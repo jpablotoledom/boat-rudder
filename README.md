@@ -97,7 +97,7 @@ sudo pacman -Syu cmake gcc
 #### Linux (Ubuntu/Debian-based)
 
 ```bash
-sudo apt update && sudo apt install -y cmake gcc build-essential
+sudo apt update && sudo apt install -y cmake gcc build-essential libcurl4-openssl-dev
 ```
 
 #### Linux (Red Hat/CentOS/Fedora)

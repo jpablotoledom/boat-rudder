@@ -1,0 +1,98 @@
+@startuml components
+
+title base-http-server - Component Diagram
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+package "Entry Point" {
+    [main.c] as MAIN
+}
+
+package "Web Server" {
+    [start_stop] as SS
+    [connection_thread] as CT
+    [connection] as CONN
+    [ssl_manager] as SSL
+    [request_handler] as RH
+    [http_request_parser] as PARSER
+}
+
+package "Web Server Utils" {
+    [static_handler] as SH
+    [split_url] as SPLIT
+}
+
+package "Utils" {
+    [config_loader] as CONFIG
+    [log] as LOG
+    [server_utils] as SU
+}
+
+database "File System\n(www/)" as FS
+file "configs/config.txt" as CFGFILE
+file "ssl/*.pem" as SSLFILES
+
+' Entry point relations
+MAIN --> CONFIG : reads config
+MAIN --> SS : server_start() / server_stop()
+MAIN ..> LOG : logging
+
+' Server startup
+SS --> CONN : uses connection_ctx_t
+SS --> SSL : ssl_create_context()
+SS --> CT : pthread_create()
+
+' Connection thread
+CT --> CONN : plain_read / ssl_read
+CT --> RH : request_handler()
+CT ..> LOG : logging
+
+' Request handling
+RH --> PARSER : parse_http_request()
+RH --> SPLIT : split_url()
+RH --> SH : handle_static_file_or_directory()
+RH --> CONN : connection_write() / connection_close()
+RH ..> SU : url_decode()
+RH ..> LOG : logging
+
+' Static handler
+SH --> CONN : connection_write()
+SH --> SU : get_mime_type()
+SH --> FS : open() / read()
+
+' External config & ssl
+CONFIG <.. CFGFILE : parsed from
+SSL <.. SSLFILES : cert + key loaded from
+
+note right of SS
+  select()-based accept loop
+  MAX_CONNECTIONS = 200
+  per-IP rate limiting (500 req/5s)
+end note
+
+note right of CT
+  One pthread per connection
+  Stack: 2 MB
+  Timeout: 5 s (recv + send)
+end note
+
+note right of CONN
+  Unified I/O:
+  plain TCP or SSL
+  MSG_NOSIGNAL on write
+end note
+
+@enduml

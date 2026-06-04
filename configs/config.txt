@@ -1,10 +1,12 @@
+# base-http-server configuration
+# Log levels: 0=none 1=error 2=warn 3=info 4=debug
 verbose_level=3
-http_port=8080
-https_port=4430
-spreadsheet_id=1kOHas0XqFkiHdaE4RpWgB4dvNL731EnuGEIBkKpaRGw
-api_key=AIzaSyBMp9XaDQ8V4Rn6hU6TjI_mUSTqZg_RA0Y
-theme=dark
-lang=Eng
+
+# HTTP port
+http_port=80
+
+# HTTPS - set ssl_enabled=1 and provide cert/key paths to activate
+https_port=443
 ssl_enabled=1
 ssl_cert=./ssl/cert.pem
 ssl_key=./ssl/key.pem

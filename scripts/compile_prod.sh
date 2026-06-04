@@ -15,35 +15,41 @@ sleep .3
 rm -rf ./build ./bin
 
 source ./scripts/show/divbar
-echo "2 - Compiling (Debug + AddressSanitizer) ..."
+echo "2 - Compiling (Release) ..."
 sleep .3
 
 mkdir -p build
-cmake -B build -DCMAKE_BUILD_TYPE=Debug .
+cmake -B build -DCMAKE_BUILD_TYPE=Release .
 cmake --build build
 
 source ./scripts/show/divbar
-echo "3 - Assembling bin/ ..."
+echo "3 - Stripping binary ..."
+sleep .3
+
+# strip is available on both Linux and macOS
+if command -v strip &>/dev/null; then
+    strip ./build/base-http-server
+fi
+
+source ./scripts/show/divbar
+echo "4 - Assembling bin/ ..."
 sleep .3
 
 mkdir -p bin
 cp ./build/base-http-server ./bin/base-http-server
 cp -r ./configs ./bin/configs
 
-# Copy www/ if it exists
 [ -d ./www ] && cp -r ./www ./bin/www
 
-# Copy ssl/ only if it contains files
 if [ -d ./ssl ] && [ -n "$(ls -A ./ssl 2>/dev/null)" ]; then
     cp -r ./ssl ./bin/ssl
 fi
 
 source ./scripts/show/divbar
-echo "4 - Removing build/ ..."
+echo "5 - Removing build/ ..."
 sleep .3
 rm -rf ./build
 
 source ./scripts/show/divbar
-echo "Done! Debug binary ready in bin/"
-echo "Run with: ./bhs.sh rundebug"
+echo "Done! Production binary ready in bin/"
 echo ""

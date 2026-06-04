@@ -1,0 +1,102 @@
+@startuml sequence-https
+
+title base-http-server - HTTPS Request Sequence
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #FFF3E0
+    LifeLineBorderColor #E65100
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #FCE4EC
+    ParticipantBorderColor #880E4F
+}
+
+actor Client
+
+participant "start_stop\n(main thread)" as SS
+participant "ssl_manager" as SSLM
+participant "connection_thread\n(pthread)" as CT
+participant "connection\n(I/O layer)" as CONN
+participant "request_handler" as RH
+participant "static_handler" as SH
+
+== Server Startup (once) ==
+
+SS -> SSLM : ssl_create_context(cert.pem, key.pem)
+activate SSLM
+SSLM -> SSLM : SSL_CTX_new(TLS_server_method())
+SSLM -> SSLM : SSL_CTX_use_certificate_file()
+SSLM -> SSLM : SSL_CTX_use_PrivateKey_file()
+SSLM --> SS : ssl_ctx
+deactivate SSLM
+
+== TLS Connection Establishment ==
+
+Client -> SS : TCP SYN (port 8443)
+SS -> SS : accept() → client_socket
+SS -> SS : too_many_connections(ip)?
+SS -> SS : try_register_connection()?
+SS -> SS : SSL_new(ssl_ctx) → ssl
+SS -> SS : SSL_set_fd(ssl, client_socket)
+SS -> CT : pthread_create(connection_thread,\n{socket, root_dir, ssl})
+
+activate CT
+CT -> CT : setsockopt SO_RCVTIMEO=5s, SO_SNDTIMEO=5s
+
+CT -> CONN : SSL_accept(ssl)
+activate CONN
+note right of CONN
+  TLS Handshake:
+  ClientHello → ServerHello
+  Certificate → ServerHelloDone
+  ClientKeyExchange → ChangeCipherSpec
+  Finished (both directions)
+end note
+CONN <-> Client : TLS Handshake
+CONN --> CT : ret > 0 (success) or error
+deactivate CONN
+
+alt SSL_accept failed
+    CT -> CT : goto cleanup
+else TLS established
+
+== Encrypted Request / Response ==
+
+CT -> RH : request_handler(ssl_read, conn_ctx, root_dir)
+
+activate RH
+loop read headers
+    RH -> CONN : ssl_read(ctx, buf, size)
+    activate CONN
+    CONN -> Client : SSL_read() [encrypted]
+    CONN --> RH : plaintext bytes
+    deactivate CONN
+end
+
+RH -> RH : parse + route (same as HTTP)
+
+RH -> SH : handle_static_file_or_directory(...)
+activate SH
+SH --> RH : (streams file)
+deactivate SH
+
+RH -> CONN : connection_write() [SSL_write → encrypted]
+CONN -> Client : encrypted response
+
+RH -> CONN : connection_close()
+activate CONN
+CONN -> Client : SSL_shutdown() (bidirectional)\n+ close(socket)
+deactivate CONN
+
+deactivate RH
+
+end
+
+== Cleanup ==
+
+CT -> CT : unregister_connection()
+deactivate CT
+
+@enduml

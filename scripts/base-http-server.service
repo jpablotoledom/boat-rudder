@@ -1,0 +1,21 @@
+[Unit]
+Description=base-http-server - Minimal HTTP/HTTPS Static File Server
+After=network.target
+
+[Service]
+TimeoutStopSec=10
+KillSignal=SIGTERM
+SendSIGKILL=yes
+ExecStart=/usr/local/bin/base-http-server/base-http-server \
+    -c /usr/local/bin/base-http-server/configs/config.txt \
+    /usr/local/bin/base-http-server/www
+WorkingDirectory=/usr/local/bin/base-http-server
+Restart=on-failure
+RestartSec=5
+User=root
+Group=root
+StandardOutput=append:/var/log/base-http-server.log
+StandardError=append:/var/log/base-http-server.log
+
+[Install]
+WantedBy=multi-user.target

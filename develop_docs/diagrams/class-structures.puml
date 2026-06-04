@@ -1,0 +1,118 @@
+@startuml class-structures
+
+title base-http-server - Data Structures
+
+skinparam backgroundColor #FAFAFA
+skinparam class {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    HeaderBackgroundColor #1565C0
+    HeaderFontColor #FFFFFF
+    FontColor #1A1A1A
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #F9A825
+}
+
+' -----------------------------------------------------------------
+' connection.h
+' -----------------------------------------------------------------
+class connection_ctx_t << (S,#90CAF9) struct >> {
+    + int client_socket
+    + SSL *ssl
+    --
+    ' ssl == NULL → plain TCP
+    ' ssl != NULL → TLS session
+}
+
+' -----------------------------------------------------------------
+' connection_thread.h
+' -----------------------------------------------------------------
+class thread_args << (S,#90CAF9) struct >> {
+    + int client_socket
+    + char *root_directory
+    + SSL *ssl
+}
+
+' -----------------------------------------------------------------
+' http_request_parser.h
+' -----------------------------------------------------------------
+class HttpHeader << (S,#A5D6A7) struct >> {
+    + char key[MAX_HEADER_KEY]
+    + char value[MAX_HEADER_VALUE]
+}
+
+class HttpRequest << (S,#A5D6A7) struct >> {
+    + char method[16]
+    + char url[256]
+    + char protocol[16]
+    + HttpHeader headers[MAX_HEADERS]
+    + int header_count
+    + char *body
+    + int body_length
+}
+
+HttpRequest "1" *-- "0..MAX_HEADERS" HttpHeader : headers
+
+' -----------------------------------------------------------------
+' params.h
+' -----------------------------------------------------------------
+class QueryParam << (S,#FFCC80) struct >> {
+    + char key[MAX_PARAM_LENGTH]
+    + char value[MAX_PARAM_LENGTH]
+}
+
+note bottom of QueryParam
+  MAX_PARAM_LENGTH = 100
+  MAX_PARAMS = 10
+end note
+
+' -----------------------------------------------------------------
+' start_stop.c (internal)
+' -----------------------------------------------------------------
+class ip_entry_t << (S,#EF9A9A) struct >> {
+    + in_addr_t ip
+    + time_t last_conn
+    + time_t last_rejected
+    + int count
+    + int blocked
+}
+
+note right of ip_entry_t
+  Table size: MAX_IPS = 1024
+  Rate window: RATE_WINDOW = 5 s
+  Rate limit: RATE_LIMIT = 500
+  Block duration: RATE_WINDOW * 2 s
+end note
+
+' -----------------------------------------------------------------
+' Constants (params.h)
+' -----------------------------------------------------------------
+class "params.h constants" << (C,#CE93D8) >> {
+    + RAW_REQUEST_SIZE = 600 000
+    + MAX_BODY_SIZE = 800 000
+    + MAX_PATH_LENGTH = PATH_MAX + 256
+    + MAX_PARAMS = 10
+    + MAX_PARAM_LENGTH = 100
+}
+
+' -----------------------------------------------------------------
+' Functional type alias
+' -----------------------------------------------------------------
+class "read_func_t" << (T,#B0BEC5) typedef >> {
+    ssize_t (*read_func_t)(void *ctx,\n  char *buf, size_t count)
+    --
+    plain_read()  → plain TCP
+    ssl_read()    → TLS
+}
+
+' -----------------------------------------------------------------
+' Relationships
+' -----------------------------------------------------------------
+thread_args ..> connection_ctx_t : spawned into\nconnection_thread
+connection_ctx_t ..> "read_func_t" : selects plain_read\nor ssl_read
+
+HttpRequest ..> QueryParam : split_url() produces\nQueryParam[]
+
+@enduml

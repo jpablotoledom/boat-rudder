@@ -1,0 +1,76 @@
+@startuml startup-flow
+
+title base-http-server - Startup & Shutdown Activity
+
+skinparam backgroundColor #FAFAFA
+skinparam activity {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    DiamondBackgroundColor #FFF9C4
+    DiamondBorderColor #F9A825
+    StartColor #1B5E20
+    EndColor #B71C1C
+    FontColor #1A1A1A
+}
+
+start
+
+:Parse argv → resolve root_directory;
+
+:load_config("./configs/config.txt")\nhttp_port, https_port, ssl_enabled,\nssl_cert, ssl_key, verbose_level;
+
+if (config load failed?) then (yes)
+    :LOG_ERROR + EXIT_FAILURE;
+    stop
+endif
+
+:Register signal handlers\nSIGINT / SIGTERM → handle_shutdown()\nSIGCHLD → sigchld_handler()\nSIGPIPE → SIG_IGN;
+
+:server_start(root_dir, ...);
+
+fork
+    :Create HTTP socket\nbind(http_port)\nlisten(backlog=128);
+fork again
+    if (ssl_enabled?) then (yes)
+        :Create HTTPS socket\nbind(https_port)\nlisten(backlog=128)\nssl_create_context(cert, key) → ssl_ctx;
+    endif
+end fork
+
+:LOG_INFO "Listening on port(s)";
+
+repeat
+
+    :select([server_fd_http, server_fd_https]);
+
+    if (HTTP fd ready?) then (yes)
+        :accept() → client_socket;
+        if (too_many_connections(ip)?) then (yes)
+            :close(client_socket);
+        elseif (active_connections >= MAX_CONNECTIONS?) then (yes)
+            :close(client_socket);
+        else (no)
+            :malloc(thread_args)\npthread_create(connection_thread)\npthread_detach;
+        endif
+    endif
+
+    if (HTTPS fd ready?) then (yes)
+        :accept() → client_socket;
+        if (too_many_connections(ip)?) then (yes)
+            :close(client_socket);
+        elseif (active_connections >= MAX_CONNECTIONS?) then (yes)
+            :close(client_socket);
+        else (no)
+            :SSL_new(ssl_ctx)\nSSL_set_fd(ssl, client_socket)\nmalloc(thread_args)\npthread_create(connection_thread)\npthread_detach;
+        endif
+    endif
+
+repeat while (running == 1?) is (yes)
+->no (SIGINT / SIGTERM);
+
+:server_stop()\nclose(server_fd_http)\nclose(server_fd_https)\nssl_free_context(ssl_ctx);
+
+:LOG_INFO "Server shut down";
+
+stop
+
+@enduml

@@ -33,7 +33,7 @@ static void print_usage(const char *prog) {
     fprintf(stderr,
             "Usage: %s [-c <config>] <root_directory>\n"
             "\n"
-            "  -c <config>      Path to config file (default: ./configs/config.txt)\n"
+            "  -c <config>      Path to config file (default: ./configs/settings.conf)\n"
             "  <root_directory> Directory to serve\n",
             prog);
 }
@@ -41,7 +41,7 @@ static void print_usage(const char *prog) {
 int main(int argc, char *argv[]) {
     signal(SIGPIPE, SIG_IGN);
 
-    const char *config_path  = "./configs/config.txt";
+    const char *config_path  = "./configs/settings.conf";
     const char *root_arg     = NULL;
 
     // Parse arguments: optional -c <path> before the mandatory root_directory.

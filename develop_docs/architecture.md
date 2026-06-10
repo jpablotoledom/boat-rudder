@@ -43,7 +43,7 @@ base-http-server/
 │       ├── generate_url_theme.c/h       # Builds ./html/themes/<theme>/... paths per epoch
 │       └── build_epoch_response.c/h     # Wraps rendered HTML with epoch-correct headers
 ├── configs/
-│   └── config.txt                       # Runtime configuration
+│   └── settings.conf                    # Runtime configuration
 ├── html/                                 # Static + templated content root (themes/, assets/)
 ├── ssl/                                 # TLS certificate and key (optional)
 └── CMakeLists.txt                       # Build definition
@@ -228,7 +228,7 @@ block (`\r\n\r\n`) before writing.
 
 ---
 
-## Configuration (`configs/config.txt`)
+## Configuration (`configs/settings.conf`)
 
 ```ini
 verbose_level=3           # 0=none 1=error 2=warn 3=info 4=debug

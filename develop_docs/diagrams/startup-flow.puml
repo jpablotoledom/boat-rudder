@@ -17,7 +17,7 @@ start
 
 :Parse argv → resolve root_directory;
 
-:load_config("./configs/config.txt")\nhttp_port, https_port, ssl_enabled,\nssl_cert, ssl_key, verbose_level;
+:load_config("./configs/settings.conf")\nhttp_port, https_port, ssl_enabled,\nssl_cert, ssl_key, verbose_level;
 
 if (config load failed?) then (yes)
     :LOG_ERROR + EXIT_FAILURE;

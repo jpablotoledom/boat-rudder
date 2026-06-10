@@ -42,7 +42,7 @@ package "Utils" {
 }
 
 database "File System\n(html/)" as FS
-file "configs/config.txt" as CFGFILE
+file "configs/settings.conf" as CFGFILE
 file "ssl/*.pem" as SSLFILES
 
 ' Entry point relations

@@ -9,7 +9,7 @@ This document describes how data moves through the server from the moment a TCP 
 ```
 main()
   │
-  ├─ load_config("./configs/config.txt")
+  ├─ load_config("./configs/settings.conf")
   │     Reads: http_port, https_port, ssl_enabled, ssl_cert, ssl_key, verbose_level,
   │            theme, lang, public_url, force_epoch (retro-compatible CMS, see §5a)
   │

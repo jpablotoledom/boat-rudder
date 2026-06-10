@@ -87,7 +87,7 @@ Runs the debug binary locally. Automatically syncs `configs/` and `ssl/` from th
 **What it does:**
 1. Verifies `bin/base-http-server` exists.
 2. Creates `bin/html/` if it does not exist.
-3. Copies `configs/config.txt` → `bin/configs/config.txt`.
+3. Copies `configs/settings.conf` → `bin/configs/settings.conf`.
 4. Copies `ssl/*.pem` → `bin/ssl/` (if `ssl/` contains files).
 5. Sends `SIGTERM` to any running instance of `base-http-server`.
 6. Reads `http_port`, `https_port`, and `ssl_enabled` from the config.
@@ -104,7 +104,7 @@ Runs the debug binary locally. Automatically syncs `configs/` and `ssl/` from th
 
 **Binary arguments passed:**
 ```
-base-http-server -c ./bin/configs/config.txt ./bin/html
+base-http-server -c ./bin/configs/settings.conf ./bin/html
 ```
 
 **Delegates to:** `scripts/run_debug.sh`
@@ -140,7 +140,7 @@ bin/ssl/cert.pem
 bin/ssl/key.pem
 ```
 
-> **Note:** After generating the certificate, make sure `ssl_enabled=1` is set in `configs/config.txt`.
+> **Note:** After generating the certificate, make sure `ssl_enabled=1` is set in `configs/settings.conf`.
 
 **Typical use:**
 ```bash
@@ -244,14 +244,14 @@ base-http-server/
 ├── bin/                        # Self-contained runtime directory
 │   ├── base-http-server        # Compiled binary
 │   ├── configs/
-│   │   └── config.txt
+│   │   └── settings.conf
 │   ├── html/                   # Static files + retro-compatible CMS templates
 │   │   └── themes/dark/...
 │   └── ssl/                    # TLS certificate and key (if present)
 │       ├── cert.pem
 │       └── key.pem
 ├── configs/
-│   └── config.txt              # Source config (synced to bin/ on rundebug)
+│   └── settings.conf           # Source config (synced to bin/ on rundebug)
 ├── ssl/
 │   ├── cert.pem                # Source certificate
 │   └── key.pem
@@ -263,9 +263,9 @@ base-http-server/
 
 ---
 
-## Configuration File (`configs/config.txt`)
+## Configuration File (`configs/settings.conf`)
 
-`rundebug` always syncs `configs/config.txt` from the project root to `bin/` before starting, so you can edit the config without recompiling.
+`rundebug` always syncs `configs/settings.conf` from the project root to `bin/` before starting, so you can edit the config without recompiling.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -291,7 +291,7 @@ base-http-server/
 # 1. Generate a self-signed certificate
 ./bhs.sh createcert
 
-# 2. Enable HTTPS in configs/config.txt
+# 2. Enable HTTPS in configs/settings.conf
 #    ssl_enabled=1
 
 # 3. Compile and run
@@ -306,7 +306,7 @@ base-http-server/
 
 1. Obtain a certificate from your CA (e.g., `certbot --standalone`).
 2. Copy the certificate and key to `ssl/cert.pem` and `ssl/key.pem`.
-3. Set `ssl_enabled=1` in `configs/config.txt`.
+3. Set `ssl_enabled=1` in `configs/settings.conf`.
 4. Run `./bhs.sh install`.
 
 The systemd service is configured with `Restart=on-failure` - if the process crashes, it restarts automatically after 5 seconds.

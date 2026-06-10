@@ -85,7 +85,7 @@ title Epoch Resolution for "/" - force_epoch Override + detect_epoch(User-Agent)
 
 start
 
-if (force_epoch in -1..3? (configs/config.txt)) then (yes)
+if (force_epoch in -1..3? (configs/settings.conf)) then (yes)
   #ECEFF1:epoch = force_epoch;
   :Skip detect_epoch() entirely;
   stop
@@ -158,7 +158,7 @@ html/themes/dark/
 ```
 
 Adding a new theme means adding a new `html/themes/<name>/` tree with the same file layout and
-pointing `theme=<name>` in `configs/config.txt`.
+pointing `theme=<name>` in `configs/settings.conf`.
 
 ### 2.4 Two kinds of placeholders
 
@@ -469,7 +469,7 @@ end
 In short:
 
 1. The client connects and sends `GET / HTTP/1.1` with a `User-Agent` header.
-2. `http_router` resolves the epoch: if `force_epoch` in `configs/config.txt` is set to a value
+2. `http_router` resolves the epoch: if `force_epoch` in `configs/settings.conf` is set to a value
    in `{-1, 0, 1, 2, 3}`, that value is used directly; otherwise `detect_epoch(User-Agent)`
    classifies the request into one of those epochs.
 3. `buildHomeWebSite(epoch, lang)` assembles the page from `container` + `menu` + `slider` +
@@ -490,7 +490,7 @@ Every other route (`/themes/dark/styles_epoch3.css`, `/favicon.ico`,
 
 ## 5. Configuration
 
-`configs/config.txt` controls both the server and the CMS:
+`configs/settings.conf` controls both the server and the CMS:
 
 ```ini
 verbose_level=3           # 0=none 1=error 2=warn 3=info 4=debug
@@ -517,7 +517,7 @@ file serving (which also points at `html/`).
 
 ```bash
 ./bhs.sh compiledebug      # Debug build + AddressSanitizer, assembled into bin/
-./bhs.sh rundebug           # Run bin/base-http-server -c bin/configs/config.txt bin/html
+./bhs.sh rundebug           # Run bin/base-http-server -c bin/configs/settings.conf bin/html
 ```
 
 See [scripts.md](scripts.md) for the full `bhs.sh` reference (production builds, systemd

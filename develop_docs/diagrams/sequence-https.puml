@@ -15,16 +15,16 @@ skinparam sequence {
 
 actor Client
 
-participant "start_stop\n(main thread)" as SS
-participant "ssl_manager" as SSLM
+participant "server_listener\n(main thread)" as SS
+participant "tls_context" as SSLM
 participant "connection_thread\n(pthread)" as CT
 participant "connection\n(I/O layer)" as CONN
-participant "request_handler" as RH
-participant "static_handler" as SH
+participant "http_router" as RH
+participant "static_file_server" as SH
 
 == Server Startup (once) ==
 
-SS -> SSLM : ssl_create_context(cert.pem, key.pem)
+SS -> SSLM : tls_create_context(cert.pem, key.pem)
 activate SSLM
 SSLM -> SSLM : SSL_CTX_new(TLS_server_method())
 SSLM -> SSLM : SSL_CTX_use_certificate_file()
@@ -64,7 +64,7 @@ else TLS established
 
 == Encrypted Request / Response ==
 
-CT -> RH : request_handler(ssl_read, conn_ctx, root_dir)
+CT -> RH : http_route(ssl_read, conn_ctx, root_dir)
 
 activate RH
 loop read headers
@@ -77,7 +77,7 @@ end
 
 RH -> RH : parse + route (same as HTTP)
 
-RH -> SH : handle_static_file_or_directory(...)
+RH -> SH : serve_static_file(...)
 activate SH
 SH --> RH : (streams file)
 deactivate SH

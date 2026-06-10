@@ -41,7 +41,7 @@ Compiles the project in **Debug** mode with AddressSanitizer (`-fsanitize=addres
 3. Assembles a self-contained `bin/` directory:
    - `bin/base-http-server` - the compiled binary
    - `bin/configs/` - copy of `configs/`
-   - `bin/www/` - copy of `www/` (if it exists)
+   - `bin/html/` - copy of `html/` (if it exists)
    - `bin/ssl/` - copy of `ssl/` (only if it contains `.pem` files)
 4. Deletes `build/` after assembly.
 
@@ -86,7 +86,7 @@ Runs the debug binary locally. Automatically syncs `configs/` and `ssl/` from th
 
 **What it does:**
 1. Verifies `bin/base-http-server` exists.
-2. Creates `bin/www/` if it does not exist.
+2. Creates `bin/html/` if it does not exist.
 3. Copies `configs/config.txt` → `bin/configs/config.txt`.
 4. Copies `ssl/*.pem` → `bin/ssl/` (if `ssl/` contains files).
 5. Sends `SIGTERM` to any running instance of `base-http-server`.
@@ -104,7 +104,7 @@ Runs the debug binary locally. Automatically syncs `configs/` and `ssl/` from th
 
 **Binary arguments passed:**
 ```
-base-http-server -c ./bin/configs/config.txt ./bin/www
+base-http-server -c ./bin/configs/config.txt ./bin/html
 ```
 
 **Delegates to:** `scripts/run_debug.sh`
@@ -163,7 +163,7 @@ Compiles the project for production and installs it as a **systemd service**.
 2. Creates `/usr/local/bin/base-http-server/` and copies into it:
    - `base-http-server` (binary, marked executable)
    - `configs/`
-   - `www/` (creates an empty one with a warning if absent)
+   - `html/` (creates an empty one with a warning if absent)
    - `ssl/` (only if it contains `.pem` files)
 3. Copies `scripts/base-http-server.service` to `/etc/systemd/system/`.
 4. Runs `systemctl daemon-reload`, `systemctl enable`, `systemctl start`.
@@ -245,8 +245,8 @@ base-http-server/
 │   ├── base-http-server        # Compiled binary
 │   ├── configs/
 │   │   └── config.txt
-│   ├── www/                    # Static files served by the server
-│   │   └── index.html
+│   ├── html/                   # Static files + retro-compatible CMS templates
+│   │   └── themes/dark/...
 │   └── ssl/                    # TLS certificate and key (if present)
 │       ├── cert.pem
 │       └── key.pem
@@ -255,8 +255,8 @@ base-http-server/
 ├── ssl/
 │   ├── cert.pem                # Source certificate
 │   └── key.pem
-└── www/
-    └── index.html              # Source static files
+└── html/
+    └── themes/dark/...         # Source static files + CMS templates
 ```
 
 `bin/` is self-contained: it can be copied to any location and run directly.
@@ -276,6 +276,10 @@ base-http-server/
 | `ssl_cert` | string | `./ssl/cert.pem` | Path to the PEM certificate file (relative to the working directory). |
 | `ssl_key` | string | `./ssl/key.pem` | Path to the PEM private key file (relative to the working directory). |
 | `trusted_proxies` | string | *(empty)* | Comma-separated list of trusted reverse proxy IPs. When set, `X-Real-IP` and `X-Forwarded-For` headers are honored only from these IPs. |
+| `theme` | string | `dark` | Active theme under `html/themes/<theme>/`, used by the retro-compatible CMS for `/`. |
+| `lang` | string | `Eng` | Content language passed to the home page content module. |
+| `public_url` | string | *(empty)* | Public base URL of the site (reserved for future SEO/canonical links). |
+| `force_epoch` | int | *(unset = auto-detect)* | Forces the browser epoch for `/` (`-1`=WML, `0`=pre-standard, `1`=early, `2`=middle, `3`=modern), bypassing `detect_epoch()`. Any value outside `-1..3` keeps auto-detection. |
 
 ---
 

@@ -19,4 +19,18 @@ extern char ssl_key[256];
 // Example: "127.0.0.1,10.0.0.1"
 extern char trusted_proxies[512];
 
+// Active theme (selects the html/themes/<theme>/ directory).
+extern char theme[64];
+
+// Default content language (reserved for a future language selector).
+extern char lang[16];
+
+// Forces the browser "epoch" used for every "/" request, bypassing
+// User-Agent detection. Valid values: -1 (WML) .. 3 (MODERN), see
+// detect_epoch.h. Any other value (default -2) means "auto-detect".
+extern int force_epoch;
+
+// Public base URL of the site (reserved for future SEO/canonical links).
+extern char public_url[256];
+
 #endif // CONFIG_LOADER_H

@@ -1,0 +1,72 @@
+@startuml template-composition
+
+title Boat Rudder - Template Composition (per epoch N)
+
+skinparam backgroundColor #FAFAFA
+skinparam object {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+
+object "container_epoch<N>.html" as CONTAINER {
+  {{PAGE_TITLE}} -> literal replace
+  %s (1) -> menu
+  %s (2) -> slider
+  %s (3) -> home_content
+}
+
+object "menu_epoch<N>.html" as MENU {
+  %s -> items
+}
+
+object "menu-item_epoch<N>.html" as MENUITEM {
+  %s -> link
+  %s -> label
+  %s -> separator
+}
+
+object "menu-item-separator_epoch<N>.html" as SEP {
+  static, no placeholders
+}
+
+object "slider_epoch<N>.html" as SLIDER {
+  static per epoch,
+  no placeholders
+}
+
+object "home-content_epoch<N>.html" as HOMECONTENT {
+  %s -> items
+}
+
+object "home-content-item_epoch<N>.html" as HOMEITEM {
+  %s -> title
+  %s -> date
+  %s -> text
+}
+
+CONTAINER *-- MENU
+CONTAINER *-- SLIDER
+CONTAINER *-- HOMECONTENT
+MENU *-- "0..N" MENUITEM
+MENUITEM o-- SEP : separator arg
+HOMECONTENT *-- "0..N" HOMEITEM
+
+note bottom of CONTAINER
+  %s arguments are substituted via printf %s:
+  any literal "%" already inside an argument
+  passes through unchanged (no double-escaping).
+end note
+
+note bottom of MENUITEM
+  "%%" -> literal "%" escaping is required ONLY
+  in templates used as the *format string*
+  (container, menu, menu-item,
+  home-content, home-content-item).
+
+  Templates inserted as %s ARGUMENTS
+  (slider, menu-item-separator) must use
+  a single "%".
+end note
+
+@enduml

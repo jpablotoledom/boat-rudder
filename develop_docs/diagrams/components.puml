@@ -22,26 +22,26 @@ package "Entry Point" {
 }
 
 package "Web Server" {
-    [start_stop] as SS
+    [server_listener] as SS
     [connection_thread] as CT
     [connection] as CONN
-    [ssl_manager] as SSL
-    [request_handler] as RH
+    [tls_context] as TLS
+    [http_router] as RH
     [http_request_parser] as PARSER
 }
 
 package "Web Server Utils" {
-    [static_handler] as SH
-    [split_url] as SPLIT
+    [static_file_server] as SH
+    [url_parser] as SPLIT
 }
 
 package "Utils" {
     [config_loader] as CONFIG
     [log] as LOG
-    [server_utils] as SU
+    [http_utils] as SU
 }
 
-database "File System\n(www/)" as FS
+database "File System\n(html/)" as FS
 file "configs/config.txt" as CFGFILE
 file "ssl/*.pem" as SSLFILES
 
@@ -52,18 +52,18 @@ MAIN ..> LOG : logging
 
 ' Server startup
 SS --> CONN : uses connection_ctx_t
-SS --> SSL : ssl_create_context()
+SS --> TLS : tls_create_context()
 SS --> CT : pthread_create()
 
 ' Connection thread
 CT --> CONN : plain_read / ssl_read
-CT --> RH : request_handler()
+CT --> RH : http_route()
 CT ..> LOG : logging
 
 ' Request handling
 RH --> PARSER : parse_http_request()
-RH --> SPLIT : split_url()
-RH --> SH : handle_static_file_or_directory()
+RH --> SPLIT : url_parse()
+RH --> SH : serve_static_file()
 RH --> CONN : connection_write() / connection_close()
 RH ..> SU : url_decode()
 RH ..> LOG : logging
@@ -75,7 +75,7 @@ SH --> FS : open() / read()
 
 ' External config & ssl
 CONFIG <.. CFGFILE : parsed from
-SSL <.. SSLFILES : cert + key loaded from
+TLS <.. SSLFILES : cert + key loaded from
 
 note right of SS
   select()-based accept loop

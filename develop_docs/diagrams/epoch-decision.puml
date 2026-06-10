@@ -1,0 +1,48 @@
+@startuml epoch-decision
+
+title Epoch Resolution for "/" - force_epoch Override + detect_epoch(User-Agent)
+
+start
+
+if (force_epoch in -1..3? (configs/config.txt)) then (yes)
+  #ECEFF1:epoch = force_epoch;
+  :Skip detect_epoch() entirely;
+  stop
+endif
+
+:Read "User-Agent" header;
+
+if (WAP / UP.Browser / Nokia WAP tokens?) then (yes)
+  #FFE0E0:epoch = -1 (EPOCH_WML);
+  :Content-Type = text/vnd.wap.wml;
+  :Template style: WML <card> deck,\nno HTML, text + <a> links only;
+  stop
+endif
+
+if (Lynx / Cello / Line Mode Browser?) then (yes)
+  #FFF3E0:epoch = 0 (EPOCH_PRESTANDARD);
+  :Content-Type = text/html;
+  :Template style: bare <html>,\nno styling attributes,\n<h1>/<h2>/<hr>/<a> only;
+  stop
+endif
+
+if (Mosaic / Netscape 1-2 / MSIE <= 4?) then (yes)
+  #FFFDE7:epoch = 1 (EPOCH_EARLY);
+  :Content-Type = text/html;
+  :Template style: HTML 3.2,\n<table> layout, <font>, bgcolor,\nno CSS / no JS;
+  stop
+endif
+
+if (Netscape 4 / MSIE 5-8 / old Firefox-Chrome?) then (yes)
+  #E8F5E9:epoch = 2 (EPOCH_MIDDLE);
+  :Content-Type = text/html; charset=UTF-8;
+  :Template style: HTML4 + CSS1\n(styles_epoch2.css), simple classes;
+  stop
+endif
+
+#E3F2FD:epoch = 3 (EPOCH_MODERN, default fallback);
+:Content-Type = text/html; charset=UTF-8;
+:Template style: HTML5 + CSS3\n(styles_epoch3.css), responsive;
+stop
+
+@enduml

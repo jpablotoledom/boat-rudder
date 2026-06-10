@@ -6,6 +6,10 @@
 #include "http_request_parser.h"
 #include "utils/url_parser.h"
 #include "utils/static_file_server.h"
+#include "../html_builder/orchestrator.h"
+#include "../utils/build_epoch_response.h"
+#include "../utils/config_loader.h"
+#include "../utils/detect_epoch.h"
 #include "../utils/log.h"
 #include "../utils/http_utils.h"
 #include <arpa/inet.h>
@@ -167,8 +171,40 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         url_decode(decoded_url, route);
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
-            const char *ims = get_header_value(&req, "If-Modified-Since");
-            serve_static_file(ctx, root_directory, decoded_url, ims);
+            if (strcmp(decoded_url, "/") == 0) {
+                const char *ua = get_header_value(&req, "User-Agent");
+                int epoch = (force_epoch >= EPOCH_WML && force_epoch <= EPOCH_MODERN)
+                            ? force_epoch
+                            : detect_epoch(ua);
+
+                char *body = buildHomeWebSite(epoch, lang);
+                if (!body) {
+                    LOG_ERROR("buildHomeWebSite failed for epoch %d", epoch);
+                    send_simple(ctx, "500 Internal Server Error",
+                                "<html><body><h1>500 Internal Server Error</h1></body></html>");
+                    goto cleanup;
+                }
+
+                char *response = build_epoch_response(body, "", epoch);
+                free(body);
+                if (!response) {
+                    send_simple(ctx, "500 Internal Server Error",
+                                "<html><body><h1>500 Internal Server Error</h1></body></html>");
+                    goto cleanup;
+                }
+
+                size_t response_len = strlen(response);
+                if (strcmp(req.method, "HEAD") == 0) {
+                    const char *header_end = strstr(response, "\r\n\r\n");
+                    response_len = header_end ? (size_t)(header_end - response) + 4 : response_len;
+                }
+                connection_write(ctx, response, response_len);
+                free(response);
+
+            } else {
+                const char *ims = get_header_value(&req, "If-Modified-Since");
+                serve_static_file(ctx, root_directory, decoded_url, ims);
+            }
 
         } else if (strcmp(req.method, "OPTIONS") == 0) {
             const char *opts =

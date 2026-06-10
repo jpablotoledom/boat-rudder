@@ -1,0 +1,90 @@
+@startuml cms-components
+
+title Boat Rudder - Retro-Compatible CMS Components
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+package "web_server" {
+    [http_router] as ROUTER
+    [serve_static_file] as STATIC
+}
+
+package "html_builder" {
+    [orchestrator\nbuildHomeWebSite()] as ORCH
+}
+
+package "modules" {
+    [container] as CONTAINER
+    [menu] as MENU
+    [slider] as SLIDER
+    [home_content] as HOME
+}
+
+package "utils" {
+    [detect_epoch] as EPOCH
+    [generate_url_theme] as URLTHEME
+    [read_file] as READFILE
+    [template_utils\n(render_template, str_append,\nstr_replace_first)] as TPL
+    [build_epoch_response] as RESP
+    [config_loader\n(theme, lang, public_url)] as CONFIG
+}
+
+database "html/\n(static assets +\nthemes/<theme>/...)" as FS
+
+ROUTER --> EPOCH : detect_epoch(User-Agent)
+ROUTER --> ORCH : buildHomeWebSite(epoch, lang)\n[route == "/"]
+ROUTER --> RESP : build_epoch_response(body, epoch)
+ROUTER --> STATIC : [route != "/"]
+STATIC --> FS : open() / read()
+
+ORCH --> CONTAINER
+ORCH --> MENU
+ORCH --> SLIDER
+ORCH --> HOME
+ORCH --> TPL : render_template(container,\nmenu, slider, home_content)
+
+CONTAINER --> URLTHEME
+MENU --> URLTHEME
+SLIDER --> URLTHEME
+HOME --> URLTHEME
+
+CONTAINER --> READFILE
+MENU --> READFILE
+SLIDER --> READFILE
+HOME --> READFILE
+
+MENU --> TPL : per item:\nrender_template + str_append
+HOME --> TPL : per item:\nrender_template + str_append
+CONTAINER --> TPL : str_replace_first({{PAGE_TITLE}})
+
+URLTHEME --> CONFIG : reads "theme"
+URLTHEME --> FS : "./html/themes/<theme>/<component>_epoch<N>.html"
+READFILE --> FS
+
+note right of EPOCH
+  epoch in {-1, 0, 1, 2, 3}
+  see epoch-decision.puml
+end note
+
+note right of RESP
+  Content-Type by epoch:
+  -1     -> text/vnd.wap.wml
+  0, 1   -> text/html
+  2, 3   -> text/html; charset=UTF-8
+  + SECURITY_HEADERS
+end note
+
+@enduml

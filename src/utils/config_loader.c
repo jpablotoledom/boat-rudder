@@ -13,6 +13,10 @@ bool ssl_enabled      = false;
 char ssl_cert[256]    = {0};
 char ssl_key[256]     = {0};
 char trusted_proxies[512] = {0};
+char theme[64]            = "dark";
+char lang[16]             = "Eng";
+char public_url[256]      = {0};
+int  force_epoch          = -2;
 
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -50,6 +54,17 @@ int load_config(const char *filename) {
         } else if (strcmp(key, "trusted_proxies") == 0) {
             strncpy(trusted_proxies, value, sizeof(trusted_proxies) - 1);
             trusted_proxies[sizeof(trusted_proxies) - 1] = '\0';
+        } else if (strcmp(key, "theme") == 0) {
+            strncpy(theme, value, sizeof(theme) - 1);
+            theme[sizeof(theme) - 1] = '\0';
+        } else if (strcmp(key, "lang") == 0) {
+            strncpy(lang, value, sizeof(lang) - 1);
+            lang[sizeof(lang) - 1] = '\0';
+        } else if (strcmp(key, "public_url") == 0) {
+            strncpy(public_url, value, sizeof(public_url) - 1);
+            public_url[sizeof(public_url) - 1] = '\0';
+        } else if (strcmp(key, "force_epoch") == 0) {
+            force_epoch = atoi(value);
         }
     }
 

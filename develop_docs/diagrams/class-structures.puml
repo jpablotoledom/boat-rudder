@@ -56,7 +56,7 @@ class HttpRequest << (S,#A5D6A7) struct >> {
 HttpRequest "1" *-- "0..MAX_HEADERS" HttpHeader : headers
 
 ' -----------------------------------------------------------------
-' params.h
+' web_server/utils/url_parser.h
 ' -----------------------------------------------------------------
 class QueryParam << (S,#FFCC80) struct >> {
     + char key[MAX_PARAM_LENGTH]
@@ -69,7 +69,7 @@ note bottom of QueryParam
 end note
 
 ' -----------------------------------------------------------------
-' start_stop.c (internal)
+' server_listener.c (internal)
 ' -----------------------------------------------------------------
 class ip_entry_t << (S,#EF9A9A) struct >> {
     + in_addr_t ip
@@ -87,14 +87,14 @@ note right of ip_entry_t
 end note
 
 ' -----------------------------------------------------------------
-' Constants (params.h)
+' Constants (web_server/http_constants.h)
 ' -----------------------------------------------------------------
-class "params.h constants" << (C,#CE93D8) >> {
-    + RAW_REQUEST_SIZE = 600 000
-    + MAX_BODY_SIZE = 800 000
+class "http_constants.h constants" << (C,#CE93D8) >> {
+    + RAW_REQUEST_SIZE = 32 768
+    + MAX_BODY_SIZE = 10 485 760
     + MAX_PATH_LENGTH = PATH_MAX + 256
-    + MAX_PARAMS = 10
-    + MAX_PARAM_LENGTH = 100
+    + MAX_PARAMS = 16
+    + MAX_PARAM_LENGTH = 256
 }
 
 ' -----------------------------------------------------------------
@@ -113,6 +113,6 @@ class "read_func_t" << (T,#B0BEC5) typedef >> {
 thread_args ..> connection_ctx_t : spawned into\nconnection_thread
 connection_ctx_t ..> "read_func_t" : selects plain_read\nor ssl_read
 
-HttpRequest ..> QueryParam : split_url() produces\nQueryParam[]
+HttpRequest ..> QueryParam : url_parse() produces\nQueryParam[]
 
 @enduml

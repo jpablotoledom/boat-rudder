@@ -32,7 +32,7 @@ fork
     :Create HTTP socket\nbind(http_port)\nlisten(backlog=128);
 fork again
     if (ssl_enabled?) then (yes)
-        :Create HTTPS socket\nbind(https_port)\nlisten(backlog=128)\nssl_create_context(cert, key) → ssl_ctx;
+        :Create HTTPS socket\nbind(https_port)\nlisten(backlog=128)\ntls_create_context(cert, key) → ssl_ctx;
     endif
 end fork
 
@@ -67,7 +67,7 @@ repeat
 repeat while (running == 1?) is (yes)
 ->no (SIGINT / SIGTERM);
 
-:server_stop()\nclose(server_fd_http)\nclose(server_fd_https)\nssl_free_context(ssl_ctx);
+:server_stop()\nclose(server_fd_http)\nclose(server_fd_https)\ntls_free_context(ssl_ctx);
 
 :LOG_INFO "Server shut down";
 

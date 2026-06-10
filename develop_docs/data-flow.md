@@ -10,7 +10,8 @@ This document describes how data moves through the server from the moment a TCP 
 main()
   │
   ├─ load_config("./configs/config.txt")
-  │     Reads: http_port, https_port, ssl_enabled, ssl_cert, ssl_key, verbose_level
+  │     Reads: http_port, https_port, ssl_enabled, ssl_cert, ssl_key, verbose_level,
+  │            theme, lang, public_url, force_epoch (retro-compatible CMS, see §5a)
   │
   ├─ server_start(root_dir, ssl_enabled, ssl_cert, ssl_key, http_port, https_port)
   │     ├─ socket(AF_INET, SOCK_STREAM) → server_fd_http
@@ -21,7 +22,7 @@ main()
   │     │     ├─ socket() → server_fd_https
   │     │     ├─ bind(server_fd_https, port=https_port)
   │     │     ├─ listen(server_fd_https, backlog=128)
-  │     │     └─ ssl_create_context(cert, key) → ssl_ctx
+  │     │     └─ tls_create_context(cert, key) → ssl_ctx
   │     │
   │     └─ enter accept loop  ──────────────────────────────►  see §2
   │
@@ -30,15 +31,15 @@ main()
 
 ---
 
-## 2. Accept Loop (`start_stop.c`)
+## 2. Accept Loop (`server_listener.c`)
 
 The main thread runs a blocking `select()` over both listening sockets.
 
 ```
 while (running):
   select([server_fd_http, server_fd_https]) ─── blocks until activity ───┐
-                                                                           │
-  ┌────────────────────────────────────────────────────────────────────────┘
+                                                                         │
+  ┌──────────────────────────────────────────────────────────────────────┘
   │
   ├─ HTTP socket ready?
   │     accept() → client_socket
@@ -87,7 +88,7 @@ connection_thread(thread_args)
   │     ssl != NULL  →  read_func = ssl_read
   │     ssl == NULL  →  read_func = plain_read
   │
-  ├─ request_handler(read_func, conn_ctx, root_directory)  ────►  see §4
+  ├─ http_route(read_func, conn_ctx, root_directory)  ─────────►  see §4
   │
   └─ cleanup:
         SSL_shutdown + SSL_free  (if SSL)
@@ -97,14 +98,14 @@ connection_thread(thread_args)
 
 ---
 
-## 4. Request Handler (`request_handler.c`)
+## 4. HTTP Router (`http_router.c`)
 
 This is the core HTTP processing stage.
 
 ```
-request_handler(read_func, ctx, root_directory)
+http_route(read_func, ctx, root_directory)
   │
-  ├─ malloc(raw_request, RAW_REQUEST_SIZE=600KB)
+  ├─ malloc(raw_request, RAW_REQUEST_SIZE=32KB)
   │
   ├─ READ LOOP: call read_func() until "\r\n\r\n" found (headers complete)
   │     EOF / error? → goto conn_cleanup
@@ -125,12 +126,13 @@ request_handler(read_func, ctx, root_directory)
   ├─ Validate request line (sscanf METHOD URL PROTO):
   │     invalid? → send 400 Bad Request → goto conn_cleanup
   │
-  ├─ split_url(url) → route + QueryParam[]
+  ├─ url_parse(url, route, sizeof(route), params, &param_count) → route + QueryParam[]
   ├─ url_decode(route) → decoded_url
   │
   ├─ ROUTE DISPATCH:
-  │     GET  → handle_static_file_or_directory()  ────────────►  see §5
-  │     OPTIONS → send 200 with CORS headers
+  │     GET/HEAD, route == "/" → dynamic home page  ───────────►  see §5a
+  │     GET/HEAD, other route  → serve_static_file()  ─────────►  see §5
+  │     OPTIONS → send 204
   │     other → send 405 Method Not Allowed
   │
   └─ conn_cleanup:
@@ -141,17 +143,74 @@ request_handler(read_func, ctx, root_directory)
 
 ---
 
-## 5. Static File Handler (`utils/static_handler.c`)
+## 5a. Dynamic Home Route (`/`) - Retro-Compatible CMS
 
 ```
-handle_static_file_or_directory(ctx, root_directory, decoded_url)
+GET/HEAD "/"  (http_router.c)
+  │
+  ├─ ua = header("User-Agent")
+  ├─ epoch = (force_epoch in -1..3) ? force_epoch : detect_epoch(ua)
+  │     -1 = WML, 0 = pre-standard, 1 = early, 2 = middle, 3 = modern
+  │     force_epoch (config_loader, default unset) overrides detection when in range
+  │
+  ├─ body = buildHomeWebSite(epoch, lang)         ── html_builder/orchestrator.c
+  │     ├─ container(epoch)
+  │     │     generate_url_theme("container/container_epoch%d.html", epoch)
+  │     │     read_file_to_string() → tpl (3x %s: menu, slider, home_content; {{PAGE_TITLE}})
+  │     │
+  │     ├─ menu("/", epoch)
+  │     │     reads menu_epoch%d.html, menu-item_epoch%d.html, menu-item-separator_epoch%d.html
+  │     │     for each route in MENU_ROUTES: render_template(menu_item_tpl, link, label, sep)
+  │     │     → str_append into items, then render_template(menu_tpl, items)
+  │     │
+  │     ├─ slider(epoch)
+  │     │     generate_url_theme("slider/slider_epoch%d.html", epoch) → read_file_to_string()
+  │     │
+  │     ├─ home_content(epoch, lang)
+  │     │     for each entry in UPDATES: render_template(item_tpl, title, date, text)
+  │     │     → str_append into items, then render_template(content_tpl, items)
+  │     │
+  │     ├─ NULL check: any of the 4 pieces missing → goto cleanup, free non-NULL pieces
+  │     │
+  │     └─ render_template(container_tpl, menu_html, slider_html, home_content_html)
+  │           free(container_tpl/menu_html/slider_html/home_content_html)
+  │
+  ├─ body == NULL? → send 500 Internal Server Error
+  │
+  ├─ response = build_epoch_response(body, "", epoch)  ── utils/build_epoch_response.c
+  │     Content-Type by epoch:
+  │       -1 → text/vnd.wap.wml
+  │        0,1 → text/html
+  │        2,3 → text/html; charset=UTF-8
+  │     + SECURITY_HEADERS (X-Content-Type-Options, X-Frame-Options)
+  │     free(body)
+  │
+  ├─ HEAD? → truncate response at end of "\r\n\r\n" (headers only)
+  │
+  └─ connection_write(ctx, response, response_len); free(response)
+```
+
+`generate_url_theme()` resolves every template path as `./html/themes/<theme>/<subpath>`,
+relative to the server's working directory, using the global `theme` from `config_loader`
+(default `dark`). All static assets referenced by the templates (CSS, images, favicon) are
+served from the same `html/` tree via the normal static file path (§5).
+
+---
+
+## 5. Static File Handler (`utils/static_file_server.c`)
+
+```
+serve_static_file(ctx, root_directory, decoded_url, if_modified_since)
   │
   ├─ build path:  safe_path = root_directory + decoded_url
   │
   ├─ stat(safe_path):
   │     ENOENT / error? → send 404 Not Found → return
   │
-  ├─ S_ISDIR? → (directory listing, currently a no-op stub)
+  ├─ S_ISDIR? → append "/index.html" to safe_path, re-stat
+  │
+  ├─ Cache validation:
+  │     if_modified_since set && file not modified since → send 304 Not Modified → return
   │
   └─ Regular file:
         open(safe_path, O_RDONLY)
@@ -163,10 +222,10 @@ handle_static_file_or_directory(ctx, root_directory, decoded_url)
         │     "HTTP/1.1 200 OK\r\n"
         │     "Content-Type: <mime>\r\n"
         │     "Content-Length: <size>\r\n"
-        │     "Connection: close\r\n\r\n"
+        │     "Last-Modified: <date>\r\n\r\n"
         │
         ├─ STREAM LOOP:
-        │     read(fd, buffer, 4096) → connection_write(ctx, buffer, bytes)
+        │     read(fd, buffer, 8192) → connection_write(ctx, buffer, bytes)
         │     repeat until EOF
         │
         └─ close(fd)
@@ -210,7 +269,7 @@ main loop exits
         running = 0
         close(server_fd_http)
         close(server_fd_https)
-        ssl_free_context(ssl_ctx)
+        tls_free_context(ssl_ctx)
 ```
 
 Active threads finish naturally (they check nothing from main, they just run to completion with the 5 s socket timeout as backstop).
@@ -225,8 +284,8 @@ Active threads finish naturally (they check nothing from main, they just run to 
 | `thread_args` | `connection_thread.h` | Passed to each pthread: socket, root_dir, ssl pointer |
 | `HttpRequest` | `http_request_parser.h` | Parsed HTTP request: method, url, protocol, headers[], body |
 | `HttpHeader` | `http_request_parser.h` | Single header key-value pair |
-| `QueryParam` | `params.h` | Single URL query parameter key-value |
-| `ip_entry_t` | `start_stop.c` (internal) | Per-IP rate limiting state |
+| `QueryParam` | `url_parser.h` | Single URL query parameter key-value |
+| `ip_entry_t` | `server_listener.c` (internal) | Per-IP rate limiting state |
 
 ---
 

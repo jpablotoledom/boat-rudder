@@ -78,16 +78,16 @@ void html_encode(char *dst, const char *src, size_t dst_size) {
     while (*src && dst < end) {
         if (*src == '&') {
             if (dst + 5 >= end) break;
-            strncpy(dst, "&amp;", end - dst); dst += 5;
+            memcpy(dst, "&amp;", 5); dst += 5;
         } else if (*src == '<') {
             if (dst + 4 >= end) break;
-            strncpy(dst, "&lt;",  end - dst); dst += 4;
+            memcpy(dst, "&lt;", 4); dst += 4;
         } else if (*src == '>') {
             if (dst + 4 >= end) break;
-            strncpy(dst, "&gt;",  end - dst); dst += 4;
+            memcpy(dst, "&gt;", 4); dst += 4;
         } else if (*src == '"') {
             if (dst + 6 >= end) break;
-            strncpy(dst, "&quot;",end - dst); dst += 6;
+            memcpy(dst, "&quot;", 6); dst += 6;
         } else {
             *dst++ = *src;
         }
@@ -107,13 +107,15 @@ int sanitize_path(const char *url_path, char *safe_path, size_t size,
         return 0;
 
     size_t root_len = strlen(root_directory);
-    if (strncmp(resolved, root_directory, root_len) != 0)
+    if (strncmp(resolved, root_directory, root_len) != 0 ||
+        (resolved[root_len] != '/' && resolved[root_len] != '\0'))
         return 0;
 
-    if (strlen(resolved) >= size)
+    size_t resolved_len = strlen(resolved);
+    if (resolved_len >= size)
         return 0;
 
-    strcpy(safe_path, resolved);
+    memcpy(safe_path, resolved, resolved_len + 1);
     return 1;
 }
 

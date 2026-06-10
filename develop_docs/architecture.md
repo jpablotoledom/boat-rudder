@@ -25,14 +25,26 @@ base-http-server/
 │   │   └── utils/
 │   │       ├── static_file_server.c/h   # Static file serving (MIME, cache, security headers)
 │   │       └── url_parser.c/h           # URL path / query-string splitter + QueryParam
+│   ├── html_builder/
+│   │   └── orchestrator.c/h             # buildHomeWebSite(): assembles a full page per epoch
+│   ├── modules/
+│   │   ├── container/container.c/h      # Page shell (head/body wrapper) per epoch
+│   │   ├── menu/menu.c/h                # Nav menu + menu-item + separator per epoch
+│   │   ├── slider/slider.c/h            # Hero/banner block per epoch
+│   │   └── home_content/home_content.c/h# Home page body content per epoch
 │   └── utils/
 │       ├── config_loader.c/h            # INI-style config file parser
 │       ├── log.c/h                      # Leveled, thread-safe logging macros
-│       └── http_utils.c/h               # MIME detection, URL encode/decode, path sanitizer,
-│                                        # trusted proxy check
+│       ├── http_utils.c/h               # MIME detection, URL encode/decode, path sanitizer,
+│       │                                # trusted proxy check
+│       ├── detect_epoch.c/h             # User-Agent → epoch heuristic
+│       ├── read_file.c/h                # read_file_to_string(): malloc'd file contents
+│       ├── template_utils.c/h           # render_template, str_replace_first, str_append
+│       ├── generate_url_theme.c/h       # Builds ./html/themes/<theme>/... paths per epoch
+│       └── build_epoch_response.c/h     # Wraps rendered HTML with epoch-correct headers
 ├── configs/
 │   └── config.txt                       # Runtime configuration
-├── www/                                 # Default static files root
+├── html/                                 # Static + templated content root (themes/, assets/)
 ├── ssl/                                 # TLS certificate and key (optional)
 └── CMakeLists.txt                       # Build definition
 ```
@@ -42,21 +54,21 @@ base-http-server/
 ## Layers
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                      main.c                          │  ← Entry point: config, signals, lifecycle
-├──────────────────────────────────────────────────────┤
-│              web_server/server_listener               │  ← Socket creation, select() accept loop
-├────────────────────────────┬─────────────────────────┤
-│       connection.c          │     tls_context.c       │  ← I/O abstraction  │  TLS context
-├────────────────────────────┴─────────────────────────┤
-│              connection_thread.c                      │  ← Per-request pthread + TLS handshake
-├──────────────────────────────────────────────────────┤
-│              http_router.c                            │  ← HTTP parse, route dispatch
-├────────────────────────────┬─────────────────────────┤
+┌────────────────────────────────────────────────────────┐
+│                      main.c                            │  ← Entry point: config, signals, lifecycle
+├────────────────────────────────────────────────────────┤
+│              web_server/server_listener                │  ← Socket creation, select() accept loop
+├────────────────────────────┬───────────────────────────┤
+│       connection.c         │     tls_context.c         │  ← I/O abstraction  │  TLS context
+├────────────────────────────┴───────────────────────────┤
+│              connection_thread.c                       │  ← Per-request pthread + TLS handshake
+├────────────────────────────────────────────────────────┤
+│              http_router.c                             │  ← HTTP parse, route dispatch
+├────────────────────────────┬───────────────────────────┤
 │    http_request_parser.c    │  utils/static_file_server│  ← Parser  │  File server
-├────────────────────────────┴─────────────────────────┤
-│       utils/  (log, config_loader, http_utils)        │  ← Cross-cutting utilities
-└──────────────────────────────────────────────────────┘
+├────────────────────────────┴───────────────────────────┤
+│       utils/  (log, config_loader, http_utils)         │  ← Cross-cutting utilities
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -111,7 +123,9 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 - Parses headers with `parse_http_request()`.
 - Extracts the real client IP: honors `X-Real-IP` / `X-Forwarded-For` **only when the peer IP matches the `trusted_proxies` config list**, falling back to the raw socket address for all other peers.
 - Validates the request line (400 Bad Request on failure).
-- Routes `GET`/`HEAD` to `serve_static_file()`, passing the `If-Modified-Since` header for cache validation.
+- Routes `GET`/`HEAD`:
+  - `/` → dynamic, epoch-aware home page (see [Retro-Compatible CMS](#retro-compatible-cms-epoch-based-rendering) below).
+  - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache validation.
 - Returns `204` for `OPTIONS`, `405` for all other methods.
 
 ### `web_server/http_request_parser.c`
@@ -151,6 +165,69 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 
 ---
 
+## Retro-Compatible CMS (epoch-based rendering)
+
+The `/` route is rendered dynamically instead of being served as a static file. The goal is to send each
+client the simplest markup its browser can handle, from WAP-era phones to modern HTML5/CSS3 browsers.
+
+### Epochs
+
+`utils/detect_epoch.c` classifies the `User-Agent` header into one of five epochs:
+
+| Epoch | Constant | Target | `Content-Type` |
+|---|---|---|---|
+| -1 | `EPOCH_WML` | WAP phones | `text/vnd.wap.wml` |
+| 0 | `EPOCH_PRESTANDARD` | Text browsers (e.g. Lynx) | `text/html` |
+| 1 | `EPOCH_EARLY` | Old browsers (table layouts, `<font>`) | `text/html` |
+| 2 | `EPOCH_MIDDLE` | HTML4 + CSS1 era | `text/html; charset=UTF-8` |
+| 3 | `EPOCH_MODERN` | Modern HTML5 + CSS3 | `text/html; charset=UTF-8` |
+
+### Templates (`html/themes/<theme>/`)
+
+Each visual component has one HTML template per epoch, named `<component>_epoch<N>.html`
+(`<N>` ∈ {-1, 0, 1, 2, 3}), under `html/themes/<theme>/<component>/`:
+
+- `container/` - page shell (`<head>`/`<body>` wrapper); contains `{{PAGE_TITLE}}` and 3 `%s`
+  placeholders for menu, slider and home content.
+- `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, label,
+  separator), `menu-item-separator_epoch<N>.html` (static, no placeholders).
+- `slider/` - hero/banner block, static per epoch (no placeholders).
+- `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
+  `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
+
+`%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
+that is itself used as a format string must be written as `%%`. Templates that are only ever
+substituted *into* another template's `%s` (e.g. `slider`, `menu-item-separator`) are inserted
+as-is and must use a single `%`.
+
+### Build pipeline
+
+```
+http_router.c  (route == "/")
+  │
+  ├─ epoch = (force_epoch in -1..3) ? force_epoch : detect_epoch(User-Agent)
+  │
+  ├─ buildHomeWebSite(epoch, lang)        ── html_builder/orchestrator.c
+  │     ├─ container(epoch)               ── modules/container
+  │     ├─ menu("/", epoch)                ── modules/menu
+  │     ├─ slider(epoch)                   ── modules/slider
+  │     ├─ home_content(epoch, lang)       ── modules/home_content
+  │     └─ render_template(container, menu, slider, home_content)
+  │
+  └─ build_epoch_response(body, extra_headers, epoch) ── utils/build_epoch_response.c
+        sets Content-Type per epoch, reuses SECURITY_HEADERS
+```
+
+Each module resolves its template path via `generate_url_theme("<subpath>_epoch%d.html", epoch)`,
+which expands to `./html/themes/<theme>/<subpath>` (relative to the process working directory,
+using the global `theme` from `config_loader`), reads it with `read_file_to_string()`, and renders
+it with `render_template()`. The orchestrator frees every intermediate buffer on all paths.
+
+For `HEAD /`, `http_router.c` builds the same response and truncates it at the end of the header
+block (`\r\n\r\n`) before writing.
+
+---
+
 ## Configuration (`configs/config.txt`)
 
 ```ini
@@ -162,6 +239,10 @@ ssl_cert=./ssl/cert.pem
 ssl_key=./ssl/key.pem
 trusted_proxies=          # comma-separated IPs of trusted reverse proxies
                           # e.g. 127.0.0.1,10.0.0.1
+theme=dark                 # active theme under html/themes/<theme>/
+lang=Eng                   # content language passed to home_content
+public_url=                # public base URL (reserved for future SEO/canonical links)
+#force_epoch=3             # force a browser epoch for "/" (-1..3), omit to auto-detect
 ```
 
 ---

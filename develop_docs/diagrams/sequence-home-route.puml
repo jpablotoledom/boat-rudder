@@ -1,0 +1,86 @@
+@startuml sequence-home-route
+
+title Boat Rudder - Dynamic "/" Route (Retro-Compatible CMS)
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipant underline
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Client
+participant "http_router" as ROUTER
+participant "detect_epoch" as EPOCH
+participant "orchestrator\n(buildHomeWebSite)" as ORCH
+participant "container" as CONTAINER
+participant "menu" as MENU
+participant "slider" as SLIDER
+participant "home_content" as HOME
+participant "build_epoch_response" as RESP
+
+Client -> ROUTER : GET / HTTP/1.1\nUser-Agent: ...
+ROUTER -> EPOCH : detect_epoch(User-Agent)
+EPOCH --> ROUTER : epoch (-1..3)
+
+ROUTER -> ORCH : buildHomeWebSite(epoch, lang)
+activate ORCH
+
+ORCH -> CONTAINER : container(epoch)
+CONTAINER -> CONTAINER : generate_url_theme + read_file\n+ str_replace_first({{PAGE_TITLE}})
+CONTAINER --> ORCH : html_container\n(3x %s placeholders)
+
+ORCH -> MENU : menu("/", epoch)
+activate MENU
+MENU -> MENU : load menu_epoch<N>,\nmenu-item_epoch<N>,\nmenu-item-separator_epoch<N>
+loop for each route in MENU_ROUTES
+  MENU -> MENU : render_template(menu-item_tpl,\nlink, label, separator)
+  MENU -> MENU : str_append(items, item)
+end
+MENU -> MENU : render_template(menu_tpl, items)
+deactivate MENU
+MENU --> ORCH : html_menu
+
+ORCH -> SLIDER : slider(epoch)
+SLIDER -> SLIDER : generate_url_theme + read_file\n(static block, no placeholders)
+SLIDER --> ORCH : html_slider
+
+ORCH -> HOME : home_content(epoch, lang)
+activate HOME
+HOME -> HOME : load home-content_epoch<N>,\nhome-content-item_epoch<N>
+loop for each entry in UPDATES
+  HOME -> HOME : render_template(item_tpl,\ntitle, date, text)
+  HOME -> HOME : str_append(items, item)
+end
+HOME -> HOME : render_template(content_tpl, items)
+deactivate HOME
+HOME --> ORCH : html_home_content
+
+alt any component == NULL
+  ORCH -> ORCH : free non-NULL pieces
+  ORCH --> ROUTER : NULL
+  ROUTER -> Client : 500 Internal Server Error
+else all components OK
+  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content)
+  ORCH -> ORCH : free all intermediate buffers
+  ORCH --> ROUTER : body (full HTML / WML document)
+  deactivate ORCH
+
+  ROUTER -> RESP : build_epoch_response(body, "", epoch)
+  RESP --> ROUTER : response\n(headers + body)
+  ROUTER -> ROUTER : free(body)
+
+  alt method == HEAD
+    ROUTER -> ROUTER : truncate response\nat end of "\\r\\n\\r\\n"
+  end
+
+  ROUTER -> Client : HTTP/1.1 200 OK\nContent-Type per epoch
+  ROUTER -> ROUTER : free(response)
+end
+
+@enduml

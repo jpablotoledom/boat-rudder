@@ -16,13 +16,13 @@ skinparam sequence {
 
 actor Client
 
-participant "start_stop\n(main thread)" as SS
+participant "server_listener\n(main thread)" as SS
 participant "connection_thread\n(pthread)" as CT
 participant "connection\n(I/O layer)" as CONN
-participant "request_handler" as RH
+participant "http_router" as RH
 participant "http_request_parser" as PARSER
-participant "static_handler" as SH
-participant "server_utils" as SU
+participant "static_file_server" as SH
+participant "http_utils" as SU
 participant "File System" as FS
 
 == Connection Establishment ==
@@ -40,7 +40,7 @@ SS -> SS : pthread_detach(tid)
 
 activate CT
 CT -> CONN : setsockopt SO_RCVTIMEO=5s
-CT -> RH : request_handler(plain_read, conn_ctx, root_dir)
+CT -> RH : http_route(plain_read, conn_ctx, root_dir)
 
 activate RH
 loop until "\r\n\r\n" found
@@ -78,20 +78,22 @@ else bytes_read > 0
 == Routing ==
 
     alt GET request
-        RH -> SH : handle_static_file_or_directory(ctx, root_dir, decoded_url)
+        RH -> SH : serve_static_file(ctx, root_dir, decoded_url, if_modified_since)
 
         activate SH
         SH -> FS : stat(root_dir + decoded_url)
 
         alt file not found
             SH -> CONN : connection_write("HTTP/1.1 404 Not Found")
+        else not modified since (304)
+            SH -> CONN : connection_write("HTTP/1.1 304 Not Modified")
         else file found
             SH -> SU : get_mime_type(path)
             SH -> FS : open(path, O_RDONLY)
 
             SH -> CONN : connection_write(HTTP headers)
             loop until EOF
-                SH -> FS : read(fd, buffer, 4096)
+                SH -> FS : read(fd, buffer, 8192)
                 SH -> CONN : connection_write(buffer, bytes_read)
             end
             SH -> FS : close(fd)
@@ -99,7 +101,7 @@ else bytes_read > 0
         deactivate SH
 
     else OPTIONS request
-        RH -> CONN : connection_write("HTTP/1.1 200 OK + CORS headers")
+        RH -> CONN : connection_write("HTTP/1.1 204 No Content + Allow header")
 
     else other method
         RH -> CONN : connection_write("HTTP/1.1 405 Method Not Allowed")

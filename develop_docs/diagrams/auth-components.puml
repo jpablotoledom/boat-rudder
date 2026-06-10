@@ -1,0 +1,114 @@
+@startuml auth-components
+
+title Boat Rudder - Authentication Components (Login, Dashboard, Logout, Errors)
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+package "web_server" {
+    [http_router] as ROUTER
+    [serve_static_file] as STATIC
+}
+
+package "html_builder" {
+    [orchestrator\nbuildPageWebSite()] as ORCH
+}
+
+package "modules" {
+    [login] as LOGIN
+    [dashboard] as DASHBOARD
+    [error] as ERROR
+}
+
+package "db" {
+    [mongodb_manager] as MONGO
+    [auth\nauth_login_user()] as AUTH
+    [session_manager] as SESSION
+}
+
+package "utils" {
+    [generate_url_theme] as URLTHEME
+    [read_file] as READFILE
+    [template_utils\n(render_template)] as TPL
+    [build_epoch_response\n(_status, redirect)] as RESP
+    [config_loader\n(mongodb_uri, mongodb_db,\nsession_ttl_seconds, ssl_enabled)] as CONFIG
+}
+
+database "html/themes/<theme>/\n{login,dashboard,error,page}/" as FS
+database "MongoDB\n(users, sessions)" as DB
+
+ROUTER --> LOGIN : login(epoch, error_message)\n[GET/POST /login]
+ROUTER --> DASHBOARD : dashboard(epoch)\n[GET /dashboard, valid session]
+ROUTER --> ERROR : error_content(epoch, status, msg)\n[send_error_response(): all 4xx/5xx]
+ROUTER --> ORCH : buildPageWebSite(epoch, title, content)
+ORCH --> RESP : build_epoch_response(body, "", epoch)
+ROUTER --> RESP : build_epoch_response_status()\nbuild_redirect_response()
+STATIC --> ROUTER : 0 (sent) | 403/404/500\n[caller renders error]
+
+ROUTER --> MONGO : mongodb_manager_is_ready()
+ROUTER --> AUTH : auth_login_user(email, password)\n[POST /login, EPOCH_MODERN only]
+ROUTER --> SESSION : generate_session_token()\ncreate_session() / validate_session_cookie()\ndestroy_session()\nbuild_session_cookie_header()
+
+AUTH --> MONGO : mongodb_manager_get_collection("users")
+SESSION --> MONGO : mongodb_manager_get_collection("sessions")
+MONGO --> DB
+
+LOGIN --> URLTHEME
+DASHBOARD --> URLTHEME
+ERROR --> URLTHEME
+ORCH --> URLTHEME : page_epoch<N>.html
+
+LOGIN --> READFILE
+DASHBOARD --> READFILE
+ERROR --> READFILE
+ORCH --> READFILE
+
+LOGIN --> TPL : render_template(login_epoch3, error_block)\n[EPOCH_MODERN only]
+ERROR --> TPL : render_template(error_epoch<N>,\nstatus_code, message)
+ORCH --> TPL : str_replace_first({{PAGE_TITLE}})
+
+URLTHEME --> FS
+READFILE --> FS
+
+note right of LOGIN
+  /login form + credential checks:
+  EPOCH_MODERN only, enforced on
+  both GET and POST.
+  Other epochs: static
+  "not available" message.
+end note
+
+note bottom of MONGO
+  mongoc_client_pool_t, initialized once at
+  startup (mongodb_uri/mongodb_db).
+  If init fails: server keeps running,
+  /login and /dashboard return 503
+  via send_error_response().
+end note
+
+note right of AUTH
+  Argon2id (libsodium crypto_pwhash_str_verify).
+  NULL for unknown email, wrong password,
+  AND db error alike (no enumeration).
+end note
+
+note right of SESSION
+  64-hex token (libsodium CSPRNG),
+  stored in "sessions" with expires_at.
+  Cookie: HttpOnly; Path=/; SameSite=Lax
+  (+ Secure if ssl_enabled=1)
+end note
+
+@enduml

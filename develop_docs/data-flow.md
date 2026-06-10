@@ -11,7 +11,13 @@ main()
   │
   ├─ load_config("./configs/settings.conf")
   │     Reads: http_port, https_port, ssl_enabled, ssl_cert, ssl_key, verbose_level,
-  │            theme, lang, public_url, force_epoch (retro-compatible CMS, see §5a)
+  │            theme, lang, public_url, force_epoch (retro-compatible CMS, see §5a),
+  │            mongodb_uri, mongodb_db, session_ttl_seconds (login/sessions, see §5b)
+  │
+  ├─ mongodb_manager_init(mongodb_uri, mongodb_db)
+  │     sodium_init()  ← required once before any libsodium call
+  │     mongoc_init() + mongoc_client_pool_new()
+  │     failure → logged, server continues; /login and /dashboard return 503 (see §5b/§5c)
   │
   ├─ server_start(root_dir, ssl_enabled, ssl_cert, ssl_key, http_port, https_port)
   │     ├─ socket(AF_INET, SOCK_STREAM) → server_fd_http
@@ -130,10 +136,17 @@ http_route(read_func, ctx, root_directory)
   ├─ url_decode(route) → decoded_url
   │
   ├─ ROUTE DISPATCH:
-  │     GET/HEAD, route == "/" → dynamic home page  ───────────►  see §5a
-  │     GET/HEAD, other route  → serve_static_file()  ─────────►  see §5
+  │     GET/HEAD, route == "/"          → dynamic home page  ───────────►  see §5a
+  │     GET/HEAD, route == "/login"     → login page (epoch-aware)  ─────►  see §5b
+  │     GET/HEAD, route == "/dashboard" → dashboard or 302 /login  ──────►  see §5b
+  │     GET/HEAD, route == "/logout"    → destroy session, 302 /  ───────►  see §5b
+  │     POST,     route == "/login"     → authenticate, 302 /dashboard ─►  see §5b
+  │     GET/HEAD, other route           → serve_static_file()  ─────────►  see §5
   │     OPTIONS → send 204
   │     other → send 405 Method Not Allowed
+  │
+  │     Any non-2xx/3xx response (400/403/404/405/431/500/503) is rendered
+  │     via send_error_response(ctx, status_code, status_line, epoch)  ──►  see §5c
   │
   └─ conn_cleanup:
         free(raw_request)
@@ -156,7 +169,7 @@ GET/HEAD "/"  (http_router.c)
   ├─ body = buildHomeWebSite(epoch, lang)         ── html_builder/orchestrator.c
   │     ├─ container(epoch)
   │     │     generate_url_theme("container/container_epoch%d.html", epoch)
-  │     │     read_file_to_string() → tpl (3x %s: menu, slider, home_content; {{PAGE_TITLE}})
+  │     │     read_file_to_string() → tpl (4x %s: menu, slider, home_content, home_blog; {{PAGE_TITLE}})
   │     │
   │     ├─ menu("/", epoch)
   │     │     reads menu_epoch%d.html, menu-item_epoch%d.html, menu-item-separator_epoch%d.html
@@ -170,10 +183,16 @@ GET/HEAD "/"  (http_router.c)
   │     │     for each entry in UPDATES: render_template(item_tpl, title, date, text)
   │     │     → str_append into items, then render_template(content_tpl, items)
   │     │
-  │     ├─ NULL check: any of the 4 pieces missing → goto cleanup, free non-NULL pieces
+  │     ├─ home_blog(epoch)
+  │     │     reads home-blog_epoch%d.html, home-blog-item_epoch%d.html
+  │     │     for each entry in BLOG_POSTS: render_template(item_tpl, image, link, title, summary, author, date)
+  │     │     (epoch -1/0: render_template(item_tpl, title, date, summary))
+  │     │     → str_append into items, then render_template(content_tpl, items)
   │     │
-  │     └─ render_template(container_tpl, menu_html, slider_html, home_content_html)
-  │           free(container_tpl/menu_html/slider_html/home_content_html)
+  │     ├─ NULL check: any of the 5 pieces missing → goto cleanup, free non-NULL pieces
+  │     │
+  │     └─ render_template(container_tpl, menu_html, slider_html, home_content_html, home_blog_html)
+  │           free(container_tpl/menu_html/slider_html/home_content_html/home_blog_html)
   │
   ├─ body == NULL? → send 500 Internal Server Error
   │
@@ -197,7 +216,143 @@ served from the same `html/` tree via the normal static file path (§5).
 
 ---
 
+## 5b. Login, Dashboard and Logout Routes
+
+All four routes share `epoch = resolve_epoch(req)` (`force_epoch` override, else
+`detect_epoch(User-Agent)`) and the generic `page_epoch<N>.html` shell via
+`buildPageWebSite(epoch, title, content)` (head + menu + `%s` content + footer).
+
+```
+GET/HEAD "/login"  (http_router.c)
+  │
+  ├─ epoch = resolve_epoch(req)
+  ├─ cookie = get_header_value(req, "Cookie")
+  │
+  ├─ mongodb_manager_is_ready() && validate_session_cookie(cookie, user_id) == 1 ?
+  │     yes → response = build_redirect_response("/dashboard", "", epoch)
+  │           "302 Found\r\nLocation: /dashboard"
+  │           send_or_error(...)                       ── already logged in, skip the form
+  │
+  │     no  ↓
+  ├─ content = login(epoch, NULL)              ── modules/login
+  │     epoch == EPOCH_MODERN → login_epoch3.html, error %s = ""
+  │     epoch != EPOCH_MODERN → login_epoch<N>.html, verbatim ("not available")
+  ├─ body = buildPageWebSite(epoch, "Boat Rudder - Login", content)
+  └─ response = build_epoch_response(body, "", epoch); send_or_error(...)
+
+
+POST "/login"  (http_router.c)
+  │
+  ├─ epoch = resolve_epoch(req)
+  │
+  ├─ epoch != EPOCH_MODERN?
+  │     → content = login(epoch, NULL); buildPageWebSite(...); 200 OK ("not available")
+  │       (no DB access at all)
+  │
+  ├─ !mongodb_manager_is_ready()?
+  │     → send_error_response(ctx, 503, "503 Service Unavailable", epoch)
+  │
+  └─ else:
+        ├─ parse_urlencoded_field(body, "user")     → email
+        ├─ parse_urlencoded_field(body, "password") → password
+        │
+        ├─ user_id = auth_login_user(email, password)   ── db/auth.c
+        │     find users.email == email
+        │     crypto_pwhash_str_verify(hash, password)   (libsodium, Argon2id)
+        │     match → malloc'd 24-hex ObjectId string ; else → NULL
+        │     (unknown email / wrong password / DB error → all NULL, no enumeration)
+        │
+        ├─ user_id == NULL?
+        │     → content = login(epoch, "Invalid email or password.")
+        │       body = buildPageWebSite(epoch, "Boat Rudder - Login", content)
+        │       200 OK (re-rendered form + error block)
+        │
+        └─ user_id != NULL:
+              ├─ token = generate_session_token()        ── db/session_manager.c
+              │     32 random bytes (libsodium CSPRNG) → 64-hex string
+              ├─ create_session(user_id, token, session_ttl_seconds)
+              │     insert sessions: {user_id, token, created_at, expires_at}
+              ├─ build_session_cookie_header(token, ttl, ...)
+              │     "Set-Cookie: session=<token>; HttpOnly; Path=/;
+              │      Max-Age=<ttl>; SameSite=Lax[; Secure]"
+              └─ response = build_redirect_response("/dashboard", cookie_header, epoch)
+                    "302 Found\r\nLocation: /dashboard\r\nSet-Cookie: ..."
+
+
+GET/HEAD "/dashboard"  (http_router.c)
+  │
+  ├─ epoch = resolve_epoch(req)
+  │
+  ├─ !mongodb_manager_is_ready()?
+  │     → send_error_response(ctx, 503, "503 Service Unavailable", epoch)
+  │
+  └─ else:
+        ├─ cookie = header("Cookie")
+        ├─ validate_session_cookie(cookie, user_id_out)  ── db/session_manager.c
+        │     extract_session_token() + validate_session()
+        │     1  → valid, non-expired session (user_id_out filled)
+        │     0  → missing / invalid / expired
+        │     -1 → DB error
+        │
+        ├─ == 1?
+        │     → content = dashboard(epoch)            ── modules/dashboard
+        │       body = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content)
+        │       200 OK ("Welcome to dashboard")
+        │
+        └─ != 1 (0 or -1)?
+              → response = build_redirect_response("/login", "", epoch)
+                "302 Found\r\nLocation: /login"
+
+
+GET/HEAD "/logout"  (http_router.c)
+  │
+  ├─ epoch = resolve_epoch(req)
+  ├─ cookie = header("Cookie")
+  ├─ mongodb_manager_is_ready() && extract_session_token(cookie, token)?
+  │     → destroy_session(token)                       ── delete from sessions
+  ├─ build_session_clear_cookie_header(...)
+  │     "Set-Cookie: session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax[; Secure]"
+  └─ response = build_redirect_response("/", clear_cookie, epoch)
+        "302 Found\r\nLocation: /\r\nSet-Cookie: session=...; Max-Age=0"
+```
+
+---
+
+## 5c. Centralized Epoch-Aware Error Pages
+
+Every non-2xx/3xx response - `400`, `403`, `404`, `405`, `431`, `500`, `503` - including those
+returned as a status code from `serve_static_file()` (§5), goes through one helper:
+
+```
+send_error_response(ctx, status_code, status_line, epoch)  (http_router.c)
+  │
+  ├─ content  = error_content(epoch, status_code, NULL)   ── modules/error
+  │     loads error_epoch<N>.html, fills 2x %s (status_code, message)
+  │     message == NULL → default message from a static table
+  │     (400/403/404/405/431/500/503; unknown codes → "Error")
+  │
+  ├─ body     = buildPageWebSite(epoch, "Boat Rudder - Error <code>", content)
+  ├─ response = build_epoch_response_status(body, "", epoch, status_line)
+  │
+  ├─ response == NULL? (template missing / alloc failure)
+  │     → send_simple(ctx, status_line, "<html><body><h1><status_line></h1></body></html>")
+  │
+  └─ else: connection_write(ctx, response, strlen(response)); free(response)
+```
+
+`send_or_error(ctx, response, method, epoch)` is the complementary helper used by every other
+route: writes a malloc'd `response` (truncated to headers for `HEAD`), or calls
+`send_error_response(ctx, 500, "500 Internal Server Error", epoch)` if `response` is `NULL`
+(e.g. `buildPageWebSite()`/`buildHomeWebSite()` returned `NULL`).
+
+---
+
 ## 5. Static File Handler (`utils/static_file_server.c`)
+
+`serve_static_file()` returns `int`: `0` if it already wrote a response (`200`/`304`, or a
+streaming failure that closed the connection), otherwise an HTTP status code (`403`/`404`/`500`)
+with **nothing written yet** - the caller (`http_router.c`) renders that status via the
+epoch-aware `send_error_response()` (§5c).
 
 ```
 serve_static_file(ctx, root_directory, decoded_url, if_modified_since)
@@ -205,16 +360,17 @@ serve_static_file(ctx, root_directory, decoded_url, if_modified_since)
   ├─ build path:  safe_path = root_directory + decoded_url
   │
   ├─ stat(safe_path):
-  │     ENOENT / error? → send 404 Not Found → return
+  │     ENOENT / error? → return 404  (no response written)
   │
   ├─ S_ISDIR? → append "/index.html" to safe_path, re-stat
+  │     too long / re-stat fails? → return 403 / 404
   │
   ├─ Cache validation:
-  │     if_modified_since set && file not modified since → send 304 Not Modified → return
+  │     if_modified_since set && file not modified since → send 304 Not Modified → return 0
   │
   └─ Regular file:
         open(safe_path, O_RDONLY)
-        error? → send 500 Internal Server Error → return
+        error? → return 500  (no response written)
         │
         ├─ get_mime_type(safe_path)  ← extension lookup table
         │
@@ -228,7 +384,8 @@ serve_static_file(ctx, root_directory, decoded_url, if_modified_since)
         │     read(fd, buffer, 8192) → connection_write(ctx, buffer, bytes)
         │     repeat until EOF
         │
-        └─ close(fd)
+        ├─ close(fd)
+        └─ return 0
 ```
 
 ---
@@ -265,11 +422,14 @@ SIGINT / SIGTERM
 
 main loop exits
   │
-  └─ server_stop():
-        running = 0
-        close(server_fd_http)
-        close(server_fd_https)
-        tls_free_context(ssl_ctx)
+  ├─ server_stop():
+  │     running = 0
+  │     close(server_fd_http)
+  │     close(server_fd_https)
+  │     tls_free_context(ssl_ctx)
+  │
+  └─ mongodb_manager_cleanup()
+        mongoc_client_pool_destroy() + mongoc_cleanup()
 ```
 
 Active threads finish naturally (they check nothing from main, they just run to completion with the 5 s socket timeout as backstop).

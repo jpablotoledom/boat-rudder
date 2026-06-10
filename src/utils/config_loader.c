@@ -17,6 +17,9 @@ char theme[64]            = "dark";
 char lang[16]             = "Eng";
 char public_url[256]      = {0};
 int  force_epoch          = -2;
+char mongodb_uri[256]     = "mongodb://localhost:27017";
+char mongodb_db[64]       = "boat_rudder";
+int  session_ttl_seconds  = 86400;
 
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -65,6 +68,14 @@ int load_config(const char *filename) {
             public_url[sizeof(public_url) - 1] = '\0';
         } else if (strcmp(key, "force_epoch") == 0) {
             force_epoch = atoi(value);
+        } else if (strcmp(key, "mongodb_uri") == 0) {
+            strncpy(mongodb_uri, value, sizeof(mongodb_uri) - 1);
+            mongodb_uri[sizeof(mongodb_uri) - 1] = '\0';
+        } else if (strcmp(key, "mongodb_db") == 0) {
+            strncpy(mongodb_db, value, sizeof(mongodb_db) - 1);
+            mongodb_db[sizeof(mongodb_db) - 1] = '\0';
+        } else if (strcmp(key, "session_ttl_seconds") == 0) {
+            session_ttl_seconds = atoi(value);
         }
     }
 

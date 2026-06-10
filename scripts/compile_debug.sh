@@ -30,8 +30,8 @@ mkdir -p bin
 cp ./build/base-http-server ./bin/base-http-server
 cp -r ./configs ./bin/configs
 
-# Copy www/ if it exists
-[ -d ./www ] && cp -r ./www ./bin/www
+# Copy html/ if it exists
+[ -d ./html ] && cp -r ./html ./bin/html
 
 # Copy ssl/ only if it contains files
 if [ -d ./ssl ] && [ -n "$(ls -A ./ssl 2>/dev/null)" ]; then

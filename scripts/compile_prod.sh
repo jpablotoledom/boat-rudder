@@ -39,7 +39,7 @@ mkdir -p bin
 cp ./build/base-http-server ./bin/base-http-server
 cp -r ./configs ./bin/configs
 
-[ -d ./www ] && cp -r ./www ./bin/www
+[ -d ./html ] && cp -r ./html ./bin/html
 
 if [ -d ./ssl ] && [ -n "$(ls -A ./ssl 2>/dev/null)" ]; then
     cp -r ./ssl ./bin/ssl

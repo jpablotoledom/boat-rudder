@@ -1,0 +1,69 @@
+<div class="boat-rudder__navbar-space">
+  <div class="boat-rudder__navbar">
+    <div class="boat-rudder__navbar__content">
+      <div class="boat-rudder__navbar__title boat-rudder__navbar__title_onslidelogo" id="navbarTitle">
+        <a href="/">Boat Rudder</a>
+      </div>
+
+      <button class="navbar__toggle" id="navbarToggle">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </button>
+
+      <div class="boat-rudder__navbar__menu boat-rudder__navbar__menu_onslidelogo" id="navbarMenu">
+%s
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const navbarTitle = document.getElementById('navbarTitle');
+  const navbarMenu = document.getElementById('navbarMenu');
+  const toggleBtn = document.getElementById('navbarToggle');
+  const isHome = window.location.pathname === '/';
+
+  if (isHome) {
+    const updateScroll = () => {
+      if (window.scrollY > 100) {
+        navbarTitle.classList.remove('boat-rudder__navbar__title_onslidelogo');
+        navbarMenu.classList.remove('boat-rudder__navbar__menu_onslidelogo');
+      } else {
+        navbarTitle.classList.add('boat-rudder__navbar__title_onslidelogo');
+        navbarMenu.classList.add('boat-rudder__navbar__menu_onslidelogo');
+      }
+    };
+
+    function throttle(func, limit) {
+      let lastFunc;
+      let lastRan;
+      return function (...args) {
+        if (!lastRan) {
+          func.apply(this, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(() => {
+            if (Date.now() - lastRan >= limit) {
+              func.apply(this, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      };
+    }
+
+    updateScroll();
+    window.addEventListener('scroll', throttle(updateScroll, 50));
+  } else {
+    navbarTitle.classList.remove('boat-rudder__navbar__title_onslidelogo');
+    navbarMenu.classList.remove('boat-rudder__navbar__menu_onslidelogo');
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    navbarMenu.classList.toggle('menu--open');
+  });
+})();
+</script>

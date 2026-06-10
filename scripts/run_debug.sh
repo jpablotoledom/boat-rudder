@@ -4,8 +4,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
 BINARY="./bin/base-http-server"
-WWW_DIR="./bin/www"
-CONFIG="./bin/configs/config.txt"
+HTML_DIR="./bin/html"
+CONFIG="./bin/configs/settings.conf"
 
 source ./scripts/show/divbar
 echo "Starting base-http-server in debug mode..."
@@ -18,14 +18,14 @@ if [ ! -f "$BINARY" ]; then
     exit 1
 fi
 
-# Verify www/ exists
-if [ ! -d "$WWW_DIR" ]; then
-    echo "Warning: $WWW_DIR not found - creating an empty one."
-    mkdir -p "$WWW_DIR"
+# Verify html/ exists
+if [ ! -d "$HTML_DIR" ]; then
+    echo "Warning: $HTML_DIR not found - creating an empty one."
+    mkdir -p "$HTML_DIR"
 fi
 
 # Sync configs and ssl from source to bin/ so changes take effect without recompiling
-cp -f ./configs/config.txt ./bin/configs/config.txt 2>/dev/null || true
+cp -f ./configs/settings.conf ./bin/configs/settings.conf 2>/dev/null || true
 if [ -d ./ssl ] && [ -n "$(ls -A ./ssl 2>/dev/null)" ]; then
     mkdir -p ./bin/ssl
     cp -f ./ssl/*.pem ./bin/ssl/ 2>/dev/null || true
@@ -59,7 +59,7 @@ if [ "$SSL_ENABLED" = "1" ]; then
     echo "HTTPS port: ${HTTPS_PORT:-?}"
 fi
 echo "Config    : $CONFIG"
-echo "Serving   : $WWW_DIR"
+echo "Serving   : $HTML_DIR"
 source ./scripts/show/divbar
 
 OS="$(uname -s)"
@@ -70,14 +70,14 @@ if [ "$OS" = "Linux" ] && command -v gdb &>/dev/null; then
         gdb -q \
             -ex "handle SIGPIPE nostop noprint pass" \
             -ex run \
-            --args "$BINARY" -c "$CONFIG" "$WWW_DIR"
+            --args "$BINARY" -c "$CONFIG" "$HTML_DIR"
 
 elif [ "$OS" = "Darwin" ] && command -v lldb &>/dev/null; then
     echo "Debugger: LLDB"
     ASAN_OPTIONS=check_printf=0 \
-        lldb -- "$BINARY" -c "$CONFIG" "$WWW_DIR"
+        lldb -- "$BINARY" -c "$CONFIG" "$HTML_DIR"
 
 else
     echo "No debugger found - running directly (ASan still active)."
-    ASAN_OPTIONS=check_printf=0 "$BINARY" -c "$CONFIG" "$WWW_DIR"
+    ASAN_OPTIONS=check_printf=0 "$BINARY" -c "$CONFIG" "$HTML_DIR"
 fi

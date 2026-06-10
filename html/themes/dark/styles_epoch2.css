@@ -1,0 +1,101 @@
+body {
+  background-color: #000000;
+  color: #ffffff;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a:link, a:visited {
+  color: #56e9fd;
+}
+
+.br-page {
+  width: 100%;
+}
+
+.br-page-content {
+  padding: 20px;
+}
+
+.br-menu {
+  background-color: #000080;
+}
+
+.br-menu__logo {
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+
+.br-menu__item {
+  padding: 8px;
+  text-align: center;
+}
+
+.br-menu__separator {
+  width: 1px;
+  background-color: #ffffff;
+}
+
+.br-slider {
+  background-color: #000080;
+  width: 100%;
+}
+
+.br-slider__title {
+  background-color: #000080;
+  padding: 10px 0;
+}
+
+.br-slider__title h1 {
+  margin: 0;
+}
+
+.br-home-content {
+  padding: 20px;
+}
+
+.br-home-content__item {
+  background-color: #000080;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.br-home-content__item-date {
+  color: #cccccc;
+  font-style: italic;
+}
+
+.br-home-blog {
+  padding: 20px;
+}
+
+.boat-rudder__home-blog__item {
+  background-color: #000080;
+  padding: 10px;
+  margin: 10px 0;
+  overflow: hidden;
+}
+
+.boat-rudder__home-blog__item__image {
+  float: left;
+  margin-right: 10px;
+}
+
+.boat-rudder__home-blog__item__container h2 {
+  margin-top: 0;
+}
+
+.boat-rudder__home-blog__item__byline-owner {
+  color: #f2e200;
+}
+
+.boat-rudder__home-blog__item__byline-date {
+  color: #f9964f;
+  float: right;
+}
+
+.br-footer {
+  text-align: center;
+  background-color: #001a00;
+  padding: 10px;
+  margin-top: 20px;
+}

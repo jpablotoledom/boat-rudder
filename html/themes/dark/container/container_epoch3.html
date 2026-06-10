@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+{{PAGE_TITLE}}
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/themes/dark/styles_epoch3.css">
+</head>
+<body>
+<div class="boat-rudder__main-container">
+%s
+%s
+%s
+%s
+<footer class="boat-rudder__footer">
+<div class="boat-rudder__footer-title">BOAT RUDDER</div>
+</footer>
+</div>
+
+<div class="boat-rudder__home-blog-modal" id="homeBlogModal">
+  <span class="boat-rudder__home-blog-modal__close" id="homeBlogModalClose">&times;</span>
+  <img id="homeBlogModalImage" src="" alt="">
+</div>
+
+<script>
+(function () {
+  const modal = document.getElementById('homeBlogModal');
+  const modalImage = document.getElementById('homeBlogModalImage');
+  const closeModal = document.getElementById('homeBlogModalClose');
+
+  document.querySelectorAll('.boat-rudder__home-blog__item__image img').forEach((image) => {
+    image.addEventListener('click', () => {
+      modalImage.src = image.src;
+      modal.classList.add('active');
+    });
+  });
+
+  closeModal.addEventListener('click', () => modal.classList.remove('active'));
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.remove('active');
+  });
+})();
+</script>
+</body>
+</html>

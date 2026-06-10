@@ -10,4 +10,13 @@
 // returned buffer.
 char *buildHomeWebSite(int epoch, const char *lang);
 
+// Builds a generic, non-home page (login, dashboard, error, ...) by wrapping
+// `html_content` in the page_epoch<N>.html shell (head + menu + footer) and
+// resolving {{PAGE_TITLE}} as "<title>page_title</title>".
+//
+// Takes ownership of `html_content` (always frees it, even on failure).
+// Returns a malloc'd string, or NULL if the shell template or menu could not
+// be built. The caller must free() the returned buffer.
+char *buildPageWebSite(int epoch, const char *page_title, char *html_content);
+
 #endif // ORCHESTRATOR_H

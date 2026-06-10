@@ -14,6 +14,7 @@ object "container_epoch<N>.html" as CONTAINER {
   %s (1) -> menu
   %s (2) -> slider
   %s (3) -> home_content
+  %s (4) -> home_blog
 }
 
 object "menu_epoch<N>.html" as MENU {
@@ -45,12 +46,33 @@ object "home-content-item_epoch<N>.html" as HOMEITEM {
   %s -> text
 }
 
+object "home-blog_epoch<N>.html" as HOMEBLOG {
+  %s -> items
+}
+
+object "home-blog-item_epoch<N>.html" as BLOGITEM {
+  epoch -1/0:
+  %s -> title
+  %s -> date
+  %s -> summary
+  --
+  epoch 1/2/3:
+  %s -> image
+  %s -> link
+  %s -> title
+  %s -> summary
+  %s -> author
+  %s -> date
+}
+
 CONTAINER *-- MENU
 CONTAINER *-- SLIDER
 CONTAINER *-- HOMECONTENT
+CONTAINER *-- HOMEBLOG
 MENU *-- "0..N" MENUITEM
 MENUITEM o-- SEP : separator arg
 HOMECONTENT *-- "0..N" HOMEITEM
+HOMEBLOG *-- "0..N" BLOGITEM
 
 note bottom of CONTAINER
   %s arguments are substituted via printf %s:

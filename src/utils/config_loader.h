@@ -33,4 +33,11 @@ extern int force_epoch;
 // Public base URL of the site (reserved for future SEO/canonical links).
 extern char public_url[256];
 
+// MongoDB connection URI and database name (login/sessions, epoch3 only).
+extern char mongodb_uri[256];
+extern char mongodb_db[64];
+
+// Session cookie lifetime, in seconds.
+extern int session_ttl_seconds;
+
 #endif // CONFIG_LOADER_H

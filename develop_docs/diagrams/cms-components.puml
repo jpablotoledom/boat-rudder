@@ -31,6 +31,7 @@ package "modules" {
     [menu] as MENU
     [slider] as SLIDER
     [home_content] as HOME
+    [home_blog] as BLOG
 }
 
 package "utils" {
@@ -54,20 +55,24 @@ ORCH --> CONTAINER
 ORCH --> MENU
 ORCH --> SLIDER
 ORCH --> HOME
-ORCH --> TPL : render_template(container,\nmenu, slider, home_content)
+ORCH --> BLOG
+ORCH --> TPL : render_template(container,\nmenu, slider, home_content, home_blog)
 
 CONTAINER --> URLTHEME
 MENU --> URLTHEME
 SLIDER --> URLTHEME
 HOME --> URLTHEME
+BLOG --> URLTHEME
 
 CONTAINER --> READFILE
 MENU --> READFILE
 SLIDER --> READFILE
 HOME --> READFILE
+BLOG --> READFILE
 
 MENU --> TPL : per item:\nrender_template + str_append
 HOME --> TPL : per item:\nrender_template + str_append
+BLOG --> TPL : per item:\nrender_template + str_append
 CONTAINER --> TPL : str_replace_first({{PAGE_TITLE}})
 
 URLTHEME --> CONFIG : reads "theme"

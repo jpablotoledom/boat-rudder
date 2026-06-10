@@ -54,6 +54,6 @@ if [ -d ./bin ]; then
 fi
 
 source ./scripts/show/divbar
-echo "Done! Enable HTTPS in configs/config.txt:"
+echo "Done! Enable HTTPS in configs/settings.conf:"
 echo "  ssl_enabled=1"
 echo ""

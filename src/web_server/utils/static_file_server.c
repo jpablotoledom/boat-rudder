@@ -27,21 +27,6 @@
     "X-Content-Type-Options: nosniff\r\n" \
     "X-Frame-Options: SAMEORIGIN\r\n"
 
-static void send_error(void *ctx, int code, const char *reason, const char *body) {
-    char header[512];
-    int  body_len = (int)strlen(body);
-    snprintf(header, sizeof(header),
-        "HTTP/1.1 %d %s\r\n"
-        "Content-Type: text/html; charset=UTF-8\r\n"
-        "Content-Length: %d\r\n"
-        SECURITY_HEADERS
-        "Connection: close\r\n"
-        "\r\n",
-        code, reason, body_len);
-    connection_write(ctx, header, strlen(header));
-    connection_write(ctx, body, body_len);
-}
-
 // Format a time_t as an HTTP-date string (RFC 7231).
 static void format_http_date(char *buf, size_t size, time_t t) {
     struct tm tm_val;
@@ -57,34 +42,30 @@ static time_t parse_http_date(const char *s) {
     return timegm(&tm_val);
 }
 
-void serve_static_file(void *ctx,
-                       const char *root_directory,
-                       const char *decoded_url,
-                       const char *if_modified_since) {
+int serve_static_file(void *ctx,
+                      const char *root_directory,
+                      const char *decoded_url,
+                      const char *if_modified_since) {
     char safe_path[PATH_MAX];
     if (!sanitize_path(decoded_url, safe_path, sizeof(safe_path), root_directory)) {
         LOG_WARN("Path traversal or invalid path: %s", decoded_url);
-        send_error(ctx, 404, "Not Found", "<html><body><h1>404 Not Found</h1></body></html>");
-        return;
+        return 404;
     }
 
     struct stat st;
     if (stat(safe_path, &st) != 0) {
-        send_error(ctx, 404, "Not Found", "<html><body><h1>404 Not Found</h1></body></html>");
-        return;
+        return 404;
     }
 
     // Directory → serve index.html inside it.
     if (S_ISDIR(st.st_mode)) {
         size_t base_len = strlen(safe_path);
         if (base_len + sizeof("/index.html") >= sizeof(safe_path)) {
-            send_error(ctx, 403, "Forbidden", "<html><body><h1>403 Forbidden</h1></body></html>");
-            return;
+            return 403;
         }
         memcpy(safe_path + base_len, "/index.html", sizeof("/index.html"));
         if (stat(safe_path, &st) != 0) {
-            send_error(ctx, 404, "Not Found", "<html><body><h1>404 Not Found</h1></body></html>");
-            return;
+            return 404;
         }
     }
 
@@ -104,15 +85,13 @@ void serve_static_file(void *ctx,
             last_modified_str);
         connection_write(ctx, header, strlen(header));
         LOG_DEBUG("304 Not Modified: %s", safe_path);
-        return;
+        return 0;
     }
 
     int fd = open(safe_path, O_RDONLY);
     if (fd < 0) {
         LOG_ERROR("open(%s) failed", safe_path);
-        send_error(ctx, 500, "Internal Server Error",
-                   "<html><body><h1>500 Internal Server Error</h1></body></html>");
-        return;
+        return 500;
     }
 
     const char *mime = get_mime_type(safe_path);
@@ -141,4 +120,5 @@ void serve_static_file(void *ctx,
 
     close(fd);
     LOG_DEBUG("200 OK: %s (%s, %ld bytes)", safe_path, mime, (long)st.st_size);
+    return 0;
 }

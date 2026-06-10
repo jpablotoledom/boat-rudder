@@ -22,6 +22,7 @@ participant "container" as CONTAINER
 participant "menu" as MENU
 participant "slider" as SLIDER
 participant "home_content" as HOME
+participant "home_blog" as BLOG
 participant "build_epoch_response" as RESP
 
 Client -> ROUTER : GET / HTTP/1.1\nUser-Agent: ...
@@ -33,7 +34,7 @@ activate ORCH
 
 ORCH -> CONTAINER : container(epoch)
 CONTAINER -> CONTAINER : generate_url_theme + read_file\n+ str_replace_first({{PAGE_TITLE}})
-CONTAINER --> ORCH : html_container\n(3x %s placeholders)
+CONTAINER --> ORCH : html_container\n(4x %s placeholders)
 
 ORCH -> MENU : menu("/", epoch)
 activate MENU
@@ -61,12 +62,23 @@ HOME -> HOME : render_template(content_tpl, items)
 deactivate HOME
 HOME --> ORCH : html_home_content
 
+ORCH -> BLOG : home_blog(epoch)
+activate BLOG
+BLOG -> BLOG : load home-blog_epoch<N>,\nhome-blog-item_epoch<N>
+loop for each entry in BLOG_POSTS
+  BLOG -> BLOG : render_template(item_tpl,\nimage, link, title, summary, author, date)\n(epoch -1/0: title, date, summary)
+  BLOG -> BLOG : str_append(items, item)
+end
+BLOG -> BLOG : render_template(content_tpl, items)
+deactivate BLOG
+BLOG --> ORCH : html_home_blog
+
 alt any component == NULL
   ORCH -> ORCH : free non-NULL pieces
   ORCH --> ROUTER : NULL
   ROUTER -> Client : 500 Internal Server Error
 else all components OK
-  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content)
+  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content, html_home_blog)
   ORCH -> ORCH : free all intermediate buffers
   ORCH --> ROUTER : body (full HTML / WML document)
   deactivate ORCH

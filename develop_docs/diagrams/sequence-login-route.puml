@@ -1,0 +1,78 @@
+@startuml sequence-login-route
+
+title Boat Rudder - "POST /login" Route (Authentication)
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipant underline
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Client
+participant "http_router" as ROUTER
+participant "resolve_epoch" as EPOCH
+participant "mongodb_manager" as MONGO
+participant "auth\n(auth_login_user)" as AUTH
+participant "session_manager" as SESSION
+participant "login module" as LOGIN
+participant "orchestrator\n(buildPageWebSite)" as ORCH
+participant "build_epoch_response" as RESP
+
+Client -> ROUTER : POST /login\nuser=...&password=...
+ROUTER -> EPOCH : resolve_epoch(req)
+EPOCH --> ROUTER : epoch (-1..3)
+
+alt epoch != EPOCH_MODERN
+  ROUTER -> LOGIN : login(epoch, NULL)
+  LOGIN --> ROUTER : html ("not available")
+  ROUTER -> ORCH : buildPageWebSite(epoch, "Login", html)
+  ORCH --> ROUTER : body
+  ROUTER -> RESP : build_epoch_response(body, "", epoch)
+  RESP --> ROUTER : response (200 OK)
+  ROUTER -> Client : 200 OK\n"functionality not available"
+
+else epoch == EPOCH_MODERN
+  ROUTER -> MONGO : mongodb_manager_is_ready()
+
+  alt not ready
+    ROUTER -> Client : 503 Service Unavailable\n(error_epoch3.html)
+
+  else ready
+    ROUTER -> ROUTER : parse_urlencoded_field(body, "user")\nparse_urlencoded_field(body, "password")
+    ROUTER -> AUTH : auth_login_user(email, password)
+    AUTH -> MONGO : find user by email\nin "users" collection
+    MONGO --> AUTH : user document (or none)
+    AUTH -> AUTH : crypto_pwhash_str_verify(hash, password)
+    AUTH --> ROUTER : user_id (24-hex) | NULL
+
+    alt user_id == NULL
+      ROUTER -> LOGIN : login(epoch, "Invalid email or password.")
+      LOGIN --> ROUTER : html (form + error block)
+      ROUTER -> ORCH : buildPageWebSite(epoch, "Login", html)
+      ORCH --> ROUTER : body
+      ROUTER -> RESP : build_epoch_response(body, "", epoch)
+      RESP --> ROUTER : response (200 OK)
+      ROUTER -> Client : 200 OK\nlogin form + error message
+
+    else user_id != NULL
+      ROUTER -> SESSION : generate_session_token()
+      SESSION --> ROUTER : token (64-hex)
+      ROUTER -> SESSION : create_session(user_id, token, ttl)
+      SESSION -> MONGO : insert into "sessions"\n{user_id, token, created_at, expires_at}
+      SESSION --> ROUTER : 0 (ok)
+      ROUTER -> SESSION : build_session_cookie_header(token, ttl)
+      SESSION --> ROUTER : "Set-Cookie: session=...; HttpOnly;\nPath=/; Max-Age=<ttl>; SameSite=Lax[; Secure]"
+      ROUTER -> RESP : build_redirect_response("/dashboard", cookie_header, epoch)
+      RESP --> ROUTER : response (302 Found)
+      ROUTER -> Client : 302 Found\nLocation: /dashboard\nSet-Cookie: session=...
+    end
+  end
+end
+
+@enduml

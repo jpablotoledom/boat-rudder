@@ -6,7 +6,13 @@
 #include "http_request_parser.h"
 #include "utils/url_parser.h"
 #include "utils/static_file_server.h"
+#include "../db/auth.h"
+#include "../db/mongodb_manager.h"
+#include "../db/session_manager.h"
 #include "../html_builder/orchestrator.h"
+#include "../modules/dashboard/dashboard.h"
+#include "../modules/error/error.h"
+#include "../modules/login/login.h"
 #include "../utils/build_epoch_response.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
@@ -44,6 +50,93 @@ static void send_simple(void *ctx, const char *status, const char *body) {
     connection_write(ctx, body, body_len);
 }
 
+// Computes the browser "epoch" for `req`: the configured `force_epoch`
+// override, if set, otherwise detect_epoch(User-Agent).
+static int resolve_epoch(HttpRequest *req) {
+    if (force_epoch >= EPOCH_WML && force_epoch <= EPOCH_MODERN) return force_epoch;
+    return detect_epoch(get_header_value(req, "User-Agent"));
+}
+
+// Renders the centralized error_epoch<N>.html template via error_content() +
+// buildPageWebSite(), and sends it with `status_line`. Falls back to
+// send_simple() if the template could not be loaded/rendered.
+static void send_error_response(void *ctx, int status_code, const char *status_line, int epoch) {
+    char title[64];
+    snprintf(title, sizeof(title), "Boat Rudder - Error %d", status_code);
+
+    char *content  = error_content(epoch, status_code, NULL);
+    char *body     = buildPageWebSite(epoch, title, content);
+    char *response = body ? build_epoch_response_status(body, "", epoch, status_line) : NULL;
+    free(body);
+
+    if (!response) {
+        char fallback[256];
+        snprintf(fallback, sizeof(fallback), "<html><body><h1>%s</h1></body></html>", status_line);
+        send_simple(ctx, status_line, fallback);
+        return;
+    }
+
+    connection_write(ctx, response, strlen(response));
+    free(response);
+}
+
+// Sends a malloc'd full HTTP response, truncating to headers-only for HEAD
+// requests, and frees it. If `response` is NULL (some step failed), sends an
+// epoch-aware 500 error page instead.
+static void send_or_error(void *ctx, char *response, const char *method, int epoch) {
+    if (!response) {
+        send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+        return;
+    }
+
+    size_t response_len = strlen(response);
+    if (strcmp(method, "HEAD") == 0) {
+        const char *header_end = strstr(response, "\r\n\r\n");
+        response_len = header_end ? (size_t)(header_end - response) + 4 : response_len;
+    }
+    connection_write(ctx, response, response_len);
+    free(response);
+}
+
+// Extracts the url-decoded value of `key` from an
+// "application/x-www-form-urlencoded" body into `out` (NUL-terminated,
+// truncated to out_size - 1). Returns 1 if `key` was found, 0 otherwise
+// (out is left as an empty string).
+static int parse_urlencoded_field(const char *body, int body_length, const char *key,
+                                   char *out, size_t out_size) {
+    if (out_size == 0) return 0;
+    out[0] = '\0';
+    if (!body || body_length <= 0) return 0;
+
+    size_t key_len = strlen(key);
+    const char *p = body;
+    const char *end = body + body_length;
+
+    while (p < end) {
+        const char *eq = memchr(p, '=', (size_t)(end - p));
+        if (!eq) return 0;
+        const char *amp = memchr(p, '&', (size_t)(end - p));
+        const char *field_end = amp ? amp : end;
+
+        if ((size_t)(eq - p) == key_len && strncmp(p, key, key_len) == 0) {
+            char raw[256];
+            size_t val_len = (size_t)(field_end - (eq + 1));
+            if (val_len >= sizeof(raw)) val_len = sizeof(raw) - 1;
+            memcpy(raw, eq + 1, val_len);
+            raw[val_len] = '\0';
+
+            char decoded[256];
+            url_decode(decoded, raw);
+            strncpy(out, decoded, out_size - 1);
+            out[out_size - 1] = '\0';
+            return 1;
+        }
+
+        p = amp ? amp + 1 : end;
+    }
+    return 0;
+}
+
 void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     LOG_DEBUG("http_route() called");
 
@@ -72,8 +165,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             if (strstr(raw_request, "\r\n\r\n")) break;
             if (bytes_read >= (int)RAW_REQUEST_SIZE - 1) {
                 LOG_WARN("Headers exceed %d bytes", RAW_REQUEST_SIZE);
-                send_simple(ctx, "431 Request Header Fields Too Large",
-                            "<html><body><h1>431 Request Header Fields Too Large</h1></body></html>");
+                send_error_response(ctx, 431, "431 Request Header Fields Too Large", EPOCH_PRESTANDARD);
                 goto cleanup;
             }
             continue;
@@ -92,8 +184,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     // --- Parse request line + headers ---
     if (parse_http_request(raw_request, bytes_read, &req) != 0) {
         LOG_WARN("Malformed HTTP request");
-        send_simple(ctx, "400 Bad Request",
-                    "<html><body><h1>400 Bad Request</h1></body></html>");
+        send_error_response(ctx, 400, "400 Bad Request", EPOCH_PRESTANDARD);
         goto cleanup;
     }
 
@@ -101,8 +192,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         char m[16], u[2048], p[16];
         if (sscanf(raw_request, "%15s %2047s %15s", m, u, p) != 3 ||
             strncmp(p, "HTTP/", 5) != 0) {
-            send_simple(ctx, "400 Bad Request",
-                        "<html><body><h1>400 Bad Request</h1></body></html>");
+            send_error_response(ctx, 400, "400 Bad Request", EPOCH_PRESTANDARD);
             goto cleanup;
         }
     }
@@ -172,52 +262,131 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
             if (strcmp(decoded_url, "/") == 0) {
-                const char *ua = get_header_value(&req, "User-Agent");
-                int epoch = (force_epoch >= EPOCH_WML && force_epoch <= EPOCH_MODERN)
-                            ? force_epoch
-                            : detect_epoch(ua);
+                int epoch = resolve_epoch(&req);
 
                 char *body = buildHomeWebSite(epoch, lang);
-                if (!body) {
-                    LOG_ERROR("buildHomeWebSite failed for epoch %d", epoch);
-                    send_simple(ctx, "500 Internal Server Error",
-                                "<html><body><h1>500 Internal Server Error</h1></body></html>");
-                    goto cleanup;
-                }
+                if (!body) LOG_ERROR("buildHomeWebSite failed for epoch %d", epoch);
 
-                char *response = build_epoch_response(body, "", epoch);
+                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                 free(body);
-                if (!response) {
-                    send_simple(ctx, "500 Internal Server Error",
-                                "<html><body><h1>500 Internal Server Error</h1></body></html>");
-                    goto cleanup;
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (strcmp(decoded_url, "/login") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                const char *cookie = get_header_value(&req, "Cookie");
+
+                if (mongodb_manager_is_ready() && validate_session_cookie(cookie, user_id) == 1) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char *content  = login(epoch, NULL);
+                    char *body     = buildPageWebSite(epoch, "Boat Rudder - Login", content);
+                    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
                 }
 
-                size_t response_len = strlen(response);
-                if (strcmp(req.method, "HEAD") == 0) {
-                    const char *header_end = strstr(response, "\r\n\r\n");
-                    response_len = header_end ? (size_t)(header_end - response) + 4 : response_len;
+            } else if (strcmp(decoded_url, "/dashboard") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (!mongodb_manager_is_ready()) {
+                    send_error_response(ctx, 503, "503 Service Unavailable", epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    const char *cookie = get_header_value(&req, "Cookie");
+
+                    if (validate_session_cookie(cookie, user_id) == 1) {
+                        char *content  = dashboard(epoch);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else {
+                        char *response = build_redirect_response("/login", "", epoch);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
                 }
-                connection_write(ctx, response, response_len);
-                free(response);
+
+            } else if (strcmp(decoded_url, "/logout") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                char token[SESSION_TOKEN_BUF_SIZE];
+                const char *cookie = get_header_value(&req, "Cookie");
+                if (mongodb_manager_is_ready() && extract_session_token(cookie, token, sizeof(token))) {
+                    destroy_session(token);
+                }
+
+                char clear_cookie[128];
+                build_session_clear_cookie_header(clear_cookie, sizeof(clear_cookie));
+
+                char *response = build_redirect_response("/", clear_cookie, epoch);
+                send_or_error(ctx, response, req.method, epoch);
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");
-                serve_static_file(ctx, root_directory, decoded_url, ims);
+                int status = serve_static_file(ctx, root_directory, decoded_url, ims);
+                if (status != 0) {
+                    const char *status_line = status == 404 ? "404 Not Found"
+                                             : status == 403 ? "403 Forbidden"
+                                             : "500 Internal Server Error";
+                    send_error_response(ctx, status, status_line, resolve_epoch(&req));
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/login") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *content  = login(epoch, NULL);
+                char *body     = buildPageWebSite(epoch, "Boat Rudder - Login", content);
+                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                free(body);
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (!mongodb_manager_is_ready()) {
+                send_error_response(ctx, 503, "503 Service Unavailable", epoch);
+
+            } else {
+                char email[256];
+                char password[256];
+                parse_urlencoded_field(req.body, req.body_length, "user", email, sizeof(email));
+                parse_urlencoded_field(req.body, req.body_length, "password", password, sizeof(password));
+
+                char *user_id = auth_login_user(email, password);
+                char *response = NULL;
+
+                if (user_id) {
+                    char *token = generate_session_token();
+                    if (token && create_session(user_id, token, session_ttl_seconds) == 0) {
+                        char cookie_header[256];
+                        build_session_cookie_header(token, session_ttl_seconds, cookie_header, sizeof(cookie_header));
+                        response = build_redirect_response("/dashboard", cookie_header, epoch);
+                    }
+                    free(token);
+                    free(user_id);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char *content  = login(epoch, "Invalid email or password.");
+                    char *body     = buildPageWebSite(epoch, "Boat Rudder - Login", content);
+                    response       = body ? build_epoch_response(body, "", epoch) : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
             }
 
         } else if (strcmp(req.method, "OPTIONS") == 0) {
             const char *opts =
                 "HTTP/1.1 204 No Content\r\n"
-                "Allow: GET, HEAD, OPTIONS\r\n"
+                "Allow: GET, HEAD, OPTIONS, POST\r\n"
                 "Content-Length: 0\r\n"
                 "Connection: close\r\n"
                 "\r\n";
             connection_write(ctx, opts, strlen(opts));
 
         } else {
-            send_simple(ctx, "405 Method Not Allowed",
-                        "<html><body><h1>405 Method Not Allowed</h1></body></html>");
+            send_error_response(ctx, 405, "405 Method Not Allowed", resolve_epoch(&req));
         }
     }
 

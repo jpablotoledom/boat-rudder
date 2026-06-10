@@ -79,6 +79,12 @@ Classification is a simple, dependency-free substring/version heuristic over `Us
 epoch `1` as the fallback for anything unrecognized (better to render an old-but-working page
 than to assume modern capabilities).
 
+> **Login is `EPOCH_MODERN`-only.** For security reasons, the `/login` form (and all
+> credential handling) is only served to `EPOCH_MODERN` (epoch `3`) clients - enforced
+> server-side on both `GET` and `POST /login`. The other four epochs show a static
+> "this functionality is not available" message instead. See
+> [§5, Authentication](#5-authentication-login-dashboard-and-logout).
+
 ```plantuml
 @startuml epoch-decision
 title Epoch Resolution for "/" - force_epoch Override + detect_epoch(User-Agent)
@@ -152,9 +158,12 @@ html/themes/dark/
 │   └── menu-item-separator_epoch{-1,0,1,2,3}.html
 ├── slider/
 │   └── slider_epoch{-1,0,1,2,3}.html
-└── home-content/
-    ├── home-content_epoch{-1,0,1,2,3}.html
-    └── home-content-item_epoch{-1,0,1,2,3}.html
+├── home-content/
+│   ├── home-content_epoch{-1,0,1,2,3}.html
+│   └── home-content-item_epoch{-1,0,1,2,3}.html
+└── home-blog/
+    ├── home-blog_epoch{-1,0,1,2,3}.html
+    └── home-blog-item_epoch{-1,0,1,2,3}.html
 ```
 
 Adding a new theme means adding a new `html/themes/<name>/` tree with the same file layout and
@@ -184,6 +193,7 @@ object "container_epoch<N>.html" as CONTAINER {
   %s (1) -> menu
   %s (2) -> slider
   %s (3) -> home_content
+  %s (4) -> home_blog
 }
 
 object "menu_epoch<N>.html" as MENU {
@@ -215,12 +225,33 @@ object "home-content-item_epoch<N>.html" as HOMEITEM {
   %s -> text
 }
 
+object "home-blog_epoch<N>.html" as HOMEBLOG {
+  %s -> items
+}
+
+object "home-blog-item_epoch<N>.html" as BLOGITEM {
+  epoch -1/0:
+  %s -> title
+  %s -> date
+  %s -> summary
+  --
+  epoch 1/2/3:
+  %s -> image
+  %s -> link
+  %s -> title
+  %s -> summary
+  %s -> author
+  %s -> date
+}
+
 CONTAINER *-- MENU
 CONTAINER *-- SLIDER
 CONTAINER *-- HOMECONTENT
+CONTAINER *-- HOMEBLOG
 MENU *-- "0..N" MENUITEM
 MENUITEM o-- SEP : separator arg
 HOMECONTENT *-- "0..N" HOMEITEM
+HOMEBLOG *-- "0..N" BLOGITEM
 
 note bottom of CONTAINER
   %s arguments are substituted via printf %s:
@@ -245,15 +276,16 @@ end note
 
 ### 2.5 Modules and the orchestrator
 
-Four small C modules each load their own templates and return a fully-rendered HTML/WML
+Five small C modules each load their own templates and return a fully-rendered HTML/WML
 fragment for a given epoch:
 
 | Module | Signature | Responsibility |
 |---|---|---|
-| `modules/container` | `char *container(int epoch)` | Page shell (`<head>`/`<body>` wrapper), resolves `{{PAGE_TITLE}}`, exposes 3 `%s` slots (menu, slider, home content) |
+| `modules/container` | `char *container(int epoch)` | Page shell (`<head>`/`<body>` wrapper), resolves `{{PAGE_TITLE}}`, exposes 4 `%s` slots (menu, slider, home content, home blog) |
 | `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from a static `MENU_ROUTES[]` table, joining items with the epoch's separator |
-| `modules/slider` | `char *slider(int epoch)` | Hero/banner block, static per epoch |
+| `modules/slider` | `char *slider(int epoch)` | Hero/banner (mainbanner) block, static per epoch |
 | `modules/home_content` | `char *home_content(int epoch, const char *lang)` | Welcome text + a static "updates" list, one item per `home-content-item_epoch<N>.html` |
+| `modules/home_blog` | `char *home_blog(int epoch)` | "Latest Blog Posts" gallery, one item per `home-blog-item_epoch<N>.html`, from a static `BLOG_POSTS[]` table |
 
 `src/html_builder/orchestrator.c` ties them together:
 
@@ -261,11 +293,12 @@ fragment for a given epoch:
 char *buildHomeWebSite(int epoch, const char *lang);
 ```
 
-1. Calls `container`, `menu`, `slider`, `home_content` for the given epoch.
-2. If any of the four returns `NULL`, frees whatever succeeded and returns `NULL` (the router
+1. Calls `container`, `menu`, `slider`, `home_content`, `home_blog` for the given epoch.
+2. If any of the five returns `NULL`, frees whatever succeeded and returns `NULL` (the router
    answers `500`).
-3. Otherwise calls `render_template(html_container, html_menu, html_slider, html_home_content)`
-   to inject the three components into the container's `%s` slots.
+3. Otherwise calls
+   `render_template(html_container, html_menu, html_slider, html_home_content, html_home_blog)`
+   to inject the four components into the container's `%s` slots.
 4. Frees every intermediate buffer and returns the final page body.
 
 Every function in this pipeline returns a `malloc`'d `char*` (or `NULL`); the caller is always
@@ -289,6 +322,7 @@ package "modules" {
     [menu] as MENU
     [slider] as SLIDER
     [home_content] as HOME
+    [home_blog] as BLOG
 }
 
 package "utils" {
@@ -312,20 +346,24 @@ ORCH --> CONTAINER
 ORCH --> MENU
 ORCH --> SLIDER
 ORCH --> HOME
-ORCH --> TPL : render_template(container,\nmenu, slider, home_content)
+ORCH --> BLOG
+ORCH --> TPL : render_template(container,\nmenu, slider, home_content, home_blog)
 
 CONTAINER --> URLTHEME
 MENU --> URLTHEME
 SLIDER --> URLTHEME
 HOME --> URLTHEME
+BLOG --> URLTHEME
 
 CONTAINER --> READFILE
 MENU --> READFILE
 SLIDER --> READFILE
 HOME --> READFILE
+BLOG --> READFILE
 
 MENU --> TPL : per item:\nrender_template + str_append
 HOME --> TPL : per item:\nrender_template + str_append
+BLOG --> TPL : per item:\nrender_template + str_append
 CONTAINER --> TPL : str_replace_first({{PAGE_TITLE}})
 
 URLTHEME --> CONFIG : reads "theme"
@@ -373,11 +411,20 @@ The CMS sits on top of a generic, dependency-light static file server:
   `connection_close`, so the rest of the code is protocol-agnostic.
 - **Routing** (`http_router.c`):
   - `GET`/`HEAD /` → the dynamic CMS pipeline described in §2.
+  - `GET`/`HEAD /login` → if a valid session cookie is present, `302 /dashboard`; otherwise the
+    login form (epoch3) or "not available" message (other epochs).
+  - `GET`/`HEAD /dashboard` → the static "Welcome to dashboard" page if a valid session cookie
+    is present, otherwise `302 /login`.
+  - `GET`/`HEAD /logout` → destroys the session (if any) and `302 /` with a cleared cookie.
+  - `POST /login` → `EPOCH_MODERN` only; verifies credentials against MongoDB and on success
+    sets a session cookie and redirects to `/dashboard`. See §5.
   - `GET`/`HEAD <anything else>` → `serve_static_file()` against the `html/` root, with
     `Last-Modified` / `If-Modified-Since` cache validation, MIME type detection and 8 KiB
     streaming.
-  - `OPTIONS` → `204` with `Allow: GET, HEAD, OPTIONS`.
+  - `OPTIONS` → `204` with `Allow: GET, HEAD, OPTIONS, POST`.
   - any other method → `405 Method Not Allowed`.
+  - Every non-2xx/3xx response (`400`, `403`, `404`, `405`, `431`, `500`, `503`) is rendered
+    through the same centralized, epoch-aware `error_epoch<N>.html` template - see §5.4.
 - **Security**: directory traversal protection (`sanitize_path` + `realpath`), trusted-proxy-only
   `X-Real-IP`/`X-Forwarded-For` handling, capped header/body sizes (`431`/`413` on overflow),
   `SIGPIPE` suppression.
@@ -401,6 +448,7 @@ participant "container" as CONTAINER
 participant "menu" as MENU
 participant "slider" as SLIDER
 participant "home_content" as HOME
+participant "home_blog" as BLOG
 participant "build_epoch_response" as RESP
 
 Client -> ROUTER : GET / HTTP/1.1\nUser-Agent: ...
@@ -412,7 +460,7 @@ activate ORCH
 
 ORCH -> CONTAINER : container(epoch)
 CONTAINER -> CONTAINER : generate_url_theme + read_file\n+ str_replace_first({{PAGE_TITLE}})
-CONTAINER --> ORCH : html_container\n(3x %s placeholders)
+CONTAINER --> ORCH : html_container\n(4x %s placeholders)
 
 ORCH -> MENU : menu("/", epoch)
 activate MENU
@@ -440,12 +488,23 @@ HOME -> HOME : render_template(content_tpl, items)
 deactivate HOME
 HOME --> ORCH : html_home_content
 
+ORCH -> BLOG : home_blog(epoch)
+activate BLOG
+BLOG -> BLOG : load home-blog_epoch<N>,\nhome-blog-item_epoch<N>
+loop for each entry in BLOG_POSTS
+  BLOG -> BLOG : render_template(item_tpl,\nimage, link, title, summary, author, date)\n(epoch -1/0: title, date, summary)
+  BLOG -> BLOG : str_append(items, item)
+end
+BLOG -> BLOG : render_template(content_tpl, items)
+deactivate BLOG
+BLOG --> ORCH : html_home_blog
+
 alt any component == NULL
   ORCH -> ORCH : free non-NULL pieces
   ORCH --> ROUTER : NULL
   ROUTER -> Client : 500 Internal Server Error
 else all components OK
-  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content)
+  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content, html_home_blog)
   ORCH -> ORCH : free all intermediate buffers
   ORCH --> ROUTER : body (full HTML / WML document)
   deactivate ORCH
@@ -473,7 +532,7 @@ In short:
    in `{-1, 0, 1, 2, 3}`, that value is used directly; otherwise `detect_epoch(User-Agent)`
    classifies the request into one of those epochs.
 3. `buildHomeWebSite(epoch, lang)` assembles the page from `container` + `menu` + `slider` +
-   `home_content`, all resolved via `generate_url_theme()` against
+   `home_content` + `home_blog`, all resolved via `generate_url_theme()` against
    `./html/themes/<theme>/...`.
 4. `build_epoch_response(body, "", epoch)` wraps the body with the correct `Content-Type` and
    security headers.
@@ -488,7 +547,106 @@ Every other route (`/themes/dark/styles_epoch3.css`, `/favicon.ico`,
 
 ---
 
-## 5. Configuration
+## 5. Authentication: Login, Dashboard and Logout
+
+A small authentication slice sits alongside the CMS, reusing the same epoch detection,
+templates and `build_epoch_response` infrastructure via a new generic page shell.
+
+### 5.1 A page shell for non-home routes
+
+`/login`, `/dashboard` and every error page share `page_epoch<N>.html` (head + menu + footer,
+1 `%s` for the menu and 1 `%s` for the page content), assembled by:
+
+```c
+char *buildPageWebSite(int epoch, const char *page_title, char *html_content);
+```
+
+This mirrors `buildHomeWebSite()` but for a single content fragment instead of the four
+home-page components - `/` keeps using `container_epoch<N>.html` and `buildHomeWebSite()`
+unchanged.
+
+### 5.2 Data layer: MongoDB, Argon2id, sessions
+
+A new `src/db/` layer (`mongodb_manager`, `auth`, `session_manager`) backs `/login` and
+`/dashboard`:
+
+- **`mongodb_manager`** owns a `mongoc_client_pool_t` (configured via `mongodb_uri`/
+  `mongodb_db`), initialized once at startup. If it fails to connect, the server keeps running
+  - only `/login` and `/dashboard` degrade to a `503` error page.
+- **`auth_login_user(email, password)`** checks the `users` collection and verifies the
+  password against a `crypto_pwhash_str()` (Argon2id) hash via libsodium. It returns `NULL` for
+  an unknown email, a wrong password, *and* a DB error alike, so the response can never be used
+  to enumerate registered emails.
+- **`session_manager`** generates 64-hex-char session tokens (libsodium CSPRNG), stores them in
+  the `sessions` collection with an `expires_at` (`session_ttl_seconds`, default 24h), and
+  builds the `Set-Cookie` headers (`HttpOnly; Path=/; SameSite=Lax`, `; Secure` when
+  `ssl_enabled=1`).
+
+> Source: [diagrams/auth-components.puml](diagrams/auth-components.puml) - component diagram
+> for `login`/`dashboard`/`error` and the `db` package.
+
+### 5.3 `POST /login` → session → `/dashboard`
+
+```plantuml
+@startuml sequence-login-route
+title Boat Rudder - "POST /login" Route (Authentication)
+
+actor Client
+participant "http_router" as ROUTER
+participant "auth" as AUTH
+participant "session_manager" as SESSION
+participant "MongoDB" as MONGO
+
+Client -> ROUTER : POST /login\nuser=...&password=...
+ROUTER -> ROUTER : epoch = resolve_epoch(req)
+
+alt epoch != EPOCH_MODERN
+  ROUTER -> Client : 200 OK\n"functionality not available"
+else epoch == EPOCH_MODERN
+  ROUTER -> AUTH : auth_login_user(email, password)
+  AUTH -> MONGO : find user, verify Argon2id hash
+  AUTH --> ROUTER : user_id | NULL
+  alt user_id == NULL
+    ROUTER -> Client : 200 OK\nlogin form + "Invalid email or password."
+  else user_id != NULL
+    ROUTER -> SESSION : generate_session_token() + create_session()
+    SESSION -> MONGO : insert into "sessions"
+    ROUTER -> Client : 302 Found /dashboard\nSet-Cookie: session=...
+  end
+end
+@enduml
+```
+
+> Source: [diagrams/sequence-login-route.puml](diagrams/sequence-login-route.puml)
+
+The full request table:
+
+| Route | Method | Behavior |
+|---|---|---|
+| `/login` | `GET` | If `mongodb_manager_is_ready()` and the session cookie is valid → `302 /dashboard`. Otherwise `login(epoch, NULL)` via `buildPageWebSite()`. `EPOCH_MODERN`: real form. Other epochs: "not available". |
+| `/login` | `POST` | `EPOCH_MODERN` only (other epochs re-render "not available", no DB access). `503` if MongoDB isn't ready. Otherwise `auth_login_user()` → success: new session + `Set-Cookie` + `302 /dashboard`; failure: `200` with the form + "Invalid email or password." |
+| `/dashboard` | `GET` | `503` if MongoDB isn't ready. Otherwise `validate_session_cookie()`: valid → `dashboard(epoch)` via `buildPageWebSite()`; invalid/missing/expired → `302 /login`. |
+| `/logout` | `GET` | Destroys the session (if any) and responds `302 /` with a cleared `session` cookie (`Max-Age=0`). |
+
+### 5.4 Centralized epoch-aware error pages
+
+Every non-2xx/3xx response - `400`, `403`, `404`, `405`, `431`, `500`, `503`, including those
+from `serve_static_file()` - is rendered through one helper:
+
+```c
+send_error_response(ctx, status_code, status_line, epoch);
+```
+
+which calls `error_content(epoch, status_code, NULL)` (`src/modules/error`,
+`error_epoch<N>.html`), wraps it with `buildPageWebSite()`, and sends it via
+`build_epoch_response_status()`. `serve_static_file()` itself returns a status code (`0`,
+`403`, `404` or `500`) instead of writing a hardcoded response, letting `http_router.c` render
+even missing-asset 404s in the visitor's epoch. If template rendering itself fails,
+`send_error_response()` falls back to a hardcoded minimal HTML response.
+
+---
+
+## 6. Configuration
 
 `configs/settings.conf` controls both the server and the CMS:
 
@@ -505,6 +663,15 @@ theme=dark                 # active theme under html/themes/<theme>/
 lang=Eng                   # content language passed to home_content
 public_url=                # public base URL (reserved for future SEO/canonical links)
 #force_epoch=3             # force a browser epoch for "/" (-1..3), omit to auto-detect
+
+# MongoDB connection (login/sessions, epoch3 only). If the connection fails
+# at startup, /login and /dashboard serve a 503 error page; the rest of the
+# site (epoch CMS + static files) is unaffected.
+mongodb_uri=mongodb://localhost:27017
+mongodb_db=boat_rudder
+
+# Session cookie lifetime, in seconds (default: 24h).
+session_ttl_seconds=86400
 ```
 
 `generate_url_theme()` always resolves templates as `./html/themes/<theme>/...`, relative to the
@@ -513,7 +680,7 @@ file serving (which also points at `html/`).
 
 ---
 
-## 6. Building and Running
+## 7. Building and Running
 
 ```bash
 ./bhs.sh compiledebug      # Debug build + AddressSanitizer, assembled into bin/
@@ -525,7 +692,7 @@ install, TLS certificate generation).
 
 ---
 
-## 7. Roadmap (not yet implemented)
+## 8. Roadmap (not yet implemented)
 
 The current implementation is an MVP covering only the home page. Planned next steps (see
 [retro-compatible-cms.md §9](retro-compatible-cms.md)):

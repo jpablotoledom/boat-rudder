@@ -7,8 +7,8 @@ TimeoutStopSec=10
 KillSignal=SIGTERM
 SendSIGKILL=yes
 ExecStart=/usr/local/bin/base-http-server/base-http-server \
-    -c /usr/local/bin/base-http-server/configs/config.txt \
-    /usr/local/bin/base-http-server/www
+    -c /usr/local/bin/base-http-server/configs/settings.conf \
+    /usr/local/bin/base-http-server/html
 WorkingDirectory=/usr/local/bin/base-http-server
 Restart=on-failure
 RestartSec=5

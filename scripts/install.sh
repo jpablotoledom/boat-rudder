@@ -40,12 +40,12 @@ chmod +x "$INSTALL_DIR/base-http-server"
 
 cp -r ./bin/configs "$INSTALL_DIR/configs"
 
-# www/ is required at runtime - copy if it exists in bin/
-if [ -d ./bin/www ]; then
-    cp -r ./bin/www "$INSTALL_DIR/www"
+# html/ is required at runtime - copy if it exists in bin/
+if [ -d ./bin/html ]; then
+    cp -r ./bin/html "$INSTALL_DIR/html"
 else
-    mkdir -p "$INSTALL_DIR/www"
-    echo "Warning: www/ is empty. Add your static files to $INSTALL_DIR/www/"
+    mkdir -p "$INSTALL_DIR/html"
+    echo "Warning: html/ is empty. Add your retro-compatible CMS files to $INSTALL_DIR/html/"
 fi
 
 # ssl/ is optional

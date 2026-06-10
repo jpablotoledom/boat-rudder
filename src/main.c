@@ -1,5 +1,6 @@
 #define _XOPEN_SOURCE 700
 
+#include "db/mongodb_manager.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
 #include "web_server/server_listener.h"
@@ -98,6 +99,10 @@ int main(int argc, char *argv[]) {
     if (trusted_proxies[0])
         LOG_INFO("Trusted proxies: %s", trusted_proxies);
 
+    if (mongodb_manager_init(mongodb_uri, mongodb_db) != 0) {
+        LOG_WARN("MongoDB unavailable - /login and /dashboard will return 503");
+    }
+
     signal(SIGINT,  handle_shutdown);
     signal(SIGTERM, handle_shutdown);
     signal(SIGCHLD, sigchld_handler);
@@ -113,6 +118,7 @@ int main(int argc, char *argv[]) {
 
     LOG_INFO("Shutting down...");
     server_stop();
+    mongodb_manager_cleanup();
     free(root_directory);
 
     return EXIT_SUCCESS;

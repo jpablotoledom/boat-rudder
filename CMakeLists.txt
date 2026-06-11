@@ -60,6 +60,7 @@ set(SOURCES
     src/modules/slider/slider.c
     src/modules/home_content/home_content.c
     src/modules/home_blog/home_blog.c
+    src/modules/entry_page/entry_page.c
     src/modules/login/login.c
     src/modules/dashboard/dashboard.c
     src/modules/error/error.c
@@ -67,6 +68,7 @@ set(SOURCES
     # Database / auth / sessions
     src/db/mongodb_manager.c
     src/db/auth.c
+    src/db/cms_entries.c
     src/db/session_manager.c
 )
 

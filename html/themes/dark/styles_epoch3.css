@@ -439,3 +439,58 @@ h1, h2 {
     margin-left: -43%;
   }
 }
+
+/* ENTRY PAGE */
+.boat-rudder__entry-header {
+  background-color: #0000006b;
+  padding: 20px;
+  border: 1px solid #349b00;
+  margin: 0 0 20px;
+}
+
+.boat-rudder__entry-header__image {
+  width: 100%;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.boat-rudder__entry-header__summary {
+  font-style: italic;
+}
+
+.boat-rudder__entry-header__byline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.boat-rudder__entry-header__byline-owner,
+.boat-rudder__entry-byline-owner {
+  color: #f2e200;
+}
+
+.boat-rudder__entry-header__byline-date,
+.boat-rudder__entry-byline-date {
+  color: #fba8f6;
+}
+
+.boat-rudder__entry-byline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 10px 0;
+}
+
+.boat-rudder__entry-image {
+  margin: 20px 0;
+  text-align: center;
+}
+
+.boat-rudder__entry-image img {
+  max-width: 100%;
+}
+
+.boat-rudder__entry-image figcaption {
+  font-style: italic;
+  color: #fba8f6;
+}

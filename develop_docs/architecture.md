@@ -248,6 +248,11 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 - `redirect/` - `redirect_epoch<N>.html`, the standalone "click here to continue" body sent
   with `302` responses (for clients that don't auto-follow `Location`); 2 `%s` placeholders
   (both the redirect target: link `href` and link text). Not wrapped by `page_epoch<N>.html`.
+- `entry/` - `entry-header_epoch<N>.html`, the header/SEO block for a CMS entry (epochs 1-3:
+  5 `%s` - image, title, summary, author, date; epochs -1/0: 4 `%s` - title, summary, author,
+  date). See "CMS entries" below.
+- `elements/<type>/` - one subdirectory per content-block type (e.g. `tittle`, `paragraph`,
+  `image`, `byline`), each with `<type>_epoch<N>.html`. See "CMS entries" below.
 
 `%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
 that is itself used as a format string must be written as `%%`. Templates that are only ever
@@ -280,6 +285,43 @@ it with `render_template()`. The orchestrator frees every intermediate buffer on
 
 For `HEAD /`, `http_router.c` builds the same response and truncates it at the end of the header
 block (`\r\n\r\n`) before writing.
+
+### CMS entries (`GET /page/<link>`)
+
+A first increment of the database-backed CMS described in
+`develop_docs/cms-entry-model-plan.md`: a single `entries` MongoDB collection
+(`ENTRIES_COLLECTION`, `src/db/mongodb_manager.h`) holds one self-contained document per page -
+`header` (image, title, summary, author, date) plus an ordered `content[]` array of typed
+blocks - with all user-facing text stored as a `map<lang,string>` keyed by ISO 639-1 codes
+(`en`, `es`, ...).
+
+```
+http_router.c  (route == "/page/<link>")
+  │
+  ├─ cms_get_entry_by_link(link, lang, &entry)  ── src/db/cms_entries.c
+  │     db.entries.findOne({ link, enabled: true })
+  │     resolves header.* and content[].text map<lang,string> to `lang`
+  │     (configs/settings.conf "Eng"/"Esp" mapped to ISO "en"/"es", default "en"),
+  │     falling back to "en" if the requested language is missing
+  │
+  ├─ entry_page(&entry, epoch)                   ── src/modules/entry_page/entry_page.c
+  │     ├─ entry/entry-header_epoch<N>.html      (header)
+  │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
+  │
+  └─ buildPageWebSite(epoch, entry.header_title, content)
+```
+
+Only `entries.type == "page"` documents are served by `/page/<link>` (other types are reserved
+for future routes, e.g. a `/blog/` listing). Unknown `content[].type` values render as empty
+output, so a page still renders if it contains a block type this increment doesn't support.
+
+This increment implements 4 content-block types - `tittle`, `paragraph`, `image`, `byline` -
+the minimum set called out in
+[retro-center-entry-model.md §9](retro-center-entry-model.md#9-why-this-matters-for-boat-rudder).
+**Not yet implemented**: `entry_categories`, `media`/`media_directories`, the `/blog/` route,
+heading levels via `content[].extra_data` for `tittle`, and the remaining element types from
+`retro-center-entry-model.md` §7 (gallery, table, forms, etc.) - see
+`develop_docs/cms-entry-model-plan.md` for the full target schema.
 
 ---
 

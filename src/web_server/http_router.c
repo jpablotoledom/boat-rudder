@@ -7,10 +7,12 @@
 #include "utils/url_parser.h"
 #include "utils/static_file_server.h"
 #include "../db/auth.h"
+#include "../db/cms_entries.h"
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
 #include "../html_builder/orchestrator.h"
 #include "../modules/dashboard/dashboard.h"
+#include "../modules/entry_page/entry_page.h"
 #include "../modules/error/error.h"
 #include "../modules/login/login.h"
 #include "../utils/build_epoch_response.h"
@@ -323,6 +325,35 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                 char *response = build_redirect_response("/", clear_cookie, epoch);
                 send_or_error(ctx, response, req.method, epoch);
+
+            } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {
+                int epoch = resolve_epoch(&req);
+                const char *link = decoded_url + 6;
+
+                CmsEntry entry;
+                if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
+                    if (strcmp(entry.type, "page") != 0) {
+                        cms_entry_free(&entry);
+                        send_error_response(ctx, 404, "404 Not Found", epoch);
+                    } else {
+                        char *title   = strdup(entry.header_title);
+                        char *content = entry_page(&entry, epoch);
+                        cms_entry_free(&entry);
+
+                        char *body = NULL;
+                        if (content && title) {
+                            body = buildPageWebSite(epoch, title, content); // frees content
+                        } else {
+                            free(content);
+                        }
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(title);
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                } else {
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                }
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");

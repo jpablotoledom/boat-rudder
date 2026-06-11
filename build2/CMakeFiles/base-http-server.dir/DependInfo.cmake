@@ -9,12 +9,14 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/auth.c" "CMakeFiles/base-http-server.dir/src/db/auth.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/auth.c.o.d"
+  "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_entries.c" "CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/mongodb_manager.c" "CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/session_manager.c" "CMakeFiles/base-http-server.dir/src/db/session_manager.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/session_manager.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/html_builder/orchestrator.c" "CMakeFiles/base-http-server.dir/src/html_builder/orchestrator.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/html_builder/orchestrator.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/main.c" "CMakeFiles/base-http-server.dir/src/main.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/main.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/modules/container/container.c" "CMakeFiles/base-http-server.dir/src/modules/container/container.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/modules/container/container.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/modules/dashboard/dashboard.c" "CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o.d"
+  "/media/pablo/Datos NVME/Projects/boat-rudder/src/modules/entry_page/entry_page.c" "CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/modules/error/error.c" "CMakeFiles/base-http-server.dir/src/modules/error/error.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/modules/error/error.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/modules/home_blog/home_blog.c" "CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/modules/home_content/home_content.c" "CMakeFiles/base-http-server.dir/src/modules/home_content/home_content.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/modules/home_content/home_content.c.o.d"

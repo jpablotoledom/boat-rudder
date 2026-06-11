@@ -27,11 +27,13 @@ base-http-server: \
   CMakeFiles/base-http-server.dir/src/modules/slider/slider.c.o \
   CMakeFiles/base-http-server.dir/src/modules/home_content/home_content.c.o \
   CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o \
+  CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o \
   CMakeFiles/base-http-server.dir/src/modules/login/login.c.o \
   CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o \
   CMakeFiles/base-http-server.dir/src/modules/error/error.c.o \
   CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o \
   CMakeFiles/base-http-server.dir/src/db/auth.c.o \
+  CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o \
   CMakeFiles/base-http-server.dir/src/db/session_manager.c.o \
   /usr/lib/x86_64-linux-gnu/libssl.so \
   /usr/lib/x86_64-linux-gnu/libcrypto.so \
@@ -141,6 +143,8 @@ CMakeFiles/base-http-server.dir/src/modules/home_content/home_content.c.o:
 
 CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o:
 
+CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o:
+
 CMakeFiles/base-http-server.dir/src/modules/login/login.c.o:
 
 CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o:
@@ -150,6 +154,8 @@ CMakeFiles/base-http-server.dir/src/modules/error/error.c.o:
 CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o:
 
 CMakeFiles/base-http-server.dir/src/db/auth.c.o:
+
+CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o:
 
 CMakeFiles/base-http-server.dir/src/db/session_manager.c.o:
 

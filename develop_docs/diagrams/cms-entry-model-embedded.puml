@@ -1,0 +1,88 @@
+@startuml cms-entry-model-embedded
+
+title Boat Rudder - Proposed "Entry" Document Model (embedded, vs. the-retro-center's normalized model)
+
+skinparam backgroundColor #FAFAFA
+skinparam linetype ortho
+skinparam entity {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    FontColor #1A1A1A
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #F9A825
+}
+
+entity "entries" as ENTRIES {
+    * _id : ObjectId
+    --
+    link : string <<unique slug>>
+    type : string ("blog" | "page" | ...)
+    order : int
+    enabled : bool
+    menu : bool
+    name : map<lang, string>        <<embedded translation, lang = ISO 639-1>>
+    categories : ObjectId[] --> entry_categories
+    --
+    .. header (embedded, was its own collection) ..
+    header.image_url : string
+    header.title   : map<lang, string>  <<embedded translation>>
+    header.summary : map<lang, string>  <<embedded translation>>
+    header.author  : map<lang, string>  <<embedded translation>>
+    header.date : datetime
+    --
+    .. content[] (embedded array, was its own collection) ..
+    content[]._id : ObjectId
+    content[].type : string <<element type>>
+    content[].order : int
+    content[].text : map<lang, string>  <<embedded translation>>
+    content[].extra_data : string
+}
+
+entity "entry_categories" as ENTRYCAT {
+    * _id : ObjectId
+    --
+    name : map<lang, string>   <<embedded translation, lang = ISO 639-1>>
+}
+
+entity "media / media_directories" as MEDIA {
+    * _id : ObjectId
+    --
+    "(unchanged: still standalone,\nreferenced from content[].extra_data\nwhen type == \"gallery\")"
+}
+
+ENTRIES }o--o{ ENTRYCAT : categories[]
+ENTRIES ..> MEDIA       : content[].type == "gallery"
+
+note right of ENTRIES
+  One document per page, fully self-contained:
+  reading a page is a single findOne({link}).
+  No $lookup / $unwind needed for header,
+  content blocks, or their translations.
+end note
+
+note right of ENTRYCAT
+  Kept as its own collection because categories
+  are reused across many entries (many-to-many);
+  embedding "translation" here just removes the
+  separate translation collection for category names.
+end note
+
+note bottom
+  Collection count: 7 -> 4
+  (entries, header, content, translation,
+   entry_categories, media, media_directories)
+  becomes
+  (entries [header+content+translation embedded],
+   entry_categories [translation embedded],
+   media, media_directories)
+end note
+
+note left of ENTRIES
+  map<lang, string> = open object keyed by
+  ISO 639-1 codes, e.g. { "en": "...", "es": "..." }
+  Adding a language = adding a key, no schema change.
+end note
+
+@enduml

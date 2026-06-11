@@ -8,7 +8,7 @@ conventions already used in `src/` so new code stays consistent, and
 highlights the security rules that are non-negotiable for this project.
 
 Where the two sources disagree (e.g. Google avoids `goto`, CERT recommends it
-for centralized cleanup), the CERT/C-idiomatic choice wins — this is C, not
+for centralized cleanup), the CERT/C-idiomatic choice wins - this is C, not
 C++, and `goto cleanup` is the standard way to avoid resource leaks across
 many error paths.
 
@@ -74,7 +74,7 @@ that prefix. Internal helpers are `static` and do not need the prefix.
 
 `HttpRequest`, `HttpHeader` and `QueryParam` use `PascalCase` from before
 this guide existed. Don't change them gratuitously (churn for no benefit),
-but don't introduce new `PascalCase` types — use `snake_case_t`.
+but don't introduce new `PascalCase` types - use `snake_case_t`.
 
 Boolean-returning functions read as predicates: `too_many_connections()`,
 `is_trusted_proxy()`. Functions that allocate and return ownership to the
@@ -86,7 +86,7 @@ caller should make that obvious from the name or a one-line comment (see
 ## 3. Formatting
 
 - **Indentation:** 4 spaces, no tabs.
-- **Braces:** K&R style — opening brace on the same line as the
+- **Braces:** K&R style - opening brace on the same line as the
   function/control statement.
   ```c
   void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
@@ -110,7 +110,7 @@ caller should make that obvious from the name or a one-line comment (see
 ## 4. Comments
 
 - Use `//` for all normal comments; reserve `/* */` for nothing in
-  particular (keep it consistent — this codebase already uses `//`
+  particular (keep it consistent - this codebase already uses `//`
   exclusively).
 - Document the **contract** in the header, not the implementation: what the
   function expects, who owns/frees what it returns, and what the return
@@ -122,7 +122,7 @@ caller should make that obvious from the name or a one-line comment (see
   void serve_static_file(void *ctx, const char *root_directory,
                          const char *decoded_url, const char *if_modified_since);
   ```
-- Comment *why*, not *what* — if a line needs a comment to explain what it
+- Comment *why*, not *what* - if a line needs a comment to explain what it
   does, prefer renaming variables/functions until it doesn't. Reserve
   comments for non-obvious constraints (platform quirks, RFC references,
   security rationale), e.g. the `timegm()`/`_GNU_SOURCE` portability note in
@@ -134,7 +134,7 @@ caller should make that obvious from the name or a one-line comment (see
 
 - Keep functions focused on one responsibility. Extract `static` helpers
   (`send_error`, `format_http_date`) for repeated or logically distinct
-  steps — `static` linkage signals "module-private" and lets the compiler
+  steps - `static` linkage signals "module-private" and lets the compiler
   warn about unused helpers.
 - **Centralized cleanup with `goto`:** when a function has multiple resources
   to release (buffers, file descriptors, SSL handles) and multiple error
@@ -151,7 +151,7 @@ caller should make that obvious from the name or a one-line comment (see
   ```
 - **Avoid global mutable state.** The two exceptions in this codebase
   (`ip_table`, `active_connections` in `server_listener.c`) are
-  intentionally `static` to the file, guarded by a mutex, and documented —
+  intentionally `static` to the file, guarded by a mutex, and documented -
   follow that template if a new global is unavoidable. Don't add new
   globals without the same treatment.
 
@@ -160,7 +160,7 @@ caller should make that obvious from the name or a one-line comment (see
 ## 6. Memory Management (CERT MEM)
 
 - **Check every `malloc`/`calloc`/`realloc` return value** before use
-  (`MEM32-C`). On failure, log and take the cleanup path — never dereference
+  (`MEM32-C`). On failure, log and take the cleanup path - never dereference
   a possibly-NULL allocation.
 - **Free exactly once** (`MEM30-C`/`MEM31-C`). If a pointer might be freed on
   more than one cleanup path, set it to `NULL` immediately after `free()` so
@@ -182,12 +182,12 @@ the request path originates from the client.
 
 - **Never use `strcpy`, `strcat`, `sprintf`, or `gets`.** Use `snprintf`,
   `strncpy` (with explicit termination), or `memcpy` with a checked length.
-- **`STR31-C` — size buffers correctly**, including the null terminator.
+- **`STR31-C` - size buffers correctly**, including the null terminator.
   When copying into a fixed-size buffer (`char route[2048]`), always pass
   `sizeof(buffer)` (or `sizeof(buffer) - 1` if you'll append the
-  terminator yourself) — never a hardcoded length that can drift from the
+  terminator yourself) - never a hardcoded length that can drift from the
   declaration.
-- **`STR32-C` — guarantee null-termination.** `strncpy` does *not*
+- **`STR32-C` - guarantee null-termination.** `strncpy` does *not*
   null-terminate if the source is >= the destination size. After any
   `strncpy`, explicitly set `buf[sizeof(buf) - 1] = '\0'`, as
   `http_router.c` does for `client_ip` and `url_copy`.
@@ -200,11 +200,11 @@ the request path originates from the client.
 
 ## 8. Integers & Arithmetic (CERT INT)
 
-- **Use `size_t` for sizes, lengths, and array indices** — never `int`.
+- **Use `size_t` for sizes, lengths, and array indices** - never `int`.
   `-Wextra` (already enabled) flags signed/unsigned comparison mismatches;
   don't silence these with casts unless you've proven the value can't be
   negative.
-- **`INT30-C`/`INT32-C` — check for overflow before arithmetic** that
+- **`INT30-C`/`INT32-C` - check for overflow before arithmetic** that
   computes buffer sizes or offsets, e.g. `base_len + sizeof("/index.html")`
   in `static_file_server.c` is checked against `sizeof(safe_path)` *before*
   the `memcpy`. Apply the same pattern anywhere a length from the client
@@ -218,12 +218,12 @@ the request path originates from the client.
 
 ## 9. Arrays, Pointers & Bounds (CERT ARR / EXP)
 
-- **`ARR30-C`/`ARR38-C` — never index outside array bounds.** Any path built
+- **`ARR30-C`/`ARR38-C` - never index outside array bounds.** Any path built
   from `root_directory + decoded_url` must be checked to still resolve
-  *inside* `root_directory` (no `../` traversal) before `open()` — this is
+  *inside* `root_directory` (no `../` traversal) before `open()` - this is
   already done in `static_file_server.c` and must be preserved in any new
   code that touches the filesystem from a URL.
-- **`EXP34-C` — never dereference a possibly-NULL pointer.** Check
+- **`EXP34-C` - never dereference a possibly-NULL pointer.** Check
   `get_header_value()`, `malloc()`, `fopen()`, `getenv()` results before use.
   The codebase's `real_ip && real_ip[0]` pattern (check non-NULL *and*
   non-empty before using a header value) is the right template.
@@ -232,7 +232,7 @@ the request path originates from the client.
 
 ## 10. Error Handling (CERT ERR)
 
-- **`ERR33-C` — check return values** of `read`/`write`/`malloc`/`pthread_*`
+- **`ERR33-C` - check return values** of `read`/`write`/`malloc`/`pthread_*`
   /`SSL_*`/`fopen` etc. A function that can fail and whose failure is
   ignored is a latent bug.
 - **Consistent return-code convention:** `0` = success, `-1` = error (as in
@@ -240,7 +240,7 @@ the request path originates from the client.
   conventions (e.g. `1` = success) in new modules.
 - **Log before failing.** Use `LOG_ERROR`/`LOG_WARN` with enough context
   (function name, the value that failed) so a production log line is
-  actionable without a debugger — see the `"http_route: malloc failed"`
+  actionable without a debugger - see the `"http_route: malloc failed"`
   style.
 
 ---
@@ -250,7 +250,7 @@ the request path originates from the client.
 - **Document shared state.** Any data structure touched from more than one
   `pthread_create`d thread (currently `ip_table` / `active_connections`)
   must be guarded by a mutex and have a comment stating *what* it protects.
-- **Keep critical sections small** — do the minimum work under the lock,
+- **Keep critical sections small** - do the minimum work under the lock,
   then release it before I/O or logging.
 - **Detach or join explicitly.** Connection threads are `pthread_detach`'d
   immediately after creation; if a future thread needs a result back, prefer
@@ -261,7 +261,7 @@ the request path originates from the client.
 
 ## 12. Resource Management / I/O (CERT FIO)
 
-- **`FIO42-C` — close every file descriptor / `SSL*` / socket on every exit
+- **`FIO42-C` - close every file descriptor / `SSL*` / socket on every exit
   path**, including error paths. This is what the `cleanup:` label pattern
   (§5) exists for.
 - **Set socket timeouts** (`SO_RCVTIMEO`/`SO_SNDTIMEO`, already 5s) on every
@@ -286,18 +286,18 @@ use. When adding a feature that touches any of these, re-read §7-§9:
   `MAX_PARAM_LENGTH`)
 
 `X-Real-IP`/`X-Forwarded-For` are additionally only trusted when the peer is
-in `trusted_proxies` — don't add new "trust this header" logic without the
+in `trusted_proxies` - don't add new "trust this header" logic without the
 same proxy check.
 
 ---
 
 ## 14. Tooling
 
-- Build with `-Wall -Wextra -Wpedantic` (already on for all builds) — fix
+- Build with `-Wall -Wextra -Wpedantic` (already on for all builds) - fix
   warnings rather than silencing them.
 - `compiledebug` builds with **AddressSanitizer**; run `rundebug` regularly
   during development, especially after touching memory management or
-  parsing code — ASan catches most CERT MEM/STR violations at runtime.
+  parsing code - ASan catches most CERT MEM/STR violations at runtime.
 - For periodic audits, `cppcheck --enable=all` or `clang-tidy` with the
   `cert-*`/`bugprone-*`/`clang-analyzer-*` checks complement ASan by finding
   issues on paths that aren't exercised by a given test run.

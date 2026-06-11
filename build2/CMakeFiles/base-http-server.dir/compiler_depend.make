@@ -263,6 +263,206 @@ CMakeFiles/base-http-server.dir/src/db/auth.c.o: /media/pablo/Datos\ NVME/Projec
   /usr/lib/gcc/x86_64-linux-gnu/14/include/syslimits.h \
   /usr/lib/linux/uapi/x86/asm/errno.h
 
+CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.c \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/log.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/mongodb_manager.h \
+  /usr/include/arpa/inet.h \
+  /usr/include/asm-generic/errno-base.h \
+  /usr/include/asm-generic/errno.h \
+  /usr/include/ctype.h \
+  /usr/include/endian.h \
+  /usr/include/errno.h \
+  /usr/include/fcntl.h \
+  /usr/include/features-time64.h \
+  /usr/include/features.h \
+  /usr/include/inttypes.h \
+  /usr/include/libbson-1.0/bson/bcon.h \
+  /usr/include/libbson-1.0/bson/bson-atomic.h \
+  /usr/include/libbson-1.0/bson/bson-clock.h \
+  /usr/include/libbson-1.0/bson/bson-cmp.h \
+  /usr/include/libbson-1.0/bson/bson-compat.h \
+  /usr/include/libbson-1.0/bson/bson-config.h \
+  /usr/include/libbson-1.0/bson/bson-context.h \
+  /usr/include/libbson-1.0/bson/bson-decimal128.h \
+  /usr/include/libbson-1.0/bson/bson-endian.h \
+  /usr/include/libbson-1.0/bson/bson-error.h \
+  /usr/include/libbson-1.0/bson/bson-iter.h \
+  /usr/include/libbson-1.0/bson/bson-json.h \
+  /usr/include/libbson-1.0/bson/bson-keys.h \
+  /usr/include/libbson-1.0/bson/bson-macros.h \
+  /usr/include/libbson-1.0/bson/bson-md5.h \
+  /usr/include/libbson-1.0/bson/bson-memory.h \
+  /usr/include/libbson-1.0/bson/bson-oid.h \
+  /usr/include/libbson-1.0/bson/bson-prelude.h \
+  /usr/include/libbson-1.0/bson/bson-reader.h \
+  /usr/include/libbson-1.0/bson/bson-string.h \
+  /usr/include/libbson-1.0/bson/bson-types.h \
+  /usr/include/libbson-1.0/bson/bson-utf8.h \
+  /usr/include/libbson-1.0/bson/bson-value.h \
+  /usr/include/libbson-1.0/bson/bson-version-functions.h \
+  /usr/include/libbson-1.0/bson/bson-version.h \
+  /usr/include/libbson-1.0/bson/bson-writer.h \
+  /usr/include/libbson-1.0/bson/bson.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-apm.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-bulk-operation.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-bulkwrite.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-change-stream.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-client-pool.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-client-session.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-client-side-encryption.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-client.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-collection.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-config.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-cursor.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-database.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-error.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-find-and-modify.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-flags.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-bucket.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-file-list.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-file-page.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-file.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-handshake.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-host-list.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-index.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-init.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-iovec.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-log.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-macros.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-matcher.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-opcode.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-optional.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-prelude.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-rand.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-read-concern.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-read-prefs.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-server-api.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-server-description.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-sleep.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-socket.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-ssl.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-stream-buffered.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-stream-file.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-stream-gridfs.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-stream-socket.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-stream-tls.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-stream.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-structured-log.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-topology-description.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-uri.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-version-functions.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-version.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc-write-concern.h \
+  /usr/include/libmongoc-1.0/mongoc/mongoc.h \
+  /usr/include/limits.h \
+  /usr/include/linux/errno.h \
+  /usr/include/linux/limits.h \
+  /usr/include/netdb.h \
+  /usr/include/netinet/in.h \
+  /usr/include/netinet/tcp.h \
+  /usr/include/poll.h \
+  /usr/include/stdc-predef.h \
+  /usr/include/stdint.h \
+  /usr/include/stdio.h \
+  /usr/include/stdlib.h \
+  /usr/include/string.h \
+  /usr/include/strings.h \
+  /usr/include/time.h \
+  /usr/include/unistd.h \
+  /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
+  /usr/include/x86_64-linux-gnu/bits/byteswap.h \
+  /usr/include/x86_64-linux-gnu/bits/confname.h \
+  /usr/include/x86_64-linux-gnu/bits/endian.h \
+  /usr/include/x86_64-linux-gnu/bits/endianness.h \
+  /usr/include/x86_64-linux-gnu/bits/environments.h \
+  /usr/include/x86_64-linux-gnu/bits/errno.h \
+  /usr/include/x86_64-linux-gnu/bits/fcntl-linux.h \
+  /usr/include/x86_64-linux-gnu/bits/fcntl.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn.h \
+  /usr/include/x86_64-linux-gnu/bits/getopt_core.h \
+  /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
+  /usr/include/x86_64-linux-gnu/bits/in.h \
+  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+  /usr/include/x86_64-linux-gnu/bits/local_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/long-double.h \
+  /usr/include/x86_64-linux-gnu/bits/netdb.h \
+  /usr/include/x86_64-linux-gnu/bits/poll.h \
+  /usr/include/x86_64-linux-gnu/bits/posix1_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/posix2_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
+  /usr/include/x86_64-linux-gnu/bits/pthread_stack_min-dynamic.h \
+  /usr/include/x86_64-linux-gnu/bits/pthread_stack_min.h \
+  /usr/include/x86_64-linux-gnu/bits/pthreadtypes-arch.h \
+  /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h \
+  /usr/include/x86_64-linux-gnu/bits/select.h \
+  /usr/include/x86_64-linux-gnu/bits/sockaddr.h \
+  /usr/include/x86_64-linux-gnu/bits/socket-constants.h \
+  /usr/include/x86_64-linux-gnu/bits/socket.h \
+  /usr/include/x86_64-linux-gnu/bits/socket_type.h \
+  /usr/include/x86_64-linux-gnu/bits/stat.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_mutex.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_stat.h \
+  /usr/include/x86_64-linux-gnu/bits/thread-shared-types.h \
+  /usr/include/x86_64-linux-gnu/bits/time.h \
+  /usr/include/x86_64-linux-gnu/bits/time64.h \
+  /usr/include/x86_64-linux-gnu/bits/timesize.h \
+  /usr/include/x86_64-linux-gnu/bits/types.h \
+  /usr/include/x86_64-linux-gnu/bits/types/FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/clock_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/clockid_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/sigset_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_timeval.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h \
+  /usr/include/x86_64-linux-gnu/bits/types/time_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/timer_t.h \
+  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
+  /usr/include/x86_64-linux-gnu/bits/uintn-identity.h \
+  /usr/include/x86_64-linux-gnu/bits/uio_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/unistd_ext.h \
+  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
+  /usr/include/x86_64-linux-gnu/bits/wchar.h \
+  /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+  /usr/include/x86_64-linux-gnu/bits/xopen_lim.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+  /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+  /usr/include/x86_64-linux-gnu/sys/poll.h \
+  /usr/include/x86_64-linux-gnu/sys/select.h \
+  /usr/include/x86_64-linux-gnu/sys/socket.h \
+  /usr/include/x86_64-linux-gnu/sys/stat.h \
+  /usr/include/x86_64-linux-gnu/sys/time.h \
+  /usr/include/x86_64-linux-gnu/sys/types.h \
+  /usr/include/x86_64-linux-gnu/sys/uio.h \
+  /usr/include/x86_64-linux-gnu/sys/un.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/limits.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/stdarg.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/stdbool.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/stdint.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/syslimits.h \
+  /usr/lib/linux/uapi/x86/asm/errno.h
+
 CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/mongodb_manager.c \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/log.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/mongodb_manager.h \
@@ -1119,6 +1319,48 @@ CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o: /media/pabl
   /usr/include/x86_64-linux-gnu/bits/types.h \
   /usr/include/x86_64-linux-gnu/bits/types/clock_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/clockid_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/time_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/timer_t.h \
+  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
+  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
+  /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+  /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+  /usr/include/x86_64-linux-gnu/sys/types.h \
+  /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h
+
+CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/entry_page/entry_page.c \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/generate_url_theme.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/read_file.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/template_utils.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/entry_page/entry_page.h \
+  /usr/include/features-time64.h \
+  /usr/include/features.h \
+  /usr/include/stdc-predef.h \
+  /usr/include/stdlib.h \
+  /usr/include/string.h \
+  /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn.h \
+  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+  /usr/include/x86_64-linux-gnu/bits/long-double.h \
+  /usr/include/x86_64-linux-gnu/bits/pthreadtypes-arch.h \
+  /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_mutex.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h \
+  /usr/include/x86_64-linux-gnu/bits/thread-shared-types.h \
+  /usr/include/x86_64-linux-gnu/bits/time64.h \
+  /usr/include/x86_64-linux-gnu/bits/timesize.h \
+  /usr/include/x86_64-linux-gnu/bits/types.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/clock_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/clockid_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/time_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/timer_t.h \
   /usr/include/x86_64-linux-gnu/bits/typesizes.h \
@@ -2297,10 +2539,13 @@ CMakeFiles/base-http-server.dir/src/web_server/http_request_parser.c.o: /media/p
 
 CMakeFiles/base-http-server.dir/src/web_server/http_router.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/http_router.c \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/auth.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/mongodb_manager.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/session_manager.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/html_builder/orchestrator.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/dashboard/dashboard.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/entry_page/entry_page.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/error/error.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/login/login.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/build_epoch_response.h \
@@ -3234,12 +3479,14 @@ base-http-server: /lib/i386-linux-gnu/libm.so.6 \
   /usr/lib/x86_64-linux-gnu/libsodium.so \
   /usr/lib/x86_64-linux-gnu/libssl.so \
   CMakeFiles/base-http-server.dir/src/db/auth.c.o \
+  CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o \
   CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o \
   CMakeFiles/base-http-server.dir/src/db/session_manager.c.o \
   CMakeFiles/base-http-server.dir/src/html_builder/orchestrator.c.o \
   CMakeFiles/base-http-server.dir/src/main.c.o \
   CMakeFiles/base-http-server.dir/src/modules/container/container.c.o \
   CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o \
+  CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o \
   CMakeFiles/base-http-server.dir/src/modules/error/error.c.o \
   CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o \
   CMakeFiles/base-http-server.dir/src/modules/home_content/home_content.c.o \
@@ -3279,6 +3526,8 @@ CMakeFiles/base-http-server.dir/src/modules/slider/slider.c.o:
 CMakeFiles/base-http-server.dir/src/modules/login/login.c.o:
 
 CMakeFiles/base-http-server.dir/src/modules/home_content/home_content.c.o:
+
+CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o:
 
 CMakeFiles/base-http-server.dir/src/modules/container/container.c.o:
 
@@ -3500,6 +3749,8 @@ CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o:
 
 /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_content/home_content.c:
 
+/media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/entry_page/entry_page.h:
+
 /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/container/container.c:
 
 /usr/include/x86_64-linux-gnu/sys/ucontext.h:
@@ -3528,15 +3779,9 @@ CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o:
 
 /usr/include/x86_64-linux-gnu/bits/sigevent-consts.h:
 
+CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o:
+
 /usr/include/x86_64-linux-gnu/bits/sigaction.h:
-
-CMakeFiles/base-http-server.dir/src/web_server/http_request_parser.c.o:
-
-/lib/x86_64-linux-gnu/libresolv.so.2:
-
-/usr/include/strings.h:
-
-/usr/include/signal.h:
 
 /usr/include/openssl/dherr.h:
 
@@ -3574,6 +3819,16 @@ CMakeFiles/base-http-server.dir/src/db/auth.c.o:
 
 /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/mongodb_manager.c:
 
+CMakeFiles/base-http-server.dir/src/web_server/http_request_parser.c.o:
+
+/lib/x86_64-linux-gnu/libresolv.so.2:
+
+/usr/include/signal.h:
+
+/usr/include/strings.h:
+
+/media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h:
+
 /usr/include/sodium/crypto_hash_sha256.h:
 
 /usr/include/openssl/rsaerr.h:
@@ -3581,6 +3836,8 @@ CMakeFiles/base-http-server.dir/src/db/auth.c.o:
 /usr/include/sodium/crypto_generichash_blake2b.h:
 
 /usr/include/libmongoc-1.0/mongoc/mongoc-iovec.h:
+
+/media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.c:
 
 /usr/include/fcntl.h:
 
@@ -3729,6 +3986,8 @@ CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.o:
 /usr/include/libbson-1.0/bson/bson-json.h:
 
 /usr/include/x86_64-linux-gnu/bits/sockaddr.h:
+
+/media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/entry_page/entry_page.c:
 
 /usr/include/sodium/crypto_hash_sha512.h:
 

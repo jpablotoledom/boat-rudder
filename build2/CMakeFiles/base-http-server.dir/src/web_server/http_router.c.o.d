@@ -117,6 +117,7 @@ CMakeFiles/base-http-server.dir/src/web_server/http_router.c.o: \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/utils/../http_constants.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/utils/static_file_server.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../db/auth.h \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../db/cms_entries.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../db/mongodb_manager.h \
  /usr/include/libmongoc-1.0/mongoc/mongoc.h \
  /usr/include/libbson-1.0/bson/bson.h \
@@ -230,6 +231,8 @@ CMakeFiles/base-http-server.dir/src/web_server/http_router.c.o: \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../db/session_manager.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../html_builder/orchestrator.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../modules/dashboard/dashboard.h \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../modules/entry_page/entry_page.h \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../modules/entry_page/../../db/cms_entries.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../modules/error/error.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../modules/login/login.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/web_server/../utils/build_epoch_response.h \

@@ -198,6 +198,30 @@ src/db/auth.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/auth.c.s
 .PHONY : src/db/auth.c.s
 
+src/db/cms_entries.o: src/db/cms_entries.c.o
+.PHONY : src/db/cms_entries.o
+
+# target to build an object file
+src/db/cms_entries.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o
+.PHONY : src/db/cms_entries.c.o
+
+src/db/cms_entries.i: src/db/cms_entries.c.i
+.PHONY : src/db/cms_entries.i
+
+# target to preprocess a source file
+src/db/cms_entries.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_entries.c.i
+.PHONY : src/db/cms_entries.c.i
+
+src/db/cms_entries.s: src/db/cms_entries.c.s
+.PHONY : src/db/cms_entries.s
+
+# target to generate assembly for a file
+src/db/cms_entries.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_entries.c.s
+.PHONY : src/db/cms_entries.c.s
+
 src/db/mongodb_manager.o: src/db/mongodb_manager.c.o
 .PHONY : src/db/mongodb_manager.o
 
@@ -341,6 +365,30 @@ src/modules/dashboard/dashboard.s: src/modules/dashboard/dashboard.c.s
 src/modules/dashboard/dashboard.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboard.c.s
 .PHONY : src/modules/dashboard/dashboard.c.s
+
+src/modules/entry_page/entry_page.o: src/modules/entry_page/entry_page.c.o
+.PHONY : src/modules/entry_page/entry_page.o
+
+# target to build an object file
+src/modules/entry_page/entry_page.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.o
+.PHONY : src/modules/entry_page/entry_page.c.o
+
+src/modules/entry_page/entry_page.i: src/modules/entry_page/entry_page.c.i
+.PHONY : src/modules/entry_page/entry_page.i
+
+# target to preprocess a source file
+src/modules/entry_page/entry_page.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.i
+.PHONY : src/modules/entry_page/entry_page.c.i
+
+src/modules/entry_page/entry_page.s: src/modules/entry_page/entry_page.c.s
+.PHONY : src/modules/entry_page/entry_page.s
+
+# target to generate assembly for a file
+src/modules/entry_page/entry_page.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/modules/entry_page/entry_page.c.s
+.PHONY : src/modules/entry_page/entry_page.c.s
 
 src/modules/error/error.o: src/modules/error/error.c.o
 .PHONY : src/modules/error/error.o
@@ -886,6 +934,9 @@ help:
 	@echo "... src/db/auth.o"
 	@echo "... src/db/auth.i"
 	@echo "... src/db/auth.s"
+	@echo "... src/db/cms_entries.o"
+	@echo "... src/db/cms_entries.i"
+	@echo "... src/db/cms_entries.s"
 	@echo "... src/db/mongodb_manager.o"
 	@echo "... src/db/mongodb_manager.i"
 	@echo "... src/db/mongodb_manager.s"
@@ -904,6 +955,9 @@ help:
 	@echo "... src/modules/dashboard/dashboard.o"
 	@echo "... src/modules/dashboard/dashboard.i"
 	@echo "... src/modules/dashboard/dashboard.s"
+	@echo "... src/modules/entry_page/entry_page.o"
+	@echo "... src/modules/entry_page/entry_page.i"
+	@echo "... src/modules/entry_page/entry_page.s"
 	@echo "... src/modules/error/error.o"
 	@echo "... src/modules/error/error.i"
 	@echo "... src/modules/error/error.s"

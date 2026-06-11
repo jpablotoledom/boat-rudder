@@ -1,0 +1,72 @@
+@startuml retro-center-page-render-flow
+
+title the-retro-center - Rendering an Entry Page (GET /blog/<link> or /page/<link>)
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipant underline
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Client
+participant "http_router\n(handle_blog_entry)" as ROUTER
+participant "orchestrator\nbuildPageEntryWebSite()" as ORCH
+participant "home_blog_items\n(getBlogItemBySlug /\ngetPageMetaBySlug)" as SEO
+participant "page module\npage()" as PAGE
+participant "page_items\n(getPageItems)" as ITEMS
+database "MongoDB\n(entries, header,\ncontent, translation)" as DB
+participant "elements/<type>_epoch<N>.html\n(per content block)" as ELEMENTS
+participant "container() /\ncontainer_seo()" as CONTAINER
+participant "menu()" as MENU
+
+Client -> ROUTER : GET /blog/<link>  (or /page/<link>)
+ROUTER -> ORCH : buildPageEntryWebSite(id, url, epoch, lang, theme)
+
+alt epoch == EPOCH_MODERN (SEO metadata)
+  ORCH -> SEO : getBlogItemBySlug(id, lang, "blog")\n/ getPageMetaBySlug(id, lang)
+  SEO -> DB : $lookup entries + header + translation\nby entries.link == id
+  DB --> SEO : title, summary, image, author, date
+  SEO --> ORCH : HomeBlogItems
+  ORCH -> CONTAINER : container_seo(epoch, title, summary,\ncanonical_url, image, author, date)
+else other epochs / no metadata
+  ORCH -> CONTAINER : container(epoch)
+end
+
+ORCH -> MENU : menu(url, epoch, lang, theme)
+
+ORCH -> PAGE : page(id, epoch, lang)
+PAGE -> ITEMS : getPageItems(id, &count, lang)
+ITEMS -> DB : aggregate(content)\n  $lookup entries  (match entries.link == id)\n  $lookup translation (content_id)\n  $sort order
+DB --> ITEMS : ordered list of\n{type, content (translated), extra_data}
+ITEMS --> PAGE : PageItems[]
+
+PAGE -> PAGE : load page-container_epoch<N>.html\n+ all elements/*_epoch<N>.html templates
+
+loop for each PageItems[i], in "order"
+  PAGE -> ELEMENTS : render_template(element_<type>_epoch<N>,\ncontent, extra_data)
+  note right
+    type-specific formatting, e.g.:
+    - "tittle"      -> heading level from extra_data
+    - "image*"      -> per-epoch image variant
+                       (_micro/_small/_medium/_full)
+    - "gallery"     -> table of <gallery-item> rows
+    - "youtube-embed" -> iframe (epoch3) or QR (epoch<3 / WML)
+    - "table"       -> rows built from "a|b|c\nd|e|f"
+  end note
+  ELEMENTS --> PAGE : rendered block HTML
+end
+
+PAGE -> PAGE : concatenate all blocks\n-> page-container_epoch<N>.html
+PAGE --> ORCH : page HTML fragment
+
+ORCH -> ORCH : render_template(container, menu, "", page, "")
+ORCH --> ROUTER : full page HTML
+ROUTER -> Client : 200 OK + HTML/WML body
+
+@enduml

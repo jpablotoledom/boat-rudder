@@ -19,7 +19,7 @@
   following the same per-epoch template convention already used for `container`, `menu`,
   `slider`, etc.
 - Everything below follows the conventions documented in
-  [architecture.md](architecture.md) and [boat-rudder.md](boat-rudder.md): malloc'd-string
+  [architecture.md](../reference/architecture.md) and [boat-rudder.md](../boat-rudder.md): malloc'd-string
   modules, `generate_url_theme()` + `read_file_to_string()` + `render_template()`, one
   `http_router.c`, AddressSanitizer-clean.
 
@@ -189,7 +189,7 @@ reads `ssl_enabled` from `config_loader` to decide.
 
 ### 4.1 Why a new shell is needed
 
-`container_epoch<N>.html` (see [architecture.md §2.3](architecture.md)) is the home page's
+`container_epoch<N>.html` (see [architecture.md §2.3](../reference/architecture.md)) is the home page's
 shell: it has exactly **4** `%s` slots (menu, slider, home_content, home_blog), a hardcoded
 footer, and - on epoch 3 - the home-blog lightbox `<div id="homeBlogModal">` + `<script>`.
 Reusing it for `/login`, `/dashboard` and error pages would force those pages to fill 4
@@ -326,7 +326,7 @@ filled with `<p class="boat-rudder__login__error">Invalid email or password.</p>
 when `login(epoch3, error_message)` is called after a failed `POST /login`. This keeps the
 template's placeholder count fixed regardless of success/failure, consistent with the
 "`%s` count must match across epochs... and across calls" rule in
-[architecture.md §2.4](architecture.md).
+[architecture.md §2.4](../reference/architecture.md).
 
 The `-1/0/1/2` variants have **zero** placeholders (they're static "not available" messages),
 so `login(epoch)` for those epochs just reads and returns the file content directly - no

@@ -3,8 +3,12 @@
 
 #include <stddef.h>
 
+// Maximum number of "entries" documents (type == "blog", enabled == true) returned by
+// cms_get_blog_entries() for the home blog list, newest header.date first.
+#define HOME_BLOG_LIMIT 10
+
 // One ordered, typed content block from `entries.content[]` (see
-// develop_docs/cms-entry-model-plan.md). `text` is the block's
+// develop_docs/plans/cms-entry-model-plan.md). `text` is the block's
 // `map<lang,string>` resolved to the requested language (falling back to
 // "en", then ""). `extra_data` is untranslated, type-specific configuration.
 typedef struct {
@@ -46,5 +50,34 @@ int cms_get_entry_by_link(const char *link, const char *lang, CmsEntry *out);
 
 // Frees every malloc'd field of *entry and zeroes it.
 void cms_entry_free(CmsEntry *entry);
+
+// One "entries" document with type == "blog", for the home blog list. Lighter than
+// CmsEntry: no content[] (not needed for a list view).
+typedef struct {
+    char *link; // entries.link, for building /page/<link>
+
+    char *header_image_url;
+    char *header_title;
+    char *header_summary;
+    char *header_author;
+    char  header_date[16]; // "YYYY-MM-DD", empty if absent
+
+    // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
+    // for the requested lang. NULL/0 if the entry has no categories.
+    char  **category_names;
+    size_t  category_count;
+} CmsBlogListItem;
+
+// Looks up db.entries.find({type: "blog", enabled: true})
+//   .sort({"header.date": -1}).limit(HOME_BLOG_LIMIT),
+// resolving header.* and categories[] to `lang` for each match (same lang convention as
+// cms_get_entry_by_link). On success, *out points to a malloc'd array of *out_count items
+// (possibly 0) that must be passed to cms_blog_list_free(). On a DB error or if mongodb is
+// not ready, *out = NULL and *out_count = 0 - the home blog list is decorative and must
+// never fail the home page.
+void cms_get_blog_entries(const char *lang, CmsBlogListItem **out, size_t *out_count);
+
+// Frees every item's fields and the array itself. Safe to call with items == NULL.
+void cms_blog_list_free(CmsBlogListItem *items, size_t count);
 
 #endif // CMS_ENTRIES_H

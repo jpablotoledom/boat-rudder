@@ -318,6 +318,18 @@ h1, h2 {
   color: #f9964f;
 }
 
+.boat-rudder__home-blog__item__byline-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.boat-rudder__home-blog__empty {
+  text-align: center;
+  color: #cccccc;
+  font-style: italic;
+}
+
 /* HOME BLOG - IMAGE MODAL */
 .boat-rudder__home-blog-modal {
   display: none;

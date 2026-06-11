@@ -1,41 +1,61 @@
 #include "home_blog.h"
+#include "../../db/cms_entries.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-    const char *title;
-    const char *date;
-    const char *author;
-    const char *image;
-    const char *summary;
-    const char *url;
-} blog_post_t;
+static char *load_template(const char *subpath_fmt, int epoch) {
+    char *path = generate_url_theme(subpath_fmt, epoch);
+    char *tpl  = path ? read_file_to_string(path) : NULL;
+    free(path);
+    return tpl;
+}
 
-// MVP: static "blog posts" list, no database/CMS backing yet.
-static const blog_post_t BLOG_POSTS[] = {
-    {"Sailing into HTML 3.2", "2026", "Boat Rudder Crew",
-     "/themes/dark/assets/home-content/bg_epoch3.png",
-     "A look back at table layouts and <font> tags, and how Boat Rudder "
-     "renders them for HTML 3.2 browsers.",
-     "/"},
-    {"WAP phones welcome aboard", "2026", "Boat Rudder Crew",
-     "/assets/slide/background/floor.jpg",
-     "Even the smallest WML decks get a tailored response - no images, no "
-     "CSS, just the essentials.",
-     "/"},
-    {"CSS3 hits the deck", "2026", "Boat Rudder Crew",
-     "/assets/slide/background/background-wb.jpg",
-     "The modern epoch gets a full mainbanner, animated navbar and a "
-     "gallery for the latest posts.",
-     "/"},
-};
+// Renders item->category_names as concatenated category tags, without the
+// entry-categories wrapper - the placeholder already sits inside the item's
+// own byline container. Returns "" if the item has no categories.
+static char *render_item_categories(const CmsBlogListItem *item, int epoch) {
+    if (item->category_count == 0) return strdup("");
 
-#define BLOG_POST_COUNT (sizeof(BLOG_POSTS) / sizeof(BLOG_POSTS[0]))
+    char *item_tpl = load_template("elements/category/category_epoch%d.html", epoch);
+    if (!item_tpl) return strdup("");
 
-char *home_blog(int epoch) {
+    char *result = strdup("");
+    for (size_t i = 0; result && i < item->category_count; i++) {
+        char *tag = render_template(item_tpl, item->category_names[i]);
+        result = tag ? str_append(result, tag) : NULL;
+        free(tag);
+    }
+
+    free(item_tpl);
+    return result;
+}
+
+static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int epoch) {
+    char *categories_html = render_item_categories(item, epoch);
+    if (!categories_html) return NULL;
+
+    char *result;
+    if (epoch >= 1) {
+        char *link_url = render_template("/page/%s", item->link);
+        result = link_url
+            ? render_template(item_tpl, item->header_image_url, link_url, item->header_title,
+                               item->header_summary, item->header_author, categories_html,
+                               item->header_date)
+            : NULL;
+        free(link_url);
+    } else {
+        result = render_template(item_tpl, item->header_title, item->header_date,
+                                  item->header_summary, categories_html);
+    }
+
+    free(categories_html);
+    return result;
+}
+
+char *home_blog(int epoch, const char *lang) {
     char *item_path    = generate_url_theme("home-blog/home-blog-item_epoch%d.html", epoch);
     char *content_path = generate_url_theme("home-blog/home-blog_epoch%d.html", epoch);
 
@@ -48,33 +68,28 @@ char *home_blog(int epoch) {
     char *items  = NULL;
     char *result = NULL;
 
+    CmsBlogListItem *entries     = NULL;
+    size_t           entry_count = 0;
+
     if (!item_tpl || !content_tpl) goto cleanup;
 
-    items = strdup("");
-    if (!items) goto cleanup;
+    cms_get_blog_entries(lang, &entries, &entry_count);
 
-    for (size_t i = 0; i < BLOG_POST_COUNT; i++) {
-        const blog_post_t *post = &BLOG_POSTS[i];
-        char *item;
-
-        if (epoch >= 1) {
-            // Image-card layout: image, link, title, summary, author, date.
-            item = render_template(item_tpl, post->image, post->url, post->title,
-                                    post->summary, post->author, post->date);
-        } else {
-            // Text-only layout: title, date, summary.
-            item = render_template(item_tpl, post->title, post->date, post->summary);
+    if (entry_count == 0) {
+        items = load_template("home-blog/empty_epoch%d.html", epoch);
+    } else {
+        items = strdup("");
+        for (size_t i = 0; items && i < entry_count; i++) {
+            char *item = render_item(&entries[i], item_tpl, epoch);
+            items = item ? str_append(items, item) : NULL;
+            free(item);
         }
-        if (!item) goto cleanup;
-
-        items = str_append(items, item);
-        free(item);
-        if (!items) goto cleanup;
     }
 
-    result = render_template(content_tpl, items);
+    if (items) result = render_template(content_tpl, items);
 
 cleanup:
+    cms_blog_list_free(entries, entry_count);
     free(item_tpl);
     free(content_tpl);
     free(items);

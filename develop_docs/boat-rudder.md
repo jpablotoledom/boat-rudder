@@ -10,11 +10,14 @@ This document is a high-level tour of the whole project: the web server foundati
 retro-compatible CMS concept, the **epoch** strategy that drives it, and the request lifecycle,
 illustrated with diagrams. For deeper detail see:
 
-- [architecture.md](architecture.md) - full component breakdown of the server.
-- [data-flow.md](data-flow.md) - step-by-step data flow, including the dynamic `/` route.
-- [retro-compatible-cms.md](retro-compatible-cms.md) - the original implementation plan (in
-  Spanish) that this CMS was built from.
-- [scripts.md](scripts.md) - build, run and deployment scripts (`bhs.sh`).
+- [reference/architecture.md](reference/architecture.md) - full component breakdown of the
+  server.
+- [reference/data-flow.md](reference/data-flow.md) - step-by-step data flow, including the
+  dynamic `/` route.
+- [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts
+  (`bhs.sh`).
+- [plans/](plans/) - per-feature implementation plans (CMS entry model, home blog list,
+  login).
 - [diagrams/](diagrams/) - PlantUML source files for every diagram in this document.
 
 ---
@@ -430,7 +433,7 @@ The CMS sits on top of a generic, dependency-light static file server:
   `SIGPIPE` suppression.
 
 For the full breakdown (every source file and its responsibility), see
-[architecture.md](architecture.md).
+[reference/architecture.md](reference/architecture.md).
 
 ---
 
@@ -687,15 +690,14 @@ file serving (which also points at `html/`).
 ./bhs.sh rundebug           # Run bin/base-http-server -c bin/configs/settings.conf bin/html
 ```
 
-See [scripts.md](scripts.md) for the full `bhs.sh` reference (production builds, systemd
-install, TLS certificate generation).
+See [reference/scripts.md](reference/scripts.md) for the full `bhs.sh` reference (production
+builds, systemd install, TLS certificate generation).
 
 ---
 
 ## 8. Roadmap (not yet implemented)
 
-The current implementation is an MVP covering only the home page. Planned next steps (see
-[retro-compatible-cms.md §9](retro-compatible-cms.md)):
+The current implementation is an MVP covering only the home page. Planned next steps:
 
 - Theme (`light`) and language (`Esp`) switching via query string / cookie.
 - Additional pages (`/blog`, `/about`, ...) reusing `container`/`menu`.

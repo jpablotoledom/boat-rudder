@@ -2,6 +2,8 @@ CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o: \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/home_blog.c \
  /usr/include/stdc-predef.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/home_blog.h \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/../../db/cms_entries.h \
+ /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/../../utils/generate_url_theme.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/../../utils/read_file.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/../../utils/template_utils.h \
@@ -14,7 +16,6 @@ CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o: \
  /usr/include/x86_64-linux-gnu/bits/long-double.h \
  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
- /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h \
  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
  /usr/include/x86_64-linux-gnu/bits/floatn.h \

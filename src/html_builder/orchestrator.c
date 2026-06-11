@@ -14,7 +14,7 @@ char *buildHomeWebSite(int epoch, const char *lang) {
     char *html_menu         = menu("/", epoch);
     char *html_slider       = slider(epoch);
     char *html_home_content = home_content(epoch, lang);
-    char *html_home_blog    = home_blog(epoch);
+    char *html_home_blog    = home_blog(epoch, lang);
 
     char *result = NULL;
     if (html_container && html_menu && html_slider && html_home_content && html_home_blog) {

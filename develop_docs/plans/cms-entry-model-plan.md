@@ -1,10 +1,10 @@
 # CMS "Entry" Data Model - Embedded Schema
 
 > **Status**: `entries` (with embedded `header` and `content[]`) and `entry_categories` are
-> implemented - see [architecture.md, "CMS entries"](architecture.md#cms-entries-get-pagelink).
+> implemented - see [architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink).
 > `media`/`media_directories` (§2.3) remain a design proposal, not yet implemented.
 
-Diagram: [diagrams/cms-entry-model-embedded.puml](diagrams/cms-entry-model-embedded.puml)
+Diagram: [diagrams/cms-entry-model-embedded.puml](../diagrams/cms-entry-model-embedded.puml)
 
 ## 1. Goal
 
@@ -50,7 +50,7 @@ Every embedded translation object is an **open map keyed by
   to a configured default (`en`) if a key is missing for the requested `lang`. This is
   implemented by `resolve_lang_map()` in `src/db/cms_entries.c`, which also bridges
   `configs/settings.conf`'s `lang="Eng"/"Esp"` convention to `en`/`es` (see
-  [architecture.md, "CMS entries"](architecture.md#cms-entries-get-pagelink)).
+  [architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink)).
 - If region-specific variants are ever needed (e.g. `en-US` vs. `en-GB`), extend to
   [BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) tags - they're a superset
   of ISO 639-1, so plain `en`/`es` keys remain valid.
@@ -164,18 +164,21 @@ stored pre-sorted, since they're rewritten as a whole array on every edit anyway
 
 ### 3.2 Listing blog cards (was: `getBlogItems`, joins `entries` + `header` + `translation`)
 
-**After**:
+**Implemented** - `cms_get_blog_entries()` in `src/db/cms_entries.c`, used by the home blog
+list (`src/modules/home_blog/home_blog.c`, see `develop_docs/reference/architecture.md` "Home
+blog list"):
 
 ```js
-db.entries.find(
-  { type: "blog", enabled: true, menu: true },
-  { link: 1, name: 1, header: 1, categories: 1 }
-).sort({ "header.date": -1 })
+db.entries.find({ type: "blog", enabled: true })
+  .sort({ "header.date": -1 })
+  .limit(HOME_BLOG_LIMIT)
 ```
 
-No `$lookup` needed - `header` (with its embedded title/summary/author/date) is already
-part of the projected document. If category **names** are needed for the card (not just
-ids), that's the one remaining join: `entry_categories` by `categories[]`.
+No `$lookup` needed - `header` (with its embedded title/summary/author/date) is already part
+of the document. Category **names** are resolved with the same `entry_categories` `$in` lookup
+used by `cms_get_entry_by_link()` (`resolve_category_names()`). There is no `menu` field on
+`entries`; menu-driven navigation is deferred to a future separate `menu` collection (see
+[home-blog-list-plan.md](home-blog-list-plan.md) §6).
 
 ### 3.3 Editing a page (dashboard / future editor)
 
@@ -237,7 +240,7 @@ adding, or removing content blocks is just array manipulation within one documen
 
 The `entries` collection (with embedded `header` and `content[]`) and `entry_categories`
 described above are implemented and wired into the `/page/<link>` route - see
-[architecture.md, "CMS entries"](architecture.md#cms-entries-get-pagelink),
+[architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink),
 `src/db/cms_entries.c`, and `src/modules/entry_page/entry_page.c`. The currently
 implemented `content[].type`s are `tittle`, `paragraph`, `image`, and `byline`.
 
@@ -247,4 +250,4 @@ route (incl. filtering by category), heading levels via `content[].extra_data` f
 rendering follows the same pattern as the implemented types: per-type "element"
 templates loaded via `generate_url_theme` + `read_file_to_string` + `render_template`
 per `content[].type`/epoch, per Boat Rudder's
-[no-embedded-HTML convention](architecture.md#templates-htmlthemestheme).
+[no-embedded-HTML convention](../reference/architecture.md#templates-htmlthemestheme).

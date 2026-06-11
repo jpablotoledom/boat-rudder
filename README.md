@@ -59,7 +59,7 @@ Actions run left to right and can be combined:
 ./bhs.sh compileprod install
 ```
 
-See [develop_docs/scripts.md](develop_docs/scripts.md) for the full reference.
+See [develop_docs/reference/scripts.md](develop_docs/reference/scripts.md) for the full reference.
 
 ---
 
@@ -97,7 +97,10 @@ boat-rudder/
 ├── configs/settings.conf        # Runtime configuration
 ├── ssl/                         # TLS certificate and key (optional)
 ├── scripts/                     # Build/run/install scripts (called by bhs.sh)
-└── develop_docs/                # Architecture, data flow, CMS docs and diagrams
+└── develop_docs/                # Project overview, reference docs, plans and diagrams
+    ├── reference/                # Architecture, data flow, scripts, style guide
+    ├── plans/                    # Per-feature implementation plans
+    └── diagrams/                 # PlantUML sources
 ```
 
 ---
@@ -106,13 +109,16 @@ boat-rudder/
 
 - **[develop_docs/boat-rudder.md](develop_docs/boat-rudder.md)** - project overview: web
   server, retro-compatible CMS concept, epoch strategy, request lifecycle, with diagrams.
-- [develop_docs/architecture.md](develop_docs/architecture.md) - full component breakdown.
-- [develop_docs/data-flow.md](develop_docs/data-flow.md) - step-by-step request data flow.
-- [develop_docs/retro-compatible-cms.md](develop_docs/retro-compatible-cms.md) - original CMS
-  implementation plan.
-- [develop_docs/scripts.md](develop_docs/scripts.md) - `bhs.sh` and build/deploy scripts.
-- [develop_docs/style-guide.md](develop_docs/style-guide.md) - C coding style and security
-  rules (Google C++ Style Guide + SEI CERT C, adapted for this project).
+- [develop_docs/reference/architecture.md](develop_docs/reference/architecture.md) - full
+  component breakdown.
+- [develop_docs/reference/data-flow.md](develop_docs/reference/data-flow.md) - step-by-step
+  request data flow.
+- [develop_docs/reference/scripts.md](develop_docs/reference/scripts.md) - `bhs.sh` and
+  build/deploy scripts.
+- [develop_docs/reference/style-guide.md](develop_docs/reference/style-guide.md) - C coding
+  style and security rules (Google C++ Style Guide + SEI CERT C, adapted for this project).
+- [develop_docs/plans/](develop_docs/plans/) - per-feature implementation plans (CMS entry
+  model, home blog list, login).
 - [develop_docs/diagrams/](develop_docs/diagrams/) - PlantUML source for all diagrams.
 
 ---

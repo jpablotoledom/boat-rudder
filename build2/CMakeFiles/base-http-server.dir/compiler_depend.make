@@ -1421,6 +1421,7 @@ CMakeFiles/base-http-server.dir/src/modules/error/error.c.o: /media/pablo/Datos\
   /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h
 
 CMakeFiles/base-http-server.dir/src/modules/home_blog/home_blog.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/modules/home_blog/home_blog.c \
+  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/generate_url_theme.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/read_file.h \
   /media/pablo/Datos\ NVME/Projects/boat-rudder/src/utils/template_utils.h \

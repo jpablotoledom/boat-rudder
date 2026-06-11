@@ -42,15 +42,20 @@ static char *resolve_lang_map(const bson_t *parent, const char *field, const cha
     return strdup("");
 }
 
-static void parse_header(const bson_t *doc, const char *lang, CmsEntry *out) {
+// Resolves header.image_url/title/summary/author/date from doc's "header" subdocument,
+// with title/summary/author resolved to `lang` (map<lang,string>). All output strings are
+// malloc'd ("" on absence); date is "YYYY-MM-DD" or "" if absent.
+static void resolve_header_fields(const bson_t *doc, const char *lang,
+                                   char **image_url, char **title, char **summary,
+                                   char **author, char date[16]) {
     bson_iter_t iter;
 
     if (!bson_iter_init_find(&iter, doc, "header") || !BSON_ITER_HOLDS_DOCUMENT(&iter)) {
-        out->header_image_url = strdup("");
-        out->header_title     = strdup("");
-        out->header_summary   = strdup("");
-        out->header_author    = strdup("");
-        out->header_date[0]   = '\0';
+        *image_url = strdup("");
+        *title     = strdup("");
+        *summary   = strdup("");
+        *author    = strdup("");
+        date[0]    = '\0';
         return;
     }
 
@@ -62,28 +67,34 @@ static void parse_header(const bson_t *doc, const char *lang, CmsEntry *out) {
     bson_init_static(&header, data, len);
 
     bson_iter_t hiter;
-    out->header_image_url = (bson_iter_init_find(&hiter, &header, "image_url") && BSON_ITER_HOLDS_UTF8(&hiter))
+    *image_url = (bson_iter_init_find(&hiter, &header, "image_url") && BSON_ITER_HOLDS_UTF8(&hiter))
         ? strdup(bson_iter_utf8(&hiter, NULL)) : strdup("");
 
-    out->header_title   = resolve_lang_map(&header, "title", lang);
-    out->header_summary = resolve_lang_map(&header, "summary", lang);
-    out->header_author  = resolve_lang_map(&header, "author", lang);
+    *title   = resolve_lang_map(&header, "title", lang);
+    *summary = resolve_lang_map(&header, "summary", lang);
+    *author  = resolve_lang_map(&header, "author", lang);
 
-    out->header_date[0] = '\0';
+    date[0] = '\0';
     if (bson_iter_init_find(&hiter, &header, "date") && BSON_ITER_HOLDS_DATE_TIME(&hiter)) {
         time_t secs = (time_t)(bson_iter_date_time(&hiter) / 1000);
         struct tm tm_buf;
         gmtime_r(&secs, &tm_buf);
-        strftime(out->header_date, sizeof(out->header_date), "%Y-%m-%d", &tm_buf);
+        strftime(date, 16, "%Y-%m-%d", &tm_buf);
     }
 }
 
-// Resolves entries.categories[] (ObjectId[]) to entry_categories.name,
-// resolved to `lang`. Leaves out->category_names = NULL / category_count = 0
-// on any failure - categories are decorative and must never fail the page.
-static void parse_categories(const bson_t *doc, const char *lang, CmsEntry *out) {
-    out->category_names = NULL;
-    out->category_count = 0;
+static void parse_header(const bson_t *doc, const char *lang, CmsEntry *out) {
+    resolve_header_fields(doc, lang, &out->header_image_url, &out->header_title,
+                           &out->header_summary, &out->header_author, out->header_date);
+}
+
+// Resolves doc.categories[] (ObjectId[]) to entry_categories.name, resolved to `lang`.
+// *out_names/*out_count are NULL/0 on any failure - categories are decorative and must
+// never fail the caller.
+static void resolve_category_names(const bson_t *doc, const char *lang,
+                                    char ***out_names, size_t *out_count) {
+    *out_names = NULL;
+    *out_count = 0;
 
     bson_iter_t iter;
     if (!bson_iter_init_find(&iter, doc, "categories") || !BSON_ITER_HOLDS_ARRAY(&iter)) return;
@@ -151,14 +162,18 @@ static void parse_categories(const bson_t *doc, const char *lang, CmsEntry *out)
 
     bson_error_t error;
     if (mongoc_cursor_error(cursor, &error))
-        LOG_ERROR("parse_categories: cursor error: %s", error.message);
+        LOG_ERROR("resolve_category_names: cursor error: %s", error.message);
 
     mongoc_cursor_destroy(cursor);
     bson_destroy(&query);
     mongoc_collection_destroy(collection);
 
-    out->category_names = names;
-    out->category_count = found;
+    *out_names = names;
+    *out_count = found;
+}
+
+static void parse_categories(const bson_t *doc, const char *lang, CmsEntry *out) {
+    resolve_category_names(doc, lang, &out->category_names, &out->category_count);
 }
 
 static int compare_blocks_by_order(const void *a, const void *b) {
@@ -276,4 +291,78 @@ void cms_entry_free(CmsEntry *entry) {
     free(entry->content);
 
     memset(entry, 0, sizeof(*entry));
+}
+
+void cms_get_blog_entries(const char *lang, CmsBlogListItem **out, size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
+    if (!collection) return;
+
+    bson_t *query = BCON_NEW("type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
+    bson_t *opts = BCON_NEW(
+        "sort", "{", "header.date", BCON_INT32(-1), "}",
+        "limit", BCON_INT64((int64_t)HOME_BLOG_LIMIT)
+    );
+
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, opts, NULL);
+
+    CmsBlogListItem *items = calloc(HOME_BLOG_LIMIT, sizeof(CmsBlogListItem));
+    if (!items) {
+        bson_destroy(query);
+        bson_destroy(opts);
+        mongoc_cursor_destroy(cursor);
+        mongoc_collection_destroy(collection);
+        return;
+    }
+
+    const char *resolved_lang = iso_lang(lang);
+
+    size_t count = 0;
+    const bson_t *doc;
+    while (count < HOME_BLOG_LIMIT && mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+
+        items[count].link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
+            ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
+
+        resolve_header_fields(doc, resolved_lang, &items[count].header_image_url,
+                               &items[count].header_title, &items[count].header_summary,
+                               &items[count].header_author, items[count].header_date);
+        resolve_category_names(doc, resolved_lang, &items[count].category_names,
+                                &items[count].category_count);
+
+        count++;
+    }
+
+    bson_error_t error;
+    if (mongoc_cursor_error(cursor, &error))
+        LOG_ERROR("cms_get_blog_entries: cursor error: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(opts);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
+    *out = items;
+    *out_count = count;
+}
+
+void cms_blog_list_free(CmsBlogListItem *items, size_t count) {
+    if (!items) return;
+
+    for (size_t i = 0; i < count; i++) {
+        free(items[i].link);
+        free(items[i].header_image_url);
+        free(items[i].header_title);
+        free(items[i].header_summary);
+        free(items[i].header_author);
+
+        for (size_t j = 0; j < items[i].category_count; j++)
+            free(items[i].category_names[j]);
+        free(items[i].category_names);
+    }
+
+    free(items);
 }

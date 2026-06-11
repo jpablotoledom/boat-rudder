@@ -93,6 +93,16 @@ a:link, a:visited {
   float: right;
 }
 
+.boat-rudder__home-blog__item__byline-categories {
+  margin: 0 6px;
+}
+
+.br-home-blog-empty {
+  text-align: center;
+  color: #cccccc;
+  font-style: italic;
+}
+
 .br-footer {
   text-align: center;
   background-color: #001a00;

@@ -332,7 +332,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                 CmsEntry entry;
                 if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
-                    if (strcmp(entry.type, "page") != 0) {
+                    if (strcmp(entry.type, "page") != 0 && strcmp(entry.type, "blog") != 0) {
                         cms_entry_free(&entry);
                         send_error_response(ctx, 404, "404 Not Found", epoch);
                     } else {

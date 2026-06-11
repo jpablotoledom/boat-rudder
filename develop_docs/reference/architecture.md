@@ -235,8 +235,11 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 - `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
   `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
 - `home-blog/` - `home-blog_epoch<N>.html` (1 `%s`: items) and `home-blog-item_epoch<N>.html`
-  (epoch -1/0: 3 `%s` - title, date, summary; epoch 1/2/3: 6 `%s` - image, link, title,
-  summary, author, date).
+  (epoch -1/0: 4 `%s` - title, date, summary, categories; epoch 1/2/3: 7 `%s` - image, link,
+  title, summary, author, categories, date); `home-blog/empty_epoch<N>.html`, a static
+  "No blog entries found" message rendered instead of `items` when there are no blog entries.
+  Category tags reuse `elements/category/category_epoch<N>.html` items, concatenated without
+  the `entry-categories` wrapper. See "Home blog list" below.
 - `page/` - `page_epoch<N>.html`, the generic page shell for non-home routes (`/login`,
   `/dashboard`, error pages); contains `{{PAGE_TITLE}}`, 1 `%s` for the menu and 1 `%s` for the
   page's content fragment.
@@ -272,7 +275,8 @@ http_router.c  (route == "/")
   │     ├─ menu("/", epoch)                ── modules/menu
   │     ├─ slider(epoch)                   ── modules/slider
   │     ├─ home_content(epoch, lang)       ── modules/home_content
-  │     ├─ home_blog(epoch)                ── modules/home_blog
+  │     ├─ home_blog(epoch, lang)          ── modules/home_blog
+  │     │     cms_get_blog_entries(lang, &items, &count) ── src/db/cms_entries.c
   │     └─ render_template(container, menu, slider, home_content, home_blog)
   │
   └─ build_epoch_response(body, extra_headers, epoch) ── utils/build_epoch_response.c
@@ -290,7 +294,7 @@ block (`\r\n\r\n`) before writing.
 ### CMS entries (`GET /page/<link>`)
 
 A first increment of the database-backed CMS described in
-`develop_docs/cms-entry-model-plan.md`: a single `entries` MongoDB collection
+`develop_docs/plans/cms-entry-model-plan.md`: a single `entries` MongoDB collection
 (`ENTRIES_COLLECTION`, `src/db/mongodb_manager.h`) holds one self-contained document per page -
 `header` (image, title, summary, author, date) plus an ordered `content[]` array of typed
 blocks - with all user-facing text stored as a `map<lang,string>` keyed by ISO 639-1 codes
@@ -317,23 +321,52 @@ http_router.c  (route == "/page/<link>")
   └─ buildPageWebSite(epoch, entry.header_title, content)
 ```
 
-Only `entries.type == "page"` documents are served by `/page/<link>` (other types are reserved
-for future routes, e.g. a `/blog/` listing). Unknown `content[].type` values render as empty
-output, so a page still renders if it contains a block type this increment doesn't support.
+`cms_get_entry_by_link()`'s query (`db.entries.findOne({ link, enabled: true })`) has no `type`
+filter, but `http_router.c` only renders the result for `entries.type` of `"page"` or `"blog"`
+(other types 404) - this is what lets the home blog list's items link to `/page/<link>`.
+Unknown `content[].type` values render as empty output, so a page still renders if it contains
+a block type this increment doesn't support.
 
 This increment implements 4 content-block types - `tittle`, `paragraph`, `image`, `byline` -
 a minimal but useful set: a heading, body text, an image, and an attribution line.
 
 `entries.categories[]` (an `ObjectId[]` referencing `entry_categories._id`, per
-`cms-entry-model-plan.md` §2.2) is resolved to category names and rendered as a small "tags"
+`plans/cms-entry-model-plan.md` §2.2) is resolved to category names and rendered as a small "tags"
 block under the header. `entry_categories` documents are `{ _id, name: <map<lang,string>> }` -
 a separate collection (kept normalized, since categories are shared across entries). An entry
 with no `categories` field/empty array renders with no tags block.
 
 **Not yet implemented**: `media`/`media_directories`, the `/blog/` route (incl. filtering by
 category), heading levels via `content[].extra_data` for `tittle`, and additional element
-types (gallery, table, forms, etc.) - see `develop_docs/cms-entry-model-plan.md` for the
+types (gallery, table, forms, etc.) - see `develop_docs/plans/cms-entry-model-plan.md` for the
 full target schema.
+
+### Home blog list (`/`)
+
+The home page's "Latest Blog Posts" gallery (`modules/home_blog/home_blog.c`) lists `entries`
+documents with `type == "blog"`:
+
+```
+home_blog(epoch, lang)                          ── src/modules/home_blog/home_blog.c
+  │
+  ├─ cms_get_blog_entries(lang, &items, &count)  ── src/db/cms_entries.c
+  │     db.entries.find({ type: "blog", enabled: true })
+  │       .sort({ "header.date": -1 }).limit(HOME_BLOG_LIMIT)
+  │     resolves header.* and categories[] to `lang`, reusing the same
+  │     resolve_header_fields()/resolve_category_names() helpers as cms_get_entry_by_link()
+  │
+  ├─ if count == 0: home-blog/empty_epoch<N>.html ("No blog entries found")
+  │
+  └─ for each item: home-blog-item_epoch<N>.html
+        link        -> "/page/<item.link>"
+        categories  -> elements/category/category_epoch<N>.html items, concatenated
+                        (no entry-categories wrapper)
+```
+
+`HOME_BLOG_LIMIT` (`src/db/cms_entries.h`, currently 10) bounds the result size;
+`cms_get_blog_entries()` allocates a fixed-size array of that length and never grows it. On a
+DB error or if MongoDB is not ready, it returns `*out_count == 0` and the empty-state template
+is shown - the home blog list is decorative and must never fail the home page.
 
 ---
 
@@ -429,9 +462,9 @@ client-supplied data beyond the same `User-Agent`/`force_epoch` resolution used 
 else. Other epochs see a static "this functionality is not available" message and never reach
 `auth_login_user()`.
 
-See [diagrams/auth-components.puml](diagrams/auth-components.puml) for the component diagram
-and [diagrams/sequence-login-route.puml](diagrams/sequence-login-route.puml) for the
-`POST /login` sequence diagram.
+See [diagrams/auth-components.puml](../diagrams/auth-components.puml) for the component
+diagram and [diagrams/sequence-login-route.puml](../diagrams/sequence-login-route.puml) for
+the `POST /login` sequence diagram.
 
 ---
 

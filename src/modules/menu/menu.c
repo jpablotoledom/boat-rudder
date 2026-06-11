@@ -1,7 +1,7 @@
 #include "menu.h"
+#include "../../db/cms_languages.h"
 #include "../../db/cms_menu.h"
 #include "../../db/mongodb_manager.h"
-#include "../../utils/config_loader.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
@@ -38,7 +38,11 @@ char *menu(const char *current_url, int epoch) {
 
     CmsMenuItem *db_items = NULL;
     size_t db_count = 0;
-    if (mongodb_manager_is_ready()) cms_get_menu_items(lang, &db_items, &db_count);
+    if (mongodb_manager_is_ready()) {
+        char content_lang[16];
+        cms_resolve_default_lang(content_lang, sizeof(content_lang));
+        cms_get_menu_items(content_lang, &db_items, &db_count);
+    }
 
     const CmsMenuItem *menu_items = db_count > 0 ? db_items : FALLBACK_ITEMS;
     size_t item_count = db_count > 0 ? db_count : FALLBACK_ITEM_COUNT;

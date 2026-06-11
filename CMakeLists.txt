@@ -65,6 +65,8 @@ set(SOURCES
     src/modules/login/login.c
     src/modules/dashboard/dashboard.c
     src/modules/error/error.c
+    src/modules/categories_admin/categories_admin.c
+    src/modules/languages_admin/languages_admin.c
 
     # Database / auth / sessions
     src/db/mongodb_manager.c
@@ -72,6 +74,9 @@ set(SOURCES
     src/db/bson_lang.c
     src/db/cms_entries.c
     src/db/cms_menu.c
+    src/db/cms_categories.c
+    src/db/cms_languages.c
+    src/db/language_catalog.c
     src/db/session_manager.c
 )
 

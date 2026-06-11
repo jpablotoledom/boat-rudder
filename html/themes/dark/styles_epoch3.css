@@ -228,6 +228,87 @@ h1, h2 {
   text-align: center;
 }
 
+/* DASHBOARD MAINTAINERS */
+.boat-rudder__dashboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+.boat-rudder__dashboard__table th,
+.boat-rudder__dashboard__table td {
+  padding: 10px;
+  border: 1px solid #7b0a74;
+  text-align: left;
+}
+
+.boat-rudder__dashboard__form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #7b0a74;
+  background-color: #111111;
+  max-width: 400px;
+}
+
+.boat-rudder__dashboard__form-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.boat-rudder__dashboard__input {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  background-color: #000000;
+  color: #ffffff;
+  border: 1px solid #56e9fd;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.boat-rudder__dashboard__button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.boat-rudder__dashboard__inline-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.boat-rudder__dashboard__inline-form form {
+  margin: 0;
+}
+
+.boat-rudder__dashboard__button {
+  padding: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  background-color: #003530;
+  border: 1px solid #00c832;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.boat-rudder__dashboard__button:hover {
+  background-color: #098000;
+  border: 1px solid #00ff40;
+}
+
+.boat-rudder__dashboard__error {
+  width: 90%;
+  max-width: 400px;
+  padding: 10px;
+  box-sizing: border-box;
+  border: 1px solid #f9964f;
+  color: #f9964f;
+  text-align: center;
+}
+
 /* HOME CONTENT */
 .boat-rudder__home-content {
   width: 100%;

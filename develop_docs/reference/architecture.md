@@ -519,6 +519,16 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
 | `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → `dashboard(epoch)` via `buildPageWebSite()`; otherwise → `302 /login`. |
+| `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_dashboard_session()`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
+| `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
+| `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
+| `/dashboard/categories/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `categories_admin_form()` pre-filled via `cms_get_category_name_values()`. |
+| `/dashboard/categories/<id>/edit` | `POST` | Same guards. `cms_update_category()`, `302 /dashboard/categories`. |
+| `/dashboard/categories/<id>/delete` | `POST` | Same guards. `cms_delete_category()`, `302 /dashboard/categories`. Any `entries.categories[]` referencing `<id>` simply stop resolving to a name - no cascading cleanup. |
+| `/dashboard/languages` | `GET` | Same guards. Renders `languages_admin()`: active `languages` documents (default marked, "make default"/"remove" actions on the rest) plus an "add language" `<select>` of `LANGUAGE_CATALOG` entries not yet active. |
+| `/dashboard/languages/add` | `POST` | Same guards. `cms_add_language(code)`; on failure (unknown or already-active code), re-renders `/dashboard/languages` (`200`) with an error message; on success, `302 /dashboard/languages`. |
+| `/dashboard/languages/<code>/default` | `POST` | Same guards. `cms_set_default_language(code)`, `302 /dashboard/languages`. Takes effect immediately (no restart) - `cms_resolve_default_lang()` re-queries `languages` on every request. |
+| `/dashboard/languages/<code>/remove` | `POST` | Same guards. `cms_remove_language(code)`; rejected (re-renders with an error) if `<code>` is the current default or the only remaining language; otherwise `302 /dashboard/languages`. |
 | `/logout` | `GET` | If a valid session cookie is present, `destroy_session()`; always responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`). |
 
 ### Epoch restriction (security)
@@ -535,6 +545,83 @@ the `POST /login` sequence diagram.
 
 ---
 
+## Dashboard maintainers: Categories and Languages
+
+Two CRUD admin pages under `/dashboard`, **`EPOCH_MODERN` only** (other epochs `302
+/dashboard`, matching the `/login`/`/dashboard` precedent), each requiring a valid session via
+`require_dashboard_session()` (`http_router.c`): `503` if mongodb is not ready, `302 /login` if
+the session cookie is missing/invalid, otherwise the request proceeds.
+
+### Content language resolution (`src/db/cms_languages.c`, `src/db/language_catalog.c`)
+
+A new `languages` collection (`LANGUAGES_COLLECTION`, `src/db/mongodb_manager.h`) replaces
+`configs/settings.conf`'s static `lang` as the source of the *content* language - the key used
+into every `map<lang,string>` field across `entries`/`menu`/`entry_categories`:
+
+```c
+typedef struct { char *code; char *name; int is_default; } CmsLanguageItem;
+```
+
+- `cms_languages_ensure_seeded()`: called once from `main()` after `mongodb_manager_init()`
+  succeeds; inserts `{code:"en", name:"English", is_default:true}` iff `languages` is empty.
+- `cms_resolve_default_lang(out, out_size)`: `db.languages.findOne({is_default:true}).code`,
+  falling back to `iso_lang(lang)` (the global `lang` from `configs/settings.conf`) if mongodb
+  is not ready or no document has `is_default:true`. Called once per request in
+  `http_router.c`'s route block (`content_lang`) and once in `menu()`, then passed to
+  `buildHomeWebSite()`, `blog_list()`, `serve_cms_entry()` and `cms_get_menu_items()` instead of
+  the old global `lang`.
+- Because callers now pass an already-resolved ISO code (which may be any `LANGUAGE_CATALOG`
+  entry, not just `en`/`es`), `cms_get_entry_by_link()`, `cms_get_blog_entries()`
+  (`cms_entries.c`) and `cms_get_menu_items()` (`cms_menu.c`) no longer call `iso_lang()`
+  internally - `iso_lang()` is now only called from `cms_resolve_default_lang()`'s fallback path.
+- `src/db/language_catalog.c`: a curated, static `LANGUAGE_CATALOG[]` of ~25 ISO 639-1 codes +
+  English names, used to validate/name new languages and to build the "add language" `<select>`
+  on `/dashboard/languages`.
+- `cms_add_language(code)` / `cms_set_default_language(code)` / `cms_remove_language(code)`:
+  insert/promote/remove a `languages` document. `cms_set_default_language()` takes effect
+  immediately (no restart), since `cms_resolve_default_lang()` re-queries `languages` on every
+  request. `cms_remove_language()` refuses to remove the current default or the last remaining
+  language.
+
+### Categories CRUD (`src/db/cms_categories.c`, `src/modules/categories_admin/`)
+
+Basic CRUD over `entry_categories` (`ENTRY_CATEGORIES_COLLECTION`), already read by
+`resolve_category_names()` in `cms_entries.c`:
+
+- `cms_get_categories(lang, &items, &count)`: `db.entry_categories.find().sort({_id:1})`,
+  `name` resolved to `lang` (`CmsCategoryItem { id, name }`, `id` = hex ObjectId).
+- `cms_get_category_name_values(id_hex, langs, lang_count, out_values)`: exact (no "en"
+  fallback) `name.<langs[i].code>` per active language, for the edit form.
+- `cms_create_category()` / `cms_update_category()` / `cms_delete_category()`: build
+  `name: {<code>: <value>, ...}` from the active-language form fields. Deleting a category
+  leaves dangling `entries.categories[]` references, which `resolve_category_names()`'s `$in`
+  lookup already ignores gracefully.
+- `src/modules/categories_admin/categories_admin.c`:
+  - `categories_admin_list(epoch, lang)` -> `dashboard/categories/list_epoch<N>.html` (+
+    `list-row_epoch<N>.html` per category, or `list-empty_epoch<N>.html`).
+  - `categories_admin_form(epoch, id, langs, lang_count, values, error_message)` ->
+    `dashboard/categories/form_epoch<N>.html` (+ one `form-field_epoch<N>.html` per active
+    language, + `form-error_epoch<N>.html` if `error_message`). `id == ""` for "new category".
+
+### Languages admin (`src/modules/languages_admin/`)
+
+- `languages_admin(epoch, error_message)` -> `dashboard/languages/list_epoch<N>.html`: one row
+  per active `languages` document (`list-row_epoch<N>.html` for the default, with no actions;
+  `list-row-actions_epoch<N>.html` for the rest, with "make default"/"remove" forms), plus
+  `option_epoch<N>.html` per `LANGUAGE_CATALOG` entry not yet active, plus
+  `list-error_epoch<N>.html` if `error_message`.
+
+### Routing helpers (`src/web_server/http_router.c`)
+
+- `require_dashboard_session(ctx, req, epoch, user_id_out)`: shared by every `/dashboard/*`
+  sub-route - `503` if mongodb is not ready, `302 /login` if the session cookie is
+  missing/invalid, else returns `1` with `user_id_out` filled.
+- `match_id_route(decoded_url, prefix, suffix, id_out, id_size)`: matches
+  `"<prefix>/<id><suffix>"` (e.g. `/dashboard/categories/<id>/edit`,
+  `/dashboard/languages/<code>/remove`), extracting `<id>` into `id_out`.
+
+---
+
 ## Configuration (`configs/settings.conf`)
 
 ```ini
@@ -547,7 +634,9 @@ ssl_key=./ssl/key.pem
 trusted_proxies=          # comma-separated IPs of trusted reverse proxies
                           # e.g. 127.0.0.1,10.0.0.1
 theme=dark                 # active theme under html/themes/<theme>/
-lang=Eng                   # content language passed to home_content
+lang=Eng                   # content language fallback, used only when MongoDB is unavailable
+                           # or no `languages` document has is_default:true (see "Dashboard
+                           # maintainers: Categories and Languages")
 public_url=                # public base URL (reserved for future SEO/canonical links)
 #force_epoch=3             # force a browser epoch for "/" (-1..3), omit to auto-detect
 

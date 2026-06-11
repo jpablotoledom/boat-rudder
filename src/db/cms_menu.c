@@ -30,8 +30,6 @@ void cms_get_menu_items(const char *lang, CmsMenuItem **out, size_t *out_count) 
         return;
     }
 
-    const char *resolved_lang = iso_lang(lang);
-
     size_t count = 0;
     const bson_t *doc;
     while (count < MENU_ITEM_LIMIT && mongoc_cursor_next(cursor, &doc)) {
@@ -39,7 +37,7 @@ void cms_get_menu_items(const char *lang, CmsMenuItem **out, size_t *out_count) 
 
         items[count].link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
-        items[count].name = resolve_lang_map(doc, "name", resolved_lang);
+        items[count].name = resolve_lang_map(doc, "name", lang);
 
         count++;
     }

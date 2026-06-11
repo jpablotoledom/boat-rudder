@@ -1,5 +1,6 @@
 #define _XOPEN_SOURCE 700
 
+#include "db/cms_languages.h"
 #include "db/mongodb_manager.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
@@ -101,6 +102,8 @@ int main(int argc, char *argv[]) {
 
     if (mongodb_manager_init(mongodb_uri, mongodb_db) != 0) {
         LOG_WARN("MongoDB unavailable - /login and /dashboard will return 503");
+    } else {
+        cms_languages_ensure_seeded();
     }
 
     signal(SIGINT,  handle_shutdown);

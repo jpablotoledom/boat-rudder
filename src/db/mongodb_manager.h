@@ -8,6 +8,7 @@
 #define ENTRIES_COLLECTION          "entries"
 #define ENTRY_CATEGORIES_COLLECTION "entry_categories"
 #define MENU_COLLECTION             "menu"
+#define LANGUAGES_COLLECTION        "languages"
 
 // Initializes the MongoDB client pool from `uri`/`db_name` (see
 // configs/settings.conf: mongodb_uri, mongodb_db). Must be called once from

@@ -210,7 +210,6 @@ int cms_get_entry_by_link(const char *link, const char *lang, CmsEntry *out) {
     int found = 0;
     const bson_t *doc;
     if (mongoc_cursor_next(cursor, &doc)) {
-        const char *resolved_lang = iso_lang(lang);
         bson_iter_t iter;
 
         out->link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
@@ -218,9 +217,9 @@ int cms_get_entry_by_link(const char *link, const char *lang, CmsEntry *out) {
         out->type = (bson_iter_init_find(&iter, doc, "type") && BSON_ITER_HOLDS_UTF8(&iter))
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
 
-        parse_header(doc, resolved_lang, out);
-        parse_categories(doc, resolved_lang, out);
-        parse_content(doc, resolved_lang, out);
+        parse_header(doc, lang, out);
+        parse_categories(doc, lang, out);
+        parse_content(doc, lang, out);
 
         found = 1;
     }
@@ -284,8 +283,6 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
         return;
     }
 
-    const char *resolved_lang = iso_lang(lang);
-
     size_t count = 0;
     const bson_t *doc;
     while (count < limit && mongoc_cursor_next(cursor, &doc)) {
@@ -294,10 +291,10 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
         items[count].link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
 
-        resolve_header_fields(doc, resolved_lang, &items[count].header_image_url,
+        resolve_header_fields(doc, lang, &items[count].header_image_url,
                                &items[count].header_title, &items[count].header_summary,
                                &items[count].header_author, items[count].header_date);
-        resolve_category_names(doc, resolved_lang, &items[count].category_names,
+        resolve_category_names(doc, lang, &items[count].category_names,
                                 &items[count].category_count);
 
         count++;

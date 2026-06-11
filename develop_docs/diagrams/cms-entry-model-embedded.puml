@@ -1,6 +1,6 @@
 @startuml cms-entry-model-embedded
 
-title Boat Rudder - Proposed "Entry" Document Model (embedded, vs. the-retro-center's normalized model)
+title Boat Rudder - "Entry" Document Model (embedded)
 
 skinparam backgroundColor #FAFAFA
 skinparam linetype ortho
@@ -70,13 +70,10 @@ note right of ENTRYCAT
 end note
 
 note bottom
-  Collection count: 7 -> 4
-  (entries, header, content, translation,
-   entry_categories, media, media_directories)
-  becomes
-  (entries [header+content+translation embedded],
-   entry_categories [translation embedded],
-   media, media_directories)
+  4 collections total:
+  entries (header + content + translation embedded),
+  entry_categories (translation embedded),
+  media, media_directories
 end note
 
 note left of ENTRIES

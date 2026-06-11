@@ -22,10 +22,6 @@
   [architecture.md](architecture.md) and [boat-rudder.md](boat-rudder.md): malloc'd-string
   modules, `generate_url_theme()` + `read_file_to_string()` + `render_template()`, one
   `http_router.c`, AddressSanitizer-clean.
-- Reference project: `../the-retro-center` (same author, more mature sibling project) is used
-  for MongoDB driver choice, session/auth patterns, and HTML ideas. Its `html/themes/dark/error/`
-  directory is **empty** - the error-template system below is a new design for both projects,
-  not a direct port.
 
 ---
 
@@ -48,8 +44,8 @@ GET  /logout     -> destroys session, clears cookie, 302 -> /
 New architectural pieces:
 
 1. **`src/db/`** - new top-level layer: MongoDB connection pool, password hashing/verification,
-   session management. Mirrors `the-retro-center/src/api/` but named `db/` to avoid implying a
-   REST API surface that doesn't exist here.
+   session management. Named `db/` rather than `api/` to avoid implying a REST API surface
+   that doesn't exist here.
 2. **A generic "page" template shell** (`page_epoch<N>.html`) - `container_epoch<N>.html` is
    hard-wired to the home page (4 slots: menu/slider/home_content/home_blog, plus the
    home-blog lightbox modal). Login, dashboard and error pages need a simpler 2-slot shell
@@ -67,8 +63,7 @@ New architectural pieces:
 ### 3.1 Dependencies
 
 Boat Rudder is currently dependency-light (OpenSSL + pthreads only). Adding MongoDB support
-means accepting two new dependencies, both available via `pkg-config` on Debian/Ubuntu and
-already used successfully in `the-retro-center`:
+means accepting two new dependencies, both available via `pkg-config` on Debian/Ubuntu:
 
 | Dependency | Package(s) | Purpose |
 |---|---|---|
@@ -77,7 +72,7 @@ already used successfully in `the-retro-center`:
 
 This is a deliberate trade-off documented here explicitly: writing a hand-rolled MongoDB
 client or password-hashing routine would violate "don't build infrastructure you don't need",
-and both libraries are mature, widely-packaged, and already proven in `the-retro-center`.
+and both libraries are mature and widely-packaged.
 
 `CMakeLists.txt` additions (see §10 for the full diff description):
 
@@ -96,8 +91,6 @@ target_link_libraries(base-http-server
 ```
 
 ### 3.2 `src/db/mongodb_manager.c/h`
-
-Mirrors `the-retro-center/src/api/mongodb_manager.c`:
 
 - `int mongodb_manager_init(const char *uri, const char *db_name)` - creates a thread-safe
   `mongoc_client_pool_t` from `uri`, called once from `main.c` after `load_config()` and before
@@ -144,8 +137,6 @@ step, documented here but not part of the C code.
 
 ### 3.4 `src/db/auth.c/h`
 
-Mirrors `the-retro-center/src/api/auth/auth.c`:
-
 ```c
 // Returns a malloc'd ObjectId hex string (24 chars + NUL) of the matching user
 // on success, or NULL if the email/password pair is invalid or on DB error.
@@ -157,8 +148,6 @@ verify with `crypto_pwhash_str_verify(stored_hash, password, strlen(password))`.
 registration is in scope - matches the user's instruction that this plan only covers login.
 
 ### 3.5 `src/db/session_manager.c/h`
-
-Mirrors `the-retro-center/src/api/utils/session_manager.c`:
 
 ```c
 // 64 lowercase-hex chars + NUL, malloc'd. Caller frees.
@@ -183,7 +172,7 @@ int validate_session_cookie(const char *cookie_header, char *user_id_out);
 int destroy_session(const char *token);
 ```
 
-Cookie name: `session` (matches `the-retro-center`). Format on login success:
+Cookie name: `session`. Format on login success:
 
 ```
 Set-Cookie: session=<64-hex-token>; HttpOnly; Secure; Path=/; Max-Age=<session_ttl_seconds>; SameSite=Lax
@@ -311,9 +300,8 @@ html/themes/dark/login/
 └── login_epoch3.html    # full form (this is the only one with a real <form>)
 ```
 
-`login_epoch3.html` (HTML/CSS ideas ported from
-`the-retro-center/html/themes/dark/login/login_epoch3.html`, classes prefixed
-`boat-rudder__login__*` to match this project's BEM-ish naming):
+`login_epoch3.html` (classes prefixed `boat-rudder__login__*` to match this project's
+BEM-ish naming):
 
 ```html
 <section class="boat-rudder__login__container">
@@ -346,7 +334,7 @@ so `login(epoch)` for those epochs just reads and returns the file content direc
 placeholders" pattern).
 
 Reusable form-element partials (`html/themes/dark/elements/form/...`,
-`elements/input/...`, `elements/button/...`, as in `the-retro-center`) are **not** introduced
+`elements/input/...`, `elements/button/...`) are **not** introduced
 in this MVP - a single self-contained `login_epoch3.html` is simpler and there is currently
 only one form on the whole site. If a second form (e.g. a future contact page) is added,
 extracting shared partials becomes worthwhile and can be revisited then.

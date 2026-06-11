@@ -1,58 +1,45 @@
-# CMS "Entry" Data Model - Embedded Schema Plan
+# CMS "Entry" Data Model - Embedded Schema
 
-> **Status**: design proposal / planning document, not implemented. This is documentation
-> only - it does not change any code in this repository.
->
-> **Context**: [retro-center-entry-model.md](retro-center-entry-model.md) documents how
-> `../the-retro-center` models a CMS page ("entry") across **7 normalized collections**
-> (`entries`, `header`, `content`, `translation`, `entry_categories`, `media`,
-> `media_directories`), joined at read time via `$lookup`/`$unwind` aggregation
-> pipelines. This document proposes an **embedded** variant of the same data, for a
-> possible future Boat Rudder CMS increment, that keeps the same information but
-> reduces the collection count and removes the join-heavy read path.
+> **Status**: `entries` (with embedded `header` and `content[]`) and `entry_categories` are
+> implemented - see [architecture.md, "CMS entries"](architecture.md#cms-entries-get-pagelink).
+> `media`/`media_directories` (§2.3) remain a design proposal, not yet implemented.
 
 Diagram: [diagrams/cms-entry-model-embedded.puml](diagrams/cms-entry-model-embedded.puml)
 
 ## 1. Goal
 
-Keep the same conceptual data (a page = identity/routing info + header/SEO metadata +
-an ordered list of typed content blocks + multi-language text + categories + media
-galleries), but **embed** the pieces that are always read and written together as part
-of their parent document, instead of storing them as separate collections joined by
-`ObjectId` references.
+A page ("entry") is identity/routing info + header/SEO metadata + an ordered list of typed
+content blocks + multi-language text + categories + (eventually) media galleries. Pieces
+that are always read and written together as a unit are **embedded** in one `entries`
+document, instead of being split across separate collections joined by `ObjectId`
+references; only `entry_categories` (and, in future, `media`/`media_directories`) stay
+separate, since they're shared many-to-many across entries.
 
-Target shape (as given):
+Target shape:
 
 ```
 entries
   - header
-      - translation
-  - content
-      - translation
+  - content[]
 entry_categories
-  - translation
 media
 media_directories
 ```
 
-i.e. **7 collections -> 4 collections**:
+4 collections total:
 
-| the-retro-center (normalized) | Proposed (embedded) |
+| Collection | Contents |
 |---|---|
-| `entries` | `entries` (now includes `header` and `content`) |
-| `header` | embedded as `entries.header` |
-| `content` | embedded as `entries.content[]` |
-| `translation` | embedded inline as `{eng, esp}` wherever it was referenced |
-| `entry_categories` | `entry_categories` (now includes its `translation`) |
-| `media` | `media` (unchanged) |
-| `media_directories` | `media_directories` (unchanged) |
+| `entries` | page identity/routing + embedded `header` + embedded `content[]`, all translated text as `map<lang,string>` |
+| `entry_categories` | `{ _id, name: map<lang,string> }`, referenced from `entries.categories[]` |
+| `media` | proposed, not yet implemented (§2.3) |
+| `media_directories` | proposed, not yet implemented (§2.3) |
 
 ### 1.1 Language code convention
 
-The original analysis used `eng`/`esp` as the keys for translated text. To support an
-arbitrary number of languages without changing the schema, every embedded translation
-object should instead be an **open map keyed by [ISO 639-1](https://en.wikipedia.org/wiki/ISO_639-1)
-two-letter lowercase language codes** (`en`, `es`, `fr`, `de`, `pt`, ...):
+Every embedded translation object is an **open map keyed by
+[ISO 639-1](https://en.wikipedia.org/wiki/ISO_639-1) two-letter lowercase language codes**
+(`en`, `es`, `fr`, `de`, `pt`, ...):
 
 ```jsonc
 { "en": "Hello", "es": "Hola", "fr": "Bonjour" }
@@ -60,14 +47,13 @@ two-letter lowercase language codes** (`en`, `es`, `fr`, `de`, `pt`, ...):
 
 - Adding a new language is just adding a new key - no schema/migration needed.
 - A document doesn't need to populate every language; the rendering layer falls back
-  to a configured default (e.g. `en`) if a key is missing for the requested `lang`.
+  to a configured default (`en`) if a key is missing for the requested `lang`. This is
+  implemented by `resolve_lang_map()` in `src/db/cms_entries.c`, which also bridges
+  `configs/settings.conf`'s `lang="Eng"/"Esp"` convention to `en`/`es` (see
+  [architecture.md, "CMS entries"](architecture.md#cms-entries-get-pagelink)).
 - If region-specific variants are ever needed (e.g. `en-US` vs. `en-GB`), extend to
   [BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) tags - they're a superset
   of ISO 639-1, so plain `en`/`es` keys remain valid.
-- This replaces `eng`/`esp` everywhere in this document (`en`/`es` below). The
-  the-retro-center-specific [retro-center-entry-model.md](retro-center-entry-model.md)
-  is left as-is, since it describes that project's *current* code (`translation.eng` /
-  `translation.esp`).
 
 ## 2. Proposed schema
 
@@ -163,12 +149,9 @@ Unchanged. Still standalone collections, referenced from
 
 ## 3. Query pattern changes
 
-### 3.1 Fetching a full page (was: `getEntry` + `getHeader`/`getBlogItemBySlug` + `getPageItems`, 3 queries with aggregation `$lookup`/`$unwind`)
+### 3.1 Fetching a full page
 
-**Before** (the-retro-center): 3 separate aggregation pipelines, each doing
-`$lookup` + `$unwind` against `translation` (and `entries` for `content`).
-
-**After**: a single query.
+A single query, with no `$lookup`/`$unwind` pipeline needed:
 
 ```js
 db.entries.findOne({ link: "<link>", enabled: true })
@@ -252,10 +235,16 @@ adding, or removing content blocks is just array manipulation within one documen
 
 ## 6. Relationship to Boat Rudder's current code
 
-This schema is **not** wired into Boat Rudder yet. If/when a future increment adds
-database-backed pages (beyond the current static `home_content`/`home_blog` arrays),
-this is the proposed shape for the new `entries` collection. The per-type "element"
-templates described in [retro-center-entry-model.md §7](retro-center-entry-model.md#7-content-block-types-elements)
-remain the rendering pattern - only the *storage* shape changes; rendering still goes
-through `generate_url_theme` + `read_file_to_string` + `render_template` per
-`content[].type`/epoch, per Boat Rudder's [no-embedded-HTML convention](architecture.md#templates-htmlthemestheme).
+The `entries` collection (with embedded `header` and `content[]`) and `entry_categories`
+described above are implemented and wired into the `/page/<link>` route - see
+[architecture.md, "CMS entries"](architecture.md#cms-entries-get-pagelink),
+`src/db/cms_entries.c`, and `src/modules/entry_page/entry_page.c`. The currently
+implemented `content[].type`s are `tittle`, `paragraph`, `image`, and `byline`.
+
+Still proposed, not yet implemented: `media`/`media_directories` (§2.3), the `/blog/`
+route (incl. filtering by category), heading levels via `content[].extra_data` for
+`tittle`, and additional element types (gallery, table, forms, etc.). When these land,
+rendering follows the same pattern as the implemented types: per-type "element"
+templates loaded via `generate_url_theme` + `read_file_to_string` + `render_template`
+per `content[].type`/epoch, per Boat Rudder's
+[no-embedded-HTML convention](architecture.md#templates-htmlthemestheme).

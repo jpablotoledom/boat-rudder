@@ -322,8 +322,7 @@ for future routes, e.g. a `/blog/` listing). Unknown `content[].type` values ren
 output, so a page still renders if it contains a block type this increment doesn't support.
 
 This increment implements 4 content-block types - `tittle`, `paragraph`, `image`, `byline` -
-the minimum set called out in
-[retro-center-entry-model.md §9](retro-center-entry-model.md#9-why-this-matters-for-boat-rudder).
+a minimal but useful set: a heading, body text, an image, and an attribution line.
 
 `entries.categories[]` (an `ObjectId[]` referencing `entry_categories._id`, per
 `cms-entry-model-plan.md` §2.2) is resolved to category names and rendered as a small "tags"
@@ -332,9 +331,9 @@ a separate collection (kept normalized, since categories are shared across entri
 with no `categories` field/empty array renders with no tags block.
 
 **Not yet implemented**: `media`/`media_directories`, the `/blog/` route (incl. filtering by
-category), heading levels via `content[].extra_data` for `tittle`, and the remaining element
-types from `retro-center-entry-model.md` §7 (gallery, table, forms, etc.) - see
-`develop_docs/cms-entry-model-plan.md` for the full target schema.
+category), heading levels via `content[].extra_data` for `tittle`, and additional element
+types (gallery, table, forms, etc.) - see `develop_docs/cms-entry-model-plan.md` for the
+full target schema.
 
 ---
 

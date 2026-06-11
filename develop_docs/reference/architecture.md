@@ -240,6 +240,10 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   "No blog entries found" message rendered instead of `items` when there are no blog entries.
   Category tags reuse `elements/category/category_epoch<N>.html` items, concatenated without
   the `entry-categories` wrapper. See "Home blog list" below.
+- `blog-list/` - `blog-list_epoch<N>.html` (1 `%s`: items) and `blog-list/empty_epoch<N>.html`
+  (static "No blog entries found"), the `/blog` page wrapper and empty state. Items reuse
+  `home-blog/home-blog-item_epoch<N>.html` (same placeholders/category rendering as the home
+  blog list). See "Blog list" below.
 - `page/` - `page_epoch<N>.html`, the generic page shell for non-home routes (`/login`,
   `/dashboard`, error pages); contains `{{PAGE_TITLE}}`, 1 `%s` for the menu and 1 `%s` for the
   page's content fragment.
@@ -277,7 +281,7 @@ http_router.c  (route == "/")
   │     ├─ slider(epoch)                   ── modules/slider
   │     ├─ home_content(epoch, lang)       ── modules/home_content
   │     ├─ home_blog(epoch, lang)          ── modules/home_blog
-  │     │     cms_get_blog_entries(lang, &items, &count) ── src/db/cms_entries.c
+  │     │     cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &items, &count) ── src/db/cms_entries.c
   │     └─ render_template(container, menu, slider, home_content, home_blog)
   │
   └─ build_epoch_response(body, extra_headers, epoch) ── utils/build_epoch_response.c
@@ -292,7 +296,7 @@ it with `render_template()`. The orchestrator frees every intermediate buffer on
 For `HEAD /`, `http_router.c` builds the same response and truncates it at the end of the header
 block (`\r\n\r\n`) before writing.
 
-### CMS entries (`GET /page/<link>`)
+### CMS entries (`GET /page/<link>`, `GET /blog/<link>`)
 
 A first increment of the database-backed CMS described in
 `develop_docs/plans/cms-entry-model-plan.md`: a single `entries` MongoDB collection
@@ -302,31 +306,35 @@ blocks - with all user-facing text stored as a `map<lang,string>` keyed by ISO 6
 (`en`, `es`, ...).
 
 ```
-http_router.c  (route == "/page/<link>")
+http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │
-  ├─ cms_get_entry_by_link(link, lang, &entry)  ── src/db/cms_entries.c
-  │     db.entries.findOne({ link, enabled: true })
-  │     resolves header.* and content[].text map<lang,string> to `lang`
-  │     (configs/settings.conf "Eng"/"Esp" mapped to ISO "en"/"es", default "en"),
-  │     falling back to "en" if the requested language is missing
-  │     resolves entries.categories[] (ObjectId[]) -> entry_categories.name
-  │     (ENTRY_CATEGORIES_COLLECTION) via db.entry_categories.find({_id: {$in: [...]}}),
-  │     same lang resolution; entries with no categories get category_count == 0
-  │
-  ├─ entry_page(&entry, epoch)                   ── src/modules/entry_page/entry_page.c
-  │     ├─ entry/entry-header_epoch<N>.html       (header)
-  │     ├─ entry/entry-categories_epoch<N>.html   (category "tags", skipped if none)
-  │     │     + elements/category/category_epoch<N>.html (one per category)
-  │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
-  │
-  └─ buildPageWebSite(epoch, entry.header_title, content)
+  ├─ serve_cms_entry(ctx, link, expected_type, method, epoch) ── src/web_server/http_router.c
+  │     │
+  │     ├─ cms_get_entry_by_link(link, lang, &entry)  ── src/db/cms_entries.c
+  │     │     db.entries.findOne({ link, enabled: true })
+  │     │     resolves header.* and content[].text map<lang,string> to `lang`
+  │     │     (configs/settings.conf "Eng"/"Esp" mapped to ISO "en"/"es", default "en"),
+  │     │     falling back to "en" if the requested language is missing
+  │     │     resolves entries.categories[] (ObjectId[]) -> entry_categories.name
+  │     │     (ENTRY_CATEGORIES_COLLECTION) via db.entry_categories.find({_id: {$in: [...]}}),
+  │     │     same lang resolution; entries with no categories get category_count == 0
+  │     │
+  │     ├─ entry_page(&entry, epoch)                   ── src/modules/entry_page/entry_page.c
+  │     │     ├─ entry/entry-header_epoch<N>.html       (header)
+  │     │     ├─ entry/entry-categories_epoch<N>.html   (category "tags", skipped if none)
+  │     │     │     + elements/category/category_epoch<N>.html (one per category)
+  │     │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
+  │     │
+  │     └─ buildPageWebSite(epoch, entry.header_title, content)
 ```
 
 `cms_get_entry_by_link()`'s query (`db.entries.findOne({ link, enabled: true })`) has no `type`
-filter, but `http_router.c` only renders the result for `entries.type` of `"page"` or `"blog"`
-(other types 404) - this is what lets the home blog list's items link to `/page/<link>`.
-Unknown `content[].type` values render as empty output, so a page still renders if it contains
-a block type this increment doesn't support.
+filter; `serve_cms_entry()` 404s unless `entries.type` matches the route's `expected_type` -
+`"page"` for `/page/<link>`, `"blog"` for `/blog/<link>`. This keeps a single canonical URL per
+entry: blog articles live at `/blog/<link>` (linked from the home blog list and `/blog`
+listing), `/page/<link>` is for `type: "page"` only. Unknown `content[].type` values render as
+empty output, so a page still renders if it contains a block type this increment doesn't
+support.
 
 This increment implements 4 content-block types - `tittle`, `paragraph`, `image`, `byline` -
 a minimal but useful set: a heading, body text, an image, and an attribution line.
@@ -337,8 +345,8 @@ block under the header. `entry_categories` documents are `{ _id, name: <map<lang
 a separate collection (kept normalized, since categories are shared across entries). An entry
 with no `categories` field/empty array renders with no tags block.
 
-**Not yet implemented**: `media`/`media_directories`, the `/blog/` route (incl. filtering by
-category), heading levels via `content[].extra_data` for `tittle`, and additional element
+**Not yet implemented**: `media`/`media_directories`, filtering the `/blog` listing by
+category, heading levels via `content[].extra_data` for `tittle`, and additional element
 types (gallery, table, forms, etc.) - see `develop_docs/plans/cms-entry-model-plan.md` for the
 full target schema.
 
@@ -350,7 +358,7 @@ documents with `type == "blog"`:
 ```
 home_blog(epoch, lang)                          ── src/modules/home_blog/home_blog.c
   │
-  ├─ cms_get_blog_entries(lang, &items, &count)  ── src/db/cms_entries.c
+  ├─ cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &items, &count)  ── src/db/cms_entries.c
   │     db.entries.find({ type: "blog", enabled: true })
   │       .sort({ "header.date": -1 }).limit(HOME_BLOG_LIMIT)
   │     resolves header.* and categories[] to `lang`, reusing the same
@@ -359,7 +367,7 @@ home_blog(epoch, lang)                          ── src/modules/home_blog/hom
   ├─ if count == 0: home-blog/empty_epoch<N>.html ("No blog entries found")
   │
   └─ for each item: home-blog-item_epoch<N>.html
-        link        -> "/page/<item.link>"
+        link        -> "/blog/<item.link>"
         categories  -> elements/category/category_epoch<N>.html items, concatenated
                         (no entry-categories wrapper)
 ```
@@ -368,6 +376,39 @@ home_blog(epoch, lang)                          ── src/modules/home_blog/hom
 `cms_get_blog_entries()` allocates a fixed-size array of that length and never grows it. On a
 DB error or if MongoDB is not ready, it returns `*out_count == 0` and the empty-state template
 is shown - the home blog list is decorative and must never fail the home page.
+
+### Blog list (`/blog`)
+
+A dedicated page listing every `entries` document with `type == "blog"`
+(`modules/blog_list/blog_list.c`), the increment previously deferred as a future "`/blog/`
+route" (`develop_docs/plans/cms-entry-model-plan.md` §3.2,
+`develop_docs/plans/home-blog-list-plan.md` §6.1):
+
+```
+http_router.c  (route == "/blog")
+  │
+  ├─ blog_list(epoch, lang)                        ── src/modules/blog_list/blog_list.c
+  │     │
+  │     ├─ cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &items, &count) ── src/db/cms_entries.c
+  │     │     db.entries.find({ type: "blog", enabled: true })
+  │     │       .sort({ "header.date": -1 }).limit(BLOG_LIST_LIMIT)
+  │     │
+  │     ├─ if count == 0: blog-list/empty_epoch<N>.html ("No blog entries found")
+  │     │
+  │     ├─ for each item: home-blog/home-blog-item_epoch<N>.html (reused, same as
+  │     │     home blog list - link -> "/blog/<item.link>", categories, etc.)
+  │     │
+  │     └─ blog-list/blog-list_epoch<N>.html (1 `%s`: items, heading "Blog")
+  │
+  └─ buildPageWebSite(epoch, "Boat Rudder - Blog", content)
+```
+
+`cms_get_blog_entries()` is shared with `home_blog()`, parameterized by a `limit`:
+`HOME_BLOG_LIMIT` (10) for the home page, `BLOG_LIST_LIMIT` (`src/db/cms_entries.h`, currently
+50) for `/blog`. Same decorative/never-fail behavior: on a DB error or if MongoDB is not
+ready, `*out_count == 0` and the empty-state template is shown instead of failing the page.
+
+Each blog article is then served at `/blog/<item.link>` - see "CMS entries" above.
 
 ### Menu (all pages)
 

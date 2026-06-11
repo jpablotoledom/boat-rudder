@@ -260,7 +260,7 @@ void cms_entry_free(CmsEntry *entry) {
     memset(entry, 0, sizeof(*entry));
 }
 
-void cms_get_blog_entries(const char *lang, CmsBlogListItem **out, size_t *out_count) {
+void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
 
@@ -270,12 +270,12 @@ void cms_get_blog_entries(const char *lang, CmsBlogListItem **out, size_t *out_c
     bson_t *query = BCON_NEW("type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
     bson_t *opts = BCON_NEW(
         "sort", "{", "header.date", BCON_INT32(-1), "}",
-        "limit", BCON_INT64((int64_t)HOME_BLOG_LIMIT)
+        "limit", BCON_INT64((int64_t)limit)
     );
 
     mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, opts, NULL);
 
-    CmsBlogListItem *items = calloc(HOME_BLOG_LIMIT, sizeof(CmsBlogListItem));
+    CmsBlogListItem *items = calloc(limit, sizeof(CmsBlogListItem));
     if (!items) {
         bson_destroy(query);
         bson_destroy(opts);
@@ -288,7 +288,7 @@ void cms_get_blog_entries(const char *lang, CmsBlogListItem **out, size_t *out_c
 
     size_t count = 0;
     const bson_t *doc;
-    while (count < HOME_BLOG_LIMIT && mongoc_cursor_next(cursor, &doc)) {
+    while (count < limit && mongoc_cursor_next(cursor, &doc)) {
         bson_iter_t iter;
 
         items[count].link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))

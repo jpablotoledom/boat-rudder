@@ -1,4 +1,4 @@
-#include "home_blog.h"
+#include "blog_list.h"
 #include "../../db/cms_entries.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
@@ -55,9 +55,9 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
     return result;
 }
 
-char *home_blog(int epoch, const char *lang) {
+char *blog_list(int epoch, const char *lang) {
     char *item_path    = generate_url_theme("home-blog/home-blog-item_epoch%d.html", epoch);
-    char *content_path = generate_url_theme("home-blog/home-blog_epoch%d.html", epoch);
+    char *content_path = generate_url_theme("blog-list/blog-list_epoch%d.html", epoch);
 
     char *item_tpl    = item_path    ? read_file_to_string(item_path)    : NULL;
     char *content_tpl = content_path ? read_file_to_string(content_path) : NULL;
@@ -73,10 +73,10 @@ char *home_blog(int epoch, const char *lang) {
 
     if (!item_tpl || !content_tpl) goto cleanup;
 
-    cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &entries, &entry_count);
+    cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &entries, &entry_count);
 
     if (entry_count == 0) {
-        items = load_template("home-blog/empty_epoch%d.html", epoch);
+        items = load_template("blog-list/empty_epoch%d.html", epoch);
     } else {
         items = strdup("");
         for (size_t i = 0; items && i < entry_count; i++) {

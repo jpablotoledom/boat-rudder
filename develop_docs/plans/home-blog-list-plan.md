@@ -18,9 +18,11 @@ increment makes the home blog list read real `entries` documents where `type == 
 `map<lang,string>` resolution, header shape, and category-tag rendering already built for
 `/page/<link>`.
 
-Out of scope: a dedicated `/blog/` listing route and category-filtered listing
-(`getBlogItemsByCategory`-style queries) - both remain future increments per
-`cms-entry-model-plan.md` §3.2. A dashboard editor for blog entries is also out of scope.
+Out of scope: category-filtered listing (`getBlogItemsByCategory`-style queries) - remains a
+future increment per `cms-entry-model-plan.md` §3.2. A dashboard editor for blog entries is
+also out of scope. (The dedicated `/blog` listing route, and `/blog/<link>` for individual
+articles, were implemented as a separate increment - see
+[architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog).)
 
 ## 2. DB layer (`src/db/cms_entries.h` / `cms_entries.c`)
 
@@ -95,8 +97,10 @@ Implementation notes:
   `opts`.
 - `HOME_BLOG_LIMIT` is a new `#define HOME_BLOG_LIMIT 10` in `cms_entries.h` (or
   `cms_entries.c`, alongside the other `MAX_*`-style constants) - the home list always
-  shows at most the 10 most recent `type: "blog"` entries. A future `/blog/` listing route
-  (`cms-entry-model-plan.md` §3.2, still out of scope) would page through the rest.
+  shows at most the 10 most recent `type: "blog"` entries. The `/blog` listing route
+  (implemented separately - see
+  [architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog)) reuses the
+  same query with a higher `BLOG_LIST_LIMIT`.
 - The result count is at most `HOME_BLOG_LIMIT`, so the output array can be a fixed-size
   `CmsBlogListItem[HOME_BLOG_LIMIT]` allocated once (`calloc(HOME_BLOG_LIMIT, ...)`) and
   filled while iterating the cursor, with `*out_count` set to however many were actually
@@ -271,9 +275,10 @@ text) to `styles_epoch3.css` / `styles_epoch2.css`.
 ## 6. Resolved decisions
 
 1. **Result limit**: `cms_get_blog_entries()` caps the home list at the **10** most
-   recent `type: "blog"` entries via `HOME_BLOG_LIMIT = 10` (§2.3). A future `/blog/`
-   listing route (`cms-entry-model-plan.md` §3.2, still out of scope) would page through
-   the rest.
+   recent `type: "blog"` entries via `HOME_BLOG_LIMIT = 10` (§2.3). The `/blog` listing
+   route (implemented separately - see
+   [architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog)) reuses the
+   same query with `BLOG_LIST_LIMIT = 50`.
 
 2. **No `menu` field on `entries`** - separate `menu` collection. Implemented as a
    separate increment - see

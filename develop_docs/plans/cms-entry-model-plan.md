@@ -180,6 +180,11 @@ used by `cms_get_entry_by_link()` (`resolve_category_names()`). There is no `men
 `entries`; menu-driven navigation is deferred to a future separate `menu` collection (see
 [home-blog-list-plan.md](home-blog-list-plan.md) §6).
 
+`cms_get_blog_entries()` is parameterized by `limit`, reused by both the home blog list
+(`HOME_BLOG_LIMIT`) and the full `/blog` listing (`BLOG_LIST_LIMIT`) - see
+[architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog). Category-filtered
+listing (`getBlogItemsByCategory`-style queries) remains a future increment.
+
 ### 3.3 Editing a page (dashboard / future editor)
 
 **Before**: editing a page meant writing to up to `1 + 1 + N + (2 + N)` documents
@@ -244,8 +249,8 @@ described above are implemented and wired into the `/page/<link>` route - see
 `src/db/cms_entries.c`, and `src/modules/entry_page/entry_page.c`. The currently
 implemented `content[].type`s are `tittle`, `paragraph`, `image`, and `byline`.
 
-Still proposed, not yet implemented: `media`/`media_directories` (§2.3), the `/blog/`
-route (incl. filtering by category), heading levels via `content[].extra_data` for
+Still proposed, not yet implemented: `media`/`media_directories` (§2.3), filtering the
+`/blog` listing by category, heading levels via `content[].extra_data` for
 `tittle`, and additional element types (gallery, table, forms, etc.). When these land,
 rendering follows the same pattern as the implemented types: per-type "element"
 templates loaded via `generate_url_theme` + `read_file_to_string` + `render_template`

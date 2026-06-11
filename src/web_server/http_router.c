@@ -11,6 +11,7 @@
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
 #include "../html_builder/orchestrator.h"
+#include "../modules/blog_list/blog_list.h"
 #include "../modules/dashboard/dashboard.h"
 #include "../modules/entry_page/entry_page.h"
 #include "../modules/error/error.h"
@@ -98,6 +99,40 @@ static void send_or_error(void *ctx, char *response, const char *method, int epo
     }
     connection_write(ctx, response, response_len);
     free(response);
+}
+
+// Looks up db.entries.findOne({link, enabled: true}) and renders it via
+// entry_page() + buildPageWebSite(), used by both /page/<link>
+// (expected_type "page") and /blog/<link> (expected_type "blog"). Sends a
+// 404 if the entry doesn't exist, mongodb is not ready, or entry.type !=
+// expected_type.
+static void serve_cms_entry(void *ctx, const char *link, const char *expected_type,
+                             const char *method, int epoch) {
+    CmsEntry entry;
+    if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
+        if (strcmp(entry.type, expected_type) != 0) {
+            cms_entry_free(&entry);
+            send_error_response(ctx, 404, "404 Not Found", epoch);
+            return;
+        }
+
+        char *title   = strdup(entry.header_title);
+        char *content = entry_page(&entry, epoch);
+        cms_entry_free(&entry);
+
+        char *body = NULL;
+        if (content && title) {
+            body = buildPageWebSite(epoch, title, content); // frees content
+        } else {
+            free(content);
+        }
+        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+        free(title);
+        free(body);
+        send_or_error(ctx, response, method, epoch);
+    } else {
+        send_error_response(ctx, 404, "404 Not Found", epoch);
+    }
 }
 
 // Extracts the url-decoded value of `key` from an
@@ -328,32 +363,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                const char *link = decoded_url + 6;
+                serve_cms_entry(ctx, decoded_url + 6, "page", req.method, epoch);
 
-                CmsEntry entry;
-                if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
-                    if (strcmp(entry.type, "page") != 0 && strcmp(entry.type, "blog") != 0) {
-                        cms_entry_free(&entry);
-                        send_error_response(ctx, 404, "404 Not Found", epoch);
-                    } else {
-                        char *title   = strdup(entry.header_title);
-                        char *content = entry_page(&entry, epoch);
-                        cms_entry_free(&entry);
+            } else if (strcmp(decoded_url, "/blog") == 0) {
+                int epoch = resolve_epoch(&req);
 
-                        char *body = NULL;
-                        if (content && title) {
-                            body = buildPageWebSite(epoch, title, content); // frees content
-                        } else {
-                            free(content);
-                        }
-                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                        free(title);
-                        free(body);
-                        send_or_error(ctx, response, req.method, epoch);
-                    }
-                } else {
-                    send_error_response(ctx, 404, "404 Not Found", epoch);
-                }
+                char *content  = blog_list(epoch, lang);
+                char *body     = buildPageWebSite(epoch, "Boat Rudder - Blog", content);
+                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                free(body);
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
+                int epoch = resolve_epoch(&req);
+                serve_cms_entry(ctx, decoded_url + 6, "blog", req.method, epoch);
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");

@@ -7,6 +7,10 @@
 // cms_get_blog_entries() for the home blog list, newest header.date first.
 #define HOME_BLOG_LIMIT 10
 
+// Maximum number of "entries" documents (type == "blog", enabled == true) returned by
+// cms_get_blog_entries() for the "/blogs" listing page, newest header.date first.
+#define BLOG_LIST_LIMIT 50
+
 // One ordered, typed content block from `entries.content[]` (see
 // develop_docs/plans/cms-entry-model-plan.md). `text` is the block's
 // `map<lang,string>` resolved to the requested language (falling back to
@@ -69,13 +73,14 @@ typedef struct {
 } CmsBlogListItem;
 
 // Looks up db.entries.find({type: "blog", enabled: true})
-//   .sort({"header.date": -1}).limit(HOME_BLOG_LIMIT),
+//   .sort({"header.date": -1}).limit(limit),
 // resolving header.* and categories[] to `lang` for each match (same lang convention as
-// cms_get_entry_by_link). On success, *out points to a malloc'd array of *out_count items
-// (possibly 0) that must be passed to cms_blog_list_free(). On a DB error or if mongodb is
-// not ready, *out = NULL and *out_count = 0 - the home blog list is decorative and must
-// never fail the home page.
-void cms_get_blog_entries(const char *lang, CmsBlogListItem **out, size_t *out_count);
+// cms_get_entry_by_link). `limit` is HOME_BLOG_LIMIT for the home blog list or
+// BLOG_LIST_LIMIT for the "/blogs" listing page. On success, *out points to a malloc'd
+// array of *out_count items (possibly 0) that must be passed to cms_blog_list_free(). On a
+// DB error or if mongodb is not ready, *out = NULL and *out_count = 0 - both callers are
+// decorative and must never fail the page.
+void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count);
 
 // Frees every item's fields and the array itself. Safe to call with items == NULL.
 void cms_blog_list_free(CmsBlogListItem *items, size_t count);

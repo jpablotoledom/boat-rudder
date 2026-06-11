@@ -3,7 +3,6 @@
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 char *login(int epoch, const char *error_message) {
@@ -16,13 +15,19 @@ char *login(int epoch, const char *error_message) {
 
     if (epoch != EPOCH_MODERN) return tpl;
 
-    char error_html[512] = "";
+    char *error_html = NULL;
     if (error_message && error_message[0]) {
-        snprintf(error_html, sizeof(error_html),
-                 "<p class=\"boat-rudder__login__error\">%s</p>", error_message);
+        char *error_path = generate_url_theme("login/login-error_epoch%d.html", epoch);
+        char *error_tpl  = error_path ? read_file_to_string(error_path) : NULL;
+        free(error_path);
+        if (error_tpl) {
+            error_html = render_template(error_tpl, error_message);
+            free(error_tpl);
+        }
     }
 
-    char *result = render_template(tpl, error_html);
+    char *result = render_template(tpl, error_html ? error_html : "");
+    free(error_html);
     free(tpl);
     return result;
 }

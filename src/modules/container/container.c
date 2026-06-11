@@ -4,7 +4,7 @@
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
 
-char *container(int epoch) {
+char *container(int epoch, const char *page_title) {
     char *path = generate_url_theme("container/container_epoch%d.html", epoch);
     if (!path) return NULL;
 
@@ -12,7 +12,9 @@ char *container(int epoch) {
     free(path);
     if (!raw) return NULL;
 
-    char *result = str_replace_first(raw, "{{PAGE_TITLE}}", "<title>Boat Rudder - Home</title>");
+    char *title_tag = build_title_tag(page_title);
+    char *result = title_tag ? str_replace_first(raw, "{{PAGE_TITLE}}", title_tag) : NULL;
+    free(title_tag);
     free(raw);
     return result;
 }

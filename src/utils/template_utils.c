@@ -60,3 +60,7 @@ char *str_append(char *dst, const char *src) {
     memcpy(result + dst_len, src, src_len + 1);
     return result;
 }
+
+char *build_title_tag(const char *page_title) {
+    return render_template("<title>%s</title>", page_title);
+}

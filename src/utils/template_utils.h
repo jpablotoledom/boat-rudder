@@ -15,4 +15,9 @@ char *render_template(const char *tpl, ...);
 // failure (in which case `dst` has already been freed).
 char *str_append(char *dst, const char *src);
 
+// Builds a "<title>page_title</title>" tag as a new malloc'd string, for
+// substitution into a template's {{PAGE_TITLE}} placeholder. Returns NULL on
+// allocation failure.
+char *build_title_tag(const char *page_title);
+
 #endif // TEMPLATE_UTILS_H

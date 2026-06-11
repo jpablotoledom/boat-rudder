@@ -1,0 +1,7 @@
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/base-http-server.dir
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/edit_cache.dir
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/rebuild_cache.dir
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/list_install_components.dir
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/install.dir
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/install/local.dir
+/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles/install/strip.dir

@@ -1,5 +1,8 @@
 #include "build_epoch_response.h"
 #include "detect_epoch.h"
+#include "generate_url_theme.h"
+#include "read_file.h"
+#include "template_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,47 +62,18 @@ char *build_epoch_response_status(const char *body, const char *extra_headers,
 }
 
 // Tiny epoch-appropriate "click here to continue" body for clients that
-// don't auto-follow a 302's Location header.
+// don't auto-follow a 302's Location header. Loaded from
+// html/themes/<theme>/redirect/redirect_epoch<N>.html.
 static char *build_redirect_body(const char *location, int epoch) {
-    const char *fmt;
-    switch (epoch) {
-        case EPOCH_WML:
-            fmt =
-                "<?xml version=\"1.0\"?>\n"
-                "<!DOCTYPE wml PUBLIC \"-//WAPFORUM//DTD WML 1.1//EN\" \"http://www.wapforum.org/DTD/wml_1.1.xml\">\n"
-                "<wml>\n"
-                "<card id=\"redirect\" title=\"Redirect\">\n"
-                "<p>Redirecting to <a href=\"%s\">%s</a></p>\n"
-                "</card>\n"
-                "</wml>\n";
-            break;
-        case EPOCH_PRESTANDARD:
-            fmt =
-                "<html>\n<head></head>\n<body>\n"
-                "<p>Redirecting to <a href=\"%s\">%s</a></p>\n"
-                "</body>\n</html>\n";
-            break;
-        case EPOCH_EARLY:
-            fmt =
-                "<html>\n<head></head>\n<body bgcolor=\"#000000\" text=\"#FFFFFF\" link=\"#56E9FD\">\n"
-                "<p>Redirecting to <a href=\"%s\">%s</a></p>\n"
-                "</body>\n</html>\n";
-            break;
-        default:
-            fmt =
-                "<!DOCTYPE html>\n<html lang=\"en\">\n<head><meta charset=\"UTF-8\"></head>\n<body>\n"
-                "<p>Redirecting to <a href=\"%s\">%s</a></p>\n"
-                "</body>\n</html>\n";
-            break;
-    }
+    char *path = generate_url_theme("redirect/redirect_epoch%d.html", epoch);
+    if (!path) return NULL;
 
-    int len = snprintf(NULL, 0, fmt, location, location);
-    if (len < 0) return NULL;
+    char *tpl = read_file_to_string(path);
+    free(path);
+    if (!tpl) return NULL;
 
-    char *body = malloc((size_t)len + 1);
-    if (!body) return NULL;
-
-    snprintf(body, (size_t)len + 1, fmt, location, location);
+    char *body = render_template(tpl, location, location);
+    free(tpl);
     return body;
 }
 

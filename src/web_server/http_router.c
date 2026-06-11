@@ -70,9 +70,9 @@ static void send_error_response(void *ctx, int status_code, const char *status_l
     free(body);
 
     if (!response) {
-        char fallback[256];
-        snprintf(fallback, sizeof(fallback), "<html><body><h1>%s</h1></body></html>", status_line);
-        send_simple(ctx, status_line, fallback);
+        // Last-resort fallback: template loading itself failed, so this must
+        // not depend on the filesystem/template pipeline. Plain text only.
+        send_simple(ctx, status_line, status_line);
         return;
     }
 

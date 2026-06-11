@@ -216,6 +216,14 @@ client the simplest markup its browser can handle, from WAP-era phones to modern
 
 ### Templates (`html/themes/<theme>/`)
 
+**Convention: no HTML/markup embedded in C.** All HTML, WML and other markup lives in
+template files under `html/themes/<theme>/`, loaded via `generate_url_theme()` +
+`read_file_to_string()` and rendered with `render_template()` / `str_replace_first()`. C code
+must not contain inline markup string literals (e.g. `"<p>...</p>"`); if a new piece of markup
+is needed, add a template file instead. The one accepted exception is the catastrophic
+fallback in `send_error_response()` (`http_router.c`), which sends the plain-text status line
+via `send_simple()` when the template pipeline itself has failed and cannot be relied on.
+
 Each visual component has one HTML template per epoch, named `<component>_epoch<N>.html`
 (`<N>` ∈ {-1, 0, 1, 2, 3}), under `html/themes/<theme>/<component>/`:
 
@@ -237,6 +245,9 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 - `dashboard/` - `dashboard_epoch<N>.html`, static "Welcome to dashboard" content per epoch (no
   placeholders).
 - `error/` - `error_epoch<N>.html`, 2 `%s` placeholders (status code, message).
+- `redirect/` - `redirect_epoch<N>.html`, the standalone "click here to continue" body sent
+  with `302` responses (for clients that don't auto-follow `Location`); 2 `%s` placeholders
+  (both the redirect target: link `href` and link text). Not wrapped by `page_epoch<N>.html`.
 
 `%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
 that is itself used as a format string must be written as `%%`. Templates that are only ever

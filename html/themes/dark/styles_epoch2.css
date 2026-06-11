@@ -140,3 +140,15 @@ a:link, a:visited {
   color: #cccccc;
   font-style: italic;
 }
+
+.br-entry-categories {
+  margin: 0 0 10px;
+}
+
+.br-entry-category {
+  background-color: #000080;
+  color: #56e9fd;
+  padding: 2px 8px;
+  margin-right: 6px;
+  border: 1px solid #56e9fd;
+}

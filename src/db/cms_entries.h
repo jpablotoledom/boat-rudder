@@ -26,6 +26,11 @@ typedef struct {
     char *header_author;
     char  header_date[16]; // "YYYY-MM-DD", empty if absent
 
+    // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
+    // for the requested lang. NULL/0 if the entry has no categories.
+    char  **category_names;
+    size_t  category_count;
+
     CmsContentBlock *content;
     size_t content_count; // sorted by content[].order
 } CmsEntry;

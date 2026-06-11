@@ -250,9 +250,10 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   (both the redirect target: link `href` and link text). Not wrapped by `page_epoch<N>.html`.
 - `entry/` - `entry-header_epoch<N>.html`, the header/SEO block for a CMS entry (epochs 1-3:
   5 `%s` - image, title, summary, author, date; epochs -1/0: 4 `%s` - title, summary, author,
-  date). See "CMS entries" below.
+  date); `entry-categories_epoch<N>.html`, the category "tags" wrapper (1 `%s` - concatenated
+  rendered category items). See "CMS entries" below.
 - `elements/<type>/` - one subdirectory per content-block type (e.g. `tittle`, `paragraph`,
-  `image`, `byline`), each with `<type>_epoch<N>.html`. See "CMS entries" below.
+  `image`, `byline`, `category`), each with `<type>_epoch<N>.html`. See "CMS entries" below.
 
 `%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
 that is itself used as a format string must be written as `%%`. Templates that are only ever
@@ -303,9 +304,14 @@ http_router.c  (route == "/page/<link>")
   │     resolves header.* and content[].text map<lang,string> to `lang`
   │     (configs/settings.conf "Eng"/"Esp" mapped to ISO "en"/"es", default "en"),
   │     falling back to "en" if the requested language is missing
+  │     resolves entries.categories[] (ObjectId[]) -> entry_categories.name
+  │     (ENTRY_CATEGORIES_COLLECTION) via db.entry_categories.find({_id: {$in: [...]}}),
+  │     same lang resolution; entries with no categories get category_count == 0
   │
   ├─ entry_page(&entry, epoch)                   ── src/modules/entry_page/entry_page.c
-  │     ├─ entry/entry-header_epoch<N>.html      (header)
+  │     ├─ entry/entry-header_epoch<N>.html       (header)
+  │     ├─ entry/entry-categories_epoch<N>.html   (category "tags", skipped if none)
+  │     │     + elements/category/category_epoch<N>.html (one per category)
   │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
   │
   └─ buildPageWebSite(epoch, entry.header_title, content)
@@ -318,9 +324,16 @@ output, so a page still renders if it contains a block type this increment doesn
 This increment implements 4 content-block types - `tittle`, `paragraph`, `image`, `byline` -
 the minimum set called out in
 [retro-center-entry-model.md §9](retro-center-entry-model.md#9-why-this-matters-for-boat-rudder).
-**Not yet implemented**: `entry_categories`, `media`/`media_directories`, the `/blog/` route,
-heading levels via `content[].extra_data` for `tittle`, and the remaining element types from
-`retro-center-entry-model.md` §7 (gallery, table, forms, etc.) - see
+
+`entries.categories[]` (an `ObjectId[]` referencing `entry_categories._id`, per
+`cms-entry-model-plan.md` §2.2) is resolved to category names and rendered as a small "tags"
+block under the header. `entry_categories` documents are `{ _id, name: <map<lang,string>> }` -
+a separate collection (kept normalized, since categories are shared across entries). An entry
+with no `categories` field/empty array renders with no tags block.
+
+**Not yet implemented**: `media`/`media_directories`, the `/blog/` route (incl. filtering by
+category), heading levels via `content[].extra_data` for `tittle`, and the remaining element
+types from `retro-center-entry-model.md` §7 (gallery, table, forms, etc.) - see
 `develop_docs/cms-entry-model-plan.md` for the full target schema.
 
 ---

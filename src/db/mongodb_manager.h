@@ -3,9 +3,10 @@
 
 #include <mongoc/mongoc.h>
 
-#define USERS_COLLECTION    "users"
-#define SESSIONS_COLLECTION "sessions"
-#define ENTRIES_COLLECTION  "entries"
+#define USERS_COLLECTION            "users"
+#define SESSIONS_COLLECTION         "sessions"
+#define ENTRIES_COLLECTION          "entries"
+#define ENTRY_CATEGORIES_COLLECTION "entry_categories"
 
 // Initializes the MongoDB client pool from `uri`/`db_name` (see
 // configs/settings.conf: mongodb_uri, mongodb_db). Must be called once from

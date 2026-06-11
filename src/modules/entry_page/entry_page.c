@@ -60,6 +60,33 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
     return result;
 }
 
+// Renders entry->category_names as a "tags" block. Returns "" (no block) if
+// the entry has no categories.
+static char *render_categories(const CmsEntry *entry, int epoch) {
+    if (entry->category_count == 0) return strdup("");
+
+    char *item_tpl = load_template("elements/category/category_epoch%d.html", epoch);
+    char *wrap_tpl = load_template("entry/entry-categories_epoch%d.html", epoch);
+    if (!item_tpl || !wrap_tpl) {
+        free(item_tpl);
+        free(wrap_tpl);
+        return strdup("");
+    }
+
+    char *items = strdup("");
+    for (size_t i = 0; items && i < entry->category_count; i++) {
+        char *item = render_template(item_tpl, entry->category_names[i]);
+        items = str_append(items, item);
+        free(item);
+    }
+
+    char *result = items ? render_template(wrap_tpl, items) : NULL;
+    free(items);
+    free(item_tpl);
+    free(wrap_tpl);
+    return result;
+}
+
 // Renders one content block. Unknown types render as an empty string, so the
 // rest of the page still renders.
 static char *render_block(const CmsContentBlock *block, int epoch) {
@@ -72,6 +99,15 @@ static char *render_block(const CmsContentBlock *block, int epoch) {
 
 char *entry_page(const CmsEntry *entry, int epoch) {
     char *result = render_header(entry, epoch);
+    if (!result) return NULL;
+
+    char *categories_html = render_categories(entry, epoch);
+    if (!categories_html) {
+        free(result);
+        return NULL;
+    }
+    result = str_append(result, categories_html);
+    free(categories_html);
     if (!result) return NULL;
 
     for (size_t i = 0; i < entry->content_count; i++) {

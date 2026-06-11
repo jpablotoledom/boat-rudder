@@ -17,7 +17,7 @@ start_service() {
     elif service mongodb status >/dev/null 2>&1; then
         sudo service mongodb start
     else
-        echo "No se encontró servicio MongoDB"
+        echo "MongoDB service not found"
         exit 1
     fi
 }

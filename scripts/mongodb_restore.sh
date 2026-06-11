@@ -1,3 +1,3 @@
 #!/bin/bash
-mongorestore --drop --db the_retro_center ./db_backup/the_retro_center
-# mongorestore --db the_retro_center ./db_backup/the_retro_center
+mongorestore --drop --db boat_rudder ./db_backup/boat_rudder
+# mongorestore --db boat_rudder ./db_backup/boat_rudder

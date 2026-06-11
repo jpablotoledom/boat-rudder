@@ -1,2 +1,2 @@
 #!/bin/bash
-mongodump --db the_retro_center --out ./db_backup
+mongodump --db boat_rudder --out ./db_backup

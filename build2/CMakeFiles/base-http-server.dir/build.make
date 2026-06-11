@@ -478,10 +478,24 @@ CMakeFiles/base-http-server.dir/src/db/auth.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/base-http-server.dir/src/db/auth.c.s"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/auth.c" -o CMakeFiles/base-http-server.dir/src/db/auth.c.s
 
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o: CMakeFiles/base-http-server.dir/flags.make
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/bson_lang.c
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o: CMakeFiles/base-http-server.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_30) "Building C object CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o -MF CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o.d -o CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o -c "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/bson_lang.c"
+
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/base-http-server.dir/src/db/bson_lang.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/bson_lang.c" > CMakeFiles/base-http-server.dir/src/db/bson_lang.c.i
+
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/base-http-server.dir/src/db/bson_lang.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/bson_lang.c" -o CMakeFiles/base-http-server.dir/src/db/bson_lang.c.s
+
 CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: CMakeFiles/base-http-server.dir/flags.make
 CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.c
 CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: CMakeFiles/base-http-server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_30) "Building C object CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_31) "Building C object CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o -MF CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o.d -o CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o -c "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_entries.c"
 
 CMakeFiles/base-http-server.dir/src/db/cms_entries.c.i: cmake_force
@@ -492,10 +506,24 @@ CMakeFiles/base-http-server.dir/src/db/cms_entries.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/base-http-server.dir/src/db/cms_entries.c.s"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_entries.c" -o CMakeFiles/base-http-server.dir/src/db/cms_entries.c.s
 
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o: CMakeFiles/base-http-server.dir/flags.make
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_menu.c
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o: CMakeFiles/base-http-server.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_32) "Building C object CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o -MF CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o.d -o CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o -c "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_menu.c"
+
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/base-http-server.dir/src/db/cms_menu.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_menu.c" > CMakeFiles/base-http-server.dir/src/db/cms_menu.c.i
+
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/base-http-server.dir/src/db/cms_menu.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_menu.c" -o CMakeFiles/base-http-server.dir/src/db/cms_menu.c.s
+
 CMakeFiles/base-http-server.dir/src/db/session_manager.c.o: CMakeFiles/base-http-server.dir/flags.make
 CMakeFiles/base-http-server.dir/src/db/session_manager.c.o: /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/session_manager.c
 CMakeFiles/base-http-server.dir/src/db/session_manager.c.o: CMakeFiles/base-http-server.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_31) "Building C object CMakeFiles/base-http-server.dir/src/db/session_manager.c.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_33) "Building C object CMakeFiles/base-http-server.dir/src/db/session_manager.c.o"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/base-http-server.dir/src/db/session_manager.c.o -MF CMakeFiles/base-http-server.dir/src/db/session_manager.c.o.d -o CMakeFiles/base-http-server.dir/src/db/session_manager.c.o -c "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/session_manager.c"
 
 CMakeFiles/base-http-server.dir/src/db/session_manager.c.i: cmake_force
@@ -537,7 +565,9 @@ base__http__server_OBJECTS = \
 "CMakeFiles/base-http-server.dir/src/modules/error/error.c.o" \
 "CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o" \
 "CMakeFiles/base-http-server.dir/src/db/auth.c.o" \
+"CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o" \
 "CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o" \
+"CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o" \
 "CMakeFiles/base-http-server.dir/src/db/session_manager.c.o"
 
 # External object files for target base-http-server
@@ -572,7 +602,9 @@ base-http-server: CMakeFiles/base-http-server.dir/src/modules/dashboard/dashboar
 base-http-server: CMakeFiles/base-http-server.dir/src/modules/error/error.c.o
 base-http-server: CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o
 base-http-server: CMakeFiles/base-http-server.dir/src/db/auth.c.o
+base-http-server: CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o
 base-http-server: CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o
+base-http-server: CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o
 base-http-server: CMakeFiles/base-http-server.dir/src/db/session_manager.c.o
 base-http-server: CMakeFiles/base-http-server.dir/build.make
 base-http-server: CMakeFiles/base-http-server.dir/compiler_depend.ts
@@ -583,7 +615,7 @@ base-http-server: /usr/lib/x86_64-linux-gnu/libbson-1.0.so
 base-http-server: /usr/lib/x86_64-linux-gnu/librt.a
 base-http-server: /usr/lib/x86_64-linux-gnu/libsodium.so
 base-http-server: CMakeFiles/base-http-server.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_32) "Linking C executable base-http-server"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir="/media/pablo/Datos NVME/Projects/boat-rudder/build2/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_34) "Linking C executable base-http-server"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/base-http-server.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

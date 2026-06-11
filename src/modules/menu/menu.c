@@ -1,22 +1,20 @@
 #include "menu.h"
+#include "../../db/cms_menu.h"
+#include "../../db/mongodb_manager.h"
+#include "../../utils/config_loader.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-    const char *link;
-    const char *label;
-} menu_route_t;
-
-// MVP: a single "Home" entry. Add more routes here as new pages are built;
-// the templates already iterate over this list with separators.
-static const menu_route_t MENU_ROUTES[] = {
-    {"/", "Home"},
+// Used when the `menu` collection is empty, unreachable, or mongodb is not
+// ready, so the nav bar is never empty.
+static const CmsMenuItem FALLBACK_ITEMS[] = {
+    {.link = "/", .name = "Home"},
 };
 
-#define MENU_ROUTE_COUNT (sizeof(MENU_ROUTES) / sizeof(MENU_ROUTES[0]))
+#define FALLBACK_ITEM_COUNT (sizeof(FALLBACK_ITEMS) / sizeof(FALLBACK_ITEMS[0]))
 
 char *menu(const char *current_url, int epoch) {
     (void)current_url;
@@ -38,19 +36,37 @@ char *menu(const char *current_url, int epoch) {
 
     if (!menu_item_tpl || !separator || !menu_tpl) goto cleanup;
 
+    CmsMenuItem *db_items = NULL;
+    size_t db_count = 0;
+    if (mongodb_manager_is_ready()) cms_get_menu_items(lang, &db_items, &db_count);
+
+    const CmsMenuItem *menu_items = db_count > 0 ? db_items : FALLBACK_ITEMS;
+    size_t item_count = db_count > 0 ? db_count : FALLBACK_ITEM_COUNT;
+
     items = strdup("");
-    if (!items) goto cleanup;
+    if (!items) {
+        cms_menu_free(db_items, db_count);
+        goto cleanup;
+    }
 
-    for (size_t i = 0; i < MENU_ROUTE_COUNT; i++) {
-        const char *sep = (i + 1 < MENU_ROUTE_COUNT) ? separator : "";
+    for (size_t i = 0; i < item_count; i++) {
+        const char *sep = (i + 1 < item_count) ? separator : "";
 
-        char *item = render_template(menu_item_tpl, MENU_ROUTES[i].link, MENU_ROUTES[i].label, sep);
-        if (!item) goto cleanup;
+        char *item = render_template(menu_item_tpl, menu_items[i].link, menu_items[i].name, sep);
+        if (!item) {
+            cms_menu_free(db_items, db_count);
+            goto cleanup;
+        }
 
         items = str_append(items, item);
         free(item);
-        if (!items) goto cleanup;
+        if (!items) {
+            cms_menu_free(db_items, db_count);
+            goto cleanup;
+        }
     }
+
+    cms_menu_free(db_items, db_count);
 
     result = render_template(menu_tpl, items);
 

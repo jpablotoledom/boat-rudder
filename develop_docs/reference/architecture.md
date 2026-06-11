@@ -229,8 +229,8 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 
 - `container/` - page shell (`<head>`/`<body>` wrapper); contains `{{PAGE_TITLE}}` and 4 `%s`
   placeholders for menu, slider, home content and home blog.
-- `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, label,
-  separator), `menu-item-separator_epoch<N>.html` (static, no placeholders).
+- `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, name,
+  separator), `menu-item-separator_epoch<N>.html` (static, no placeholders). See "Menu" below.
 - `slider/` - hero/banner block, static per epoch (no placeholders).
 - `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
   `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
@@ -273,6 +273,7 @@ http_router.c  (route == "/")
   ├─ buildHomeWebSite(epoch, lang)        ── html_builder/orchestrator.c
   │     ├─ container(epoch)               ── modules/container
   │     ├─ menu("/", epoch)                ── modules/menu
+  │     │     cms_get_menu_items(lang, &items, &count) ── src/db/cms_menu.c
   │     ├─ slider(epoch)                   ── modules/slider
   │     ├─ home_content(epoch, lang)       ── modules/home_content
   │     ├─ home_blog(epoch, lang)          ── modules/home_blog
@@ -367,6 +368,31 @@ home_blog(epoch, lang)                          ── src/modules/home_blog/hom
 `cms_get_blog_entries()` allocates a fixed-size array of that length and never grows it. On a
 DB error or if MongoDB is not ready, it returns `*out_count == 0` and the empty-state template
 is shown - the home blog list is decorative and must never fail the home page.
+
+### Menu (all pages)
+
+The nav bar (`modules/menu/menu.c`, used by both `buildHomeWebSite()` and `buildPageWebSite()`)
+is backed by its own `menu` collection (`MENU_COLLECTION`, `src/db/mongodb_manager.h`),
+decoupling navigation from `entries` so items can point anywhere (`/`, `/page/<link>`, external
+URLs, ...):
+
+```
+menu(current_url, epoch)                        ── src/modules/menu/menu.c
+  │
+  ├─ cms_get_menu_items(lang, &items, &count)    ── src/db/cms_menu.c
+  │     db.menu.find({ enabled: true })
+  │       .sort({ order: 1 }).limit(MENU_ITEM_LIMIT)
+  │     resolves name (map<lang,string>) to `lang` via resolve_lang_map()
+  │     (src/db/bson_lang.c, shared with cms_entries.c)
+  │
+  └─ for each item: menu-item_epoch<N>.html (link, name, separator)
+```
+
+`menu` documents are `{ _id, link, name: <map<lang,string>>, order, enabled }`. `MENU_ITEM_LIMIT`
+(`src/db/cms_menu.h`, currently 20) bounds the result size, same fixed-array pattern as
+`HOME_BLOG_LIMIT`. If `cms_get_menu_items()` returns 0 items (DB not ready, empty collection, or
+a DB error), `menu()` falls back to a single built-in `{"/", "Home"}` item so the nav bar is
+never empty - the menu is decorative and must never fail the page.
 
 ---
 

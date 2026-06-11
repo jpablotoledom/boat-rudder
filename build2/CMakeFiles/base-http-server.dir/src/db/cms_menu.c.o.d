@@ -1,7 +1,7 @@
-CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: \
- /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.c \
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o: \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_menu.c \
  /usr/include/stdc-predef.h \
- /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_menu.h \
  /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/bson_lang.h \
  /usr/include/libbson-1.0/bson/bson.h \

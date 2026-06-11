@@ -9,7 +9,9 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/auth.c" "CMakeFiles/base-http-server.dir/src/db/auth.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/auth.c.o.d"
+  "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/bson_lang.c" "CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_entries.c" "CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o.d"
+  "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/cms_menu.c" "CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/mongodb_manager.c" "CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/db/session_manager.c" "CMakeFiles/base-http-server.dir/src/db/session_manager.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/db/session_manager.c.o.d"
   "/media/pablo/Datos NVME/Projects/boat-rudder/src/html_builder/orchestrator.c" "CMakeFiles/base-http-server.dir/src/html_builder/orchestrator.c.o" "gcc" "CMakeFiles/base-http-server.dir/src/html_builder/orchestrator.c.o.d"

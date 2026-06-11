@@ -33,7 +33,9 @@ base-http-server: \
   CMakeFiles/base-http-server.dir/src/modules/error/error.c.o \
   CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o \
   CMakeFiles/base-http-server.dir/src/db/auth.c.o \
+  CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o \
   CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o \
+  CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o \
   CMakeFiles/base-http-server.dir/src/db/session_manager.c.o \
   /usr/lib/x86_64-linux-gnu/libssl.so \
   /usr/lib/x86_64-linux-gnu/libcrypto.so \
@@ -155,7 +157,11 @@ CMakeFiles/base-http-server.dir/src/db/mongodb_manager.c.o:
 
 CMakeFiles/base-http-server.dir/src/db/auth.c.o:
 
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o:
+
 CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o:
+
+CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o:
 
 CMakeFiles/base-http-server.dir/src/db/session_manager.c.o:
 

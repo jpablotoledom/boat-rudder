@@ -1,8 +1,6 @@
-CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: \
- /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.c \
+CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o: \
+ /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/bson_lang.c \
  /usr/include/stdc-predef.h \
- /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/cms_entries.h \
- /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h \
  /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/bson_lang.h \
  /usr/include/libbson-1.0/bson/bson.h \
  /usr/include/libbson-1.0/bson/bson-compat.h \
@@ -17,6 +15,7 @@ CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: \
  /usr/include/x86_64-linux-gnu/bits/long-double.h \
  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+ /usr/lib/gcc/x86_64-linux-gnu/14/include/stddef.h \
  /usr/lib/gcc/x86_64-linux-gnu/14/include/stdarg.h \
  /usr/include/x86_64-linux-gnu/bits/types.h \
  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
@@ -110,73 +109,4 @@ CMakeFiles/base-http-server.dir/src/db/cms_entries.c.o: \
  /usr/include/libbson-1.0/bson/bson-version.h \
  /usr/include/libbson-1.0/bson/bson-version-functions.h \
  /usr/include/libbson-1.0/bson/bson-writer.h \
- /usr/include/libbson-1.0/bson/bcon.h \
- /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/mongodb_manager.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-macros.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-prelude.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-apm.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-host-list.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-server-description.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-read-prefs.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-config.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-topology-description.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-bulk-operation.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-write-concern.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-bulkwrite.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-client.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-client-side-encryption.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-collection.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-change-stream.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-flags.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-cursor.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-index.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-read-concern.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-find-and-modify.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-database.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-stream.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-iovec.h \
- /usr/include/x86_64-linux-gnu/sys/uio.h \
- /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-socket.h \
- /usr/include/arpa/inet.h /usr/include/netinet/in.h \
- /usr/include/x86_64-linux-gnu/sys/socket.h \
- /usr/include/x86_64-linux-gnu/bits/socket.h \
- /usr/include/x86_64-linux-gnu/bits/socket_type.h \
- /usr/include/x86_64-linux-gnu/bits/sockaddr.h \
- /usr/include/x86_64-linux-gnu/bits/socket-constants.h \
- /usr/include/x86_64-linux-gnu/bits/in.h /usr/include/endian.h \
- /usr/include/x86_64-linux-gnu/bits/byteswap.h \
- /usr/include/x86_64-linux-gnu/bits/uintn-identity.h /usr/include/poll.h \
- /usr/include/x86_64-linux-gnu/sys/poll.h \
- /usr/include/x86_64-linux-gnu/bits/poll.h /usr/include/netdb.h \
- /usr/include/x86_64-linux-gnu/bits/netdb.h /usr/include/netinet/tcp.h \
- /usr/include/x86_64-linux-gnu/sys/un.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-file.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-file-list.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-server-api.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-optional.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-ssl.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-structured-log.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-uri.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-client-pool.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-error.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-bucket.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-gridfs-file-page.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-init.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-matcher.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-handshake.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-opcode.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-log.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-sleep.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-client-session.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-stream-buffered.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-stream-file.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-stream-gridfs.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-stream-socket.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-version.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-version-functions.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-rand.h \
- /usr/include/libmongoc-1.0/mongoc/mongoc-stream-tls.h \
- /media/pablo/Datos\ NVME/Projects/boat-rudder/src/db/../utils/log.h
+ /usr/include/libbson-1.0/bson/bcon.h /usr/include/strings.h

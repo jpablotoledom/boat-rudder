@@ -68,7 +68,9 @@ set(SOURCES
     # Database / auth / sessions
     src/db/mongodb_manager.c
     src/db/auth.c
+    src/db/bson_lang.c
     src/db/cms_entries.c
+    src/db/cms_menu.c
     src/db/session_manager.c
 )
 

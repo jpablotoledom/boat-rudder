@@ -275,15 +275,14 @@ text) to `styles_epoch3.css` / `styles_epoch2.css`.
    listing route (`cms-entry-model-plan.md` §3.2, still out of scope) would page through
    the rest.
 
-2. **No `menu` field on `entries`** - separate `menu` collection (future increment,
-   out of scope here): instead of an `entries.menu` boolean controlling "show on home",
-   site navigation (`src/modules/menu/menu.c`, currently a static `MENU_ROUTES[]` array of
-   `{link, label}`) should eventually be backed by its own `menu` collection of link
-   documents, e.g. `{ _id, link, label: map<lang,string>, order, enabled }`. This decouples
+2. **No `menu` field on `entries`** - separate `menu` collection. Implemented as a
+   separate increment - see
+   [architecture.md, "Menu"](../reference/architecture.md#menu-all-pages). Site
+   navigation (`src/modules/menu/menu.c`) is backed by its own `menu` collection of link
+   documents, `{ _id, link, name: map<lang,string>, order, enabled }`. This decouples
    the top nav from `entries` entirely, so menu items can point anywhere (external URLs,
-   `/page/<link>`, `/`, etc.), not just CMS pages. This is a separate future plan/increment
-   - the home blog list query in this plan stays `{type: "blog", enabled: true}` with no
-   `menu` field involved.
+   `/page/<link>`, `/`, etc.), not just CMS pages. The home blog list query in this plan
+   stays `{type: "blog", enabled: true}` with no `menu` field involved.
 
 3. **Empty state**: implemented via a new static `home-blog/empty_epoch<N>.html` template
    per epoch, message "No blog entries found" (§3.3), shown when

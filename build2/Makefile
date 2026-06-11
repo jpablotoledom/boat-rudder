@@ -198,6 +198,30 @@ src/db/auth.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/auth.c.s
 .PHONY : src/db/auth.c.s
 
+src/db/bson_lang.o: src/db/bson_lang.c.o
+.PHONY : src/db/bson_lang.o
+
+# target to build an object file
+src/db/bson_lang.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/bson_lang.c.o
+.PHONY : src/db/bson_lang.c.o
+
+src/db/bson_lang.i: src/db/bson_lang.c.i
+.PHONY : src/db/bson_lang.i
+
+# target to preprocess a source file
+src/db/bson_lang.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/bson_lang.c.i
+.PHONY : src/db/bson_lang.c.i
+
+src/db/bson_lang.s: src/db/bson_lang.c.s
+.PHONY : src/db/bson_lang.s
+
+# target to generate assembly for a file
+src/db/bson_lang.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/bson_lang.c.s
+.PHONY : src/db/bson_lang.c.s
+
 src/db/cms_entries.o: src/db/cms_entries.c.o
 .PHONY : src/db/cms_entries.o
 
@@ -221,6 +245,30 @@ src/db/cms_entries.s: src/db/cms_entries.c.s
 src/db/cms_entries.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_entries.c.s
 .PHONY : src/db/cms_entries.c.s
+
+src/db/cms_menu.o: src/db/cms_menu.c.o
+.PHONY : src/db/cms_menu.o
+
+# target to build an object file
+src/db/cms_menu.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_menu.c.o
+.PHONY : src/db/cms_menu.c.o
+
+src/db/cms_menu.i: src/db/cms_menu.c.i
+.PHONY : src/db/cms_menu.i
+
+# target to preprocess a source file
+src/db/cms_menu.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_menu.c.i
+.PHONY : src/db/cms_menu.c.i
+
+src/db/cms_menu.s: src/db/cms_menu.c.s
+.PHONY : src/db/cms_menu.s
+
+# target to generate assembly for a file
+src/db/cms_menu.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/base-http-server.dir/build.make CMakeFiles/base-http-server.dir/src/db/cms_menu.c.s
+.PHONY : src/db/cms_menu.c.s
 
 src/db/mongodb_manager.o: src/db/mongodb_manager.c.o
 .PHONY : src/db/mongodb_manager.o
@@ -934,9 +982,15 @@ help:
 	@echo "... src/db/auth.o"
 	@echo "... src/db/auth.i"
 	@echo "... src/db/auth.s"
+	@echo "... src/db/bson_lang.o"
+	@echo "... src/db/bson_lang.i"
+	@echo "... src/db/bson_lang.s"
 	@echo "... src/db/cms_entries.o"
 	@echo "... src/db/cms_entries.i"
 	@echo "... src/db/cms_entries.s"
+	@echo "... src/db/cms_menu.o"
+	@echo "... src/db/cms_menu.i"
+	@echo "... src/db/cms_menu.s"
 	@echo "... src/db/mongodb_manager.o"
 	@echo "... src/db/mongodb_manager.i"
 	@echo "... src/db/mongodb_manager.s"

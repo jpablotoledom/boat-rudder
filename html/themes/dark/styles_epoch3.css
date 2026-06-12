@@ -309,6 +309,18 @@ h1, h2 {
   text-align: center;
 }
 
+.boat-rudder__dashboard__thumb {
+  width: 80px;
+  height: auto;
+  display: block;
+}
+
+.boat-rudder__dashboard__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* HOME CONTENT */
 .boat-rudder__home-content {
   width: 100%;

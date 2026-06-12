@@ -259,6 +259,22 @@ void cms_entry_free(CmsEntry *entry) {
     memset(entry, 0, sizeof(*entry));
 }
 
+// Populates *item from doc: link, type, header.* (resolved to lang) and
+// categories[] (resolved to lang). Shared by cms_get_blog_entries() and
+// cms_get_admin_entries().
+static void populate_entry_list_item(const bson_t *doc, const char *lang, CmsBlogListItem *item) {
+    bson_iter_t iter;
+
+    item->link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
+        ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
+    item->type = (bson_iter_init_find(&iter, doc, "type") && BSON_ITER_HOLDS_UTF8(&iter))
+        ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
+
+    resolve_header_fields(doc, lang, &item->header_image_url, &item->header_title,
+                           &item->header_summary, &item->header_author, item->header_date);
+    resolve_category_names(doc, lang, &item->category_names, &item->category_count);
+}
+
 void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
@@ -285,24 +301,54 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
 
     size_t count = 0;
     const bson_t *doc;
-    while (count < limit && mongoc_cursor_next(cursor, &doc)) {
-        bson_iter_t iter;
-
-        items[count].link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
-            ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
-
-        resolve_header_fields(doc, lang, &items[count].header_image_url,
-                               &items[count].header_title, &items[count].header_summary,
-                               &items[count].header_author, items[count].header_date);
-        resolve_category_names(doc, lang, &items[count].category_names,
-                                &items[count].category_count);
-
-        count++;
-    }
+    while (count < limit && mongoc_cursor_next(cursor, &doc))
+        populate_entry_list_item(doc, lang, &items[count++]);
 
     bson_error_t error;
     if (mongoc_cursor_error(cursor, &error))
         LOG_ERROR("cms_get_blog_entries: cursor error: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(opts);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
+    *out = items;
+    *out_count = count;
+}
+
+void cms_get_admin_entries(const char *lang, CmsBlogListItem **out, size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
+    if (!collection) return;
+
+    bson_t *query = BCON_NEW("enabled", BCON_BOOL(true));
+    bson_t *opts = BCON_NEW(
+        "sort", "{", "header.date", BCON_INT32(-1), "}",
+        "limit", BCON_INT64((int64_t)ENTRIES_LIST_LIMIT)
+    );
+
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, opts, NULL);
+
+    CmsBlogListItem *items = calloc(ENTRIES_LIST_LIMIT, sizeof(CmsBlogListItem));
+    if (!items) {
+        bson_destroy(query);
+        bson_destroy(opts);
+        mongoc_cursor_destroy(cursor);
+        mongoc_collection_destroy(collection);
+        return;
+    }
+
+    size_t count = 0;
+    const bson_t *doc;
+    while (count < ENTRIES_LIST_LIMIT && mongoc_cursor_next(cursor, &doc))
+        populate_entry_list_item(doc, lang, &items[count++]);
+
+    bson_error_t error;
+    if (mongoc_cursor_error(cursor, &error))
+        LOG_ERROR("cms_get_admin_entries: cursor error: %s", error.message);
 
     bson_destroy(query);
     bson_destroy(opts);
@@ -318,6 +364,7 @@ void cms_blog_list_free(CmsBlogListItem *items, size_t count) {
 
     for (size_t i = 0; i < count; i++) {
         free(items[i].link);
+        free(items[i].type);
         free(items[i].header_image_url);
         free(items[i].header_title);
         free(items[i].header_summary);

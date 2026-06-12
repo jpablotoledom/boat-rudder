@@ -67,6 +67,8 @@ set(SOURCES
     src/modules/error/error.c
     src/modules/categories_admin/categories_admin.c
     src/modules/languages_admin/languages_admin.c
+    src/modules/entries_admin/entries_admin.c
+    src/modules/menu_admin/menu_admin.c
 
     # Database / auth / sessions
     src/db/mongodb_manager.c

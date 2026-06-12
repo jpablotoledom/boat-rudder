@@ -10,6 +10,7 @@
 #include "../db/cms_categories.h"
 #include "../db/cms_entries.h"
 #include "../db/cms_languages.h"
+#include "../db/cms_menu.h"
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
 #include "../html_builder/orchestrator.h"
@@ -20,6 +21,7 @@
 #include "../modules/error/error.h"
 #include "../modules/languages_admin/languages_admin.h"
 #include "../modules/login/login.h"
+#include "../modules/menu_admin/menu_admin.h"
 #include "../utils/build_epoch_response.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
@@ -246,6 +248,35 @@ static void parse_category_form(HttpRequest *req, const CmsLanguageItem *langs,
     }
 }
 
+// Fills out_link/out_order/out_enabled and values[i] (caller-allocated,
+// lang_count entries) from req's body's "link"/"order"/"enabled"/
+// "name_<langs[i].code>" fields, for cms_create_menu_item()/
+// cms_update_menu_item(). Each values[i] is malloc'd and must be freed by
+// the caller. An unchecked "enabled" checkbox sends no field at all, so its
+// absence means false.
+static void parse_menu_form(HttpRequest *req, char *out_link, size_t out_link_size,
+                             int *out_order, bool *out_enabled,
+                             const CmsLanguageItem *langs, size_t lang_count, char **values) {
+    parse_urlencoded_field(req->body, req->body_length, "link", out_link, out_link_size);
+
+    char order_str[16];
+    parse_urlencoded_field(req->body, req->body_length, "order", order_str, sizeof(order_str));
+    *out_order = atoi(order_str);
+
+    char enabled_str[8];
+    *out_enabled = parse_urlencoded_field(req->body, req->body_length, "enabled",
+                                           enabled_str, sizeof(enabled_str)) != 0;
+
+    for (size_t i = 0; i < lang_count; i++) {
+        char field_name[40];
+        snprintf(field_name, sizeof(field_name), "name_%s", langs[i].code);
+
+        char value[256];
+        parse_urlencoded_field(req->body, req->body_length, field_name, value, sizeof(value));
+        values[i] = strdup(value);
+    }
+}
+
 void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     LOG_DEBUG("http_route() called");
 
@@ -412,7 +443,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     const char *cookie = get_header_value(&req, "Cookie");
 
                     if (validate_session_cookie(cookie, user_id) == 1) {
-                        char *content  = dashboard(epoch);
+                        char *content  = dashboard(epoch, content_lang);
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -510,6 +541,84 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/menu") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        char *content  = menu_admin_list(epoch, content_lang);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/menu/new") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        CmsLanguageItem *langs = NULL;
+                        size_t lang_count = 0;
+                        cms_get_languages(&langs, &lang_count);
+
+                        char **values = calloc(lang_count, sizeof(char *));
+                        for (size_t i = 0; i < lang_count; i++) values[i] = strdup("");
+
+                        char *content  = menu_admin_form(epoch, "", "", 0, false, langs, lang_count, values, NULL);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+
+                        cms_menu_name_values_free(values, lang_count);
+                        cms_languages_free(langs, lang_count);
+                    }
+                }
+
+            } else if (match_id_route(decoded_url, "/dashboard/menu", "/edit", id, sizeof(id))) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        CmsLanguageItem *langs = NULL;
+                        size_t lang_count = 0;
+                        cms_get_languages(&langs, &lang_count);
+
+                        char **values = calloc(lang_count, sizeof(char *));
+                        char link[256];
+                        int order;
+                        bool enabled;
+                        if (cms_get_menu_item_values(id, langs, lang_count, values,
+                                                      link, sizeof(link), &order, &enabled) == 0) {
+                            char *content  = menu_admin_form(epoch, id, link, order, enabled,
+                                                              langs, lang_count, values, NULL);
+                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                            free(body);
+                            send_or_error(ctx, response, req.method, epoch);
+                        } else {
+                            send_error_response(ctx, 404, "404 Not Found", epoch);
+                        }
+
+                        cms_menu_name_values_free(values, lang_count);
+                        cms_languages_free(langs, lang_count);
                     }
                 }
 
@@ -663,6 +772,82 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     cms_delete_category(id);
 
                     char *response = build_redirect_response("/dashboard/categories", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/menu/new") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
+
+                    char **values = calloc(lang_count, sizeof(char *));
+                    char link[256];
+                    int order;
+                    bool enabled;
+                    parse_menu_form(&req, link, sizeof(link), &order, &enabled, langs, lang_count, values);
+
+                    cms_create_menu_item(link, order, enabled, langs, lang_count, values);
+
+                    char *response = build_redirect_response("/dashboard/menu", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+
+                    cms_menu_name_values_free(values, lang_count);
+                    cms_languages_free(langs, lang_count);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/menu", "/edit", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
+
+                    char **values = calloc(lang_count, sizeof(char *));
+                    char link[256];
+                    int order;
+                    bool enabled;
+                    parse_menu_form(&req, link, sizeof(link), &order, &enabled, langs, lang_count, values);
+
+                    cms_update_menu_item(id, link, order, enabled, langs, lang_count, values);
+
+                    char *response = build_redirect_response("/dashboard/menu", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+
+                    cms_menu_name_values_free(values, lang_count);
+                    cms_languages_free(langs, lang_count);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/menu", "/delete", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    cms_delete_menu_item(id);
+
+                    char *response = build_redirect_response("/dashboard/menu", "", epoch);
                     send_or_error(ctx, response, req.method, epoch);
                 }
             }

@@ -518,7 +518,7 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
-| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → `dashboard(epoch)` via `buildPageWebSite()`; otherwise → `302 /login`. |
+| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → `dashboard(epoch, content_lang)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN`, the page embeds a read-only table of every `entries` document (any `type`, up to `ENTRIES_LIST_LIMIT`, newest `header.date` first) via `entries_admin_rows()` - same fields as the blog list plus `type` ("Page"/"Blog"). Other epochs render the static "Welcome to dashboard" fragment unchanged. |
 | `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_dashboard_session()`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
 | `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
 | `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
@@ -529,6 +529,12 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/dashboard/languages/add` | `POST` | Same guards. `cms_add_language(code)`; on failure (unknown or already-active code), re-renders `/dashboard/languages` (`200`) with an error message; on success, `302 /dashboard/languages`. |
 | `/dashboard/languages/<code>/default` | `POST` | Same guards. `cms_set_default_language(code)`, `302 /dashboard/languages`. Takes effect immediately (no restart) - `cms_resolve_default_lang()` re-queries `languages` on every request. |
 | `/dashboard/languages/<code>/remove` | `POST` | Same guards. `cms_remove_language(code)`; rejected (re-renders with an error) if `<code>` is the current default or the only remaining language; otherwise `302 /dashboard/languages`. |
+| `/dashboard/menu` | `GET` | Same guards. Renders `menu_admin_list(epoch, content_lang)`: every `menu` document (any `enabled` value, sorted by `order`), `name` resolved to the current default content language, plus `link`/`order`/`enabled`. |
+| `/dashboard/menu/new` | `GET` | Same guards. Renders `menu_admin_form()` with empty `link`, `order=0`, `enabled=false` and one empty name field per active content language. |
+| `/dashboard/menu/new` | `POST` | Same guards. Reads `link`/`order`/`enabled` (checkbox - absent means `false`) and `name_<code>` for each active language from the form body, `cms_create_menu_item()`, `302 /dashboard/menu`. |
+| `/dashboard/menu/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `menu_admin_form()` pre-filled via `cms_get_menu_item_values()`. |
+| `/dashboard/menu/<id>/edit` | `POST` | Same guards. `cms_update_menu_item()`, `302 /dashboard/menu`. |
+| `/dashboard/menu/<id>/delete` | `POST` | Same guards. `cms_delete_menu_item()`, `302 /dashboard/menu`. |
 | `/logout` | `GET` | If a valid session cookie is present, `destroy_session()`; always responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`). |
 
 ### Epoch restriction (security)
@@ -545,12 +551,28 @@ the `POST /login` sequence diagram.
 
 ---
 
-## Dashboard maintainers: Categories and Languages
+## Dashboard maintainers: Entries, Categories, Languages and Menu
 
-Two CRUD admin pages under `/dashboard`, **`EPOCH_MODERN` only** (other epochs `302
-/dashboard`, matching the `/login`/`/dashboard` precedent), each requiring a valid session via
+Admin features under `/dashboard`. The Categories, Languages and Menu maintainers are separate
+pages, **`EPOCH_MODERN` only** (other epochs `302 /dashboard`, matching the
+`/login`/`/dashboard` precedent), each requiring a valid session via
 `require_dashboard_session()` (`http_router.c`): `503` if mongodb is not ready, `302 /login` if
-the session cookie is missing/invalid, otherwise the request proceeds.
+the session cookie is missing/invalid, otherwise the request proceeds. The Entries listing is
+embedded directly in `/dashboard` itself (see below).
+
+### Entries listing (`src/modules/entries_admin/`, embedded in `/dashboard`)
+
+`entries_admin_rows(epoch, lang)` returns the `<tbody>` rows for the table embedded in
+`dashboard_epoch<N>.html` (`EPOCH_MODERN` only - `dashboard()` passes them through
+`render_template()`; other epochs' static templates are returned unchanged). The table lists
+every `entries` document (`db.entries.find({enabled: true})`, any `type`, up to
+`ENTRIES_LIST_LIMIT`, newest `header.date` first - see `cms_get_admin_entries()` in
+`cms_entries.c`). Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the same fields as
+the home/blog list - image, title (linked to `/page/<link>` or `/blog/<link>` depending on
+`type`), summary, author, date and category tags
+(`elements/category/category_epoch<N>.html`) - plus a `type` column ("Page"/"Blog"). Read-only.
+`cms_get_admin_entries()` shares its row population with `cms_get_blog_entries()` via the
+`CmsBlogListItem` struct, which now also carries `type`.
 
 ### Content language resolution (`src/db/cms_languages.c`, `src/db/language_catalog.c`)
 
@@ -610,6 +632,28 @@ Basic CRUD over `entry_categories` (`ENTRY_CATEGORIES_COLLECTION`), already read
   `list-row-actions_epoch<N>.html` for the rest, with "make default"/"remove" forms), plus
   `option_epoch<N>.html` per `LANGUAGE_CATALOG` entry not yet active, plus
   `list-error_epoch<N>.html` if `error_message`.
+
+### Menu CRUD (`src/db/cms_menu.c`, `src/modules/menu_admin/`)
+
+Basic CRUD over `menu` (`MENU_COLLECTION`), already read (read-only, `enabled: true` only) by
+`cms_get_menu_items()` for the site's nav (`src/modules/menu/menu.c`):
+
+- `cms_get_menu_admin_items(lang, &items, &count)`: `db.menu.find().sort({order:1})` (no
+  `enabled` filter - the admin must see disabled items too), `name` resolved to `lang`
+  (`CmsMenuAdminItem { id, link, name, order, enabled }`, `id` = hex ObjectId).
+- `cms_get_menu_item_values(id_hex, langs, lang_count, out_values, out_link, out_link_size,
+  &out_order, &out_enabled)`: exact (no "en" fallback) `name.<langs[i].code>` per active
+  language plus `link`/`order`/`enabled`, for the edit form.
+- `cms_create_menu_item()` / `cms_update_menu_item()` / `cms_delete_menu_item()`: build
+  `{link, order, enabled, name: {<code>: <value>, ...}}` from the form fields.
+- `src/modules/menu_admin/menu_admin.c`:
+  - `menu_admin_list(epoch, lang)` -> `dashboard/menu/list_epoch<N>.html` (+
+    `list-row_epoch<N>.html` per menu item, or `list-empty_epoch<N>.html`).
+  - `menu_admin_form(epoch, id, link, order, enabled, langs, lang_count, values, error_message)`
+    -> `dashboard/menu/form_epoch<N>.html` (`link`/`order`/`enabled` as a text/number/checkbox
+    input, + one `form-field_epoch<N>.html` per active language, + `form-error_epoch<N>.html` if
+    `error_message`). `id == ""` for "new menu item". An unchecked "enabled" checkbox sends no
+    `enabled` field at all - its absence in the POST body means `false`.
 
 ### Routing helpers (`src/web_server/http_router.c`)
 

@@ -1,0 +1,112 @@
+@startuml site-settings-components
+
+title Boat Rudder - Site Settings (proposed) - Components
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+actor Admin
+actor Visitor
+
+package "web_server" {
+    [http_router] as ROUTER
+}
+
+package "html_builder" {
+    [orchestrator\nbuildPageWebSite() / buildHomeWebSite()] as ORCH
+}
+
+package "modules/settings_admin (new)" {
+    [settings_admin\nsettings_admin_page()] as SETADMIN
+}
+
+package "modules/container" {
+    [container\ncontainer()] as CONTAINER
+}
+
+package "modules/slider" {
+    [slider\nslider()] as SLIDER
+}
+
+package "modules/menu" {
+    [menu\nmenu()] as MENU
+}
+
+package "db" {
+    [cms_site_settings (new)\ncms_get_site_settings()\ncms_update_site_settings()] as CMSSET
+    [mongodb_manager] as MONGO
+}
+
+package "utils" {
+    [generate_url_theme] as URLTHEME
+    [read_file] as READFILE
+    [template_utils\n(render_template)] as TPL
+}
+
+database "html/themes/<theme>/\ncontainer, slider,\ndashboard/settings/*" as FS
+database "MongoDB\n(site_settings, singleton)" as DB
+
+Admin --> ROUTER : GET/POST /dashboard/settings
+ROUTER --> SETADMIN : settings_admin_page() /\ncms_update_site_settings()
+SETADMIN --> CMSSET
+SETADMIN --> URLTHEME
+SETADMIN --> READFILE
+SETADMIN --> TPL : render_template(settings_epoch3.html)
+
+Visitor --> ROUTER : GET / , GET /page/<link>, ...
+ROUTER --> ORCH : buildHomeWebSite() / buildPageWebSite()
+ORCH --> CONTAINER : container(epoch, page_title)
+ORCH --> SLIDER : slider(epoch)
+ORCH --> MENU : menu(current_url, epoch)
+
+CONTAINER --> CMSSET : cms_get_site_settings()\n[site_name, favicon_url,\nlogo_url, colors]
+SLIDER --> CMSSET : cms_get_site_settings()\n[banner_image_url]
+CONTAINER --> URLTHEME
+CONTAINER --> READFILE
+CONTAINER --> TPL : render_template(container_epoch%d.html\n+ inline :root{...} style block)
+
+CMSSET --> MONGO
+MONGO --> DB
+
+URLTHEME --> FS
+READFILE --> FS
+
+note bottom of CMSSET
+  findOne({}) on a single-document collection.
+  Falls back to hardcoded defaults (current
+  literal values) if the document is missing
+  or MongoDB is unreachable - same pattern as
+  menu()'s FALLBACK_ITEMS.
+end note
+
+note right of CONTAINER
+  Epoch3 only: site_name replaces the hardcoded
+  "BOAT RUDDER" footer/title text, favicon_url
+  replaces the hardcoded "/favicon.ico" href,
+  logo_url (if set) adds an <img> next to the
+  site name, and a small inline <style> block
+  (new template fragment) sets
+  --br-color-primary/--br-color-accent
+  consumed by styles_epoch3.css.
+end note
+
+note right of SLIDER
+  Epoch3 only: banner_image_url replaces the
+  hardcoded slider_epoch3.jpg <img src>.
+  Epoch -1/0/1/2 sliders are unaffected
+  (text-only or fixed decorative tables).
+end note
+
+@enduml

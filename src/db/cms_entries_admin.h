@@ -24,6 +24,7 @@ typedef struct {
     char   *link;
     char   *type;   // "page" | "blog"
     bool    enabled;
+    char   *created_by;  // entries.created_by as 24-char hex, "" if absent
 
     char  **category_ids;  // entries.categories[] as 24-char hex strings
     size_t  category_count;
@@ -51,10 +52,12 @@ int cms_get_entry_for_edit(const char *id_hex, const CmsLanguageItem *langs,
 // which have lang_count entries) and zeroes it.
 void cms_entry_edit_free(CmsEntryEdit *entry, size_t lang_count);
 
-// db.entries.insertOne({link:"", type:"page", enabled:false, categories:[],
-// header:{}, content:[]}). Returns a malloc'd 24-char hex id of the new
-// document, or NULL on a DB error or if mongodb is not ready.
-char *cms_create_entry(void);
+// db.entries.insertOne({link:"", type: type, enabled:false, categories:[],
+// header:{}, content:[][, created_by: ObjectId(created_by_id_hex)]}).
+// `created_by` is only set if created_by_id_hex is a valid ObjectId hex
+// string. Returns a malloc'd 24-char hex id of the new document, or NULL on
+// a DB error or if mongodb is not ready.
+char *cms_create_entry(const char *created_by_id_hex, const char *type);
 
 // db.entries.updateOne({_id: id_hex},
 //   {$set: {link, type, enabled, categories: [<category_ids as ObjectId>...]}}).

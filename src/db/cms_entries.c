@@ -322,7 +322,8 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
     *out_count = count;
 }
 
-void cms_get_admin_entries(const char *lang, CmsBlogListItem **out, size_t *out_count) {
+void cms_get_admin_entries(const char *lang, const char *type_filter, const char *created_by_hex,
+                            CmsBlogListItem **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
 
@@ -330,6 +331,13 @@ void cms_get_admin_entries(const char *lang, CmsBlogListItem **out, size_t *out_
     if (!collection) return;
 
     bson_t *query = bson_new();
+    if (type_filter) bson_append_utf8(query, "type", -1, type_filter, -1);
+    if (created_by_hex && bson_oid_is_valid(created_by_hex, strlen(created_by_hex))) {
+        bson_oid_t created_by_oid;
+        bson_oid_init_from_string(&created_by_oid, created_by_hex);
+        bson_append_oid(query, "created_by", -1, &created_by_oid);
+    }
+
     bson_t *opts = BCON_NEW(
         "sort", "{", "header.date", BCON_INT32(-1), "}",
         "limit", BCON_INT64((int64_t)ENTRIES_LIST_LIMIT)

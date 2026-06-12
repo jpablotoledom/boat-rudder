@@ -70,6 +70,7 @@ set(SOURCES
     src/modules/languages_admin/languages_admin.c
     src/modules/entries_admin/entries_admin.c
     src/modules/menu_admin/menu_admin.c
+    src/modules/users_admin/users_admin.c
     src/modules/entry_editor/entry_editor.c
     src/modules/entry_editor/entry_editor_blocks.c
 
@@ -82,6 +83,7 @@ set(SOURCES
     src/db/cms_menu.c
     src/db/cms_categories.c
     src/db/cms_languages.c
+    src/db/cms_users_admin.c
     src/db/language_catalog.c
     src/db/session_manager.c
 )

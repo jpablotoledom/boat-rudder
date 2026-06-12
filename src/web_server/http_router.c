@@ -12,6 +12,7 @@
 #include "../db/cms_entries_admin.h"
 #include "../db/cms_languages.h"
 #include "../db/cms_menu.h"
+#include "../db/cms_users_admin.h"
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
 #include "../html_builder/orchestrator.h"
@@ -25,6 +26,7 @@
 #include "../modules/languages_admin/languages_admin.h"
 #include "../modules/login/login.h"
 #include "../modules/menu_admin/menu_admin.h"
+#include "../modules/users_admin/users_admin.h"
 #include "../utils/build_epoch_response.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
@@ -165,6 +167,48 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
     }
 
     return 1;
+}
+
+// require_dashboard_session() + cms_get_user_role(): role_out (>= USER_ROLE_BUF_SIZE
+// bytes) is "admin" or "author" (a missing `role` field, or a lookup error, defaults
+// to "admin" - same backward-compatible convention as cms_get_user_role()). Same
+// 0/1 return + ctx-write contract as require_dashboard_session().
+static int require_dashboard_session_role(void *ctx, HttpRequest *req, int epoch,
+                                            char *user_id_out, char *role_out, size_t role_size) {
+    if (!require_dashboard_session(ctx, req, epoch, user_id_out)) return 0;
+
+    if (cms_get_user_role(user_id_out, role_out, role_size) != 0) {
+        strncpy(role_out, "admin", role_size - 1);
+        role_out[role_size - 1] = '\0';
+    }
+
+    return 1;
+}
+
+// require_dashboard_session_role() + role != "admin" -> 302 /dashboard, return 0.
+// Used by routes reserved to Administrador (Users maintainer, entry deletion).
+static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
+    char role[USER_ROLE_BUF_SIZE];
+    if (!require_dashboard_session_role(ctx, req, epoch, user_id_out, role, sizeof(role))) return 0;
+
+    if (strcmp(role, "admin") != 0) {
+        char *response = build_redirect_response("/dashboard", "", epoch);
+        send_or_error(ctx, response, req->method, epoch);
+        return 0;
+    }
+
+    return 1;
+}
+
+// 1 if `role` is "admin", or `role` is "author" and `entry` is a "blog" entry
+// created by `user_id`. Gates the entry editor GET/POST routes - an Autor may
+// only edit their own blog entries.
+static int can_edit_entry(const char *role, const char *user_id, const CmsEntryEdit *entry) {
+    if (strcmp(role, "admin") == 0) return 1;
+
+    return strcmp(role, "author") == 0 &&
+           strcmp(entry->type, "blog") == 0 &&
+           strcmp(entry->created_by, user_id) == 0;
 }
 
 // Matches `decoded_url` against "<prefix>/<id><suffix>", where <id> is a
@@ -354,6 +398,22 @@ static void parse_menu_form(HttpRequest *req, char *out_link, size_t out_link_si
     }
 }
 
+// Fills out_email/out_password/out_role (caller-allocated buffers) from req's
+// body's "email"/"password"/"role" fields, for cms_create_user()/
+// cms_update_user(). An absent "role" field defaults to "author" (the safer
+// default for a new account).
+static void parse_user_form(HttpRequest *req, char *out_email, size_t out_email_size,
+                             char *out_password, size_t out_password_size,
+                             char *out_role, size_t out_role_size) {
+    parse_urlencoded_field(req->body, req->body_length, "email", out_email, out_email_size);
+    parse_urlencoded_field(req->body, req->body_length, "password", out_password, out_password_size);
+
+    if (!parse_urlencoded_field(req->body, req->body_length, "role", out_role, out_role_size)) {
+        strncpy(out_role, "author", out_role_size - 1);
+        out_role[out_role_size - 1] = '\0';
+    }
+}
+
 void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     LOG_DEBUG("http_route() called");
 
@@ -521,7 +581,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     const char *cookie = get_header_value(&req, "Cookie");
 
                     if (validate_session_cookie(cookie, user_id) == 1) {
-                        char *content  = dashboard(epoch, content_lang);
+                        char role[USER_ROLE_BUF_SIZE];
+                        if (cms_get_user_role(user_id, role, sizeof(role)) != 0) {
+                            strncpy(role, "admin", sizeof(role) - 1);
+                            role[sizeof(role) - 1] = '\0';
+                        }
+
+                        char *content  = dashboard(epoch, content_lang, user_id, role);
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -540,7 +606,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = categories_admin_list(epoch, content_lang);
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -557,7 +623,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         CmsLanguageItem *langs = NULL;
                         size_t lang_count = 0;
                         cms_get_languages(&langs, &lang_count);
@@ -584,7 +650,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         CmsLanguageItem *langs = NULL;
                         size_t lang_count = 0;
                         cms_get_languages(&langs, &lang_count);
@@ -613,7 +679,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = languages_admin(epoch, NULL);
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -630,7 +696,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = menu_admin_list(epoch, content_lang);
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -647,7 +713,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         CmsLanguageItem *langs = NULL;
                         size_t lang_count = 0;
                         cms_get_languages(&langs, &lang_count);
@@ -674,7 +740,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
                         CmsLanguageItem *langs = NULL;
                         size_t lang_count = 0;
                         cms_get_languages(&langs, &lang_count);
@@ -700,6 +766,63 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
+            } else if (strcmp(decoded_url, "/dashboard/users") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        char *content  = users_admin_list(epoch, NULL);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/users/new") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        char *content  = users_admin_form(epoch, "", "", "author", NULL);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (match_id_route(decoded_url, "/dashboard/users", "/edit", id, sizeof(id))) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        char email[256];
+                        char role[USER_ROLE_BUF_SIZE];
+                        if (cms_get_user_values(id, email, sizeof(email), role, sizeof(role)) == 0) {
+                            char *content  = users_admin_form(epoch, id, email, role, NULL);
+                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                            free(body);
+                            send_or_error(ctx, response, req.method, epoch);
+                        } else {
+                            send_error_response(ctx, 404, "404 Not Found", epoch);
+                        }
+                    }
+                }
+
             } else if (match_id_route(decoded_url, "/dashboard/entries", "/edit", id, sizeof(id))) {
                 int epoch = resolve_epoch(&req);
 
@@ -708,24 +831,30 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                         CmsLanguageItem *langs = NULL;
                         size_t lang_count = 0;
                         cms_get_languages(&langs, &lang_count);
 
                         CmsEntryEdit entry;
                         if (cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
-                            CmsCategoryItem *categories = NULL;
-                            size_t category_count = 0;
-                            cms_get_categories(content_lang, &categories, &category_count);
+                            if (!can_edit_entry(role, user_id, &entry)) {
+                                char *response = build_redirect_response("/dashboard", "", epoch);
+                                send_or_error(ctx, response, req.method, epoch);
+                            } else {
+                                CmsCategoryItem *categories = NULL;
+                                size_t category_count = 0;
+                                cms_get_categories(content_lang, &categories, &category_count);
 
-                            char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
-                            char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                            free(body);
-                            send_or_error(ctx, response, req.method, epoch);
+                                char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count);
+                                char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                                free(body);
+                                send_or_error(ctx, response, req.method, epoch);
 
-                            cms_categories_free(categories, category_count);
+                                cms_categories_free(categories, category_count);
+                            }
                         } else {
                             send_error_response(ctx, 404, "404 Not Found", epoch);
                         }
@@ -827,7 +956,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);
@@ -854,7 +983,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);
@@ -881,7 +1010,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     cms_delete_category(id);
 
                     char *response = build_redirect_response("/dashboard/categories", "", epoch);
@@ -897,7 +1026,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);
@@ -927,7 +1056,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);
@@ -957,7 +1086,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     cms_delete_menu_item(id);
 
                     char *response = build_redirect_response("/dashboard/menu", "", epoch);
@@ -973,8 +1102,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
-                    char *new_id = cms_create_entry();
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    const char *type = strcmp(role, "author") == 0 ? "blog" : "page";
+                    char *new_id = cms_create_entry(user_id, type);
                     char *response;
                     if (new_id) {
                         char location[64];
@@ -997,7 +1128,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     cms_delete_entry(id);
 
                     char *response = build_redirect_response("/dashboard", "", epoch);
@@ -1014,30 +1145,50 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
-                    char link[256];
-                    char type[16];
-                    parse_urlencoded_field(req.body, req.body_length, "link", link, sizeof(link));
-                    if (!parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type)))
-                        strcpy(type, "page");
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
 
-                    char enabled_str[8];
-                    bool enabled = parse_urlencoded_field(req.body, req.body_length, "enabled",
-                                                           enabled_str, sizeof(enabled_str)) != 0;
-
-                    char *category_ids[CATEGORY_LIST_LIMIT];
-                    size_t category_count = parse_urlencoded_multi(req.body, req.body_length, "categories",
-                                                                     category_ids, CATEGORY_LIST_LIMIT);
-
+                    CmsEntryEdit entry;
                     char *response;
-                    if (cms_update_entry_meta(id, link, type, enabled, category_ids, category_count) == 0) {
-                        response = build_json_response("{\"ok\":true}");
+                    if (!cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"not found\"}", "404 Not Found");
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else if (!can_edit_entry(role, user_id, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"forbidden\"}", "403 Forbidden");
+                        send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
-                    }
-                    send_or_error(ctx, response, req.method, epoch);
+                        char link[256];
+                        char type[16];
+                        parse_urlencoded_field(req.body, req.body_length, "link", link, sizeof(link));
+                        if (strcmp(role, "author") == 0) {
+                            strcpy(type, "blog");
+                        } else if (!parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type))) {
+                            strcpy(type, "page");
+                        }
 
-                    for (size_t i = 0; i < category_count; i++) free(category_ids[i]);
+                        char enabled_str[8];
+                        bool enabled = parse_urlencoded_field(req.body, req.body_length, "enabled",
+                                                               enabled_str, sizeof(enabled_str)) != 0;
+
+                        char *category_ids[CATEGORY_LIST_LIMIT];
+                        size_t category_count = parse_urlencoded_multi(req.body, req.body_length, "categories",
+                                                                         category_ids, CATEGORY_LIST_LIMIT);
+
+                        if (cms_update_entry_meta(id, link, type, enabled, category_ids, category_count) == 0) {
+                            response = build_json_response("{\"ok\":true}");
+                        } else {
+                            response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
+                        }
+                        send_or_error(ctx, response, req.method, epoch);
+
+                        for (size_t i = 0; i < category_count; i++) free(category_ids[i]);
+                    }
+
+                    cms_entry_edit_free(&entry, lang_count);
+                    cms_languages_free(langs, lang_count);
                 }
             }
 
@@ -1050,52 +1201,64 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);
 
-                    char image_url[1024];
-                    char date[16];
-                    parse_urlencoded_field(req.body, req.body_length, "image_url", image_url, sizeof(image_url));
-                    parse_urlencoded_field(req.body, req.body_length, "date", date, sizeof(date));
-
-                    char **title_values   = calloc(lang_count, sizeof(char *));
-                    char **summary_values = calloc(lang_count, sizeof(char *));
-                    char **author_values  = calloc(lang_count, sizeof(char *));
-                    for (size_t i = 0; i < lang_count; i++) {
-                        char field[40], value[1024];
-
-                        snprintf(field, sizeof(field), "title_%s", langs[i].code);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        title_values[i] = strdup(value);
-
-                        snprintf(field, sizeof(field), "summary_%s", langs[i].code);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        summary_values[i] = strdup(value);
-
-                        snprintf(field, sizeof(field), "author_%s", langs[i].code);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        author_values[i] = strdup(value);
-                    }
-
+                    CmsEntryEdit entry;
                     char *response;
-                    if (cms_update_entry_header(id, image_url, date, langs, lang_count,
-                                                 title_values, summary_values, author_values) == 0) {
-                        response = build_json_response("{\"ok\":true}");
+                    if (!cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"not found\"}", "404 Not Found");
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else if (!can_edit_entry(role, user_id, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"forbidden\"}", "403 Forbidden");
+                        send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
-                    }
-                    send_or_error(ctx, response, req.method, epoch);
+                        char image_url[1024];
+                        char date[16];
+                        parse_urlencoded_field(req.body, req.body_length, "image_url", image_url, sizeof(image_url));
+                        parse_urlencoded_field(req.body, req.body_length, "date", date, sizeof(date));
 
-                    for (size_t i = 0; i < lang_count; i++) {
-                        free(title_values[i]);
-                        free(summary_values[i]);
-                        free(author_values[i]);
+                        char **title_values   = calloc(lang_count, sizeof(char *));
+                        char **summary_values = calloc(lang_count, sizeof(char *));
+                        char **author_values  = calloc(lang_count, sizeof(char *));
+                        for (size_t i = 0; i < lang_count; i++) {
+                            char field[40], value[1024];
+
+                            snprintf(field, sizeof(field), "title_%s", langs[i].code);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            title_values[i] = strdup(value);
+
+                            snprintf(field, sizeof(field), "summary_%s", langs[i].code);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            summary_values[i] = strdup(value);
+
+                            snprintf(field, sizeof(field), "author_%s", langs[i].code);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            author_values[i] = strdup(value);
+                        }
+
+                        if (cms_update_entry_header(id, image_url, date, langs, lang_count,
+                                                     title_values, summary_values, author_values) == 0) {
+                            response = build_json_response("{\"ok\":true}");
+                        } else {
+                            response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
+                        }
+                        send_or_error(ctx, response, req.method, epoch);
+
+                        for (size_t i = 0; i < lang_count; i++) {
+                            free(title_values[i]);
+                            free(summary_values[i]);
+                            free(author_values[i]);
+                        }
+                        free(title_values);
+                        free(summary_values);
+                        free(author_values);
                     }
-                    free(title_values);
-                    free(summary_values);
-                    free(author_values);
+
+                    cms_entry_edit_free(&entry, lang_count);
                     cms_languages_free(langs, lang_count);
                 }
             }
@@ -1109,61 +1272,73 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);
 
-                    char count_str[16];
-                    parse_urlencoded_field(req.body, req.body_length, "content_count", count_str, sizeof(count_str));
-                    int block_count = atoi(count_str);
-                    if (block_count < 0) block_count = 0;
-                    if (block_count > 200) block_count = 200;
-
-                    CmsContentBlockEdit *blocks = calloc((size_t)block_count, sizeof(CmsContentBlockEdit));
-                    for (int i = 0; i < block_count; i++) {
-                        char field[48], value[8192];
-
-                        snprintf(field, sizeof(field), "content_%d_id", i);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        blocks[i].id = strdup(value);
-
-                        snprintf(field, sizeof(field), "content_%d_type", i);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        blocks[i].type = strdup(value);
-
-                        snprintf(field, sizeof(field), "content_%d_order", i);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        blocks[i].order = atoi(value);
-
-                        snprintf(field, sizeof(field), "content_%d_extra_data", i);
-                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                        blocks[i].extra_data = strdup(value);
-
-                        blocks[i].text_values = calloc(lang_count, sizeof(char *));
-                        for (size_t j = 0; j < lang_count; j++) {
-                            snprintf(field, sizeof(field), "content_%d_text_%s", i, langs[j].code);
-                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                            blocks[i].text_values[j] = strdup(value);
-                        }
-                    }
-
+                    CmsEntryEdit entry;
                     char *response;
-                    if (cms_update_entry_content(id, langs, lang_count, blocks, (size_t)block_count) == 0) {
-                        response = build_json_response("{\"ok\":true}");
+                    if (!cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"not found\"}", "404 Not Found");
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else if (!can_edit_entry(role, user_id, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"forbidden\"}", "403 Forbidden");
+                        send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
-                    }
-                    send_or_error(ctx, response, req.method, epoch);
+                        char count_str[16];
+                        parse_urlencoded_field(req.body, req.body_length, "content_count", count_str, sizeof(count_str));
+                        int block_count = atoi(count_str);
+                        if (block_count < 0) block_count = 0;
+                        if (block_count > 200) block_count = 200;
 
-                    for (int i = 0; i < block_count; i++) {
-                        free(blocks[i].id);
-                        free(blocks[i].type);
-                        free(blocks[i].extra_data);
-                        for (size_t j = 0; j < lang_count; j++) free(blocks[i].text_values[j]);
-                        free(blocks[i].text_values);
+                        CmsContentBlockEdit *blocks = calloc((size_t)block_count, sizeof(CmsContentBlockEdit));
+                        for (int i = 0; i < block_count; i++) {
+                            char field[48], value[8192];
+
+                            snprintf(field, sizeof(field), "content_%d_id", i);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            blocks[i].id = strdup(value);
+
+                            snprintf(field, sizeof(field), "content_%d_type", i);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            blocks[i].type = strdup(value);
+
+                            snprintf(field, sizeof(field), "content_%d_order", i);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            blocks[i].order = atoi(value);
+
+                            snprintf(field, sizeof(field), "content_%d_extra_data", i);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            blocks[i].extra_data = strdup(value);
+
+                            blocks[i].text_values = calloc(lang_count, sizeof(char *));
+                            for (size_t j = 0; j < lang_count; j++) {
+                                snprintf(field, sizeof(field), "content_%d_text_%s", i, langs[j].code);
+                                parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                                blocks[i].text_values[j] = strdup(value);
+                            }
+                        }
+
+                        if (cms_update_entry_content(id, langs, lang_count, blocks, (size_t)block_count) == 0) {
+                            response = build_json_response("{\"ok\":true}");
+                        } else {
+                            response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
+                        }
+                        send_or_error(ctx, response, req.method, epoch);
+
+                        for (int i = 0; i < block_count; i++) {
+                            free(blocks[i].id);
+                            free(blocks[i].type);
+                            free(blocks[i].extra_data);
+                            for (size_t j = 0; j < lang_count; j++) free(blocks[i].text_values[j]);
+                            free(blocks[i].text_values);
+                        }
+                        free(blocks);
                     }
-                    free(blocks);
+
+                    cms_entry_edit_free(&entry, lang_count);
                     cms_languages_free(langs, lang_count);
                 }
             }
@@ -1177,14 +1352,27 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
+
+                    CmsEntryEdit entry;
                     char *response;
-                    if (cms_remove_entry_content_block(id, block_id) == 0) {
+                    if (!cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"not found\"}", "404 Not Found");
+                    } else if (!can_edit_entry(role, user_id, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"forbidden\"}", "403 Forbidden");
+                    } else if (cms_remove_entry_content_block(id, block_id) == 0) {
                         response = build_json_response("{\"ok\":true}");
                     } else {
                         response = build_json_response_status("{\"ok\":false,\"error\":\"remove failed\"}", "400 Bad Request");
                     }
                     send_or_error(ctx, response, req.method, epoch);
+
+                    cms_entry_edit_free(&entry, lang_count);
+                    cms_languages_free(langs, lang_count);
                 }
             }
 
@@ -1197,49 +1385,59 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
-                    char type[16];
-                    char order_str[16];
-                    parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
-                    parse_urlencoded_field(req.body, req.body_length, "order", order_str, sizeof(order_str));
-                    int order = atoi(order_str);
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
 
-                    char new_block_id[32];
+                    CmsEntryEdit entry;
                     char *response = NULL;
-                    if (cms_add_entry_content_block(id, type, order, new_block_id, sizeof(new_block_id)) == 0) {
-                        CmsLanguageItem *langs = NULL;
-                        size_t lang_count = 0;
-                        cms_get_languages(&langs, &lang_count);
-
-                        CmsContentBlockEdit block = {0};
-                        block.id = new_block_id;
-                        block.type = type;
-                        block.order = order;
-                        block.extra_data = (char *)"";
-                        block.text_values = calloc(lang_count, sizeof(char *));
-                        for (size_t i = 0; i < lang_count; i++) block.text_values[i] = (char *)"";
-
-                        char *html = entry_editor_render_block(&block, langs, lang_count, epoch);
-                        free(block.text_values);
-                        cms_languages_free(langs, lang_count);
-
-                        char *html_json = html ? json_escape_alloc(html) : NULL;
-                        free(html);
-
-                        if (html_json) {
-                            char *json_body = render_template(
-                                "{\"ok\":true,\"block_id\":\"%s\",\"html\":\"%s\"}", new_block_id, html_json);
-                            response = json_body ? build_json_response(json_body) : NULL;
-                            free(json_body);
-                        }
-                        free(html_json);
+                    if (!cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"not found\"}", "404 Not Found");
+                    } else if (!can_edit_entry(role, user_id, &entry)) {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"forbidden\"}", "403 Forbidden");
                     } else {
-                        response = build_json_response_status("{\"ok\":false,\"error\":\"create failed\"}", "400 Bad Request");
+                        char type[16];
+                        char order_str[16];
+                        parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
+                        parse_urlencoded_field(req.body, req.body_length, "order", order_str, sizeof(order_str));
+                        int order = atoi(order_str);
+
+                        char new_block_id[32];
+                        if (cms_add_entry_content_block(id, type, order, new_block_id, sizeof(new_block_id)) == 0) {
+                            CmsContentBlockEdit block = {0};
+                            block.id = new_block_id;
+                            block.type = type;
+                            block.order = order;
+                            block.extra_data = (char *)"";
+                            block.text_values = calloc(lang_count, sizeof(char *));
+                            for (size_t i = 0; i < lang_count; i++) block.text_values[i] = (char *)"";
+
+                            char *html = entry_editor_render_block(&block, langs, lang_count, epoch);
+                            free(block.text_values);
+
+                            char *html_json = html ? json_escape_alloc(html) : NULL;
+                            free(html);
+
+                            if (html_json) {
+                                char *json_body = render_template(
+                                    "{\"ok\":true,\"block_id\":\"%s\",\"html\":\"%s\"}", new_block_id, html_json);
+                                response = json_body ? build_json_response(json_body) : NULL;
+                                free(json_body);
+                            }
+                            free(html_json);
+                        } else {
+                            response = build_json_response_status("{\"ok\":false,\"error\":\"create failed\"}", "400 Bad Request");
+                        }
                     }
 
                     if (!response)
                         response = build_json_response_status("{\"ok\":false,\"error\":\"internal error\"}", "500 Internal Server Error");
                     send_or_error(ctx, response, req.method, epoch);
+
+                    cms_entry_edit_free(&entry, lang_count);
+                    cms_languages_free(langs, lang_count);
                 }
             }
 
@@ -1251,7 +1449,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     char code[16];
                     parse_urlencoded_field(req.body, req.body_length, "code", code, sizeof(code));
 
@@ -1277,7 +1475,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     cms_set_default_language(id);
 
                     char *response = build_redirect_response("/dashboard/languages", "", epoch);
@@ -1294,7 +1492,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
                     if (cms_remove_language(id) == 0) {
                         char *response = build_redirect_response("/dashboard/languages", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1305,6 +1503,97 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
                     }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/users/new") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    parse_user_form(&req, email, sizeof(email), password, sizeof(password), role, sizeof(role));
+
+                    char *response;
+                    if (cms_create_user(email, password, role) == 0) {
+                        response = build_redirect_response("/dashboard/users", "", epoch);
+                    } else {
+                        char *content  = users_admin_form(epoch, "", email, role,
+                                              "No se pudo crear el usuario. Verifica el email y la contrasena.");
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/users", "/edit", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    parse_user_form(&req, email, sizeof(email), password, sizeof(password), role, sizeof(role));
+
+                    char *response;
+                    if (strcmp(id, user_id) == 0 && strcmp(role, "admin") != 0 && cms_count_admins() == 1) {
+                        char *content  = users_admin_form(epoch, id, email, role,
+                                              "No puedes quitarte el unico rol de administrador.");
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                    } else if (cms_update_user(id, email, role, password) == 0) {
+                        response = build_redirect_response("/dashboard/users", "", epoch);
+                    } else {
+                        char *content  = users_admin_form(epoch, id, email, role,
+                                              "No se pudo actualizar el usuario. Verifica el email.");
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/users", "/delete", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char target_role[USER_ROLE_BUF_SIZE];
+                    char *response;
+
+                    if (strcmp(id, user_id) == 0) {
+                        char *content  = users_admin_list(epoch, "No puedes eliminar tu propia cuenta.");
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                    } else if (cms_get_user_role(id, target_role, sizeof(target_role)) == 0 &&
+                               strcmp(target_role, "admin") == 0 && cms_count_admins() == 1) {
+                        char *content  = users_admin_list(epoch, "No se puede eliminar el ultimo administrador.");
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                    } else {
+                        cms_delete_user(id);
+                        response = build_redirect_response("/dashboard/users", "", epoch);
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
                 }
             }
 

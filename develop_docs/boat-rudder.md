@@ -19,7 +19,7 @@ illustrated with diagrams. For deeper detail see:
 - [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts
   (`bhs.sh`).
 - [plans/](plans/) - per-feature implementation plans (CMS entry model, home blog list,
-  login).
+  login, site settings).
 - [diagrams/](diagrams/) - PlantUML source files for every diagram in this document.
 
 ---

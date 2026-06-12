@@ -499,10 +499,11 @@ so the other epochs only ever show "this functionality is not available".
 
 ### `src/modules/dashboard/dashboard.c`
 ```c
-char *dashboard(int epoch);
+char *dashboard(int epoch, const char *lang, const char *user_id, const char *role);
 ```
-Loads the static `dashboard_epoch<N>.html` content fragment. The MVP dashboard has no dynamic
-placeholders.
+For `EPOCH_MODERN`, loads `dashboard_epoch<N>.html` and fills its nav-links and entries-table
+placeholders based on `role` (see "Roles and privileges" below). Other epochs return the static
+`dashboard_epoch<N>.html` fragment unchanged - `lang`/`user_id`/`role` are ignored.
 
 ### `src/modules/error/error.c`
 ```c
@@ -518,8 +519,8 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
-| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → `dashboard(epoch, content_lang)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN`, the page embeds a read-only table of every `entries` document (any `type`, up to `ENTRIES_LIST_LIMIT`, newest `header.date` first) via `entries_admin_rows()` - same fields as the blog list plus `type` ("Page"/"Blog"). Other epochs render the static "Welcome to dashboard" fragment unchanged. |
-| `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_dashboard_session()`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
+| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN`, an Administrador (`role == "admin"`) sees the Categories/Languages/Menu/Users nav links (`dashboard/nav-admin_epoch3.html`) and a read-only table of every `entries` document (any `type`, up to `ENTRIES_LIST_LIMIT`, newest `header.date` first) via `entries_admin_rows(epoch, lang, NULL, NULL)`; an Autor sees no extra nav links and only their own `type:"blog"` entries via `entries_admin_rows(epoch, lang, "blog", user_id)`. Rows have the same fields as the blog list plus `type` ("Page"/"Blog"). Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
+| `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()` - Administrador only, an Autor session gets `302 /dashboard`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
 | `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
 | `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
 | `/dashboard/categories/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `categories_admin_form()` pre-filled via `cms_get_category_name_values()`. |
@@ -535,14 +536,20 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/dashboard/menu/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `menu_admin_form()` pre-filled via `cms_get_menu_item_values()`. |
 | `/dashboard/menu/<id>/edit` | `POST` | Same guards. `cms_update_menu_item()`, `302 /dashboard/menu`. |
 | `/dashboard/menu/<id>/delete` | `POST` | Same guards. `cms_delete_menu_item()`, `302 /dashboard/menu`. |
-| `/dashboard/entries/new` | `POST` | Same guards. `cms_create_entry()` inserts an empty `entries` document and redirects to `/dashboard/entries/<new_id>/edit`; on failure, `302 /dashboard`. |
-| `/dashboard/entries/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `entry_editor_page()` (see below), embedded via `buildPageWebSite()`. |
-| `/dashboard/entries/<id>/delete` | `POST` | Same guards. `cms_delete_entry()`, `302 /dashboard`. |
-| `/dashboard/api/entries/<id>/meta` | `POST` | Same guards. Reads `link`, `type`, `enabled` (checkbox) and `categories` (multi-value) from the form body, `cms_update_entry_meta()`. Returns `{"ok":true}` or `400 {"ok":false,"error":"update failed"}` as JSON (`application/json; charset=UTF-8`). |
-| `/dashboard/api/entries/<id>/header` | `POST` | Same guards. Reads `image_url`, `date` and `title_<lang>`/`summary_<lang>`/`author_<lang>` for each `cms_get_languages()` entry, `cms_update_entry_header()`. Same JSON response shape. |
-| `/dashboard/api/entries/<id>/content` | `POST` | Same guards. Reads `content_count` (capped at 200) and, for each block `i`, `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>`, builds a `CmsContentBlockEdit[]` and calls `cms_update_entry_content()` (full `content[]` replace). Same JSON response shape. |
-| `/dashboard/api/entries/<id>/blocks` | `POST` | Same guards. Reads `type` and `order`, `cms_add_entry_content_block()` (`$push`s a new empty block), then renders it via `entry_editor_render_block()` and returns `{"ok":true,"block_id":"...","html":"..."}` (HTML JSON-escaped via `json_escape_alloc()`), or `400 {"ok":false,"error":"create failed"}`. |
-| `/dashboard/api/entries/<id>/blocks/<block_id>/delete` | `POST` | Same guards. `cms_remove_entry_content_block()` (`$pull`s the block by `_id`). Same JSON response shape (`"error":"remove failed"` on failure). |
+| `/dashboard/entries/new` | `POST` | `require_dashboard_session_role()`. `cms_create_entry(user_id, type)` where `type` is `"blog"` for an Autor and `"page"` for an Administrador, sets `created_by: ObjectId(user_id)`, then redirects to `/dashboard/entries/<new_id>/edit`; on failure, `302 /dashboard`. |
+| `/dashboard/entries/<id>/edit` | `GET` | `require_dashboard_session_role()`. `404` if `<id>` is not a valid ObjectId or no matching document exists. Else `can_edit_entry(role, user_id, &entry)` (`true` for an Administrador, or for an Autor iff `entry.type == "blog"` and `entry.created_by == user_id`) - if `false`, `302 /dashboard`; otherwise `entry_editor_page()` (see below), embedded via `buildPageWebSite()`. |
+| `/dashboard/entries/<id>/delete` | `POST` | `require_admin_session()` - Administrador only (an Autor can never delete entries, even their own), an Autor session gets `302 /dashboard`. `cms_delete_entry()`, `302 /dashboard`. |
+| `/dashboard/api/entries/<id>/meta` | `POST` | `require_dashboard_session_role()`. `404 {"ok":false,"error":"not found"}` if `<id>` doesn't resolve via `cms_get_entry_for_edit()`; `403 {"ok":false,"error":"forbidden"}` if `!can_edit_entry()`. Otherwise reads `link`, `enabled` (checkbox) and `categories` (multi-value) from the form body; `type` is forced to `"blog"` for an Autor (the submitted `type` field, if any, is ignored - an Autor can never turn their post into a `"page"`), or read from the form for an Administrador (default `"page"`). `cms_update_entry_meta()`. Returns `{"ok":true}` or `400 {"ok":false,"error":"update failed"}` as JSON (`application/json; charset=UTF-8`). |
+| `/dashboard/api/entries/<id>/header` | `POST` | `require_dashboard_session_role()`, same `404`/`403` ownership gate as `/meta`. Reads `image_url`, `date` and `title_<lang>`/`summary_<lang>`/`author_<lang>` for each `cms_get_languages()` entry, `cms_update_entry_header()`. Same JSON response shape. |
+| `/dashboard/api/entries/<id>/content` | `POST` | `require_dashboard_session_role()`, same `404`/`403` ownership gate as `/meta`. Reads `content_count` (capped at 200) and, for each block `i`, `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>`, builds a `CmsContentBlockEdit[]` and calls `cms_update_entry_content()` (full `content[]` replace). Same JSON response shape. |
+| `/dashboard/api/entries/<id>/blocks` | `POST` | `require_dashboard_session_role()`, same `404`/`403` ownership gate as `/meta`. Reads `type` and `order`, `cms_add_entry_content_block()` (`$push`s a new empty block), then renders it via `entry_editor_render_block()` and returns `{"ok":true,"block_id":"...","html":"..."}` (HTML JSON-escaped via `json_escape_alloc()`), or `400 {"ok":false,"error":"create failed"}`. |
+| `/dashboard/api/entries/<id>/blocks/<block_id>/delete` | `POST` | `require_dashboard_session_role()`, same `404`/`403` ownership gate as `/meta`. `cms_remove_entry_content_block()` (`$pull`s the block by `_id`). Same JSON response shape (`"error":"remove failed"` on failure). |
+| `/dashboard/users` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()`. Renders `users_admin_list(epoch, NULL)`: every `users` document sorted by email, with its role label ("Administrador"/"Autor" - a missing `role` field reads as `"admin"`/"Administrador"). |
+| `/dashboard/users/new` | `GET` | Same guards. Renders `users_admin_form(epoch, "", "", "author", NULL)`. |
+| `/dashboard/users/new` | `POST` | Same guards. `parse_user_form()` reads `email`/`password`/`role` (an absent `role` defaults to `"author"`); `cms_create_user()` hashes the password and inserts `{email, password, role}`. On success, `302 /dashboard/users`; on failure (duplicate email, invalid role, DB error), re-renders `users_admin_form()` (`200`) with "No se pudo crear el usuario. Verifica el email y la contrasena." |
+| `/dashboard/users/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `users_admin_form()` pre-filled via `cms_get_user_values()` (password field always empty). |
+| `/dashboard/users/<id>/edit` | `POST` | Same guards. `parse_user_form()`; if `<id> == user_id` (editing yourself), the new role is not `"admin"` and `cms_count_admins() == 1`, re-renders the form with "No puedes quitarte el unico rol de administrador." Otherwise `cms_update_user(id, email, role, password)` (`$set`s `email`/`role`, and `password` only if non-empty - a blank password leaves the stored hash unchanged). On success, `302 /dashboard/users`; on failure, re-renders the form with "No se pudo actualizar el usuario. Verifica el email." |
+| `/dashboard/users/<id>/delete` | `POST` | Same guards. If `<id> == user_id`, `users_admin_list(epoch, "No puedes eliminar tu propia cuenta.")`. Else if the target user's role is `"admin"` and `cms_count_admins() == 1`, `users_admin_list(epoch, "No se puede eliminar el ultimo administrador.")`. Otherwise `cms_delete_user(id)`, `302 /dashboard/users`. |
 | `/logout` | `GET` | If a valid session cookie is present, `destroy_session()`; always responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`). |
 
 ### Epoch restriction (security)
@@ -559,27 +566,31 @@ the `POST /login` sequence diagram.
 
 ---
 
-## Dashboard maintainers: Entries, Categories, Languages and Menu
+## Dashboard maintainers: Entries, Categories, Languages, Menu and Users
 
-Admin features under `/dashboard`. The Categories, Languages and Menu maintainers are separate
-pages, **`EPOCH_MODERN` only** (other epochs `302 /dashboard`, matching the
-`/login`/`/dashboard` precedent), each requiring a valid session via
-`require_dashboard_session()` (`http_router.c`): `503` if mongodb is not ready, `302 /login` if
-the session cookie is missing/invalid, otherwise the request proceeds. The Entries listing is
-embedded directly in `/dashboard` itself (see below).
+Admin features under `/dashboard`. The Categories, Languages, Menu and Users maintainers are
+separate pages, **`EPOCH_MODERN` only** (other epochs `302 /dashboard`, matching the
+`/login`/`/dashboard` precedent), each requiring an **Administrador** session via
+`require_admin_session()` (`http_router.c`): `503` if mongodb is not ready, `302 /login` if the
+session cookie is missing/invalid, `302 /dashboard` if the session belongs to an Autor,
+otherwise the request proceeds. The Entries listing and editor are embedded directly in
+`/dashboard` and are available to both roles, gated by ownership instead (see "Roles and
+privileges" below).
 
 ### Entries listing (`src/modules/entries_admin/`, embedded in `/dashboard`)
 
-`entries_admin_rows(epoch, lang)` returns the `<tbody>` rows for the table embedded in
-`dashboard_epoch<N>.html` (`EPOCH_MODERN` only - `dashboard()` passes them through
-`render_template()`; other epochs' static templates are returned unchanged). The table lists
-every `entries` document (`db.entries.find({enabled: true})`, any `type`, up to
-`ENTRIES_LIST_LIMIT`, newest `header.date` first - see `cms_get_admin_entries()` in
-`cms_entries.c`). Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the same fields as
-the home/blog list - image, title (linked to `/page/<link>` or `/blog/<link>` depending on
-`type`), summary, author, date and category tags
-(`elements/category/category_epoch<N>.html`) - plus a `type` column ("Page"/"Blog") and an
-"Edit"/"Delete" actions cell (`/dashboard/entries/<id>/edit`,
+`entries_admin_rows(epoch, lang, type_filter, created_by_hex)` returns the `<tbody>` rows for
+the table embedded in `dashboard_epoch<N>.html` (`EPOCH_MODERN` only - `dashboard()` passes them
+through `render_template()`; other epochs' static templates are returned unchanged). The table
+lists `entries` documents (`db.entries.find({enabled: true})`, up to `ENTRIES_LIST_LIMIT`,
+newest `header.date` first - see `cms_get_admin_entries()` in `cms_entries.c`); `type_filter`
+and `created_by_hex`, if non-NULL, restrict the query to `{type: type_filter, created_by:
+ObjectId(created_by_hex)}` - `dashboard()` passes `(NULL, NULL)` for an Administrador (every
+entry, any `type`) and `("blog", user_id)` for an Autor (only their own `type:"blog"` entries).
+Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the same fields as the home/blog
+list - image, title (linked to `/page/<link>` or `/blog/<link>` depending on `type`), summary,
+author, date and category tags (`elements/category/category_epoch<N>.html`) - plus a `type`
+column ("Page"/"Blog") and an "Edit"/"Delete" actions cell (`/dashboard/entries/<id>/edit`,
 `POST /dashboard/entries/<id>/delete`). `cms_get_admin_entries()` shares its row population
 with `cms_get_blog_entries()` via the `CmsBlogListItem` struct, which now also carries `type`
 and `id` (hex ObjectId). `dashboard_epoch<N>.html` also has a static "+ New entry"
@@ -728,11 +739,69 @@ Basic CRUD over `menu` (`MENU_COLLECTION`), already read (read-only, `enabled: t
     `error_message`). `id == ""` for "new menu item". An unchecked "enabled" checkbox sends no
     `enabled` field at all - its absence in the POST body means `false`.
 
+### Roles and privileges (`users.role`, `entries.created_by`)
+
+Two roles: **Administrador** (`users.role == "admin"`, full access - everything described in
+this document) and **Autor** (`users.role == "author"`, can only create/edit their own
+`type:"blog"` entries - no Categories/Languages/Menu/Users, no `type:"page"` entries, and can
+never delete entries). A `users` document with no `role` field (the original seed account) is
+treated as `"admin"` everywhere it's read - no migration is required, and an admin can open that
+user in `/dashboard/users/<id>/edit` and Save to persist `role: "admin"` explicitly.
+
+`entries` documents gained an optional `created_by: ObjectId` field, set once by
+`cms_create_entry()` at creation time and exposed as a 24-char hex string
+(`CmsEntryEdit.created_by`, `""` if absent) by `cms_get_entry_for_edit()`. Pre-existing entries
+have no `created_by`, so they are only ever editable by an Administrador.
+
+`can_edit_entry(role, user_id, entry)` (`http_router.c`) is the single ownership gate used by
+every entry editor route: `true` if `role == "admin"`, or if `role == "author"` and
+`entry->type == "blog"` and `entry->created_by == user_id`.
+
+### Users CRUD (`src/db/cms_users_admin.c`, `src/modules/users_admin/`)
+
+Basic CRUD over `users` (the same collection `auth_login_user()` reads):
+
+- `cms_get_users(&items, &count)`: `db.users.find().sort({email:1}).limit(USERS_LIST_LIMIT)` ->
+  `CmsUserAdminItem { id, email, role }` (`role` is `"admin"` if the field is absent).
+- `cms_get_user_values(id_hex, out_email, ..., out_role, ...)`: `email`/`role` for the edit form.
+- `cms_get_user_role(id_hex, out_role, ...)`: `role` only (`"admin"` if absent or on any
+  lookup error) - used by `require_dashboard_session_role()` and `/dashboard`.
+- `cms_count_admins()`: `db.users.countDocuments({$or: [{role:"admin"}, {role:{$exists:false}}]})`
+  - used by the router to block removing/demoting the last admin.
+- `cms_create_user(email, password, role)`: hashes `password` with `crypto_pwhash_str()`
+  (Argon2id, same as `auth.c`) and inserts `{email, password, role}`. Fails (`-1`) on a
+  duplicate email, an invalid `role` (must be `"admin"` or `"author"`), or a DB error.
+- `cms_update_user(id_hex, email, role, new_password)`: `$set`s `email`/`role`, plus a freshly
+  hashed `password` only if `new_password != ""` (a blank password leaves the stored hash
+  unchanged). Fails on the same conditions as `cms_create_user()`, plus "not found".
+- `cms_delete_user(id_hex)`: `db.users.deleteOne({_id})`. Self-delete and last-admin protection
+  are enforced by the router (`/dashboard/users/<id>/delete`), not here.
+- `src/modules/users_admin/users_admin.c`:
+  - `users_admin_list(epoch, error_message)` -> `dashboard/users/list_epoch<N>.html` (+
+    `list-row_epoch<N>.html` per user with a "Role" column - "Administrador"/"Autor" - or
+    `list-empty_epoch<N>.html`, + `list-error_epoch<N>.html` if `error_message`).
+  - `users_admin_form(epoch, id, email, role, error_message)` -> `dashboard/users/form_epoch<N>.html`
+    (email input, always-empty password input, a 2-option `role` `<select>`
+    ("Administrador"/"Autor"), + `form-error_epoch<N>.html` if `error_message`). `id == ""` for
+    "new user"; action is `/dashboard/users/new` or `/dashboard/users/<id>/edit`.
+
 ### Routing helpers (`src/web_server/http_router.c`)
 
 - `require_dashboard_session(ctx, req, epoch, user_id_out)`: shared by every `/dashboard/*`
   sub-route - `503` if mongodb is not ready, `302 /login` if the session cookie is
   missing/invalid, else returns `1` with `user_id_out` filled.
+- `require_dashboard_session_role(ctx, req, epoch, user_id_out, role_out, role_size)`:
+  `require_dashboard_session()` + `cms_get_user_role()`; `role_out` is `"admin"` or `"author"`
+  (a missing `role` field, or a lookup error, defaults to `"admin"`). Used by
+  `/dashboard/entries/new` and the entry editor routes.
+- `require_admin_session(ctx, req, epoch, user_id_out)`: `require_dashboard_session_role()` +
+  `302 /dashboard` (returning `0`) if `role != "admin"`. Used by `/dashboard/users*`,
+  `/dashboard/categories*`, `/dashboard/languages*`, `/dashboard/menu*` and
+  `/dashboard/entries/<id>/delete`.
+- `can_edit_entry(role, user_id, entry)`: see "Roles and privileges" above.
+- `parse_user_form(req, out_email, ..., out_password, ..., out_role, ...)`: reads
+  `email`/`password`/`role` from the POST body for `cms_create_user()`/`cms_update_user()`; an
+  absent `role` field defaults to `"author"` (the safer default for new accounts).
 - `match_id_route(decoded_url, prefix, suffix, id_out, id_size)`: matches
   `"<prefix>/<id><suffix>"` (e.g. `/dashboard/categories/<id>/edit`,
   `/dashboard/languages/<code>/remove`), extracting `<id>` into `id_out`.

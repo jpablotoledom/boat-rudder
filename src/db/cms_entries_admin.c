@@ -219,6 +219,14 @@ int cms_get_entry_for_edit(const char *id_hex, const CmsLanguageItem *langs,
         out->enabled = (bson_iter_init_find(&iter, doc, "enabled") && BSON_ITER_HOLDS_BOOL(&iter))
             ? bson_iter_bool(&iter) : false;
 
+        if (bson_iter_init_find(&iter, doc, "created_by") && BSON_ITER_HOLDS_OID(&iter)) {
+            char created_by_str[25];
+            bson_oid_to_string(bson_iter_oid(&iter), created_by_str);
+            out->created_by = strdup(created_by_str);
+        } else {
+            out->created_by = strdup("");
+        }
+
         parse_categories_edit(doc, out);
         parse_header_edit(doc, langs, lang_count, out);
         parse_content_edit(doc, langs, lang_count, out);
@@ -242,6 +250,7 @@ void cms_entry_edit_free(CmsEntryEdit *entry, size_t lang_count) {
     free(entry->id);
     free(entry->link);
     free(entry->type);
+    free(entry->created_by);
 
     for (size_t i = 0; i < entry->category_count; i++)
         free(entry->category_ids[i]);
@@ -270,7 +279,7 @@ void cms_entry_edit_free(CmsEntryEdit *entry, size_t lang_count) {
     memset(entry, 0, sizeof(*entry));
 }
 
-char *cms_create_entry(void) {
+char *cms_create_entry(const char *created_by_id_hex, const char *type) {
     mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
     if (!collection) return NULL;
 
@@ -281,7 +290,7 @@ char *cms_create_entry(void) {
     bson_init(&doc);
     bson_append_oid(&doc, "_id", -1, &oid);
     bson_append_utf8(&doc, "link", -1, "", -1);
-    bson_append_utf8(&doc, "type", -1, "page", -1);
+    bson_append_utf8(&doc, "type", -1, type, -1);
     bson_append_bool(&doc, "enabled", -1, false);
     bson_t categories_arr;
     bson_append_array_begin(&doc, "categories", -1, &categories_arr);
@@ -292,6 +301,12 @@ char *cms_create_entry(void) {
     bson_t content_arr;
     bson_append_array_begin(&doc, "content", -1, &content_arr);
     bson_append_array_end(&doc, &content_arr);
+
+    if (bson_oid_is_valid(created_by_id_hex, strlen(created_by_id_hex))) {
+        bson_oid_t created_by_oid;
+        bson_oid_init_from_string(&created_by_oid, created_by_id_hex);
+        bson_append_oid(&doc, "created_by", -1, &created_by_oid);
+    }
 
     bson_error_t error;
     bool ok = mongoc_collection_insert_one(collection, &doc, NULL, NULL, &error);

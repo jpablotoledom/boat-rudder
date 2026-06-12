@@ -1,0 +1,25 @@
+<section class="boat-rudder__dashboard">
+  <h1>User</h1>
+%s
+  <form class="boat-rudder__dashboard__form" method="POST" action="%s">
+    <div class="boat-rudder__dashboard__form-row">
+      <label for="email">Email</label>
+      <input class="boat-rudder__dashboard__input" type="email" id="email" name="email" value="%s" required>
+    </div>
+    <div class="boat-rudder__dashboard__form-row">
+      <label for="password">%s</label>
+      <input class="boat-rudder__dashboard__input" type="password" id="password" name="password">
+    </div>
+    <div class="boat-rudder__dashboard__form-row">
+      <label for="role">Role</label>
+      <select class="boat-rudder__dashboard__input" id="role" name="role">
+        <option value="admin"%s>Administrador</option>
+        <option value="author"%s>Autor</option>
+      </select>
+    </div>
+    <div class="boat-rudder__dashboard__button-container">
+      <button class="boat-rudder__dashboard__button" type="submit">Save</button>
+    </div>
+  </form>
+  <p><a href="/dashboard/users">Back to users</a></p>
+</section>

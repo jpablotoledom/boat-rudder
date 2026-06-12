@@ -91,11 +91,15 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
 // Looks up db.entries.find({}).sort({"header.date": -1}).limit(ENTRIES_LIST_LIMIT) - no
 // `enabled` filter, so admins can find and edit disabled/draft entries too - resolving
 // header.*, categories[], type and id for each match (same lang convention as
-// cms_get_entry_by_link), for the /dashboard/entries listing. On success, *out points to a
-// malloc'd array of *out_count items (possibly 0) that must be passed to
-// cms_blog_list_free(). On a DB error or if mongodb is not ready, *out = NULL and
+// cms_get_entry_by_link), for the /dashboard/entries listing. `type_filter` (e.g. "blog")
+// and `created_by_hex` (a 24-char hex ObjectId), if non-NULL, are added to the query as
+// {type: type_filter} / {created_by: ObjectId(created_by_hex)} - used by Autor users to see
+// only their own blog entries. Pass NULL for both to list every entry (Administrador). On
+// success, *out points to a malloc'd array of *out_count items (possibly 0) that must be
+// passed to cms_blog_list_free(). On a DB error or if mongodb is not ready, *out = NULL and
 // *out_count = 0.
-void cms_get_admin_entries(const char *lang, CmsBlogListItem **out, size_t *out_count);
+void cms_get_admin_entries(const char *lang, const char *type_filter, const char *created_by_hex,
+                            CmsBlogListItem **out, size_t *out_count);
 
 // Frees every item's fields and the array itself. Safe to call with items == NULL.
 void cms_blog_list_free(CmsBlogListItem *items, size_t count);

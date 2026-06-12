@@ -57,7 +57,8 @@ static char *render_row(const CmsBlogListItem *item, const char *row_tpl, int ep
     return result;
 }
 
-char *entries_admin_rows(int epoch, const char *lang) {
+char *entries_admin_rows(int epoch, const char *lang, const char *type_filter,
+                          const char *created_by_hex) {
     char *row_tpl = load_template("dashboard/entries/list-row_epoch%d.html", epoch);
 
     char *rows = NULL;
@@ -67,7 +68,7 @@ char *entries_admin_rows(int epoch, const char *lang) {
 
     if (!row_tpl) goto cleanup;
 
-    cms_get_admin_entries(lang, &items, &item_count);
+    cms_get_admin_entries(lang, type_filter, created_by_hex, &items, &item_count);
 
     if (item_count == 0) {
         rows = load_template("dashboard/entries/list-empty_epoch%d.html", epoch);

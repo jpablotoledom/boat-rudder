@@ -1,0 +1,109 @@
+@startuml entry-editor-components
+
+title Boat Rudder - Entry Editor Components ("/dashboard/entries/<id>/edit")
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+actor "Browser\n(editor <script>)" as BROWSER
+
+package "web_server" {
+    [http_router] as ROUTER
+}
+
+package "html_builder" {
+    [orchestrator\nbuildPageWebSite()] as ORCH
+}
+
+package "modules/entry_editor" {
+    [entry_editor\nentry_editor_page()] as EDITOR
+    [entry_editor_blocks\nrender_block() / render_blocks()] as BLOCKS
+}
+
+package "db" {
+    [cms_entries_admin\nCmsEntryEdit / CmsContentBlockEdit] as CMSADMIN
+    [cms_languages\ncms_get_languages()] as CMSLANG
+    [cms_categories\ncms_get_categories()] as CMSCAT
+    [mongodb_manager] as MONGO
+}
+
+package "utils" {
+    [generate_url_theme] as URLTHEME
+    [read_file] as READFILE
+    [template_utils\n(render_template)] as TPL
+    [build_epoch_response\n(build_json_response)] as RESP
+    [json_utils\n(json_escape_alloc)] as JSON
+}
+
+database "html/themes/<theme>/\ndashboard/entries/editor/*" as FS
+database "MongoDB\n(entries, entry_categories, languages)" as DB
+
+BROWSER --> ROUTER : GET /dashboard/entries/<id>/edit
+BROWSER --> ROUTER : POST /dashboard/api/entries/<id>/...\n(meta, header, content, blocks,\nblocks/<block_id>/delete)\napplication/x-www-form-urlencoded
+
+ROUTER --> EDITOR : entry_editor_page(epoch, entry,\ncategories, langs)\n[GET .../edit]
+ROUTER --> CMSADMIN : cms_get_entry_for_edit() / cms_create_entry() /\ncms_update_entry_meta|header|content() /\ncms_add|remove_entry_content_block() /\ncms_delete_entry()
+ROUTER --> CMSLANG : cms_get_languages()
+ROUTER --> CMSCAT : cms_get_categories(content_lang)
+ROUTER --> ORCH : buildPageWebSite(epoch, title, content)\n[GET .../edit]
+ROUTER --> RESP : build_json_response()\nbuild_json_response_status()\n[/api/entries/* routes]
+ROUTER --> JSON : json_escape_alloc(html)\n[POST .../blocks]
+
+EDITOR --> BLOCKS : entry_editor_render_blocks(entry, langs, epoch)
+EDITOR --> URLTHEME
+EDITOR --> READFILE
+EDITOR --> TPL : render_template(container/meta/header/\nlang-tab-button/header-lang-tab/\ncategory-option templates)
+
+BLOCKS --> URLTHEME
+BLOCKS --> READFILE
+BLOCKS --> TPL : render_template(blocks_/<type>_/\nlang-field templates)
+
+CMSADMIN --> MONGO
+CMSLANG --> MONGO
+CMSCAT --> MONGO
+MONGO --> DB
+
+URLTHEME --> FS
+READFILE --> FS
+
+note right of EDITOR
+  Renders the meta sidebar, header sidebar
+  and blocks section + one inline <script>
+  (container_epoch3.html). One global set of
+  language-tab buttons drives every
+  ".lang-panel[data-lang]" via setLang(code).
+end note
+
+note right of BLOCKS
+  entry_editor_render_block() is reused by
+  POST .../blocks ("add block") to render the
+  new empty block's HTML for the AJAX response
+  - same markup as the full-page render.
+end note
+
+note bottom of CMSADMIN
+  cms_get_entry_for_edit(): no "enabled" filter,
+  no language fallback (exact_lang_value() per
+  langs[]) - admins see/edit the document
+  exactly as stored, including disabled entries.
+end note
+
+note bottom of BROWSER
+  4 supported content block types:
+  tittle, paragraph, image, byline
+  (same types entry_page.c renders publicly).
+end note
+
+@enduml

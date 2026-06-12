@@ -614,3 +614,170 @@ h1, h2 {
   border-radius: 12px;
   font-size: 0.85em;
 }
+
+/* ENTRY EDITOR */
+.boat-rudder__entry-editor__topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.boat-rudder__entry-editor__lang-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.boat-rudder__entry-editor__lang-tab {
+  padding: 6px 12px;
+  cursor: pointer;
+  background-color: #003530;
+  border: 1px solid #00c832;
+  color: #ffffff;
+}
+
+.boat-rudder__entry-editor__lang-tab_active {
+  background-color: #098000;
+  border: 1px solid #00ff40;
+}
+
+.boat-rudder__entry-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.boat-rudder__entry-editor__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.boat-rudder__entry-editor__status {
+  color: #56e9fd;
+}
+
+.boat-rudder__entry-editor__layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.boat-rudder__entry-editor__sidebars {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 0 0 320px;
+}
+
+.boat-rudder__entry-editor__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #7b0a74;
+  background-color: #111111;
+}
+
+.boat-rudder__entry-editor__blocks-section {
+  flex: 1 1 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.boat-rudder__entry-editor__blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.boat-rudder__entry-editor__block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid #7b0a74;
+  background-color: #111111;
+}
+
+.boat-rudder__entry-editor__block-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.boat-rudder__entry-editor__block-type {
+  font-weight: bold;
+  color: #fba8f6;
+}
+
+.boat-rudder__entry-editor__block-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.boat-rudder__entry-editor__block-actions button {
+  cursor: pointer;
+  background-color: #003530;
+  border: 1px solid #00c832;
+  color: #ffffff;
+  padding: 4px 8px;
+}
+
+.boat-rudder__entry-editor__block-fields,
+.boat-rudder__entry-editor__block-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.boat-rudder__entry-editor__block-preview {
+  padding: 10px;
+  border: 1px dashed #56e9fd;
+  overflow: auto;
+}
+
+.boat-rudder__entry-editor__block-preview img {
+  max-width: 100%;
+  height: auto;
+}
+
+.boat-rudder__entry-editor__lang-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boat-rudder__entry-editor__add-block {
+  position: relative;
+}
+
+.boat-rudder__entry-editor__add-block-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #111111;
+  border: 1px solid #7b0a74;
+  z-index: 10;
+  min-width: 160px;
+}
+
+.boat-rudder__entry-editor__add-block-menu button {
+  padding: 10px;
+  cursor: pointer;
+  background-color: #003530;
+  border: none;
+  border-bottom: 1px solid #7b0a74;
+  color: #ffffff;
+  text-align: left;
+}
+
+.boat-rudder__entry-editor__add-block-menu button:hover {
+  background-color: #098000;
+}

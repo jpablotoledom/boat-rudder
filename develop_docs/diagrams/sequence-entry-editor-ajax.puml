@@ -1,0 +1,88 @@
+@startuml sequence-entry-editor-ajax
+
+title Boat Rudder - Entry Editor AJAX API ("/dashboard/api/entries/<id>/...")
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipant underline
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor "Browser\n(editor <script>)" as BROWSER
+participant "http_router" as ROUTER
+participant "require_dashboard_session" as SESSION
+participant "cms_entries_admin" as ADMIN
+participant "entry_editor_blocks" as BLOCKS
+participant "json_utils" as JSONUTIL
+participant "MongoDB\n(entries)" as MONGO
+
+note over ROUTER, SESSION
+  Every route below: epoch != EPOCH_MODERN -> 302 /dashboard;
+  require_dashboard_session() -> 503 (mongo down) |
+  302 /login (missing/invalid session) | proceed.
+  Responses are application/json; charset=UTF-8.
+end note
+
+== editorSaveAll(): saveMeta() + saveHeader() + saveContent() ==
+
+BROWSER -> ROUTER : POST .../meta\nlink, type, enabled, categories[] (multi)
+ROUTER -> ROUTER : parse_urlencoded_field/_multi()
+ROUTER -> ADMIN : cms_update_entry_meta(id, link, type,\nenabled, category_ids)
+ADMIN -> MONGO : updateOne({_id}, {$set: {link, type,\nenabled, categories: [...]}})
+ADMIN --> ROUTER : 0 | -1
+ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
+
+BROWSER -> ROUTER : POST .../header\nimage_url, date,\ntitle_<lang>/summary_<lang>/author_<lang>
+ROUTER -> ADMIN : cms_update_entry_header(id, image_url, date,\nlangs, title/summary/author values)
+ADMIN -> MONGO : updateOne({_id}, {$set: {\n"header.image_url", "header.date",\n"header.title.<lang>", ...}})
+ADMIN --> ROUTER : 0 | -1
+ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
+
+BROWSER -> ROUTER : POST .../content\ncontent_count, content_<i>_id/type/order/\nextra_data/text_<lang>
+ROUTER -> ROUTER : build CmsContentBlockEdit[]\n(content_count capped at 200)
+ROUTER -> ADMIN : cms_update_entry_content(id, langs, blocks)
+ADMIN -> MONGO : updateOne({_id}, {$set: {content: [...]}})\n(full array replace)
+ADMIN --> ROUTER : 0 | -1
+ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
+
+BROWSER -> BROWSER : setStatus("Saved" | "Save failed")\n(or scheduled via editorScheduleAutoSave(), 3s debounce)
+
+== insertNewComponent(type): "+ Add block" dropdown ==
+
+BROWSER -> ROUTER : POST .../blocks\ntype, order
+ROUTER -> ADMIN : cms_add_entry_content_block(id, type, order)
+ADMIN -> MONGO : updateOne({_id}, {$push: {content:\n{_id: <new ObjectId>, type, order,\ntext: {}, extra_data: ""}}})
+ADMIN --> ROUTER : 0, new_block_id
+
+ROUTER -> BLOCKS : entry_editor_render_block(empty block,\nlangs, epoch)
+BLOCKS --> ROUTER : html
+ROUTER -> JSONUTIL : json_escape_alloc(html)
+JSONUTIL --> ROUTER : html_json
+ROUTER --> BROWSER : {"ok":true,"block_id":"...","html":"..."}
+
+BROWSER -> BROWSER : append block to #entryBlocks,\napplyLangVisibility(blockEl)\nrefreshBlockPreview(blockEl)
+
+== removeComponent(): delete a block ==
+
+BROWSER -> ROUTER : POST .../blocks/<block_id>/delete
+ROUTER -> ROUTER : match_block_delete_route(decoded_url)
+ROUTER -> ADMIN : cms_remove_entry_content_block(id, block_id)
+ADMIN -> MONGO : updateOne({_id}, {$pull: {content: {_id: block_id}}})
+ADMIN --> ROUTER : 0 | -1
+ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"remove failed"}
+BROWSER -> BROWSER : blockEl.remove()
+
+note over BROWSER
+  moveBlockUp()/moveBlockDown() are pure
+  client-side DOM swaps - no request is sent
+  until the next saveContent(), which derives
+  each block's "order" from its DOM index.
+end note
+
+@enduml

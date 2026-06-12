@@ -1,0 +1,268 @@
+<section id="entryEditor" class="boat-rudder__dashboard boat-rudder__entry-editor" data-entry-id="%s" data-langs='%s'>
+  <div class="boat-rudder__entry-editor__topbar">
+    <h1>Edit entry</h1>
+    <div class="boat-rudder__entry-editor__lang-tabs">
+%s
+    </div>
+    <div class="boat-rudder__entry-editor__actions">
+      <label class="boat-rudder__entry-editor__checkbox-label">
+        <input type="checkbox" id="autoSaveToggle" onchange="toggleAutoSave()">
+        Autosave
+      </label>
+      <button class="boat-rudder__dashboard__button" type="button" onclick="editorSaveAll()">Save all</button>
+      <span id="editorStatus" class="boat-rudder__entry-editor__status"></span>
+    </div>
+  </div>
+
+  <div class="boat-rudder__entry-editor__layout">
+    <div class="boat-rudder__entry-editor__sidebars">
+%s
+%s
+    </div>
+%s
+  </div>
+
+  <p><a href="/dashboard">Back to dashboard</a></p>
+</section>
+
+<script>
+(function () {
+  var root = document.getElementById('entryEditor');
+  var entryId = root.dataset.entryId;
+  var langs = JSON.parse(root.dataset.langs);
+  var currentLang = langs[0];
+  var autoSaveTimer = null;
+  var autoSaveEnabled = false;
+  var dirty = false;
+
+  function apiUrl(suffix) {
+    return '/dashboard/api/entries/' + entryId + suffix;
+  }
+
+  function postForm(url, params) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    }).then(function (res) { return res.json(); });
+  }
+
+  function setStatus(text) {
+    document.getElementById('editorStatus').textContent = text;
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function applyLangVisibility(scopeEl) {
+    var panels = scopeEl.querySelectorAll('.boat-rudder__entry-editor__lang-panel');
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].style.display = panels[i].dataset.lang === currentLang ? '' : 'none';
+    }
+  }
+
+  function refreshBlockPreview(blockEl) {
+    var type = blockEl.dataset.type;
+    var preview = blockEl.querySelector('.boat-rudder__entry-editor__block-preview');
+    if (!preview) return;
+
+    var panel = blockEl.querySelector('.boat-rudder__entry-editor__lang-panel[data-lang="' + currentLang + '"]');
+    var textField = panel ? panel.querySelector('[name="text"]') : null;
+    var text = textField ? textField.value : '';
+    var extraField = blockEl.querySelector('[name="extra_data"]');
+    var extra = extraField ? extraField.value : '';
+
+    if (type === 'tittle') {
+      preview.innerHTML = '<h2>' + escapeHtml(text) + '</h2>';
+    } else if (type === 'paragraph') {
+      preview.innerHTML = '<p>' + escapeHtml(text) + '</p>';
+    } else if (type === 'image') {
+      preview.innerHTML = '<figure><img src="' + escapeHtml(text) + '" alt="' + escapeHtml(extra) + '"><figcaption>' + escapeHtml(extra) + '</figcaption></figure>';
+    } else if (type === 'byline') {
+      preview.innerHTML = '<span>' + escapeHtml(text) + '</span> <span>' + escapeHtml(extra) + '</span>';
+    } else {
+      preview.innerHTML = '';
+    }
+  }
+
+  function refreshAllPreviews() {
+    var blocks = document.querySelectorAll('.boat-rudder__entry-editor__block');
+    for (var i = 0; i < blocks.length; i++) refreshBlockPreview(blocks[i]);
+  }
+
+  window.setLang = function (code) {
+    currentLang = code;
+
+    var tabs = document.querySelectorAll('.boat-rudder__entry-editor__lang-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].dataset.lang === code) {
+        tabs[i].classList.add('boat-rudder__entry-editor__lang-tab_active');
+      } else {
+        tabs[i].classList.remove('boat-rudder__entry-editor__lang-tab_active');
+      }
+    }
+
+    applyLangVisibility(document);
+    refreshAllPreviews();
+  };
+
+  window.setContentChanged = function () {
+    dirty = true;
+    if (autoSaveEnabled) editorScheduleAutoSave();
+  };
+
+  function editorScheduleAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(function () {
+      editorSaveAll();
+    }, 3000);
+  }
+
+  window.toggleAutoSave = function () {
+    autoSaveEnabled = document.getElementById('autoSaveToggle').checked;
+    if (autoSaveEnabled && dirty) editorScheduleAutoSave();
+  };
+
+  window.onBlockInput = function (el) {
+    refreshBlockPreview(el.closest('.boat-rudder__entry-editor__block'));
+    setContentChanged();
+  };
+
+  window.saveMeta = function () {
+    var sidebar = document.getElementById('metaSidebar');
+    var params = new URLSearchParams();
+    params.set('link', sidebar.querySelector('[name="link"]').value);
+    params.set('type', sidebar.querySelector('[name="type"]').value);
+    if (sidebar.querySelector('[name="enabled"]').checked) params.set('enabled', 'true');
+
+    var selected = sidebar.querySelector('[name="categories"]').selectedOptions;
+    for (var i = 0; i < selected.length; i++) params.append('categories', selected[i].value);
+
+    return postForm(apiUrl('/meta'), params).then(function (data) {
+      setStatus(data.ok ? 'Settings saved' : 'Error: ' + data.error);
+      return data;
+    });
+  };
+
+  window.saveHeader = function () {
+    var sidebar = document.getElementById('headerSidebar');
+    var params = new URLSearchParams();
+    params.set('image_url', sidebar.querySelector('[name="image_url"]').value);
+    params.set('date', sidebar.querySelector('[name="date"]').value);
+
+    for (var i = 0; i < langs.length; i++) {
+      var code = langs[i];
+      var panel = sidebar.querySelector('.boat-rudder__entry-editor__lang-panel[data-lang="' + code + '"]');
+      params.set('title_' + code, panel.querySelector('[name="title"]').value);
+      params.set('summary_' + code, panel.querySelector('[name="summary"]').value);
+      params.set('author_' + code, panel.querySelector('[name="author"]').value);
+    }
+
+    return postForm(apiUrl('/header'), params).then(function (data) {
+      setStatus(data.ok ? 'Header saved' : 'Error: ' + data.error);
+      return data;
+    });
+  };
+
+  window.saveContent = function () {
+    var blocks = document.querySelectorAll('#entryBlocks .boat-rudder__entry-editor__block');
+    var params = new URLSearchParams();
+    params.set('content_count', blocks.length);
+
+    for (var i = 0; i < blocks.length; i++) {
+      var blockEl = blocks[i];
+      params.set('content_' + i + '_id', blockEl.dataset.blockId);
+      params.set('content_' + i + '_type', blockEl.dataset.type);
+      params.set('content_' + i + '_order', i);
+
+      var extraField = blockEl.querySelector('[name="extra_data"]');
+      params.set('content_' + i + '_extra_data', extraField ? extraField.value : '');
+
+      for (var j = 0; j < langs.length; j++) {
+        var code = langs[j];
+        var panel = blockEl.querySelector('.boat-rudder__entry-editor__lang-panel[data-lang="' + code + '"]');
+        var textField = panel ? panel.querySelector('[name="text"]') : null;
+        params.set('content_' + i + '_text_' + code, textField ? textField.value : '');
+      }
+    }
+
+    return postForm(apiUrl('/content'), params).then(function (data) {
+      setStatus(data.ok ? 'Content saved' : 'Error: ' + data.error);
+      return data;
+    });
+  };
+
+  window.editorSaveAll = function () {
+    setStatus('Saving...');
+    return Promise.all([saveMeta(), saveHeader(), saveContent()]).then(function (results) {
+      dirty = results.some(function (data) { return !data.ok; });
+      setStatus(dirty ? 'Save failed' : 'Saved');
+    });
+  };
+
+  window.toggleAddBlockDropdown = function () {
+    var menu = document.getElementById('addBlockMenu');
+    menu.hidden = !menu.hidden;
+  };
+
+  window.insertNewComponent = function (type) {
+    var blocksEl = document.getElementById('entryBlocks');
+    var params = new URLSearchParams();
+    params.set('type', type);
+    params.set('order', blocksEl.children.length);
+
+    postForm(apiUrl('/blocks'), params).then(function (data) {
+      if (!data.ok) {
+        setStatus('Error: ' + data.error);
+        return;
+      }
+
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = data.html;
+      var blockEl = wrapper.firstElementChild;
+      blocksEl.appendChild(blockEl);
+      applyLangVisibility(blockEl);
+      refreshBlockPreview(blockEl);
+      document.getElementById('addBlockMenu').hidden = true;
+      setContentChanged();
+    });
+  };
+
+  window.removeComponent = function (btn) {
+    var blockEl = btn.closest('.boat-rudder__entry-editor__block');
+    var blockId = blockEl.dataset.blockId;
+
+    postForm(apiUrl('/blocks/' + blockId + '/delete'), new URLSearchParams()).then(function (data) {
+      if (data.ok) {
+        blockEl.remove();
+        setContentChanged();
+      } else {
+        setStatus('Error: ' + data.error);
+      }
+    });
+  };
+
+  window.moveBlockUp = function (btn) {
+    var blockEl = btn.closest('.boat-rudder__entry-editor__block');
+    var prev = blockEl.previousElementSibling;
+    if (prev) blockEl.parentNode.insertBefore(blockEl, prev);
+    setContentChanged();
+  };
+
+  window.moveBlockDown = function (btn) {
+    var blockEl = btn.closest('.boat-rudder__entry-editor__block');
+    var next = blockEl.nextElementSibling;
+    if (next) blockEl.parentNode.insertBefore(next, blockEl);
+    setContentChanged();
+  };
+
+  setLang(currentLang);
+})();
+</script>

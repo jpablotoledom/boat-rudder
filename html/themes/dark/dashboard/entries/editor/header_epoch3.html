@@ -1,0 +1,17 @@
+    <div class="boat-rudder__entry-editor__sidebar" id="headerSidebar">
+      <h2>Post header</h2>
+      <div class="boat-rudder__dashboard__form-row">
+        <label for="headerImageUrl">Image URL</label>
+        <input class="boat-rudder__dashboard__input" type="text" id="headerImageUrl" name="image_url" value="%s" oninput="setContentChanged()">
+      </div>
+      <div class="boat-rudder__dashboard__form-row">
+        <label for="headerDate">Date</label>
+        <input class="boat-rudder__dashboard__input" type="date" id="headerDate" name="date" value="%s" oninput="setContentChanged()">
+      </div>
+      <div id="headerLangPanels">
+%s
+      </div>
+      <div class="boat-rudder__dashboard__button-container">
+        <button class="boat-rudder__dashboard__button" type="button" onclick="saveHeader()">Save header</button>
+      </div>
+    </div>

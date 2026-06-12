@@ -6,6 +6,9 @@
 <li><a href="/dashboard/menu">Menu</a></li>
 </ul>
 <h2>Entries</h2>
+<form method="POST" action="/dashboard/entries/new">
+  <button class="boat-rudder__dashboard__button" type="submit">+ New entry</button>
+</form>
 <table class="boat-rudder__dashboard__table">
   <thead>
     <tr>
@@ -16,6 +19,7 @@
       <th>Author</th>
       <th>Date</th>
       <th>Categories</th>
+      <th>Actions</th>
     </tr>
   </thead>
   <tbody>

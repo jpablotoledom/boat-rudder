@@ -535,6 +535,14 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/dashboard/menu/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `menu_admin_form()` pre-filled via `cms_get_menu_item_values()`. |
 | `/dashboard/menu/<id>/edit` | `POST` | Same guards. `cms_update_menu_item()`, `302 /dashboard/menu`. |
 | `/dashboard/menu/<id>/delete` | `POST` | Same guards. `cms_delete_menu_item()`, `302 /dashboard/menu`. |
+| `/dashboard/entries/new` | `POST` | Same guards. `cms_create_entry()` inserts an empty `entries` document and redirects to `/dashboard/entries/<new_id>/edit`; on failure, `302 /dashboard`. |
+| `/dashboard/entries/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `entry_editor_page()` (see below), embedded via `buildPageWebSite()`. |
+| `/dashboard/entries/<id>/delete` | `POST` | Same guards. `cms_delete_entry()`, `302 /dashboard`. |
+| `/dashboard/api/entries/<id>/meta` | `POST` | Same guards. Reads `link`, `type`, `enabled` (checkbox) and `categories` (multi-value) from the form body, `cms_update_entry_meta()`. Returns `{"ok":true}` or `400 {"ok":false,"error":"update failed"}` as JSON (`application/json; charset=UTF-8`). |
+| `/dashboard/api/entries/<id>/header` | `POST` | Same guards. Reads `image_url`, `date` and `title_<lang>`/`summary_<lang>`/`author_<lang>` for each `cms_get_languages()` entry, `cms_update_entry_header()`. Same JSON response shape. |
+| `/dashboard/api/entries/<id>/content` | `POST` | Same guards. Reads `content_count` (capped at 200) and, for each block `i`, `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>`, builds a `CmsContentBlockEdit[]` and calls `cms_update_entry_content()` (full `content[]` replace). Same JSON response shape. |
+| `/dashboard/api/entries/<id>/blocks` | `POST` | Same guards. Reads `type` and `order`, `cms_add_entry_content_block()` (`$push`s a new empty block), then renders it via `entry_editor_render_block()` and returns `{"ok":true,"block_id":"...","html":"..."}` (HTML JSON-escaped via `json_escape_alloc()`), or `400 {"ok":false,"error":"create failed"}`. |
+| `/dashboard/api/entries/<id>/blocks/<block_id>/delete` | `POST` | Same guards. `cms_remove_entry_content_block()` (`$pull`s the block by `_id`). Same JSON response shape (`"error":"remove failed"` on failure). |
 | `/logout` | `GET` | If a valid session cookie is present, `destroy_session()`; always responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`). |
 
 ### Epoch restriction (security)
@@ -570,9 +578,74 @@ every `entries` document (`db.entries.find({enabled: true})`, any `type`, up to
 `cms_entries.c`). Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the same fields as
 the home/blog list - image, title (linked to `/page/<link>` or `/blog/<link>` depending on
 `type`), summary, author, date and category tags
-(`elements/category/category_epoch<N>.html`) - plus a `type` column ("Page"/"Blog"). Read-only.
-`cms_get_admin_entries()` shares its row population with `cms_get_blog_entries()` via the
-`CmsBlogListItem` struct, which now also carries `type`.
+(`elements/category/category_epoch<N>.html`) - plus a `type` column ("Page"/"Blog") and an
+"Edit"/"Delete" actions cell (`/dashboard/entries/<id>/edit`,
+`POST /dashboard/entries/<id>/delete`). `cms_get_admin_entries()` shares its row population
+with `cms_get_blog_entries()` via the `CmsBlogListItem` struct, which now also carries `type`
+and `id` (hex ObjectId). `dashboard_epoch<N>.html` also has a static "+ New entry"
+`POST /dashboard/entries/new` button above the table.
+
+### Entry editor (`src/db/cms_entries_admin.c`, `src/modules/entry_editor/`)
+
+`/dashboard/entries/<id>/edit` is an AJAX content editor for one `entries` document - meta
+(link/type/enabled/categories), header (image, date, per-language title/summary/author) and
+`content[]` blocks - with live preview and optional autosave. It's the editor counterpart to
+the read-only entries listing above, and to the-retro-center's epoch3 "trc-editor", adapted to
+boat-rudder's single-document `entries` schema (one collection, `$set`/`$push`/`$pull` on one
+document instead of a 5-table relational model).
+
+> See [entry-editor.md](entry-editor.md) for the full writeup, including diagrams of the
+> component layout, the `GET .../edit` render pipeline and the 5 AJAX endpoints.
+
+- `src/db/cms_entries_admin.c` (`CmsEntryEdit`/`CmsContentBlockEdit`, see
+  `cms_entries_admin.h`): `cms_get_entry_for_edit()` reads one `entries` document with **no**
+  `enabled` filter and **no** language fallback (`exact_lang_value()` per `langs[]` entry, "" if
+  a key is absent) - admins must be able to edit disabled entries and see exactly what's
+  stored. `cms_create_entry()` / `cms_delete_entry()` insert/delete the whole document.
+  `cms_update_entry_meta()` and `cms_update_entry_header()` each `$set` their fields in one
+  call (`header.date` parsed from `"YYYY-MM-DD"` into a BSON UTC datetime, the inverse of
+  `cms_entries.c`'s `resolve_header_fields()`). `content[]` blocks are edited individually:
+  `cms_add_entry_content_block()` (`$push`es an empty block, returns its new hex `_id`),
+  `cms_remove_entry_content_block()` (`$pull` by `_id`), and `cms_update_entry_content()`
+  (full-array `$set` replace, used for editing/reordering existing blocks - every block must
+  already have a valid `_id` from `cms_add_entry_content_block()`).
+- `src/modules/entry_editor/entry_editor.c`: `entry_editor_page()` renders
+  `dashboard/entries/editor/container_epoch<N>.html` - a meta sidebar
+  (`meta_epoch<N>.html` + `category-option_epoch<N>.html` per category, multi-select), a header
+  sidebar (`header_epoch<N>.html` + one `header-lang-tab_epoch<N>.html` per
+  `cms_get_languages()` entry), and the blocks section (below), plus a JSON array of language
+  codes (`["en","es",...]`) injected into `data-langs` for the inline editor script.
+  `lang-tab-button_epoch<N>.html` renders one language-switcher button per language, shared by
+  the header sidebar and every content block.
+- `src/modules/entry_editor/entry_editor_blocks.c`: `entry_editor_render_block()` renders one
+  `content[]` block's edit form - move-up/down/remove buttons, one
+  `blocks/lang-field_epoch<N>.html` per language (the block's `text.<lang>`), a type-specific
+  `extra_data` field for `image` ("Caption / alt text") and `byline` ("Date"), and an empty
+  preview `<div>` filled client-side. Loads `blocks/<type>_epoch<N>.html` (`tittle`,
+  `paragraph`, `image`, `byline` - the same 4 types `entry_page.c`'s `render_block()` renders
+  publicly; unknown types render `""`, mirroring that function). `entry_editor_render_blocks()`
+  renders every block and wraps them in `blocks_epoch<N>.html`, which also holds the
+  "+ Add block" dropdown (one button per supported type) and the "Save all"/autosave controls.
+- **Editor JS** (inline `<script>` in `container_epoch3.html`, no external `.js` file, following
+  the convention in `container/container_epoch3.html` / `menu/menu_epoch3.html`): language tabs
+  toggle every `.boat-rudder__entry-editor__lang-panel[data-lang="<code>"]` element (header
+  sidebar + each block) via `setLang()`. `saveMeta()`/`saveHeader()`/`saveContent()` each `POST`
+  one of the `/dashboard/api/entries/<id>/...` endpoints below as
+  `application/x-www-form-urlencoded`; `editorSaveAll()` runs all three. Editing any field marks
+  the page dirty; an "Autosave" checkbox schedules `editorSaveAll()` 3s after the last edit.
+  `insertNewComponent(type)` / `removeComponent()` call the `/blocks` and
+  `/blocks/<block_id>/delete` endpoints and patch the DOM without a full reload.
+  `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
+  the next `saveContent()` (block `order` = DOM index at save time). `refreshBlockPreview()`
+  mirrors `entry_page.c`'s public renderers client-side (`tittle`->`<h2>`, `paragraph`->`<p>`,
+  `image`->`<figure><img><figcaption>`, `byline`->two `<span>`s), HTML-escaping field values for
+  the preview only (the saved/rendered HTML itself follows the project's no-escaping
+  convention, like every other admin form).
+- **Future work**: the other 8 the-retro-center block types (gallery, image-single,
+  image-paragraph, youtube-embed, code-text, list, table, link, separator, generic) and a media
+  library (`media`/`media_directories`, upload + gallery picker - currently
+  "proposed, not implemented" per `develop_docs/plans/cms-entry-model-plan.md`) are out of scope;
+  images are plain URL text inputs for now.
 
 ### Content language resolution (`src/db/cms_languages.c`, `src/db/language_catalog.c`)
 
@@ -663,6 +736,14 @@ Basic CRUD over `menu` (`MENU_COLLECTION`), already read (read-only, `enabled: t
 - `match_id_route(decoded_url, prefix, suffix, id_out, id_size)`: matches
   `"<prefix>/<id><suffix>"` (e.g. `/dashboard/categories/<id>/edit`,
   `/dashboard/languages/<code>/remove`), extracting `<id>` into `id_out`.
+- `match_block_delete_route(decoded_url, entry_id_out, entry_id_size, block_id_out,
+  block_id_size)`: one-off two-id matcher for
+  `/dashboard/api/entries/<entry_id>/blocks/<block_id>/delete` (the only route with two id
+  segments, so not folded into `match_id_route()`).
+- `parse_urlencoded_multi(body, body_length, key, out_values, max_count)`: like
+  `parse_urlencoded_field()`, but collects every value for `key` (used for the entries meta
+  form's `categories` multi-select, where each selected option shares `name="categories"`).
+  Each returned `out_values[i]` is malloc'd; the caller frees them.
 
 ---
 

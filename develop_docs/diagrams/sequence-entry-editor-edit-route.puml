@@ -1,0 +1,85 @@
+@startuml sequence-entry-editor-edit-route
+
+title Boat Rudder - "GET /dashboard/entries/<id>/edit" Route
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipant underline
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Client
+participant "http_router" as ROUTER
+participant "require_dashboard_session" as SESSION
+participant "cms_languages" as LANG
+participant "cms_entries_admin" as ADMIN
+participant "cms_categories" as CAT
+participant "entry_editor\n(entry_editor_page)" as EDITOR
+participant "entry_editor_blocks" as BLOCKS
+participant "orchestrator\n(buildPageWebSite)" as ORCH
+
+Client -> ROUTER : GET /dashboard/entries/<id>/edit
+ROUTER -> ROUTER : epoch = resolve_epoch(req)
+
+alt epoch != EPOCH_MODERN
+  ROUTER -> Client : 302 /dashboard
+
+else epoch == EPOCH_MODERN
+  ROUTER -> SESSION : require_dashboard_session(ctx, req, epoch)
+
+  alt mongodb not ready
+    SESSION -> Client : 503 Service Unavailable
+  else no/invalid session cookie
+    SESSION -> Client : 302 /login
+  else valid session
+    SESSION --> ROUTER : 1, user_id
+
+    ROUTER -> LANG : cms_get_languages()
+    LANG --> ROUTER : CmsLanguageItem[] langs
+
+    ROUTER -> ADMIN : cms_get_entry_for_edit(id, langs)
+
+    alt invalid id / not found
+      ADMIN --> ROUTER : 0
+      ROUTER -> Client : 404 Not Found
+    else found
+      ADMIN --> ROUTER : 1, CmsEntryEdit entry
+
+      ROUTER -> CAT : cms_get_categories(content_lang)
+      CAT --> ROUTER : CmsCategoryItem[] categories
+
+      ROUTER -> EDITOR : entry_editor_page(epoch, &entry,\ncategories, langs)
+      activate EDITOR
+
+      EDITOR -> EDITOR : render_meta_sidebar()\n(link/type/enabled +\ncategories <select multiple>)
+      EDITOR -> EDITOR : render_lang_tab_buttons()
+      EDITOR -> EDITOR : render_header_sidebar()\n(image_url/date +\none lang-panel per language)
+
+      EDITOR -> BLOCKS : entry_editor_render_blocks(&entry, langs, epoch)
+      activate BLOCKS
+      loop for each entry.content[i]
+        BLOCKS -> BLOCKS : entry_editor_render_block(&content[i], langs, epoch)
+      end
+      BLOCKS --> EDITOR : blocks_html\n(+ "Add block" dropdown)
+      deactivate BLOCKS
+
+      EDITOR -> EDITOR : render_template(container_epoch3.html,\nentry_id, langs_json, lang_tabs,\nmeta_html, header_html, blocks_html)
+      EDITOR --> ROUTER : content (full editor fragment + <script>)
+      deactivate EDITOR
+
+      ROUTER -> ORCH : buildPageWebSite(epoch, "Boat Rudder - Dashboard", content)
+      ORCH --> ROUTER : body
+      ROUTER -> Client : 200 OK\nfull editor page
+
+      ROUTER -> ROUTER : cms_categories_free()\ncms_entry_edit_free()\ncms_languages_free()
+    end
+  end
+end
+
+@enduml

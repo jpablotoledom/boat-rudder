@@ -121,3 +121,37 @@ char *build_redirect_response(const char *location, const char *extra_headers, i
 
     return response;
 }
+
+char *build_json_response_status(const char *json_body, const char *status_line) {
+    size_t body_len = strlen(json_body);
+
+    int header_len = snprintf(NULL, 0,
+        "HTTP/1.1 %s\r\n"
+        "Content-Type: application/json; charset=UTF-8\r\n"
+        "Content-Length: %zu\r\n"
+        SECURITY_HEADERS
+        "Connection: close\r\n"
+        "\r\n",
+        status_line, body_len);
+    if (header_len < 0) return NULL;
+
+    char *response = malloc((size_t)header_len + body_len + 1);
+    if (!response) return NULL;
+
+    snprintf(response, (size_t)header_len + 1,
+        "HTTP/1.1 %s\r\n"
+        "Content-Type: application/json; charset=UTF-8\r\n"
+        "Content-Length: %zu\r\n"
+        SECURITY_HEADERS
+        "Connection: close\r\n"
+        "\r\n",
+        status_line, body_len);
+
+    memcpy(response + header_len, json_body, body_len + 1);
+
+    return response;
+}
+
+char *build_json_response(const char *json_body) {
+    return build_json_response_status(json_body, "200 OK");
+}

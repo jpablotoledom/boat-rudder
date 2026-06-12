@@ -9,6 +9,7 @@
 #include "../db/auth.h"
 #include "../db/cms_categories.h"
 #include "../db/cms_entries.h"
+#include "../db/cms_entries_admin.h"
 #include "../db/cms_languages.h"
 #include "../db/cms_menu.h"
 #include "../db/mongodb_manager.h"
@@ -17,6 +18,8 @@
 #include "../modules/blog_list/blog_list.h"
 #include "../modules/categories_admin/categories_admin.h"
 #include "../modules/dashboard/dashboard.h"
+#include "../modules/entry_editor/entry_editor.h"
+#include "../modules/entry_editor/entry_editor_blocks.h"
 #include "../modules/entry_page/entry_page.h"
 #include "../modules/error/error.h"
 #include "../modules/languages_admin/languages_admin.h"
@@ -25,8 +28,10 @@
 #include "../utils/build_epoch_response.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
+#include "../utils/json_utils.h"
 #include "../utils/log.h"
 #include "../utils/http_utils.h"
+#include "../utils/template_utils.h"
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -193,6 +198,41 @@ static int match_id_route(const char *decoded_url, const char *prefix,
     return 1;
 }
 
+// Matches "/dashboard/api/entries/<entry_id>/blocks/<block_id>/delete". On
+// match, copies both ids (truncated to their buffer sizes) and returns 1; 0
+// on no match (out buffers untouched).
+static int match_block_delete_route(const char *decoded_url, char *entry_id_out,
+                                     size_t entry_id_size, char *block_id_out,
+                                     size_t block_id_size) {
+    static const char prefix[] = "/dashboard/api/entries/";
+    static const char mid[]    = "/blocks/";
+    static const char suffix[] = "/delete";
+
+    size_t prefix_len = sizeof(prefix) - 1;
+    if (strncmp(decoded_url, prefix, prefix_len) != 0) return 0;
+
+    const char *entry_start = decoded_url + prefix_len;
+    const char *mid_start = strstr(entry_start, mid);
+    if (!mid_start) return 0;
+
+    const char *block_start = mid_start + (sizeof(mid) - 1);
+    size_t block_len = strlen(block_start);
+    size_t suffix_len = sizeof(suffix) - 1;
+    if (block_len <= suffix_len || strcmp(block_start + (block_len - suffix_len), suffix) != 0)
+        return 0;
+    block_len -= suffix_len;
+
+    size_t entry_len = (size_t)(mid_start - entry_start);
+    if (entry_len == 0 || entry_len >= entry_id_size) return 0;
+    if (block_len == 0 || block_len >= block_id_size) return 0;
+
+    memcpy(entry_id_out, entry_start, entry_len);
+    entry_id_out[entry_len] = '\0';
+    memcpy(block_id_out, block_start, block_len);
+    block_id_out[block_len] = '\0';
+    return 1;
+}
+
 // Extracts the url-decoded value of `key` from an
 // "application/x-www-form-urlencoded" body into `out` (NUL-terminated,
 // truncated to out_size - 1). Returns 1 if `key` was found, 0 otherwise
@@ -214,13 +254,13 @@ static int parse_urlencoded_field(const char *body, int body_length, const char 
         const char *field_end = amp ? amp : end;
 
         if ((size_t)(eq - p) == key_len && strncmp(p, key, key_len) == 0) {
-            char raw[256];
+            char raw[8192];
             size_t val_len = (size_t)(field_end - (eq + 1));
             if (val_len >= sizeof(raw)) val_len = sizeof(raw) - 1;
             memcpy(raw, eq + 1, val_len);
             raw[val_len] = '\0';
 
-            char decoded[256];
+            char decoded[8192];
             url_decode(decoded, raw);
             strncpy(out, decoded, out_size - 1);
             out[out_size - 1] = '\0';
@@ -230,6 +270,43 @@ static int parse_urlencoded_field(const char *body, int body_length, const char 
         p = amp ? amp + 1 : end;
     }
     return 0;
+}
+
+// Like parse_urlencoded_field(), but collects every value for `key` (not just
+// the first), e.g. repeated "categories=..." fields from a
+// <select multiple>. Each out_values[i] is malloc'd (caller must free).
+// Returns the number of values found, up to max_count.
+static size_t parse_urlencoded_multi(const char *body, int body_length, const char *key,
+                                      char **out_values, size_t max_count) {
+    size_t count = 0;
+    if (!body || body_length <= 0) return 0;
+
+    size_t key_len = strlen(key);
+    const char *p = body;
+    const char *end = body + body_length;
+
+    while (p < end && count < max_count) {
+        const char *eq = memchr(p, '=', (size_t)(end - p));
+        if (!eq) break;
+        const char *amp = memchr(p, '&', (size_t)(end - p));
+        const char *field_end = amp ? amp : end;
+
+        if ((size_t)(eq - p) == key_len && strncmp(p, key, key_len) == 0) {
+            char raw[8192];
+            size_t val_len = (size_t)(field_end - (eq + 1));
+            if (val_len >= sizeof(raw)) val_len = sizeof(raw) - 1;
+            memcpy(raw, eq + 1, val_len);
+            raw[val_len] = '\0';
+
+            char decoded[8192];
+            url_decode(decoded, raw);
+            out_values[count++] = strdup(decoded);
+        }
+
+        p = amp ? amp + 1 : end;
+    }
+
+    return count;
 }
 
 // Fills values[i] (caller-allocated, lang_count entries) with the url-decoded
@@ -404,6 +481,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         cms_resolve_default_lang(content_lang, sizeof(content_lang));
 
         char id[32];
+        char block_id[32];
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
             if (strcmp(decoded_url, "/") == 0) {
@@ -618,6 +696,41 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         }
 
                         cms_menu_name_values_free(values, lang_count);
+                        cms_languages_free(langs, lang_count);
+                    }
+                }
+
+            } else if (match_id_route(decoded_url, "/dashboard/entries", "/edit", id, sizeof(id))) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        CmsLanguageItem *langs = NULL;
+                        size_t lang_count = 0;
+                        cms_get_languages(&langs, &lang_count);
+
+                        CmsEntryEdit entry;
+                        if (cms_get_entry_for_edit(id, langs, lang_count, &entry)) {
+                            CmsCategoryItem *categories = NULL;
+                            size_t category_count = 0;
+                            cms_get_categories(content_lang, &categories, &category_count);
+
+                            char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count);
+                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                            free(body);
+                            send_or_error(ctx, response, req.method, epoch);
+
+                            cms_categories_free(categories, category_count);
+                        } else {
+                            send_error_response(ctx, 404, "404 Not Found", epoch);
+                        }
+
+                        cms_entry_edit_free(&entry, lang_count);
                         cms_languages_free(langs, lang_count);
                     }
                 }
@@ -848,6 +961,284 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     cms_delete_menu_item(id);
 
                     char *response = build_redirect_response("/dashboard/menu", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/entries/new") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char *new_id = cms_create_entry();
+                    char *response;
+                    if (new_id) {
+                        char location[64];
+                        snprintf(location, sizeof(location), "/dashboard/entries/%s/edit", new_id);
+                        response = build_redirect_response(location, "", epoch);
+                    } else {
+                        response = build_redirect_response("/dashboard", "", epoch);
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+                    free(new_id);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/entries", "/delete", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    cms_delete_entry(id);
+
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/api/entries", "/meta", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char link[256];
+                    char type[16];
+                    parse_urlencoded_field(req.body, req.body_length, "link", link, sizeof(link));
+                    if (!parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type)))
+                        strcpy(type, "page");
+
+                    char enabled_str[8];
+                    bool enabled = parse_urlencoded_field(req.body, req.body_length, "enabled",
+                                                           enabled_str, sizeof(enabled_str)) != 0;
+
+                    char *category_ids[CATEGORY_LIST_LIMIT];
+                    size_t category_count = parse_urlencoded_multi(req.body, req.body_length, "categories",
+                                                                     category_ids, CATEGORY_LIST_LIMIT);
+
+                    char *response;
+                    if (cms_update_entry_meta(id, link, type, enabled, category_ids, category_count) == 0) {
+                        response = build_json_response("{\"ok\":true}");
+                    } else {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+
+                    for (size_t i = 0; i < category_count; i++) free(category_ids[i]);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/api/entries", "/header", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
+
+                    char image_url[1024];
+                    char date[16];
+                    parse_urlencoded_field(req.body, req.body_length, "image_url", image_url, sizeof(image_url));
+                    parse_urlencoded_field(req.body, req.body_length, "date", date, sizeof(date));
+
+                    char **title_values   = calloc(lang_count, sizeof(char *));
+                    char **summary_values = calloc(lang_count, sizeof(char *));
+                    char **author_values  = calloc(lang_count, sizeof(char *));
+                    for (size_t i = 0; i < lang_count; i++) {
+                        char field[40], value[1024];
+
+                        snprintf(field, sizeof(field), "title_%s", langs[i].code);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        title_values[i] = strdup(value);
+
+                        snprintf(field, sizeof(field), "summary_%s", langs[i].code);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        summary_values[i] = strdup(value);
+
+                        snprintf(field, sizeof(field), "author_%s", langs[i].code);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        author_values[i] = strdup(value);
+                    }
+
+                    char *response;
+                    if (cms_update_entry_header(id, image_url, date, langs, lang_count,
+                                                 title_values, summary_values, author_values) == 0) {
+                        response = build_json_response("{\"ok\":true}");
+                    } else {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+
+                    for (size_t i = 0; i < lang_count; i++) {
+                        free(title_values[i]);
+                        free(summary_values[i]);
+                        free(author_values[i]);
+                    }
+                    free(title_values);
+                    free(summary_values);
+                    free(author_values);
+                    cms_languages_free(langs, lang_count);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/api/entries", "/content", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    CmsLanguageItem *langs = NULL;
+                    size_t lang_count = 0;
+                    cms_get_languages(&langs, &lang_count);
+
+                    char count_str[16];
+                    parse_urlencoded_field(req.body, req.body_length, "content_count", count_str, sizeof(count_str));
+                    int block_count = atoi(count_str);
+                    if (block_count < 0) block_count = 0;
+                    if (block_count > 200) block_count = 200;
+
+                    CmsContentBlockEdit *blocks = calloc((size_t)block_count, sizeof(CmsContentBlockEdit));
+                    for (int i = 0; i < block_count; i++) {
+                        char field[48], value[8192];
+
+                        snprintf(field, sizeof(field), "content_%d_id", i);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        blocks[i].id = strdup(value);
+
+                        snprintf(field, sizeof(field), "content_%d_type", i);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        blocks[i].type = strdup(value);
+
+                        snprintf(field, sizeof(field), "content_%d_order", i);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        blocks[i].order = atoi(value);
+
+                        snprintf(field, sizeof(field), "content_%d_extra_data", i);
+                        parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                        blocks[i].extra_data = strdup(value);
+
+                        blocks[i].text_values = calloc(lang_count, sizeof(char *));
+                        for (size_t j = 0; j < lang_count; j++) {
+                            snprintf(field, sizeof(field), "content_%d_text_%s", i, langs[j].code);
+                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
+                            blocks[i].text_values[j] = strdup(value);
+                        }
+                    }
+
+                    char *response;
+                    if (cms_update_entry_content(id, langs, lang_count, blocks, (size_t)block_count) == 0) {
+                        response = build_json_response("{\"ok\":true}");
+                    } else {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+
+                    for (int i = 0; i < block_count; i++) {
+                        free(blocks[i].id);
+                        free(blocks[i].type);
+                        free(blocks[i].extra_data);
+                        for (size_t j = 0; j < lang_count; j++) free(blocks[i].text_values[j]);
+                        free(blocks[i].text_values);
+                    }
+                    free(blocks);
+                    cms_languages_free(langs, lang_count);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_block_delete_route(decoded_url, id, sizeof(id), block_id, sizeof(block_id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char *response;
+                    if (cms_remove_entry_content_block(id, block_id) == 0) {
+                        response = build_json_response("{\"ok\":true}");
+                    } else {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"remove failed\"}", "400 Bad Request");
+                    }
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/api/entries", "/blocks", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char type[16];
+                    char order_str[16];
+                    parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
+                    parse_urlencoded_field(req.body, req.body_length, "order", order_str, sizeof(order_str));
+                    int order = atoi(order_str);
+
+                    char new_block_id[32];
+                    char *response = NULL;
+                    if (cms_add_entry_content_block(id, type, order, new_block_id, sizeof(new_block_id)) == 0) {
+                        CmsLanguageItem *langs = NULL;
+                        size_t lang_count = 0;
+                        cms_get_languages(&langs, &lang_count);
+
+                        CmsContentBlockEdit block = {0};
+                        block.id = new_block_id;
+                        block.type = type;
+                        block.order = order;
+                        block.extra_data = (char *)"";
+                        block.text_values = calloc(lang_count, sizeof(char *));
+                        for (size_t i = 0; i < lang_count; i++) block.text_values[i] = (char *)"";
+
+                        char *html = entry_editor_render_block(&block, langs, lang_count, epoch);
+                        free(block.text_values);
+                        cms_languages_free(langs, lang_count);
+
+                        char *html_json = html ? json_escape_alloc(html) : NULL;
+                        free(html);
+
+                        if (html_json) {
+                            char *json_body = render_template(
+                                "{\"ok\":true,\"block_id\":\"%s\",\"html\":\"%s\"}", new_block_id, html_json);
+                            response = json_body ? build_json_response(json_body) : NULL;
+                            free(json_body);
+                        }
+                        free(html_json);
+                    } else {
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"create failed\"}", "400 Bad Request");
+                    }
+
+                    if (!response)
+                        response = build_json_response_status("{\"ok\":false,\"error\":\"internal error\"}", "500 Internal Server Error");
                     send_or_error(ctx, response, req.method, epoch);
                 }
             }

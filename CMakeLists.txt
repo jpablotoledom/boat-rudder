@@ -52,6 +52,7 @@ set(SOURCES
     src/utils/generate_url_theme.c
     src/utils/template_utils.c
     src/utils/build_epoch_response.c
+    src/utils/json_utils.c
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
@@ -69,12 +70,15 @@ set(SOURCES
     src/modules/languages_admin/languages_admin.c
     src/modules/entries_admin/entries_admin.c
     src/modules/menu_admin/menu_admin.c
+    src/modules/entry_editor/entry_editor.c
+    src/modules/entry_editor/entry_editor_blocks.c
 
     # Database / auth / sessions
     src/db/mongodb_manager.c
     src/db/auth.c
     src/db/bson_lang.c
     src/db/cms_entries.c
+    src/db/cms_entries_admin.c
     src/db/cms_menu.c
     src/db/cms_categories.c
     src/db/cms_languages.c

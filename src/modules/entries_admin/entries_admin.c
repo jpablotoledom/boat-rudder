@@ -49,7 +49,7 @@ static char *render_row(const CmsBlogListItem *item, const char *row_tpl, int ep
     char *result = link_url
         ? render_template(row_tpl, item->header_image_url, link_url, item->header_title,
                            type_label(item->type), item->header_summary, item->header_author,
-                           item->header_date, categories)
+                           item->header_date, categories, item->id, item->id)
         : NULL;
 
     free(link_url);

@@ -62,6 +62,7 @@ void cms_entry_free(CmsEntry *entry);
 // One "entries" document, for blog/admin list views. Lighter than CmsEntry:
 // no content[] (not needed for a list view).
 typedef struct {
+    char *id;   // entries._id as 24-char hex, for /dashboard/entries/<id>/edit and /delete
     char *link; // entries.link, for building /page/<link> or /blog/<link>
     char *type; // "page" | "blog" | ...
 
@@ -87,8 +88,9 @@ typedef struct {
 // decorative and must never fail the page.
 void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count);
 
-// Looks up db.entries.find({enabled: true}).sort({"header.date": -1}).limit(ENTRIES_LIST_LIMIT),
-// resolving header.*, categories[] and type for each match (same lang convention as
+// Looks up db.entries.find({}).sort({"header.date": -1}).limit(ENTRIES_LIST_LIMIT) - no
+// `enabled` filter, so admins can find and edit disabled/draft entries too - resolving
+// header.*, categories[], type and id for each match (same lang convention as
 // cms_get_entry_by_link), for the /dashboard/entries listing. On success, *out points to a
 // malloc'd array of *out_count items (possibly 0) that must be passed to
 // cms_blog_list_free(). On a DB error or if mongodb is not ready, *out = NULL and

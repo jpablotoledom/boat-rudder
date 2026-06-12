@@ -12,6 +12,8 @@ illustrated with diagrams. For deeper detail see:
 
 - [reference/architecture.md](reference/architecture.md) - full component breakdown of the
   server.
+- [reference/entry-editor.md](reference/entry-editor.md) - the `/dashboard/entries/<id>/edit`
+  AJAX content editor, with component and sequence diagrams.
 - [reference/data-flow.md](reference/data-flow.md) - step-by-step data flow, including the
   dynamic `/` route.
 - [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts

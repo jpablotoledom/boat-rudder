@@ -265,6 +265,11 @@ void cms_entry_free(CmsEntry *entry) {
 static void populate_entry_list_item(const bson_t *doc, const char *lang, CmsBlogListItem *item) {
     bson_iter_t iter;
 
+    char id_str[25] = "";
+    if (bson_iter_init_find(&iter, doc, "_id") && BSON_ITER_HOLDS_OID(&iter))
+        bson_oid_to_string(bson_iter_oid(&iter), id_str);
+    item->id = strdup(id_str);
+
     item->link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
         ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
     item->type = (bson_iter_init_find(&iter, doc, "type") && BSON_ITER_HOLDS_UTF8(&iter))
@@ -324,7 +329,7 @@ void cms_get_admin_entries(const char *lang, CmsBlogListItem **out, size_t *out_
     mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
     if (!collection) return;
 
-    bson_t *query = BCON_NEW("enabled", BCON_BOOL(true));
+    bson_t *query = bson_new();
     bson_t *opts = BCON_NEW(
         "sort", "{", "header.date", BCON_INT32(-1), "}",
         "limit", BCON_INT64((int64_t)ENTRIES_LIST_LIMIT)
@@ -363,6 +368,7 @@ void cms_blog_list_free(CmsBlogListItem *items, size_t count) {
     if (!items) return;
 
     for (size_t i = 0; i < count; i++) {
+        free(items[i].id);
         free(items[i].link);
         free(items[i].type);
         free(items[i].header_image_url);

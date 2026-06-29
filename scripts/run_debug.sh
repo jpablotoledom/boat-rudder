@@ -4,8 +4,8 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
 BINARY="./bin/base-http-server"
-HTML_DIR="./bin/html"
-CONFIG="./bin/configs/settings.conf"
+HTML_DIR="./html"
+CONFIG="./configs/settings.conf"
 
 source ./scripts/show/divbar
 echo "Starting base-http-server in debug mode..."

@@ -21,6 +21,15 @@ h1, h2 {
   margin: 0 0 10px 0;
 }
 
+/*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
+/* FONTS */
+@font-face {
+  font-family: 'Milonga';
+  src: url('/assets/fonts/Milonga-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 /* MAIN CONTAINER */
 .boat-rudder__main-container {
   width: 100%;
@@ -54,7 +63,7 @@ h1, h2 {
 }
 
 .boat-rudder__navbar__title {
-  font-family: Georgia, serif;
+  font-family: Milonga, Georgia, serif;;
   transition: all 1s;
   padding: 20px;
   font-size: 28px;
@@ -71,9 +80,8 @@ h1, h2 {
   position: absolute;
   color: #ffffff;
   font-size: 6vw;
-  transform: rotate(-15deg);
   z-index: 2;
-  width: 33vw;
+  width: 37vw;
   margin-left: -16vw;
   margin-top: 11vw;
   transition: all 1s;

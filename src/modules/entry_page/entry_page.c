@@ -97,17 +97,8 @@ static char *render_block(const CmsContentBlock *block, int epoch) {
     return strdup("");
 }
 
-char *entry_page(const CmsEntry *entry, int epoch) {
-    char *result = render_header(entry, epoch);
-    if (!result) return NULL;
-
-    char *categories_html = render_categories(entry, epoch);
-    if (!categories_html) {
-        free(result);
-        return NULL;
-    }
-    result = str_append(result, categories_html);
-    free(categories_html);
+char *entry_page_render_content(const CmsEntry *entry, int epoch) {
+    char *result = strdup("");
     if (!result) return NULL;
 
     for (size_t i = 0; i < entry->content_count; i++) {
@@ -121,6 +112,30 @@ char *entry_page(const CmsEntry *entry, int epoch) {
         free(block_html);
         if (!result) return NULL;
     }
+
+    return result;
+}
+
+char *entry_page(const CmsEntry *entry, int epoch) {
+    char *result = render_header(entry, epoch);
+    if (!result) return NULL;
+
+    char *categories_html = render_categories(entry, epoch);
+    if (!categories_html) {
+        free(result);
+        return NULL;
+    }
+    result = str_append(result, categories_html);
+    free(categories_html);
+    if (!result) return NULL;
+
+    char *content_html = entry_page_render_content(entry, epoch);
+    if (!content_html) {
+        free(result);
+        return NULL;
+    }
+    result = str_append(result, content_html);
+    free(content_html);
 
     return result;
 }

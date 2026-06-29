@@ -12,4 +12,12 @@
 // support yet.
 char *entry_page(const CmsEntry *entry, int epoch);
 
+// Renders only entry->content[] (in order), without the header or
+// categories. Used by home_content to render the "/" entry's body inside
+// the home-content wrapper template.
+//
+// Returns a malloc'd string (possibly empty if content_count == 0), or
+// NULL on failure.
+char *entry_page_render_content(const CmsEntry *entry, int epoch);
+
 #endif // ENTRY_PAGE_H

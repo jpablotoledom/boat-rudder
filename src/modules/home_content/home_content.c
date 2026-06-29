@@ -1,4 +1,6 @@
 #include "home_content.h"
+#include "../entry_page/entry_page.h"
+#include "../../db/cms_entries.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
@@ -11,7 +13,6 @@ typedef struct {
     const char *text;
 } update_item_t;
 
-// MVP: static "updates" list, no database/CMS backing yet.
 static const update_item_t UPDATES[] = {
     {"Boat Rudder is online", "2026",
      "A retro-compatible site that serves the right HTML for every browser, "
@@ -26,39 +27,42 @@ static const update_item_t UPDATES[] = {
 
 #define UPDATE_COUNT (sizeof(UPDATES) / sizeof(UPDATES[0]))
 
-char *home_content(int epoch, const char *lang) {
-    (void)lang;
-
-    char *item_path    = generate_url_theme("home-content/home-content-item_epoch%d.html", epoch);
-    char *content_path = generate_url_theme("home-content/home-content_epoch%d.html", epoch);
-
-    char *item_tpl    = item_path    ? read_file_to_string(item_path)    : NULL;
-    char *content_tpl = content_path ? read_file_to_string(content_path) : NULL;
-
+static char *render_static_items(int epoch) {
+    char *item_path = generate_url_theme("home-content/home-content-item_epoch%d.html", epoch);
+    char *item_tpl  = item_path ? read_file_to_string(item_path) : NULL;
     free(item_path);
-    free(content_path);
+    if (!item_tpl) return NULL;
 
-    char *items  = NULL;
-    char *result = NULL;
-
-    if (!item_tpl || !content_tpl) goto cleanup;
-
-    items = strdup("");
-    if (!items) goto cleanup;
-
-    for (size_t i = 0; i < UPDATE_COUNT; i++) {
+    char *items = strdup("");
+    for (size_t i = 0; items && i < UPDATE_COUNT; i++) {
         char *item = render_template(item_tpl, UPDATES[i].title, UPDATES[i].date, UPDATES[i].text);
-        if (!item) goto cleanup;
-
-        items = str_append(items, item);
+        items = item ? str_append(items, item) : NULL;
         free(item);
-        if (!items) goto cleanup;
     }
 
-    result = render_template(content_tpl, items);
-
-cleanup:
     free(item_tpl);
+    return items;
+}
+
+char *home_content(int epoch, const char *lang) {
+    char *content_path = generate_url_theme("home-content/home-content_epoch%d.html", epoch);
+    char *content_tpl  = content_path ? read_file_to_string(content_path) : NULL;
+    free(content_path);
+    if (!content_tpl) return NULL;
+
+    char *items = NULL;
+
+    CmsEntry entry;
+    if (cms_get_entry_by_link("/", lang, &entry)) {
+        items = entry_page_render_content(&entry, epoch);
+        cms_entry_free(&entry);
+    }
+
+    if (!items)
+        items = render_static_items(epoch);
+
+    char *result = items ? render_template(content_tpl, items) : NULL;
+
     free(content_tpl);
     free(items);
     return result;

@@ -67,8 +67,7 @@ h1, h2 {
   transition: all 1s;
   padding: 20px;
   font-size: 28px;
-  word-break: break-all;
-  width: 255px;
+  width: max-content;
   margin-right: 300px;
 }
 
@@ -81,9 +80,7 @@ h1, h2 {
   color: #ffffff;
   font-size: 6vw;
   z-index: 2;
-  width: 37vw;
-  margin-left: -16vw;
-  margin-top: 11vw;
+  margin: 13vh auto;
   transition: all 1s;
   text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
 }
@@ -331,18 +328,13 @@ h1, h2 {
 
 /* HOME CONTENT */
 .boat-rudder__home-content {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  background-image: url('/themes/dark/assets/home-content/bg_epoch3.png');
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+  background-color: #00000080;
+  position: relative;
 }
 
 .boat-rudder__home-content__container {
   width: 80%;
+  margin: 0 auto;
   max-width: 980px;
   padding: 20px;
 }
@@ -368,8 +360,14 @@ h1, h2 {
 .boat-rudder__home-blog {
   width: 100%;
   display: flex;
+  /* background-image: url('/themes/dark/assets/home-blog/matrix-grid_epoch3.gif'); */
+  background-image: url('/themes/dark/assets/home-content/matrix-grid_epoch3.gif');
+  background-repeat: repeat-y;
+  background-size: contain;
+  display: flex;
   justify-content: center;
-  background-color: #000000;
+  background-attachment: fixed;
+  background-position: center;
 }
 
 .boat-rudder__home-blog__container {
@@ -467,26 +465,27 @@ h1, h2 {
 /* FOOTER */
 .boat-rudder__footer {
   width: 100%;
-  background-image: url('/themes/dark/assets/footer/footer_epoch3.jpg');
+  height: 280px;
+  background-image: url('/themes/dark/assets/footer/purple-grid_epoch3.jpg');
+  background-repeat: no-repeat;
   background-size: cover;
-  background-position: center;
   display: flex;
-  align-items: flex-end;
+  align-items: end;
+  background-position: center;
 }
 
 .boat-rudder__footer-title {
   background-color: rgba(0, 0, 0, 0.77);
   padding: 10px;
   width: 100%;
-  font-size: 24px;
-  text-align: center;
-  box-sizing: border-box;
+  font-family: Milonga;
+  font-size: 25px;
 }
 
 @media (max-width: 1200px) {
   .boat-rudder__navbar__title_onslidelogo {
-    margin-left: -8vw;
-    margin-top: 13vw;
+    /* margin: 12vh auto; */
+    font-size: 5vw;
   }
 }
 
@@ -496,11 +495,8 @@ h1, h2 {
   }
 
   .boat-rudder__navbar__title_onslidelogo {
-    font-size: 36px;
-    word-break: break-all;
-    width: 184px;
-    margin-top: 17%;
-    margin-left: -43%;
+    font-size: 6vw;
+    margin: 10vh auto;
   }
 
   .boat-rudder__navbar__content {
@@ -546,10 +542,8 @@ h1, h2 {
   }
 
   .boat-rudder__navbar__title_onslidelogo {
-    margin-top: 22%;
-    font-size: 24px;
-    width: 132px;
-    margin-left: -43%;
+    font-size: 13vw;
+    margin: 20vh auto;
   }
 }
 

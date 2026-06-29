@@ -27,7 +27,8 @@
 
   if (isHome) {
     const updateScroll = () => {
-      if (window.scrollY > 100) {
+      const threshold = window.innerWidth < 500 ? 20 : 100;
+      if (window.scrollY > threshold) {
         navbarTitle.classList.remove('boat-rudder__navbar__title_onslidelogo');
         navbarMenu.classList.remove('boat-rudder__navbar__menu_onslidelogo');
       } else {

@@ -73,6 +73,10 @@ set(SOURCES
     src/modules/users_admin/users_admin.c
     src/modules/entry_editor/entry_editor.c
     src/modules/entry_editor/entry_editor_blocks.c
+    src/modules/media_admin/media_admin.c
+
+    # Web server utilities (multipart)
+    src/web_server/utils/multipart_parser.c
 
     # Database / auth / sessions
     src/db/mongodb_manager.c
@@ -84,6 +88,7 @@ set(SOURCES
     src/db/cms_categories.c
     src/db/cms_languages.c
     src/db/cms_users_admin.c
+    src/db/cms_media.c
     src/db/language_catalog.c
     src/db/session_manager.c
 )

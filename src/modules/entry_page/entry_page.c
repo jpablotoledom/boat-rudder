@@ -12,19 +12,6 @@ static char *load_template(const char *subpath_fmt, int epoch) {
     return tpl;
 }
 
-static char *render_header(const CmsEntry *entry, int epoch) {
-    char *tpl = load_template("entry/entry-header_epoch%d.html", epoch);
-    if (!tpl) return NULL;
-
-    char *result = (epoch >= 1)
-        ? render_template(tpl, entry->header_image_url, entry->header_title,
-                           entry->header_summary, entry->header_author, entry->header_date)
-        : render_template(tpl, entry->header_title, entry->header_summary,
-                           entry->header_author, entry->header_date);
-    free(tpl);
-    return result;
-}
-
 static char *render_tittle(const CmsContentBlock *block, int epoch) {
     char *tpl = load_template("elements/tittle/tittle_epoch%d.html", epoch);
     if (!tpl) return NULL;
@@ -117,25 +104,16 @@ char *entry_page_render_content(const CmsEntry *entry, int epoch) {
 }
 
 char *entry_page(const CmsEntry *entry, int epoch) {
-    char *result = render_header(entry, epoch);
-    if (!result) return NULL;
-
     char *categories_html = render_categories(entry, epoch);
-    if (!categories_html) {
-        free(result);
-        return NULL;
-    }
-    result = str_append(result, categories_html);
-    free(categories_html);
-    if (!result) return NULL;
+    if (!categories_html) return NULL;
 
     char *content_html = entry_page_render_content(entry, epoch);
     if (!content_html) {
-        free(result);
+        free(categories_html);
         return NULL;
     }
-    result = str_append(result, content_html);
-    free(content_html);
 
+    char *result = str_append(categories_html, content_html);
+    free(content_html);
     return result;
 }

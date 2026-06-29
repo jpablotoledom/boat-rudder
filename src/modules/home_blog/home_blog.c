@@ -40,11 +40,13 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
     char *result;
     if (epoch >= 1) {
         char *link_url = render_template("/blog/%s", item->link);
-        result = link_url
-            ? render_template(item_tpl, item->header_image_url, link_url, item->header_title,
+        char *thumb = image_url_variant(item->header_image_url, "_small");
+        result = (link_url && thumb)
+            ? render_template(item_tpl, thumb, link_url, item->header_title,
                                item->header_summary, item->header_author, categories_html,
                                item->header_date)
             : NULL;
+        free(thumb);
         free(link_url);
     } else {
         result = render_template(item_tpl, item->header_title, item->header_date,

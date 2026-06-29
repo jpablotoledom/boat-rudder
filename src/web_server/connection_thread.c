@@ -43,7 +43,7 @@ void *connection_thread(void *arg) {
     setsockopt(conn->client_socket, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
 #endif
 
-    struct timeval timeout = {5, 0};
+    struct timeval timeout = {30, 0};
     setsockopt(conn->client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(conn->client_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 

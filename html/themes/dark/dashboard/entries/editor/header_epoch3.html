@@ -1,17 +1,21 @@
-    <div class="boat-rudder__entry-editor__sidebar" id="headerSidebar">
-      <h2>Post header</h2>
-      <div class="boat-rudder__dashboard__form-row">
-        <label for="headerImageUrl">Image URL</label>
-        <input class="boat-rudder__dashboard__input" type="text" id="headerImageUrl" name="image_url" value="%s" oninput="setContentChanged()">
+    <div class="trc-meta-section" id="headerSidebar">
+      <div class="trc-meta-section__title">Post Header</div>
+
+      <div class="trc-meta-group">
+        <label>Cover image</label>
+        <div class="trc-img-preview" id="header-img-preview">
+          <span class="trc-img-preview__placeholder">No image</span>
+        </div>
+        <button class="trc-meta-btn" type="button" onclick="openGallery(['headerImageUrl'], '', 'header')">Select image</button>
+        <input name="image_url" id="headerImageUrl" type="text" value="%s" oninput="setContentChanged()" placeholder="Image URL" style="display:none">
       </div>
-      <div class="boat-rudder__dashboard__form-row">
+
+      <div class="trc-meta-group">
         <label for="headerDate">Date</label>
-        <input class="boat-rudder__dashboard__input" type="date" id="headerDate" name="date" value="%s" oninput="setContentChanged()">
+        <input name="date" id="headerDate" type="date" value="%s" oninput="setContentChanged()">
       </div>
+
       <div id="headerLangPanels">
 %s
-      </div>
-      <div class="boat-rudder__dashboard__button-container">
-        <button class="boat-rudder__dashboard__button" type="button" onclick="saveHeader()">Save header</button>
       </div>
     </div>

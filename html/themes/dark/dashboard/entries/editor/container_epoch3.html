@@ -1,29 +1,59 @@
-<section id="entryEditor" class="boat-rudder__dashboard boat-rudder__entry-editor" data-entry-id="%s" data-langs='%s'>
-  <div class="boat-rudder__entry-editor__topbar">
-    <h1>Edit entry</h1>
-    <div class="boat-rudder__entry-editor__lang-tabs">
-%s
+<article class="trc-editor" id="entryEditor" data-entry-id="%s" data-langs='%s'>
+
+  <!-- Fixed top bar -->
+  <div class="trc-editor__topbar">
+    <div class="trc-editor__topbar-left">
+      <a href="/dashboard" class="trc-editor__back">&#8592; Dashboard</a>
+      <button class="trc-editor__preview-btn" onclick="openBlogPreview()">&#128065; View post</button>
     </div>
-    <div class="boat-rudder__entry-editor__actions">
-      <label class="boat-rudder__entry-editor__checkbox-label">
-        <input type="checkbox" id="autoSaveToggle" onchange="toggleAutoSave()">
-        Autosave
-      </label>
-      <button class="boat-rudder__dashboard__button" type="button" onclick="editorSaveAll()">Save all</button>
-      <span id="editorStatus" class="boat-rudder__entry-editor__status"></span>
+    <div class="trc-editor__topbar-center">
+      <button class="trc-editor__save-btn" id="editor-save-btn" onclick="editorSaveAll()">Save all</button>
+      <span class="trc-editor__save-status" id="editor-save-status"></span>
+      <div class="trc-autosave-toggle" onclick="toggleAutoSave()" title="Toggle auto-save">
+        <span class="trc-autosave-toggle__label" id="autosave-label">Manual</span>
+        <div class="trc-autosave-toggle__switch" id="autosave-switch">
+          <div class="trc-autosave-toggle__knob"></div>
+        </div>
+      </div>
+    </div>
+    <div class="trc-editor__topbar-right">
+      <div class="trc-publish-toggle" onclick="togglePublish()">
+        <span class="trc-publish-toggle__status" id="publish-status-label">Draft</span>
+        <div class="trc-publish-toggle__switch" id="publish-switch">
+          <div class="trc-publish-toggle__knob"></div>
+        </div>
+      </div>
+      <div class="trc-lang-toggle">
+%s
+      </div>
     </div>
   </div>
 
-  <div class="boat-rudder__entry-editor__layout">
-    <div class="boat-rudder__entry-editor__sidebars">
-%s
-%s
-    </div>
-%s
+  <!-- Block type toolbar -->
+  <div class="trc-block-toolbar">
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('tittle')">&sect; Title</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('image')">&square; Image</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('byline')">&#9998; Byline</button>
   </div>
 
-  <p><a href="/dashboard">Back to dashboard</a></p>
-</section>
+  <!-- Two-column body -->
+  <div class="trc-editor__body">
+    <!-- Left sidebar -->
+    <div class="trc-editor__sidebar">
+      <div class="trc-editor__sidebar-inner">
+%s
+        <hr class="trc-sidebar-divider">
+%s
+      </div>
+    </div>
+    <!-- Right: content blocks -->
+    <div class="trc-editor__main">
+%s
+    </div>
+  </div>
+</article>
+<div id="modalContainer"></div>
 
 <script>
 (function () {
@@ -34,6 +64,9 @@
   var autoSaveTimer = null;
   var autoSaveEnabled = false;
   var dirty = false;
+  var activeEditBlock = null;
+
+  document.body.classList.add('trc-editor-mode');
 
   function apiUrl(suffix) {
     return '/dashboard/api/entries/' + entryId + suffix;
@@ -48,8 +81,10 @@
     }).then(function (res) { return res.json(); });
   }
 
-  function setStatus(text) {
-    document.getElementById('editorStatus').textContent = text;
+  function setStatus(text, cls) {
+    var el = document.getElementById('editor-save-status');
+    el.textContent = text;
+    el.className = 'trc-editor__save-status' + (cls ? ' ' + cls : '');
   }
 
   function escapeHtml(text) {
@@ -61,58 +96,316 @@
       .replace(/'/g, '&#39;');
   }
 
-  function applyLangVisibility(scopeEl) {
-    var panels = scopeEl.querySelectorAll('.boat-rudder__entry-editor__lang-panel');
-    for (var i = 0; i < panels.length; i++) {
-      panels[i].style.display = panels[i].dataset.lang === currentLang ? '' : 'none';
-    }
-  }
-
-  function refreshBlockPreview(blockEl) {
-    var type = blockEl.dataset.type;
-    var preview = blockEl.querySelector('.boat-rudder__entry-editor__block-preview');
-    if (!preview) return;
-
-    var panel = blockEl.querySelector('.boat-rudder__entry-editor__lang-panel[data-lang="' + currentLang + '"]');
-    var textField = panel ? panel.querySelector('[name="text"]') : null;
-    var text = textField ? textField.value : '';
-    var extraField = blockEl.querySelector('[name="extra_data"]');
-    var extra = extraField ? extraField.value : '';
-
-    if (type === 'tittle') {
-      preview.innerHTML = '<h2>' + escapeHtml(text) + '</h2>';
-    } else if (type === 'paragraph') {
-      preview.innerHTML = '<p>' + escapeHtml(text) + '</p>';
-    } else if (type === 'image') {
-      preview.innerHTML = '<figure><img src="' + escapeHtml(text) + '" alt="' + escapeHtml(extra) + '"><figcaption>' + escapeHtml(extra) + '</figcaption></figure>';
-    } else if (type === 'byline') {
-      preview.innerHTML = '<span>' + escapeHtml(text) + '</span> <span>' + escapeHtml(extra) + '</span>';
+  /* ---- Publish toggle ---- */
+  function initPublishToggle() {
+    var cb = document.querySelector('#metaSidebar [name="enabled"]');
+    if (!cb) return;
+    var sw = document.getElementById('publish-switch');
+    var label = document.getElementById('publish-status-label');
+    if (cb.checked) {
+      sw.classList.add('on');
+      label.textContent = 'Published';
+      label.classList.add('published');
     } else {
-      preview.innerHTML = '';
+      sw.classList.remove('on');
+      label.textContent = 'Draft';
+      label.classList.remove('published');
     }
   }
 
-  function refreshAllPreviews() {
-    var blocks = document.querySelectorAll('.boat-rudder__entry-editor__block');
-    for (var i = 0; i < blocks.length; i++) refreshBlockPreview(blocks[i]);
+  window.togglePublish = function () {
+    var cb = document.querySelector('#metaSidebar [name="enabled"]');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    initPublishToggle();
+    setContentChanged();
+  };
+
+  /* ---- Autosave toggle ---- */
+  window.toggleAutoSave = function () {
+    autoSaveEnabled = !autoSaveEnabled;
+    var sw = document.getElementById('autosave-switch');
+    var label = document.getElementById('autosave-label');
+    if (autoSaveEnabled) {
+      sw.classList.add('on');
+      label.textContent = 'Auto';
+      label.classList.add('on');
+    } else {
+      sw.classList.remove('on');
+      label.textContent = 'Manual';
+      label.classList.remove('on');
+    }
+    if (autoSaveEnabled && dirty) editorScheduleAutoSave();
+  };
+
+  /* ---- Language switching ---- */
+  function applyLangVisibility(scopeEl) {
+    var panels = scopeEl.querySelectorAll('.trc-block__lang-content');
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].classList.toggle('active', panels[i].dataset.lang === currentLang);
+    }
   }
 
   window.setLang = function (code) {
     currentLang = code;
-
-    var tabs = document.querySelectorAll('.boat-rudder__entry-editor__lang-tab');
+    var tabs = root.querySelectorAll('.trc-lang-btn');
     for (var i = 0; i < tabs.length; i++) {
-      if (tabs[i].dataset.lang === code) {
-        tabs[i].classList.add('boat-rudder__entry-editor__lang-tab_active');
-      } else {
-        tabs[i].classList.remove('boat-rudder__entry-editor__lang-tab_active');
-      }
+      tabs[i].classList.toggle('active', tabs[i].dataset.lang === code);
     }
-
     applyLangVisibility(document);
     refreshAllPreviews();
   };
 
+  /* ---- Block preview/edit ---- */
+  window.activateBlock = function (el) {
+    if (!el) return;
+    var block = el.closest ? el.closest('.trc-block') : el;
+    if (!block || block.classList.contains('trc-block--editing')) return;
+    if (activeEditBlock && activeEditBlock !== block) {
+      deactivateBlock(activeEditBlock);
+    }
+    block.classList.add('trc-block--editing');
+    activeEditBlock = block;
+    initBlockEditors(block);
+  };
+
+  window.deactivateBlock = function (el) {
+    if (!el) return;
+    var block = el.closest ? el.closest('.trc-block') : el;
+    if (!block) return;
+    block.classList.remove('trc-block--editing');
+    if (activeEditBlock === block) activeEditBlock = null;
+    refreshBlockPreview(block);
+  };
+
+  function initBlockEditors(block) {
+    var type = block.dataset.type;
+    if (type === 'paragraph') initParagraphEditors(block);
+    if (type === 'tittle') initBlockHeadingBtns(block);
+    applyLangVisibility(block);
+  }
+
+  /* ---- Block preview rendering ---- */
+  window.refreshBlockPreview = function (blockEl) {
+    if (!blockEl) return;
+    var type = blockEl.dataset.type;
+    var preview = blockEl.querySelector('.trc-block__preview');
+    if (!preview) return;
+
+    var panel = blockEl.querySelector('.trc-block__lang-content[data-lang="' + currentLang + '"]');
+    var textField = panel ? (panel.querySelector('.trc-richtext') || panel.querySelector('[name="text"]')) : null;
+    var text = '';
+    if (textField) {
+      text = textField.classList && textField.classList.contains('trc-richtext')
+        ? textField.innerHTML
+        : textField.value;
+    }
+    var extraField = blockEl.querySelector('[name="extra_data"]');
+    var extra = extraField ? extraField.value : '';
+
+    if (type === 'tittle') {
+      var level = parseInt(extra) || 2;
+      preview.innerHTML = '<h' + level + ' class="trc-preview__tittle">' + escapeHtml(text) + '</h' + level + '>';
+    } else if (type === 'paragraph') {
+      preview.innerHTML = '<div class="trc-preview__paragraph">' + (text || '<span class="trc-preview__empty">Empty paragraph</span>') + '</div>';
+    } else if (type === 'image') {
+      if (text) {
+        preview.innerHTML = '<figure class="trc-preview__image"><img src="' + escapeHtml(text) + '" alt="' + escapeHtml(extra) + '"><figcaption>' + escapeHtml(extra) + '</figcaption></figure>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">No image URL</span>';
+      }
+    } else if (type === 'byline') {
+      preview.innerHTML = '<div class="trc-preview__byline"><span class="trc-preview__byline-author">' + escapeHtml(text) + '</span><span class="trc-preview__byline-date">' + escapeHtml(extra) + '</span></div>';
+    } else {
+      preview.innerHTML = '<span class="trc-preview__empty">[' + escapeHtml(type) + ']</span>';
+    }
+  };
+
+  function refreshAllPreviews() {
+    var blocks = document.querySelectorAll('.trc-block');
+    for (var i = 0; i < blocks.length; i++) {
+      if (!blocks[i].classList.contains('trc-block--editing')) refreshBlockPreview(blocks[i]);
+    }
+  }
+
+  /* ---- Rich text (paragraph) ---- */
+  var _savedRichRange = null;
+  function saveRichSelection() {
+    var sel = window.getSelection();
+    _savedRichRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+  }
+  function restoreRichSelection() {
+    if (!_savedRichRange) return;
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(_savedRichRange);
+  }
+
+  window.applyRichLink = function () {
+    var url = prompt('URL:');
+    if (!url) return;
+    document.execCommand('createLink', false, url);
+  };
+
+  window.toggleSource = function (btn) {
+    var lc = btn.closest('.trc-block__lang-content');
+    if (!lc) return;
+    var richDiv = lc.querySelector('.trc-richtext');
+    var sourceTA = lc.querySelector('.trc-source-editor');
+    if (!richDiv || !sourceTA) return;
+    var isSource = btn.classList.contains('active');
+    if (isSource) {
+      richDiv.innerHTML = sourceTA.value;
+      syncRichtext(richDiv);
+      richDiv.style.display = '';
+      sourceTA.style.display = 'none';
+      btn.classList.remove('active');
+    } else {
+      sourceTA.value = richDiv.innerHTML;
+      richDiv.style.display = 'none';
+      sourceTA.style.display = '';
+      btn.classList.add('active');
+      if (!sourceTA.dataset.srcInit) {
+        sourceTA.dataset.srcInit = '1';
+        sourceTA.addEventListener('input', function () {
+          richDiv.innerHTML = sourceTA.value;
+          syncRichtext(richDiv);
+        });
+      }
+    }
+  };
+
+  function syncRichtext(div) {
+    var block = div.closest('.trc-block');
+    if (!block) return;
+    var lang = div.dataset.for;
+    var ta = block.querySelector('.trc-block__lang-content[data-lang="' + lang + '"] [name="text"]');
+    if (!ta) return;
+    ta.value = div.innerHTML;
+    setContentChanged();
+  }
+
+  function initParagraphEditors(block) {
+    block.querySelectorAll('.trc-block__lang-content').forEach(function (lc) {
+      if (lc.querySelector('.trc-richtext')) return;
+      var ta = lc.querySelector('[name="text"]');
+      if (!ta) return;
+      var lang = lc.dataset.lang;
+
+      var toolbarHtml =
+        '<div class="trc-toolbar">' +
+        '<button class="trc-toolbar__btn" title="Bold" onmousedown="event.preventDefault();document.execCommand(\'bold\')"><b>B</b></button>' +
+        '<button class="trc-toolbar__btn" title="Italic" onmousedown="event.preventDefault();document.execCommand(\'italic\')"><i>I</i></button>' +
+        '<button class="trc-toolbar__btn" title="Underline" onmousedown="event.preventDefault();document.execCommand(\'underline\')"><u>U</u></button>' +
+        '<button class="trc-toolbar__btn" title="Strikethrough" onmousedown="event.preventDefault();document.execCommand(\'strikeThrough\')"><s>S</s></button>' +
+        '<span class="trc-toolbar__sep"></span>' +
+        '<button class="trc-toolbar__btn" title="Link" onmousedown="event.preventDefault();applyRichLink()">&#128279;</button>' +
+        '<button class="trc-toolbar__btn" title="Remove format" onmousedown="event.preventDefault();document.execCommand(\'removeFormat\')">&#10005;</button>' +
+        '</div>' +
+        '<div class="trc-toolbar">' +
+        '<button class="trc-toolbar__btn" title="Align left" onmousedown="event.preventDefault();document.execCommand(\'justifyLeft\')">&#8592;&#9644;</button>' +
+        '<button class="trc-toolbar__btn" title="Align center" onmousedown="event.preventDefault();document.execCommand(\'justifyCenter\')">&#9644;&#9644;</button>' +
+        '<button class="trc-toolbar__btn" title="Align right" onmousedown="event.preventDefault();document.execCommand(\'justifyRight\')">&#9644;&#8594;</button>' +
+        '<span class="trc-toolbar__sep"></span>' +
+        '<button class="trc-toolbar__btn" title="Bullet list" onmousedown="event.preventDefault();document.execCommand(\'insertUnorderedList\')">&#8226;</button>' +
+        '<button class="trc-toolbar__btn" title="Numbered list" onmousedown="event.preventDefault();document.execCommand(\'insertOrderedList\')">1.</button>' +
+        '<span class="trc-toolbar__sep"></span>' +
+        '<button class="trc-toolbar__btn" title="Blockquote" onmousedown="event.preventDefault();document.execCommand(\'formatBlock\',false,\'blockquote\')">&#10077;</button>' +
+        '<button class="trc-toolbar__btn" title="Code block" onmousedown="event.preventDefault();document.execCommand(\'formatBlock\',false,\'pre\')">&lt;/&gt;</button>' +
+        '<span class="trc-toolbar__sep"></span>' +
+        '<button class="trc-toolbar__btn" title="Undo" onmousedown="event.preventDefault();document.execCommand(\'undo\')">&#8617;</button>' +
+        '<button class="trc-toolbar__btn" title="Redo" onmousedown="event.preventDefault();document.execCommand(\'redo\')">&#8618;</button>' +
+        '<span class="trc-toolbar__sep"></span>' +
+        '<button class="trc-toolbar__btn" title="HTML source" onclick="toggleSource(this)">HTML</button>' +
+        '</div>';
+
+      lc.insertAdjacentHTML('afterbegin', toolbarHtml);
+
+      var div = document.createElement('div');
+      div.className = 'trc-richtext';
+      div.contentEditable = 'true';
+      div.spellcheck = true;
+      div.dataset.for = lang;
+      div.innerHTML = ta.value;
+
+      ta.style.display = 'none';
+      lc.insertBefore(div, ta);
+
+      var sourceTA = document.createElement('textarea');
+      sourceTA.className = 'trc-source-editor';
+      sourceTA.style.display = 'none';
+      lc.insertBefore(sourceTA, ta);
+
+      div.addEventListener('input', function () { syncRichtext(div); });
+      div.addEventListener('mouseup', saveRichSelection);
+      div.addEventListener('keyup', saveRichSelection);
+      div.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var html = e.clipboardData.getData('text/html');
+        var text = e.clipboardData.getData('text/plain');
+        if (html) {
+          var tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          tmp.querySelectorAll('[style],[class]').forEach(function (el) {
+            el.removeAttribute('style');
+            el.removeAttribute('class');
+          });
+          document.execCommand('insertHTML', false, tmp.innerHTML);
+        } else {
+          document.execCommand('insertText', false, text);
+        }
+      });
+    });
+  }
+
+  /* ---- Heading level ---- */
+  window.setHeadingLevel = function (btn, level) {
+    var block = btn.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) { hidden.value = level; }
+    block.querySelectorAll('.trc-heading-btn').forEach(function (b) {
+      b.classList.toggle('active', parseInt(b.dataset.level) === level);
+    });
+    setContentChanged();
+  };
+
+  function initBlockHeadingBtns(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (!hidden) return;
+    var level = parseInt(hidden.value) || 2;
+    block.querySelectorAll('.trc-heading-btn').forEach(function (b) {
+      b.classList.toggle('active', parseInt(b.dataset.level) === level);
+    });
+  }
+
+  /* ---- Advanced panel ---- */
+  window.toggleAdvanced = function (btn) {
+    var panel = btn.nextElementSibling;
+    if (!panel) return;
+    var isOpen = panel.classList.contains('open');
+    panel.classList.toggle('open', !isOpen);
+    btn.innerHTML = isOpen ? '&#9881; Advanced &#9656;' : '&#9881; Advanced &#9662;';
+    if (!isOpen) {
+      var block = btn.closest('.trc-block');
+      var hidden = block && block.querySelector('[name="extra_data"]');
+      var visible = panel.querySelector('.trc-advanced__input');
+      if (hidden && visible) visible.value = hidden.value;
+      var typeHidden = block && block.querySelector('[name="block_type"]');
+      var typeVisible = panel.querySelector('.trc-advanced__type-input');
+      if (typeHidden && typeVisible) typeVisible.value = typeHidden.value;
+    }
+  };
+
+  window.syncAdvancedInput = function (input) {
+    var block = input.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = input.value;
+    setContentChanged();
+  };
+
+  /* ---- Content changed / autosave ---- */
   window.setContentChanged = function () {
     dirty = true;
     if (autoSaveEnabled) editorScheduleAutoSave();
@@ -120,33 +413,26 @@
 
   function editorScheduleAutoSave() {
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(function () {
-      editorSaveAll();
-    }, 3000);
+    autoSaveTimer = setTimeout(function () { editorSaveAll(); }, 3000);
   }
 
-  window.toggleAutoSave = function () {
-    autoSaveEnabled = document.getElementById('autoSaveToggle').checked;
-    if (autoSaveEnabled && dirty) editorScheduleAutoSave();
-  };
-
   window.onBlockInput = function (el) {
-    refreshBlockPreview(el.closest('.boat-rudder__entry-editor__block'));
+    var block = el.closest('.trc-block');
+    if (block) refreshBlockPreview(block);
     setContentChanged();
   };
 
+  /* ---- Save functions ---- */
   window.saveMeta = function () {
     var sidebar = document.getElementById('metaSidebar');
     var params = new URLSearchParams();
     params.set('link', sidebar.querySelector('[name="link"]').value);
     params.set('type', sidebar.querySelector('[name="type"]').value);
     if (sidebar.querySelector('[name="enabled"]').checked) params.set('enabled', 'true');
-
     var selected = sidebar.querySelector('[name="categories"]').selectedOptions;
     for (var i = 0; i < selected.length; i++) params.append('categories', selected[i].value);
-
     return postForm(apiUrl('/meta'), params).then(function (data) {
-      setStatus(data.ok ? 'Settings saved' : 'Error: ' + data.error);
+      setStatus(data.ok ? 'Settings saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
       return data;
     });
   };
@@ -156,45 +442,40 @@
     var params = new URLSearchParams();
     params.set('image_url', sidebar.querySelector('[name="image_url"]').value);
     params.set('date', sidebar.querySelector('[name="date"]').value);
-
     for (var i = 0; i < langs.length; i++) {
       var code = langs[i];
-      var panel = sidebar.querySelector('.boat-rudder__entry-editor__lang-panel[data-lang="' + code + '"]');
+      var panel = sidebar.querySelector('.trc-block__lang-content[data-lang="' + code + '"]');
+      if (!panel) continue;
       params.set('title_' + code, panel.querySelector('[name="title"]').value);
       params.set('summary_' + code, panel.querySelector('[name="summary"]').value);
       params.set('author_' + code, panel.querySelector('[name="author"]').value);
     }
-
     return postForm(apiUrl('/header'), params).then(function (data) {
-      setStatus(data.ok ? 'Header saved' : 'Error: ' + data.error);
+      setStatus(data.ok ? 'Header saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
       return data;
     });
   };
 
   window.saveContent = function () {
-    var blocks = document.querySelectorAll('#entryBlocks .boat-rudder__entry-editor__block');
+    var blocks = document.querySelectorAll('#entryBlocks .trc-block');
     var params = new URLSearchParams();
     params.set('content_count', blocks.length);
-
     for (var i = 0; i < blocks.length; i++) {
       var blockEl = blocks[i];
       params.set('content_' + i + '_id', blockEl.dataset.blockId);
       params.set('content_' + i + '_type', blockEl.dataset.type);
       params.set('content_' + i + '_order', i);
-
       var extraField = blockEl.querySelector('[name="extra_data"]');
       params.set('content_' + i + '_extra_data', extraField ? extraField.value : '');
-
       for (var j = 0; j < langs.length; j++) {
         var code = langs[j];
-        var panel = blockEl.querySelector('.boat-rudder__entry-editor__lang-panel[data-lang="' + code + '"]');
+        var panel = blockEl.querySelector('.trc-block__lang-content[data-lang="' + code + '"]');
         var textField = panel ? panel.querySelector('[name="text"]') : null;
         params.set('content_' + i + '_text_' + code, textField ? textField.value : '');
       }
     }
-
     return postForm(apiUrl('/content'), params).then(function (data) {
-      setStatus(data.ok ? 'Content saved' : 'Error: ' + data.error);
+      setStatus(data.ok ? 'Content saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
       return data;
     });
   };
@@ -203,13 +484,14 @@
     setStatus('Saving...');
     return Promise.all([saveMeta(), saveHeader(), saveContent()]).then(function (results) {
       dirty = results.some(function (data) { return !data.ok; });
-      setStatus(dirty ? 'Save failed' : 'Saved');
+      setStatus(dirty ? 'Save failed' : 'Saved', dirty ? 'error' : 'saved');
     });
   };
 
+  /* ---- Add / remove blocks ---- */
   window.toggleAddBlockDropdown = function () {
     var menu = document.getElementById('addBlockMenu');
-    menu.hidden = !menu.hidden;
+    menu.classList.toggle('open');
   };
 
   window.insertNewComponent = function (type) {
@@ -220,49 +502,216 @@
 
     postForm(apiUrl('/blocks'), params).then(function (data) {
       if (!data.ok) {
-        setStatus('Error: ' + data.error);
+        setStatus('Error: ' + data.error, 'error');
         return;
       }
-
       var wrapper = document.createElement('div');
       wrapper.innerHTML = data.html;
       var blockEl = wrapper.firstElementChild;
       blocksEl.appendChild(blockEl);
       applyLangVisibility(blockEl);
       refreshBlockPreview(blockEl);
-      document.getElementById('addBlockMenu').hidden = true;
+      var menu = document.getElementById('addBlockMenu');
+      if (menu) menu.classList.remove('open');
+      activateBlock(blockEl);
+      blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setupDragHandles();
       setContentChanged();
     });
   };
 
   window.removeComponent = function (btn) {
-    var blockEl = btn.closest('.boat-rudder__entry-editor__block');
+    var blockEl = btn.closest('.trc-block');
     var blockId = blockEl.dataset.blockId;
-
     postForm(apiUrl('/blocks/' + blockId + '/delete'), new URLSearchParams()).then(function (data) {
       if (data.ok) {
+        if (activeEditBlock === blockEl) activeEditBlock = null;
         blockEl.remove();
         setContentChanged();
       } else {
-        setStatus('Error: ' + data.error);
+        setStatus('Error: ' + data.error, 'error');
       }
     });
   };
 
+  /* ---- Move blocks ---- */
   window.moveBlockUp = function (btn) {
-    var blockEl = btn.closest('.boat-rudder__entry-editor__block');
+    var blockEl = btn.closest('.trc-block');
     var prev = blockEl.previousElementSibling;
     if (prev) blockEl.parentNode.insertBefore(blockEl, prev);
     setContentChanged();
   };
 
   window.moveBlockDown = function (btn) {
-    var blockEl = btn.closest('.boat-rudder__entry-editor__block');
+    var blockEl = btn.closest('.trc-block');
     var next = blockEl.nextElementSibling;
     if (next) blockEl.parentNode.insertBefore(next, blockEl);
     setContentChanged();
   };
 
-  setLang(currentLang);
+  /* ---- Drag and drop ---- */
+  var dragging = null, clone = null, placeholder = null, dragOffsetY = 0;
+
+  function getBlockRows() {
+    return Array.from(document.querySelectorAll('#entryBlocks > .trc-block'));
+  }
+
+  function setupDragHandles() {
+    getBlockRows().forEach(function (row) {
+      var grips = [row.querySelector('.trc-block__grip'), row.querySelector('.trc-block__drag')].filter(Boolean);
+      grips.forEach(function (grip) {
+        if (grip.dataset.dragInit) return;
+        grip.dataset.dragInit = '1';
+        grip.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dragging = row;
+          var rect = row.getBoundingClientRect();
+          dragOffsetY = e.clientY - rect.top;
+
+          placeholder = document.createElement('div');
+          placeholder.style.cssText = 'height:4px;background:rgba(37,99,235,0.6);border-radius:2px;margin:2px 0;pointer-events:none;';
+
+          clone = row.cloneNode(true);
+          clone.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;opacity:0.88;pointer-events:none;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#222;border:1px solid #2563eb;border-radius:5px;box-sizing:border-box';
+
+          document.body.appendChild(clone);
+          row.after(placeholder);
+          row.style.cssText += ';visibility:hidden;height:4px;overflow:hidden;margin:0;padding:0;';
+          document.body.classList.add('is-dragging');
+        });
+      });
+    });
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    if (!dragging || !clone) return;
+    e.preventDefault();
+    clone.style.top = (e.clientY - dragOffsetY) + 'px';
+    var rows = getBlockRows().filter(function (r) { return r !== dragging; });
+    var inserted = false;
+    for (var i = 0; i < rows.length; i++) {
+      var rect = rows[i].getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        rows[i].before(placeholder);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted && placeholder.parentNode) {
+      document.getElementById('entryBlocks').appendChild(placeholder);
+    }
+  });
+
+  document.addEventListener('mouseup', function () {
+    if (!dragging) return;
+    if (placeholder && placeholder.parentNode) {
+      placeholder.parentNode.insertBefore(dragging, placeholder);
+    }
+    dragging.style.cssText = dragging.style.cssText
+      .replace(/visibility:[^;]+;?/g, '')
+      .replace(/height:[^;]+;?/g, '')
+      .replace(/overflow:[^;]+;?/g, '')
+      .replace(/margin:[^;]+;?/g, '')
+      .replace(/padding:[^;]+;?/g, '');
+    if (clone) clone.remove();
+    if (placeholder) placeholder.remove();
+    document.body.classList.remove('is-dragging');
+    dragging = null; clone = null; placeholder = null;
+    setContentChanged();
+  });
+
+  /* ---- Preview post ---- */
+  window.openBlogPreview = function () {
+    var linkInput = document.querySelector('#metaSidebar [name="link"]');
+    if (linkInput && linkInput.value) {
+      window.open('/blog/' + linkInput.value, '_blank');
+    } else {
+      window.open('/dashboard', '_blank');
+    }
+  };
+
+  /* ---- Gallery modal ---- */
+  function activateScripts(container) {
+    container.querySelectorAll('script').forEach(function (old) {
+      var s = document.createElement('script');
+      s.textContent = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+  }
+
+  function loadMediaModal(callback) {
+    fetch('/dashboard/api/media/modal')
+      .then(function (r) { if (!r.ok) throw new Error('Failed'); return r.text(); })
+      .then(function (html) {
+        var container = document.getElementById('modalContainer');
+        container.innerHTML = html;
+        activateScripts(container);
+        var modal = container.querySelector('.boat-rudder__modal');
+        if (modal) modal.style.display = 'flex';
+        if (callback) callback();
+      })
+      .catch(function (err) { console.error(err); });
+  }
+
+  window.openImageGallery = function (btn) {
+    var block = btn.closest('.trc-block');
+    if (!block) return;
+    window._galleryTargetBlock = block;
+    window.contentEditorGalleryType = 'image-block';
+    window.contentEditorGalleryId = block.dataset.blockId;
+    window.galleryElementsToUpdate = [];
+    loadMediaModal();
+  };
+
+  window.openGallery = function (elements, id, type) {
+    window.galleryElementsToUpdate = elements;
+    window.contentEditorGalleryType = type;
+    window.contentEditorGalleryId = id;
+    loadMediaModal();
+  };
+
+  /* ---- Header image preview ---- */
+  function updateHeaderImagePreview() {
+    var input = document.querySelector('#headerSidebar [name="image_url"]');
+    var preview = document.getElementById('header-img-preview');
+    if (!input || !preview) return;
+    var url = input.value.trim();
+    if (url) {
+      var thumb = url.replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+      preview.innerHTML = '<img src="' + thumb + '" alt="Cover">';
+    } else {
+      preview.innerHTML = '<span class="trc-img-preview__placeholder">No image</span>';
+    }
+  }
+
+  /* ---- Header lang tab switching ---- */
+  window.switchHeaderTab = function (btn, tabId) {
+    var section = btn.closest('.trc-meta-group');
+    if (!section) return;
+    section.querySelectorAll('.trc-tab-btn').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    section.querySelectorAll('.trc-tab-content').forEach(function (tc) { tc.classList.remove('active'); });
+    var target = document.getElementById('header-tab-' + tabId);
+    if (target) target.classList.add('active');
+  };
+
+  /* ---- Initialize ---- */
+  function init() {
+    initPublishToggle();
+    setLang(currentLang);
+    refreshAllPreviews();
+    setupDragHandles();
+    updateHeaderImagePreview();
+
+    var imgInput = document.querySelector('#headerSidebar [name="image_url"]');
+    if (imgInput) imgInput.addEventListener('input', updateHeaderImagePreview);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
 </script>

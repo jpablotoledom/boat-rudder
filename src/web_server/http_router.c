@@ -25,8 +25,11 @@
 #include "../modules/error/error.h"
 #include "../modules/languages_admin/languages_admin.h"
 #include "../modules/login/login.h"
+#include "../modules/media_admin/media_admin.h"
 #include "../modules/menu_admin/menu_admin.h"
 #include "../modules/users_admin/users_admin.h"
+#include "../db/cms_media.h"
+#include "utils/multipart_parser.h"
 #include "../utils/build_epoch_response.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
@@ -37,10 +40,14 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static const char *get_header_value(HttpRequest *req, const char *key) {
@@ -277,6 +284,14 @@ static int match_block_delete_route(const char *decoded_url, char *entry_id_out,
     return 1;
 }
 
+// Returns the value of a query parameter by key, or "" if not found.
+static const char *get_query_param(QueryParam *params, int count, const char *key) {
+    for (int i = 0; i < count; i++) {
+        if (strcmp(params[i].key, key) == 0) return params[i].value;
+    }
+    return "";
+}
+
 // Extracts the url-decoded value of `key` from an
 // "application/x-www-form-urlencoded" body into `out` (NUL-terminated,
 // truncated to out_size - 1). Returns 1 if `key` was found, 0 otherwise
@@ -457,6 +472,58 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
     raw_request[bytes_read] = '\0';
     if (bytes_read == 0) goto cleanup;
+
+    // --- Read full body based on Content-Length ---
+    {
+        const char *hdr_end = strstr(raw_request, "\r\n\r\n");
+        if (hdr_end) {
+            int header_size = (int)(hdr_end + 4 - raw_request);
+            int body_in_buffer = bytes_read - header_size;
+
+            // Extract Content-Length from raw headers
+            int content_length = 0;
+            for (const char *h = raw_request; h < hdr_end; h++) {
+                if (h[0] == '\r' && h[1] == '\n' &&
+                    strncasecmp(h + 2, "Content-Length:", 15) == 0) {
+                    const char *v = h + 17;
+                    while (*v == ' ') v++;
+                    content_length = atoi(v);
+                    break;
+                }
+            }
+
+            if (content_length > (int)MAX_BODY_SIZE) {
+                LOG_WARN("Body too large: %d > %d", content_length, (int)MAX_BODY_SIZE);
+                send_error_response(ctx, 413, "413 Payload Too Large", EPOCH_PRESTANDARD);
+                goto cleanup;
+            }
+
+            if (content_length > 0 && content_length > body_in_buffer) {
+                int total_needed = header_size + content_length;
+                char *big_buf = realloc(raw_request, total_needed + 1);
+                if (!big_buf) {
+                    LOG_ERROR("realloc failed for body (%d bytes)", total_needed);
+                    send_error_response(ctx, 500, "500 Internal Server Error", EPOCH_PRESTANDARD);
+                    goto cleanup;
+                }
+                raw_request = big_buf;
+
+                int remaining = content_length - body_in_buffer;
+                int offset = bytes_read;
+                while (remaining > 0) {
+                    int ret = read_func(ctx, raw_request + offset, remaining);
+                    if (ret <= 0) {
+                        LOG_ERROR("Connection closed while reading body (%d remaining)", remaining);
+                        goto cleanup;
+                    }
+                    offset += ret;
+                    remaining -= ret;
+                }
+                bytes_read = offset;
+                raw_request[bytes_read] = '\0';
+            }
+        }
+    }
 
     // --- Parse request line + headers ---
     if (parse_http_request(raw_request, bytes_read, &req) != 0) {
@@ -861,6 +928,92 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                         cms_entry_edit_free(&entry, lang_count);
                         cms_languages_free(langs, lang_count);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/media") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        CmsMediaDirectory *dirs = NULL;
+                        size_t dir_count = 0;
+                        cms_get_media_directories(&dirs, &dir_count);
+
+                        char *content  = media_admin_page(epoch, dirs, dir_count, NULL, 0);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Media", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+
+                        cms_media_directories_free(dirs, dir_count);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/api/media/contents") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    send_simple(ctx, "403 Forbidden", "Forbidden");
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        const char *dir_id = get_query_param(params, param_count, "directory");
+                        const char *start_str = get_query_param(params, param_count, "start");
+                        const char *end_str = get_query_param(params, param_count, "end");
+                        int skip = atoi(start_str);
+                        int limit = atoi(end_str) - skip;
+                        if (limit <= 0) limit = MEDIA_PAGE_SIZE;
+
+                        CmsMediaItem *items = NULL;
+                        size_t item_count = 0;
+                        cms_get_media_items(dir_id[0] ? dir_id : NULL, skip, limit, &items, &item_count);
+
+                        char *html = media_admin_render_items(items, item_count, epoch);
+                        char *response = build_json_response(html ? html : "");
+                        free(html);
+                        connection_write(ctx, response, strlen(response));
+                        free(response);
+                        connection_close(ctx);
+
+                        cms_media_items_free(items, item_count);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/api/media/modal") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    send_simple(ctx, "403 Forbidden", "Forbidden");
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        CmsMediaDirectory *dirs = NULL;
+                        size_t dir_count = 0;
+                        cms_get_media_directories(&dirs, &dir_count);
+
+                        char *html = media_admin_modal(epoch, dirs, dir_count, NULL, 0);
+                        if (html) {
+                            char header_buf[128];
+                            snprintf(header_buf, sizeof(header_buf),
+                                     "Content-Type: text/html; charset=UTF-8\r\n"
+                                     "Content-Length: %zu\r\n", strlen(html));
+                            char response_buf[256];
+                            snprintf(response_buf, sizeof(response_buf),
+                                     "HTTP/1.1 200 OK\r\n%s\r\n", header_buf);
+                            connection_write(ctx, response_buf, strlen(response_buf));
+                            connection_write(ctx, html, strlen(html));
+                            free(html);
+                        } else {
+                            send_simple(ctx, "500 Internal Server Error", "Error");
+                        }
+                        connection_close(ctx);
+
+                        cms_media_directories_free(dirs, dir_count);
                     }
                 }
 
@@ -1594,6 +1747,259 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         response = build_redirect_response("/dashboard/users", "", epoch);
                     }
                     send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        // ---- Media admin POST routes ----
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/media/directory") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char name[256];
+                    parse_urlencoded_field(req.body, req.body_length, "newpath", name, sizeof(name));
+
+                    size_t nlen = strlen(name);
+                    int valid = nlen >= 3 && nlen <= 60;
+                    for (size_t i = 0; valid && i < nlen; i++) {
+                        char c = name[i];
+                        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                              (c >= '0' && c <= '9') || c == '-' || c == '_'))
+                            valid = 0;
+                    }
+                    if (strstr(name, "..")) valid = 0;
+
+                    if (!valid) {
+                        send_simple(ctx, "400 Bad Request", "Invalid directory name (3-60 chars, a-z 0-9 _ -)");
+                    } else {
+                        char username[64] = {0};
+                        cms_get_username_by_id(user_id, username, sizeof(username));
+
+                        char dirpath[512];
+                        snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, name);
+
+                        struct stat st;
+                        if (stat(dirpath, &st) == -1) {
+                            char parent_path[512];
+                            snprintf(parent_path, sizeof(parent_path), "./html/content/posts/%s", username);
+                            mkdir(parent_path, 0775);
+                            mkdir(dirpath, 0775);
+                        }
+
+                        char new_id[25];
+                        if (cms_create_media_directory(name, "posts", user_id, new_id) == 0) {
+                            CmsMediaDirectory dir;
+                            if (cms_get_media_directory_by_id(new_id, &dir)) {
+                                strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
+                                char *html = media_admin_render_directory_item(&dir, epoch);
+                                if (html) {
+                                    char hdr[128];
+                                    snprintf(hdr, sizeof(hdr),
+                                             "Content-Type: text/html; charset=UTF-8\r\nContent-Length: %zu\r\n",
+                                             strlen(html));
+                                    char resp[256];
+                                    snprintf(resp, sizeof(resp), "HTTP/1.1 200 OK\r\n%s\r\n", hdr);
+                                    connection_write(ctx, resp, strlen(resp));
+                                    connection_write(ctx, html, strlen(html));
+                                    free(html);
+                                } else {
+                                    send_simple(ctx, "500 Internal Server Error", "Render error");
+                                }
+                            } else {
+                                send_simple(ctx, "500 Internal Server Error", "DB lookup error");
+                            }
+                        } else {
+                            send_simple(ctx, "500 Internal Server Error", "DB insert error");
+                        }
+                        connection_close(ctx);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/media/directory/rename") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char dir_id[32], oldname[256], newname[256];
+                    parse_urlencoded_field(req.body, req.body_length, "id", dir_id, sizeof(dir_id));
+                    parse_urlencoded_field(req.body, req.body_length, "oldname", oldname, sizeof(oldname));
+                    parse_urlencoded_field(req.body, req.body_length, "newname", newname, sizeof(newname));
+
+                    char username[64] = {0};
+                    cms_get_username_by_id(user_id, username, sizeof(username));
+
+                    char old_path[512], new_path[512];
+                    snprintf(old_path, sizeof(old_path), "./html/content/posts/%s/%s", username, oldname);
+                    snprintf(new_path, sizeof(new_path), "./html/content/posts/%s/%s", username, newname);
+
+                    if (rename(old_path, new_path) == 0 || errno == ENOENT) {
+                        cms_rename_media_directory(dir_id, newname);
+
+                        CmsMediaDirectory dir;
+                        if (cms_get_media_directory_by_id(dir_id, &dir)) {
+                            strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
+                            char *html = media_admin_render_directory_item(&dir, epoch);
+                            if (html) {
+                                char hdr[128];
+                                snprintf(hdr, sizeof(hdr),
+                                         "Content-Type: text/html; charset=UTF-8\r\nContent-Length: %zu\r\n",
+                                         strlen(html));
+                                char resp[256];
+                                snprintf(resp, sizeof(resp), "HTTP/1.1 200 OK\r\n%s\r\n", hdr);
+                                connection_write(ctx, resp, strlen(resp));
+                                connection_write(ctx, html, strlen(html));
+                                free(html);
+                            }
+                        }
+                    } else {
+                        send_simple(ctx, "500 Internal Server Error", "Could not rename directory");
+                    }
+                    connection_close(ctx);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/media/directory/delete") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char dir_id[32], dirname[256];
+                    parse_urlencoded_field(req.body, req.body_length, "id", dir_id, sizeof(dir_id));
+                    parse_urlencoded_field(req.body, req.body_length, "dirname", dirname, sizeof(dirname));
+
+                    char username[64] = {0};
+                    cms_get_username_by_id(user_id, username, sizeof(username));
+
+                    char dirpath[512];
+                    snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, dirname);
+
+                    rmdir(dirpath);
+                    cms_delete_media_directory(dir_id);
+                    send_simple(ctx, "200 OK", "Deleted");
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/media/upload") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    const char *ct = get_header_value(&req, "Content-Type");
+                    MultipartResult *mp = parse_multipart(req.body, req.body_length, ct);
+
+                    if (!mp) {
+                        send_simple(ctx, "400 Bad Request", "Invalid multipart body");
+                    } else {
+                        const MultipartPart *dir_part = multipart_find(mp, "media-directory-selected");
+                        const MultipartPart *file_part = multipart_find(mp, "file");
+
+                        if (!dir_part || !file_part || file_part->filename[0] == '\0') {
+                            send_simple(ctx, "400 Bad Request", "Missing directory or file");
+                            free_multipart(mp);
+                        } else {
+                            char dir_id_buf[32] = {0};
+                            size_t dlen = dir_part->data_len < sizeof(dir_id_buf) - 1 ? dir_part->data_len : sizeof(dir_id_buf) - 1;
+                            memcpy(dir_id_buf, dir_part->data, dlen);
+
+                            CmsMediaDirectory dir;
+                            if (!cms_get_media_directory_by_id(dir_id_buf, &dir)) {
+                                send_simple(ctx, "404 Not Found", "Directory not found");
+                            } else {
+                                char username[64] = {0};
+                                cms_get_username_by_id(user_id, username, sizeof(username));
+
+                                // Sanitize filename
+                                char sanitized[256] = {0};
+                                int j = 0;
+                                for (int k = 0; file_part->filename[k] && j < (int)sizeof(sanitized) - 1; k++) {
+                                    char c = file_part->filename[k];
+                                    if (c == ' ') sanitized[j++] = '-';
+                                    else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                                             (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_')
+                                        sanitized[j++] = c;
+                                }
+                                sanitized[j] = '\0';
+
+                                // Create dir on disk
+                                char dirpath[512];
+                                snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, dir.name);
+                                mkdir(dirpath, 0775);
+
+                                // Write file
+                                char filepath[1024];
+                                snprintf(filepath, sizeof(filepath), "%s/%s", dirpath, sanitized);
+                                FILE *f = fopen(filepath, "wb");
+                                int write_ok = 0;
+                                if (f) {
+                                    write_ok = fwrite(file_part->data, 1, file_part->data_len, f) == file_part->data_len;
+                                    fclose(f);
+                                }
+
+                                if (!write_ok) {
+                                    send_simple(ctx, "500 Internal Server Error", "Could not write file");
+                                } else {
+                                    LOG_INFO("Media file saved: %s (%zu bytes)", filepath, file_part->data_len);
+
+                                    // Run image optimizer
+                                    char command[4096];
+                                    snprintf(command, sizeof(command),
+                                             "./scripts/image-optimizer.sh '%s' '%s' '%s'",
+                                             dirpath, dirpath, filepath);
+                                    LOG_INFO("Running optimizer: %s", command);
+
+                                    char optimized_path[1024] = {0};
+                                    FILE *pipe = popen(command, "r");
+                                    if (pipe) {
+                                        if (fgets(optimized_path, sizeof(optimized_path), pipe))
+                                            optimized_path[strcspn(optimized_path, "\n")] = '\0';
+                                        pclose(pipe);
+                                    }
+
+                                    if (optimized_path[0] == '\0')
+                                        strncpy(optimized_path, filepath, sizeof(optimized_path) - 1);
+
+                                    // Build filename for DB: strip path, remove _full suffix
+                                    char *basename = strrchr(optimized_path, '/');
+                                    basename = basename ? basename + 1 : optimized_path;
+                                    char db_name[512];
+                                    strncpy(db_name, basename, sizeof(db_name) - 1);
+                                    db_name[sizeof(db_name) - 1] = '\0';
+                                    char *dot = strrchr(db_name, '.');
+                                    if (dot) {
+                                        char *full_tag = strstr(db_name, "_full");
+                                        if (full_tag && full_tag < dot)
+                                            memmove(full_tag, full_tag + 5, strlen(full_tag + 5) + 1);
+                                    }
+
+                                    char media_id[25];
+                                    cms_insert_media(db_name, user_id, dir_id_buf, media_id);
+
+                                    char json_response[2048];
+                                    snprintf(json_response, sizeof(json_response),
+                                             "{\"ok\":true,\"filename\":\"%s\"}", optimized_path);
+                                    char *response = build_json_response(json_response);
+                                    connection_write(ctx, response, strlen(response));
+                                    free(response);
+                                }
+                            }
+                            free_multipart(mp);
+                            connection_close(ctx);
+                        }
+                    }
                 }
             }
 

@@ -46,12 +46,14 @@ static char *render_row(const CmsBlogListItem *item, const char *row_tpl, int ep
     const char *link_prefix = strcmp(item->type, "blog") == 0 ? "blog" : "page";
     char *link_url = render_template("/%s/%s", link_prefix, item->link);
 
-    char *result = link_url
-        ? render_template(row_tpl, item->header_image_url, link_url, item->header_title,
+    char *thumb = image_url_variant(item->header_image_url, "_small");
+    char *result = (link_url && thumb)
+        ? render_template(row_tpl, thumb, link_url, item->header_title,
                            type_label(item->type), item->header_summary, item->header_author,
                            item->header_date, categories, item->id, item->id)
         : NULL;
 
+    free(thumb);
     free(link_url);
     free(categories);
     return result;

@@ -1,29 +1,25 @@
-    <div class="boat-rudder__entry-editor__sidebar" id="metaSidebar">
-      <h2>Entry settings</h2>
-      <div class="boat-rudder__dashboard__form-row">
-        <label for="entryLink">Link</label>
-        <input class="boat-rudder__dashboard__input" type="text" id="entryLink" name="link" value="%s" oninput="setContentChanged()">
+    <div class="trc-meta-section" id="metaSidebar">
+      <div class="trc-meta-section__title">Entry Settings</div>
+
+      <div class="trc-meta-group">
+        <label for="entryLink">URL slug</label>
+        <input name="link" id="entryLink" type="text" value="%s" oninput="setContentChanged()">
       </div>
-      <div class="boat-rudder__dashboard__form-row">
+
+      <div class="trc-meta-group">
         <label for="entryType">Type</label>
-        <select class="boat-rudder__dashboard__input" id="entryType" name="type" onchange="setContentChanged()">
+        <select name="type" id="entryType" onchange="setContentChanged()">
           <option value="page"%s>Page</option>
           <option value="blog"%s>Blog</option>
         </select>
       </div>
-      <div class="boat-rudder__dashboard__form-row">
-        <label for="entryCategories">Categories</label>
-        <select class="boat-rudder__dashboard__input" id="entryCategories" name="categories" multiple onchange="setContentChanged()">
+
+      <div class="trc-meta-group">
+        <label>Categories</label>
+        <select name="categories" id="entryCategories" multiple size="6" onchange="setContentChanged()">
 %s
         </select>
       </div>
-      <div class="boat-rudder__dashboard__form-row">
-        <label class="boat-rudder__entry-editor__checkbox-label">
-          <input type="checkbox" name="enabled" value="true"%s onchange="setContentChanged()">
-          Published
-        </label>
-      </div>
-      <div class="boat-rudder__dashboard__button-container">
-        <button class="boat-rudder__dashboard__button" type="button" onclick="saveMeta()">Save settings</button>
-      </div>
+
+      <input name="enabled" type="checkbox"%s style="display:none" onchange="setContentChanged()">
     </div>

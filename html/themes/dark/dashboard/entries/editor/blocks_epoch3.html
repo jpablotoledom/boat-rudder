@@ -1,18 +1,12 @@
-    <div class="boat-rudder__entry-editor__blocks-section">
-      <h2>Content</h2>
-      <div id="entryBlocks" class="boat-rudder__entry-editor__blocks">
+      <div id="entryBlocks">
 %s
       </div>
-      <div class="boat-rudder__entry-editor__add-block">
-        <button class="boat-rudder__dashboard__button" type="button" onclick="toggleAddBlockDropdown()">+ Add block</button>
-        <div id="addBlockMenu" class="boat-rudder__entry-editor__add-block-menu" hidden>
-          <button type="button" onclick="insertNewComponent('tittle')">Title</button>
-          <button type="button" onclick="insertNewComponent('paragraph')">Paragraph</button>
-          <button type="button" onclick="insertNewComponent('image')">Image</button>
-          <button type="button" onclick="insertNewComponent('byline')">Byline</button>
+      <div class="trc-add-block">
+        <button class="trc-add-block__btn" type="button" onclick="toggleAddBlockDropdown()">+ Add block</button>
+        <div id="addBlockMenu" class="trc-add-block__dropdown">
+          <button class="trc-add-block__option" type="button" onclick="insertNewComponent('tittle')">&sect; Title</button>
+          <button class="trc-add-block__option" type="button" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
+          <button class="trc-add-block__option" type="button" onclick="insertNewComponent('image')">&square; Image</button>
+          <button class="trc-add-block__option" type="button" onclick="insertNewComponent('byline')">&#9998; Byline</button>
         </div>
       </div>
-      <div class="boat-rudder__dashboard__button-container">
-        <button class="boat-rudder__dashboard__button" type="button" onclick="saveContent()">Save content</button>
-      </div>
-    </div>

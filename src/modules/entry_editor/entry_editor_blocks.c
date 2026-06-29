@@ -34,22 +34,7 @@ static char *render_lang_fields(const CmsContentBlockEdit *block,
     return result;
 }
 
-// "tittle"/"paragraph": block id + per-language text fields.
-static char *render_simple_block(const CmsContentBlockEdit *block, const char *tpl_path,
-                                  const CmsLanguageItem *langs, size_t lang_count, int epoch) {
-    char *tpl = load_template(tpl_path, epoch);
-    if (!tpl) return NULL;
-
-    char *fields = render_lang_fields(block, langs, lang_count, epoch);
-    char *result = fields ? render_template(tpl, block->id, fields) : NULL;
-
-    free(fields);
-    free(tpl);
-    return result;
-}
-
-// "image"/"byline": block id + per-language text fields + one untranslated
-// extra_data field (caption/alt for image, date for byline).
+// block id + per-language text fields + one untranslated extra_data field.
 static char *render_extra_block(const CmsContentBlockEdit *block, const char *tpl_path,
                                  const CmsLanguageItem *langs, size_t lang_count, int epoch) {
     char *tpl = load_template(tpl_path, epoch);
@@ -66,11 +51,11 @@ static char *render_extra_block(const CmsContentBlockEdit *block, const char *tp
 char *entry_editor_render_block(const CmsContentBlockEdit *block,
                                  const CmsLanguageItem *langs, size_t lang_count, int epoch) {
     if (strcmp(block->type, "tittle") == 0)
-        return render_simple_block(block, "dashboard/entries/editor/blocks/tittle_epoch%d.html",
-                                    langs, lang_count, epoch);
+        return render_extra_block(block, "dashboard/entries/editor/blocks/tittle_epoch%d.html",
+                                   langs, lang_count, epoch);
     if (strcmp(block->type, "paragraph") == 0)
-        return render_simple_block(block, "dashboard/entries/editor/blocks/paragraph_epoch%d.html",
-                                    langs, lang_count, epoch);
+        return render_extra_block(block, "dashboard/entries/editor/blocks/paragraph_epoch%d.html",
+                                   langs, lang_count, epoch);
     if (strcmp(block->type, "image") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/image_epoch%d.html",
                                    langs, lang_count, epoch);

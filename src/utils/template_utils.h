@@ -20,4 +20,9 @@ char *str_append(char *dst, const char *src);
 // allocation failure.
 char *build_title_tag(const char *page_title);
 
+// Returns a new malloc'd URL with `suffix` inserted before the file extension.
+// e.g. image_url_variant("/img/photo.jpg", "_small") → "/img/photo_small.jpg"
+// Returns a copy of the original if no extension is found. NULL on failure.
+char *image_url_variant(const char *url, const char *suffix);
+
 #endif // TEMPLATE_UTILS_H

@@ -292,3 +292,28 @@ int cms_delete_user(const char *id_hex) {
     mongoc_collection_destroy(collection);
     return (ok && deleted > 0) ? 0 : -1;
 }
+
+int cms_get_username_by_id(const char *id_hex, char *out, size_t out_size) {
+    if (out_size == 0) return -1;
+    out[0] = '\0';
+
+    char email[256], role[32];
+    if (cms_get_user_values(id_hex, email, sizeof(email), role, sizeof(role)) != 0)
+        return -1;
+
+    const char *at = strchr(email, '@');
+    size_t len = at ? (size_t)(at - email) : strlen(email);
+    if (len >= out_size) len = out_size - 1;
+    memcpy(out, email, len);
+    out[len] = '\0';
+
+    // Sanitize: keep only alphanumeric, dash, underscore, dot
+    for (size_t i = 0; i < len; i++) {
+        char c = out[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.'))
+            out[i] = '-';
+    }
+
+    return 0;
+}

@@ -62,4 +62,8 @@ int cms_update_user(const char *id_hex, const char *email, const char *role,
 // last-admin protection is enforced by the router, not here.
 int cms_delete_user(const char *id_hex);
 
+// Gets the email-derived username (part before '@') for the user with the
+// given id. Used for media directory paths. Returns 0 on success, -1 on error.
+int cms_get_username_by_id(const char *id_hex, char *out, size_t out_size);
+
 #endif // CMS_USERS_ADMIN_H

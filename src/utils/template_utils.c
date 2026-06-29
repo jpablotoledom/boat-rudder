@@ -64,3 +64,23 @@ char *str_append(char *dst, const char *src) {
 char *build_title_tag(const char *page_title) {
     return render_template("<title>%s</title>", page_title);
 }
+
+char *image_url_variant(const char *url, const char *suffix) {
+    if (!url || !url[0]) return strdup("");
+    if (!suffix || !suffix[0]) return strdup(url);
+
+    const char *dot = strrchr(url, '.');
+    if (!dot || dot == url) return strdup(url);
+
+    size_t prefix_len = (size_t)(dot - url);
+    size_t suffix_len = strlen(suffix);
+    size_t ext_len    = strlen(dot);
+    size_t total      = prefix_len + suffix_len + ext_len + 1;
+
+    char *result = malloc(total);
+    if (!result) return NULL;
+    memcpy(result, url, prefix_len);
+    memcpy(result + prefix_len, suffix, suffix_len);
+    memcpy(result + prefix_len + suffix_len, dot, ext_len + 1);
+    return result;
+}

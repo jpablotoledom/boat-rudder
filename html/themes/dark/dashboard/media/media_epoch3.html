@@ -1,0 +1,398 @@
+<a href="/dashboard" id="media-back-btn" class="trc-admin__back-btn" style="display:none">&#8592; Dashboard</a>
+
+<div class="trc-media">
+
+  <!-- Left: Directories -->
+  <div class="trc-media__sidebar">
+    <div class="trc-media__sidebar-header">
+      <span class="trc-media__sidebar-title">Directories</span>
+      <div class="trc-media__dir-actions">
+        <button class="trc-media__dir-btn" onclick="newDirectoryBtnHandler()">+ New</button>
+        <button id="btn-dir-rename" class="trc-media__dir-btn" onclick="renameDirectoryBtnHandler()" disabled>Rename</button>
+        <button id="btn-dir-delete" class="trc-media__dir-btn trc-media__dir-btn--danger" onclick="deleteDirectoryBtnHandler()" disabled>Delete</button>
+      </div>
+    </div>
+    %s
+  </div>
+
+  <!-- Right: Content -->
+  <div class="trc-media__main">
+
+    <div class="trc-media__upload-zone" id="drop-zone">
+      <div class="trc-media__upload-label">
+        Drop files here or
+        <label for="media-file-input" class="trc-media__upload-browse">browse from your computer</label>
+      </div>
+      <input name="media-file-input" id="media-file-input" type="file" multiple class="trc-media__file-input">
+      <input name="media-directory-selected" id="media-directory-selected" type="hidden" value="">
+      <input name="media-content-start" id="media-content-start" type="hidden" value="0">
+      <input name="media-content-end" id="media-content-end" type="hidden" value="30">
+    </div>
+
+    <div id="upload-feedback" class="trc-media__upload-feedback"></div>
+
+    <div class="trc-media__grid-toolbar">
+      <button class="trc-media__select-btn" onclick="getSelectedMediaIds()">Use selected</button>
+    </div>
+
+    <div id="media_content__charger" class="trc-media__grid-scroll">
+      <div id="media-content-dynamically" class="trc-media__grid">
+        %s
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  // Gallery modal globals
+  window.galleryElementsToUpdate = window.galleryElementsToUpdate || [];
+  window.contentEditorGalleryType = window.contentEditorGalleryType || '';
+  window.contentEditorGalleryId = window.contentEditorGalleryId || '';
+  window.contentEditorGalleryEnd = false;
+  window.contentEditorGalleryLoading = false;
+
+  // Selection tracking
+  var lastCheckedIndex = null;
+  var selectionCounter = 0;
+
+  document.body.addEventListener('click', function (e) {
+    var item = e.target.closest('.trc-media__photo');
+    if (!item) return;
+    e.preventDefault();
+    var checkbox = item.querySelector('input[type="checkbox"]');
+    var items = Array.from(document.querySelectorAll('.trc-media__photo'));
+    var index = items.indexOf(item);
+    if (e.target.tagName.toLowerCase() === 'input') return;
+
+    if (e.shiftKey && lastCheckedIndex !== null) {
+      var start = lastCheckedIndex, end = index;
+      var step = start <= end ? 1 : -1;
+      var shouldCheck = !checkbox.checked;
+      for (var i = start; step === 1 ? i <= end : i >= end; i += step) {
+        var cb = items[i].querySelector('input[type="checkbox"]');
+        cb.checked = shouldCheck;
+        items[i].classList.toggle('selected', cb.checked);
+        if (cb.checked) { selectionCounter++; items[i].dataset.selectedAt = selectionCounter; }
+        else { delete items[i].dataset.selectedAt; }
+      }
+      lastCheckedIndex = index;
+    } else {
+      checkbox.checked = !checkbox.checked;
+      item.classList.toggle('selected', checkbox.checked);
+      if (checkbox.checked) { selectionCounter++; item.dataset.selectedAt = selectionCounter; }
+      else { delete item.dataset.selectedAt; }
+      lastCheckedIndex = index;
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.trc-media__photo').forEach(function (item) {
+        item.querySelector('input[type="checkbox"]').checked = false;
+        item.classList.remove('selected');
+        delete item.dataset.selectedAt;
+      });
+      lastCheckedIndex = null;
+      selectionCounter = 0;
+    }
+  });
+
+  // Directory operations
+  window.newDirectoryBtnHandler = function () {
+    var list = document.getElementById('media-directory-contents-list');
+    var li = document.createElement('li');
+    li.id = 'new-directory-container';
+    li.innerHTML = '<input type="text" class="trc-media__dir-new-input" onblur="createNewDirectory()" onkeypress="return validarCaracter(event)" id="new-directory-name" placeholder="Directory name">';
+    list.appendChild(li);
+    document.getElementById('new-directory-name').focus();
+  };
+
+  window.createNewDirectory = function () {
+    var name = document.getElementById('new-directory-name').value;
+    var container = document.getElementById('new-directory-container');
+    if (container) container.remove();
+    if (!name) return;
+
+    fetch('/dashboard/api/media/directory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'newpath=' + encodeURIComponent(name)
+    })
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      document.getElementById('media-directory-contents-list').innerHTML += html;
+    })
+    .catch(function (err) { console.error('Error:', err); });
+  };
+
+  window.selectDirectory = function (directoryId) {
+    window.contentEditorGalleryEnd = false;
+    var baseDir = document.getElementById('media-directory-selected');
+    document.getElementById('media-content-start').value = '0';
+    document.getElementById('media-content-end').value = '30';
+    if (baseDir) baseDir.value = directoryId;
+
+    document.querySelectorAll('.trc-media__dir-item.selected')
+      .forEach(function (item) { item.classList.remove('selected'); });
+    var selected = document.querySelector('.trc-media__dir-item[onclick*="' + directoryId + '"]');
+    if (selected) selected.classList.add('selected');
+
+    var btnRename = document.getElementById('btn-dir-rename');
+    var btnDelete = document.getElementById('btn-dir-delete');
+    if (btnRename) btnRename.disabled = false;
+    if (btnDelete) btnDelete.disabled = false;
+
+    document.getElementById('media-content-dynamically').innerHTML = '';
+    getMediaContents(directoryId, 0, 30);
+  };
+
+  window.renameDirectoryBtnHandler = function () {
+    var id = document.getElementById('media-directory-selected').value;
+    var label = document.getElementById('media-directory-label_' + id);
+    var input = document.getElementById('media-directory_' + id);
+    if (label) label.classList.add('none');
+    if (input) { input.classList.remove('none'); input.focus(); }
+  };
+
+  window.renameDirectory = function () {
+    var id = document.getElementById('media-directory-selected').value;
+    var oldName = document.getElementById('media-directory-name_' + id);
+    var input = document.getElementById('media-directory_' + id);
+    var row = document.getElementById('media-directory-row_' + id);
+    var label = document.getElementById('media-directory-label_' + id);
+
+    if (confirm('Renaming the directory will change the physical paths. Items in published entries may become unavailable.\n\nContinue?')) {
+      fetch('/dashboard/api/media/directory/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'id=' + encodeURIComponent(id) +
+              '&oldname=' + encodeURIComponent(oldName.value) +
+              '&newname=' + encodeURIComponent(input.value)
+      })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+        var li = wrapper.firstElementChild;
+        if (li) row.innerHTML = li.innerHTML;
+      })
+      .catch(function (err) { console.error('Error:', err); });
+    } else {
+      if (label) label.classList.remove('none');
+      if (input) input.classList.add('none');
+    }
+  };
+
+  window.deleteDirectoryBtnHandler = function () {
+    var id = document.getElementById('media-directory-selected').value;
+    deleteDirectory(id);
+  };
+
+  function deleteDirectory(id) {
+    if (!confirm('The directory and its contents will be deleted. This is irreversible.\n\nContinue?')) return;
+    var dirName = document.getElementById('media-directory-name_' + id);
+    fetch('/dashboard/api/media/directory/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'id=' + encodeURIComponent(id) + '&dirname=' + encodeURIComponent(dirName.value)
+    })
+    .then(function (r) {
+      if (r.ok) {
+        var row = document.getElementById('media-directory-row_' + id);
+        if (row) row.remove();
+      }
+    })
+    .catch(function (err) { console.error('Error:', err); });
+  }
+
+  // Media contents
+  function getMediaContents(directoryId, start, end) {
+    return fetch('/dashboard/api/media/contents?directory=' + directoryId + '&start=' + start + '&end=' + end + '&order=desc')
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      document.getElementById('media-content-dynamically').innerHTML += html;
+      return html;
+    })
+    .catch(function (err) { console.error('Error:', err); return ''; });
+  }
+
+  // Infinite scroll
+  function waitForElement(id, callback) {
+    var el = document.getElementById(id);
+    if (el) return callback(el);
+    setTimeout(function () { waitForElement(id, callback); }, 50);
+  }
+
+  waitForElement('media_content__charger', function (container) {
+    container.addEventListener('scroll', function () {
+      var nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+      if (nearBottom && !window.contentEditorGalleryLoading && !window.contentEditorGalleryEnd) {
+        window.contentEditorGalleryLoading = true;
+        var dirId = document.getElementById('media-directory-selected').value;
+        var start = Number(document.getElementById('media-content-start').value) + 30;
+        var end = Number(document.getElementById('media-content-end').value) + 30;
+        getMediaContents(dirId, start, end)
+          .then(function (response) {
+            if (response && response.trim() !== '') {
+              document.getElementById('media-content-start').value = start;
+              document.getElementById('media-content-end').value = end;
+            } else {
+              window.contentEditorGalleryEnd = true;
+            }
+            window.contentEditorGalleryLoading = false;
+          })
+          .catch(function () { window.contentEditorGalleryLoading = false; });
+      }
+    });
+  });
+
+  // Upload
+  function addUploadFeedback(container, filename, extraClass) {
+    var item = document.createElement('div');
+    item.className = 'trc-media__progress-item' + (extraClass ? ' ' + extraClass : '');
+    item.innerHTML =
+      '<span class="trc-media__progress-name" title="' + filename + '">' + filename + '</span>' +
+      '<div class="trc-media__progress-bar-wrap"><div class="trc-media__progress-bar"></div></div>';
+    container.appendChild(item);
+    return item;
+  }
+
+  function upload() {
+    var fileInput = document.getElementById('media-file-input');
+    var baseDir = document.getElementById('media-directory-selected');
+    var feedbackEl = document.getElementById('upload-feedback');
+    if (!fileInput || !fileInput.files.length) return;
+
+    var validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    var queue = Array.from(fileInput.files);
+    var idx = 0;
+
+    function uploadNext() {
+      if (idx >= queue.length) {
+        fileInput.value = '';
+        setTimeout(function () { if (feedbackEl) feedbackEl.innerHTML = ''; }, 3000);
+        // Reload current directory
+        var dirId = baseDir ? baseDir.value : '';
+        if (dirId) selectDirectory(dirId);
+        return;
+      }
+      var file = queue[idx++];
+      if (validTypes.indexOf(file.type) === -1) {
+        addUploadFeedback(feedbackEl, file.name, 'error');
+        uploadNext();
+        return;
+      }
+      var progressItem = addUploadFeedback(feedbackEl, file.name, '');
+      var progressBar = progressItem.querySelector('.trc-media__progress-bar');
+      var formData = new FormData();
+      formData.append('media-directory-selected', baseDir ? baseDir.value : '');
+      formData.append('file', file);
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/dashboard/api/media/upload');
+      xhr.upload.addEventListener('progress', function (e) {
+        if (e.lengthComputable) progressBar.style.width = Math.round(e.loaded / e.total * 100) + '%%';
+      });
+      xhr.addEventListener('load', function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          progressBar.style.width = '100%%';
+          progressItem.classList.add('done');
+        } else {
+          progressItem.classList.add('error');
+        }
+        uploadNext();
+      });
+      xhr.addEventListener('error', function () {
+        progressItem.classList.add('error');
+        uploadNext();
+      });
+      xhr.send(formData);
+    }
+    uploadNext();
+  }
+
+  // "Use selected" button
+  window.getSelectedMediaIds = function () {
+    var selected = Array.from(
+      document.querySelectorAll('.trc-media__photo.selected input[type="hidden"][name="media-item-url"]')
+    );
+    var selectedItems = selected
+      .map(function (input) {
+        return { value: input.value, selectedAt: parseInt(input.closest('.trc-media__photo').dataset.selectedAt || '0', 10) };
+      })
+      .sort(function (a, b) { return a.selectedAt - b.selectedAt; });
+
+    var selectedIds = selectedItems.map(function (item) { return item.value; });
+
+    for (var i = 0; i < window.galleryElementsToUpdate.length; i++) {
+      var elId = window.galleryElementsToUpdate[i];
+      var el = window.contentEditorGalleryType === 'header'
+        ? document.getElementById(elId)
+        : document.getElementById(elId + window.contentEditorGalleryId);
+      if (el) el.value = selectedIds.join(';');
+    }
+
+    if (window.contentEditorGalleryType === 'header' && selectedIds.length > 0) {
+      var headerInput = document.getElementById('headerImageUrl');
+      if (headerInput) headerInput.value = selectedIds[0];
+      var headerPreview = document.getElementById('header-img-preview');
+      if (headerPreview) {
+        var coverThumb = selectedIds[0].replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+        headerPreview.innerHTML = '<img src="' + coverThumb + '" alt="Cover">';
+      }
+    }
+
+    if (window.contentEditorGalleryType === 'image-block' && window._galleryTargetBlock && selectedIds.length > 0) {
+      var textFields = window._galleryTargetBlock.querySelectorAll('.trc-block__lang-content [name="text"]');
+      textFields.forEach(function (f) { f.value = selectedIds[0]; });
+      if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
+      window._galleryTargetBlock = null;
+    }
+
+    if (typeof setContentChanged === 'function')
+      setContentChanged();
+
+    window.galleryElementsToUpdate = [];
+    window.contentEditorGalleryType = '';
+    window.contentEditorGalleryId = '';
+
+    var modal = document.querySelector('.boat-rudder__modal');
+    if (modal) { modal.style.display = 'none'; modal.remove(); }
+  };
+
+  // Drag-and-drop upload zone
+  var dropZone = document.getElementById('drop-zone');
+  var fileInput = document.getElementById('media-file-input');
+  if (dropZone && fileInput) {
+    dropZone.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', function (e) {
+      if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; upload(); }
+    });
+    dropZone.addEventListener('click', function (e) {
+      if (e.target.tagName !== 'LABEL' && e.target.tagName !== 'INPUT') fileInput.click();
+    });
+    fileInput.addEventListener('change', function () { if (fileInput.files.length) upload(); });
+  }
+
+  // Show back button on full media page
+  if (window.location.pathname === '/dashboard/media') {
+    var backBtn = document.getElementById('media-back-btn');
+    if (backBtn) backBtn.style.display = 'inline-block';
+  }
+
+  // Input validation
+  window.validarCaracter = function (e) {
+    return /^[a-zA-Z0-9_-]$/.test(e.key);
+  };
+})();
+</script>

@@ -10,16 +10,12 @@ This document is a high-level tour of the whole project: the web server foundati
 retro-compatible CMS concept, the **epoch** strategy that drives it, and the request lifecycle,
 illustrated with diagrams. For deeper detail see:
 
-- [reference/architecture.md](reference/architecture.md) - full component breakdown of the
-  server.
-- [reference/entry-editor.md](reference/entry-editor.md) - the `/dashboard/entries/<id>/edit`
-  AJAX content editor, with component and sequence diagrams.
-- [reference/data-flow.md](reference/data-flow.md) - step-by-step data flow, including the
-  dynamic `/` route.
-- [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts
-  (`bhs.sh`).
-- [plans/](plans/) - per-feature implementation plans (CMS entry model, home blog list,
-  login, site settings).
+- [reference/architecture.md](reference/architecture.md) - full component breakdown.
+- [reference/entry-editor.md](reference/entry-editor.md) - the `/dashboard/entries/<id>/edit` AJAX content editor.
+- [reference/media-admin.md](reference/media-admin.md) - the `/dashboard/media` media library.
+- [reference/data-flow.md](reference/data-flow.md) - step-by-step data flow, including the dynamic `/` route.
+- [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts (`bhs.sh`).
+- [plans/](plans/) - per-feature implementation plans.
 - [diagrams/](diagrams/) - PlantUML source files for every diagram in this document.
 
 ---
@@ -697,15 +693,30 @@ builds, systemd install, TLS certificate generation).
 
 ---
 
-## 8. Roadmap (not yet implemented)
+## 8. Implemented since initial release
 
-The current implementation is an MVP covering only the home page. Planned next steps:
+Features added after the initial home-page MVP:
 
-- Theme (`light`) and language (`Esp`) switching via query string / cookie.
-- Additional pages (`/blog`, `/about`, ...) reusing `container`/`menu`.
-- A real content source for `home_content` (Markdown/JSON files or a small database) instead of
-  the static `UPDATES[]` array.
+- **CMS entries**: `/blog/<link>` and `/page/<link>` served from a MongoDB `entries` collection with per-language `header` (image, title, summary, author, date) and an ordered `content[]` array of typed blocks.
+- **Blog listing** (`/blog`) and home "Latest Blog Posts" section.
+- **Content block types**: `tittle` (H1-H6), `paragraph` (rich text), `image`, `byline`, `gallery`.
+- **Gallery**: epoch 3 CSS grid with lightbox (click to open, prev/next, ESC); epochs 1-2 paginated viewer; `/gallery/<id>` public route.
+- **Media admin** (`/dashboard/media`): directory management, drag-and-drop upload, `scripts/image-optimizer.sh` (5 variants per image via ImageMagick), paginated grid, media picker modal for the entry editor.
+- **Entry editor** (`/dashboard/entries/<id>/edit`): trc-editor UX with fixed top bar, preview/edit toggle per block, rich-text for paragraphs, heading-level buttons for titles, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.
+- **Authentication**: login (Argon2id via libsodium), session cookies, roles (Administrador / Autor).
+- **Dashboard maintainers**: Categories, Languages, Menu, Users.
+- **Active menu item**: `--selected` CSS modifier on the nav item matching the current URL.
+- **Language admin**: `languages` collection drives content language; `/dashboard/languages` to add/remove/set default.
+- **Multipart body reading**: router reads full POST body based on `Content-Length` (supports file uploads up to 10 MiB).
+
+## 9. Roadmap (not yet implemented)
+
+- Theme (`light`) switching and per-visitor language selection via query string / cookie.
+- A real content source for `home_content` (replacing the static `UPDATES[]` array).
+- Remaining content block types: `image-single`, `image-paragraph`, `youtube-embed`, `code-text`, `list`, `table`, `separator`, `link`.
+- Blog listing filtered by category.
 - SEO metadata (Open Graph, JSON-LD) for epoch 3.
+- QR code generation for gallery pages on epochs -1/0 (currently shows text links).
 
 ---
 

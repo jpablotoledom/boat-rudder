@@ -17,29 +17,51 @@ base-http-server/
 │   ├── web_server/
 │   │   ├── server_listener.c/h          # Socket setup and main accept loop
 │   │   ├── connection.c/h               # Unified read/write abstraction (plain + TLS)
-│   │   ├── connection_thread.c/h        # Per-connection POSIX thread
+│   │   ├── connection_thread.c/h        # Per-connection POSIX thread (30 s socket timeout)
 │   │   ├── tls_context.c/h              # OpenSSL context lifecycle
 │   │   ├── http_router.c/h              # HTTP routing and dispatch
 │   │   ├── http_request_parser.c/h      # Raw HTTP/1.1 request parser
 │   │   ├── http_constants.h             # Buffer sizes and compile-time assertions
 │   │   └── utils/
 │   │       ├── static_file_server.c/h   # Static file serving (MIME, cache, security headers)
-│   │       └── url_parser.c/h           # URL path / query-string splitter + QueryParam
+│   │       ├── url_parser.c/h           # URL path / query-string splitter + QueryParam
+│   │       ├── multipart_parser.c/h     # multipart/form-data body parser (file uploads)
+│   │       └── memmem_compat.h          # Portable memmem() shim (used by multipart parser)
 │   ├── html_builder/
-│   │   └── orchestrator.c/h             # buildHomeWebSite()/buildPageWebSite(): assemble pages per epoch
+│   │   └── orchestrator.c/h             # buildHomeWebSite() / buildPageWebSite() /
+│   │                                    # buildPageWebSiteAtUrl(): assemble pages per epoch
 │   ├── modules/
 │   │   ├── container/container.c/h      # Page shell (head/body wrapper) per epoch
-│   │   ├── menu/menu.c/h                # Nav menu + menu-item + separator per epoch
+│   │   ├── menu/menu.c/h                # Nav menu with active-item highlighting per epoch
 │   │   ├── slider/slider.c/h            # Hero/banner block per epoch
 │   │   ├── home_content/home_content.c/h# Home page body content per epoch
 │   │   ├── home_blog/home_blog.c/h      # "Latest Blog Posts" gallery per epoch
+│   │   ├── blog_list/blog_list.c/h      # /blog listing page per epoch
+│   │   ├── entry_page/entry_page.c/h    # Public CMS entry renderer (content[] blocks only)
+│   │   ├── entry_editor/               # AJAX entry editor (dashboard, EPOCH_MODERN only)
+│   │   │   ├── entry_editor.c/h        # Page renderer (meta + header sidebars + blocks)
+│   │   │   └── entry_editor_blocks.c/h # Per-block editor form renderer
+│   │   ├── media_admin/media_admin.c/h  # /dashboard/media page + directory/photo rendering
+│   │   ├── entries_admin/entries_admin.c/h # Entries table rows (dashboard)
+│   │   ├── categories_admin/            # /dashboard/categories CRUD
+│   │   ├── languages_admin/             # /dashboard/languages CRUD
+│   │   ├── menu_admin/                  # /dashboard/menu CRUD
+│   │   ├── users_admin/                 # /dashboard/users CRUD
 │   │   ├── login/login.c/h              # /login form (epoch3 only) per epoch
 │   │   ├── dashboard/dashboard.c/h      # /dashboard static "Welcome" content per epoch
 │   │   └── error/error.c/h              # Centralized error page content per epoch
 │   ├── db/
 │   │   ├── mongodb_manager.c/h          # MongoDB client pool lifecycle (init/cleanup/get)
 │   │   ├── auth.c/h                     # Email/password verification (Argon2id via libsodium)
-│   │   └── session_manager.c/h          # Session tokens, cookies, sessions collection
+│   │   ├── session_manager.c/h          # Session tokens, cookies, sessions collection
+│   │   ├── cms_entries.c/h              # Public entry reads (blog list, entry by link)
+│   │   ├── cms_entries_admin.c/h        # Admin entry reads/writes (editor)
+│   │   ├── cms_categories.c/h           # entry_categories CRUD
+│   │   ├── cms_languages.c/h            # languages collection + default resolution
+│   │   ├── cms_menu.c/h                 # menu collection CRUD
+│   │   ├── cms_users_admin.c/h          # users CRUD + cms_get_username_by_id()
+│   │   ├── cms_media.c/h                # media + media_directories collections
+│   │   └── cms_media_galleries.c/h      # media_galleries collection (gallery blocks)
 │   └── utils/
 │       ├── config_loader.c/h            # INI-style config file parser
 │       ├── log.c/h                      # Leveled, thread-safe logging macros
@@ -47,13 +69,17 @@ base-http-server/
 │       │                                # trusted proxy check
 │       ├── detect_epoch.c/h             # User-Agent → epoch heuristic
 │       ├── read_file.c/h                # read_file_to_string(): malloc'd file contents
-│       ├── template_utils.c/h           # render_template, str_replace_first, str_append
+│       ├── template_utils.c/h           # render_template, str_replace_first, str_append,
+│       │                                # image_url_variant()
 │       ├── generate_url_theme.c/h       # Builds ./html/themes/<theme>/... paths per epoch
 │       └── build_epoch_response.c/h     # Wraps rendered HTML with epoch-correct headers,
 │                                         # plus status-line and redirect variants
+├── scripts/
+│   └── image-optimizer.sh               # Generates 5 image variants per upload via ImageMagick
 ├── configs/
 │   └── settings.conf                    # Runtime configuration
 ├── html/                                 # Static + templated content root (themes/, assets/)
+│   └── content/posts/                   # Uploaded media files (username/dirname/filename_variant.ext)
 ├── ssl/                                 # TLS certificate and key (optional)
 └── CMakeLists.txt                       # Build definition
 ```
@@ -116,7 +142,7 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 
 ### `web_server/connection_thread.c`
 - Entry point for each per-connection pthread.
-- Sets socket timeouts (5 s read + write).
+- Sets socket timeouts (30 s read + write) — raised from 5 s to allow large file uploads.
 - Performs `SSL_accept()` if the connection is HTTPS.
 - Calls `http_route()` passing the appropriate `read_func_t`.
 - Always decrements the global `active_connections` counter on exit.
@@ -128,22 +154,32 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 - `tls_free_context(ctx)` - frees the context.
 
 ### `web_server/http_router.c`
-- Reads the raw HTTP request into a fixed 32 KiB buffer; responds `431` if exceeded.
+- Reads the raw HTTP request headers into a fixed 32 KiB buffer; responds `431` if exceeded.
+- **Full body reading**: after headers are parsed, reads the body to completion using `Content-Length` — allocates a buffer of the declared size (capped at `MAX_BODY_SIZE` = 10 MiB) and loops until all bytes are received. This supports both small form posts and large multipart file uploads.
 - Parses headers with `parse_http_request()`.
 - Extracts the real client IP: honors `X-Real-IP` / `X-Forwarded-For` **only when the peer IP matches the `trusted_proxies` config list**, falling back to the raw socket address for all other peers.
 - Validates the request line (400 Bad Request on failure).
-- `resolve_epoch(req)`: the configured `force_epoch` override (if in `-1..3`), otherwise
-  `detect_epoch(User-Agent)`.
+- `resolve_epoch(req)`: the configured `force_epoch` override (if in `-1..3`), otherwise `detect_epoch(User-Agent)`.
+- `get_query_param(params, count, key)`: looks up a parsed query parameter by name (used by `/gallery/<id>?img=N`, `/dashboard/api/media/contents?directory=&start=&end=`).
 - Routes `GET`/`HEAD`:
-  - `/` → dynamic, epoch-aware home page (see [Retro-Compatible CMS](#retro-compatible-cms-epoch-based-rendering) below).
-  - `/login` → renders `login_epoch<N>.html` via `buildPageWebSite()` (see [Login, Dashboard, Logout](#login-dashboard-and-logout)).
+  - `/` → dynamic, epoch-aware home page (see [Retro-Compatible CMS](#retro-compatible-cms-epoch-based-rendering)).
+  - `/login` → renders `login_epoch<N>.html` via `buildPageWebSite()`.
   - `/dashboard` → requires a valid session cookie, otherwise redirects to `/login`.
+  - `/dashboard/media` → media admin page (session required). See [Media Admin](#media-admin).
+  - `/dashboard/api/media/contents` → paginated media grid (HTML fragment, session required).
+  - `/dashboard/api/media/modal` → media picker modal (HTML, session required).
+  - `/gallery/<id>` → public gallery page per epoch; epoch 3: thumbnail grid with lightbox; epochs 1-2: paginated viewer (main image + prev/next + thumbnail strip); epochs -1/0: text links.
+  - `/blog` → blog list page via `blog_list()` + `buildPageWebSiteAtUrl(epoch, title, content, "/blog")`.
+  - `/blog/<link>` → CMS entry via `serve_cms_entry()`, passes `"/blog"` as active menu URL.
+  - `/page/<link>` → CMS entry via `serve_cms_entry()`, passes `"/page/<link>"` as active menu URL.
   - `/logout` → destroys the session and redirects to `/`.
-  - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache
-    validation; a non-zero return code (`403`/`404`/`500`) is rendered via
-    `send_error_response()`.
-- `POST /login` → epoch3 only; other epochs re-render the "not available" `login_epoch<N>.html`
-  without touching the database. See [Login, Dashboard, Logout](#login-dashboard-and-logout).
+  - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache validation; a non-zero return code (`403`/`404`/`500`) is rendered via `send_error_response()`.
+- `POST /login` → epoch3 only; other epochs re-render the "not available" `login_epoch<N>.html` without touching the database.
+- `POST /dashboard/api/media/directory` → create media directory.
+- `POST /dashboard/api/media/directory/rename` → rename (renames physical dir via `rename()`).
+- `POST /dashboard/api/media/directory/delete` → delete (removes physical dir via `rmdir()`).
+- `POST /dashboard/api/media/upload` → multipart file upload: saves to `html/content/posts/<username>/<dirname>/`, runs `scripts/image-optimizer.sh`, inserts into `media` collection.
+- `POST /dashboard/api/entries/<id>/content` → after saving blocks, for each `gallery` block calls `cms_upsert_media_gallery()` to sync the `media_galleries` collection and stores the gallery `_id` in the block's `extra_data`.
 - Returns `204` for `OPTIONS`, `405` for all other methods.
 - `send_error_response(ctx, status_code, status_line, epoch)`: renders `error_content()` +
   `buildPageWebSite()` + `build_epoch_response_status()` for any non-2xx/3xx response (`400`,
@@ -175,6 +211,15 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 ### `web_server/utils/url_parser.c`
 - Splits a URL string into a path component and query parameters (`?key=value&…`).
 - Owns the `QueryParam` struct definition.
+
+### `web_server/utils/multipart_parser.c`
+- Parses `multipart/form-data` POST bodies for file uploads.
+- Extracts the boundary from the `Content-Type` header, iterates parts, and for each part returns: field name, optional filename, content-type header, and a pointer+length into the original body buffer (zero-copy — no allocation of file data).
+- `parse_multipart(body, body_len, content_type)` → `MultipartResult*`; `multipart_find(result, name)` looks up a part by field name.
+- `memmem_compat.h`: portable `memmem()` implementation used internally by the parser.
+
+### `utils/template_utils.c` (additions)
+- `image_url_variant(url, suffix)` → new malloc'd URL with `suffix` inserted before the file extension. Example: `image_url_variant("/content/posts/user/dir/photo.jpg", "_small")` → `"/content/posts/user/dir/photo_small.jpg"`. Used by `home_blog`, `entries_admin`, and `entry_page` to generate thumbnail and full-size URLs from the base URL stored in `header.image_url` / `content[].text`.
 
 ### `utils/config_loader.c`
 - Reads `key=value` lines from the config file (path configurable via `-c` CLI flag).
@@ -229,8 +274,7 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 
 - `container/` - page shell (`<head>`/`<body>` wrapper); contains `{{PAGE_TITLE}}` and 4 `%s`
   placeholders for menu, slider, home content and home blog.
-- `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, name,
-  separator), `menu-item-separator_epoch<N>.html` (static, no placeholders). See "Menu" below.
+- `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, name, separator), `menu-item-selected_epoch<N>.html` (same 3 `%s`, adds `--selected` CSS modifier for the active nav item), `menu-item-separator_epoch<N>.html` (static). See "Menu" above.
 - `slider/` - hero/banner block, static per epoch (no placeholders).
 - `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
   `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
@@ -259,8 +303,8 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   5 `%s` - image, title, summary, author, date; epochs -1/0: 4 `%s` - title, summary, author,
   date); `entry-categories_epoch<N>.html`, the category "tags" wrapper (1 `%s` - concatenated
   rendered category items). See "CMS entries" below.
-- `elements/<type>/` - one subdirectory per content-block type (e.g. `tittle`, `paragraph`,
-  `image`, `byline`, `category`), each with `<type>_epoch<N>.html`. See "CMS entries" below.
+- `elements/<type>/` - one subdirectory per content-block type (`tittle`, `paragraph`, `image`, `byline`, `category`, `gallery`). The `gallery/` subdirectory has additional variants: `gallery_epoch<N>.html` (container/wrapper for epochs -1 through 2), `gallery-container_epoch3.html` + `gallery-item_epoch3.html` + `gallery-item-more_epoch3.html` (CSS grid items for epoch 3), and `gallery-page_epoch<N>.html` + `gallery-page-item_epoch3.html` (standalone gallery page templates for the `/gallery/<id>` route).
+- `dashboard/media/` - templates for the `/dashboard/media` admin page: `media_epoch3.html`, `media-directory-container_epoch3.html`, `media-directory_epoch3.html`, `item-photo_epoch3.html`, `media-modal_epoch3.html`.
 
 `%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
 that is itself used as a format string must be written as `%%`. Templates that are only ever
@@ -320,12 +364,18 @@ http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │     │     same lang resolution; entries with no categories get category_count == 0
   │     │
   │     ├─ entry_page(&entry, epoch)                   ── src/modules/entry_page/entry_page.c
-  │     │     ├─ entry/entry-header_epoch<N>.html       (header)
+  │     │     │  Note: the header (image, title, summary) is NOT rendered here —
+  │     │     │  it is used only for the blog/home listing thumbnails.
   │     │     ├─ entry/entry-categories_epoch<N>.html   (category "tags", skipped if none)
   │     │     │     + elements/category/category_epoch<N>.html (one per category)
   │     │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
+  │     │           Supported block types: tittle, paragraph, image, byline, gallery
+  │     │           gallery: epoch 3 → CSS grid with lightbox (max 5 visible + "+N");
+  │     │                    epochs 1-2 → table of thumbnails linking to /gallery/<id>;
+  │     │                    epochs -1/0 → text link to /gallery/<id>
   │     │
-  │     └─ buildPageWebSite(epoch, entry.header_title, content)
+  │     └─ buildPageWebSiteAtUrl(epoch, entry.header_title, content, current_url)
+  │           current_url = "/blog" for blog entries, "/page/<link>" for pages
 ```
 
 `cms_get_entry_by_link()`'s query (`db.entries.findOne({ link, enabled: true })`) has no `type`
@@ -336,8 +386,7 @@ listing), `/page/<link>` is for `type: "page"` only. Unknown `content[].type` va
 empty output, so a page still renders if it contains a block type this increment doesn't
 support.
 
-This increment implements 4 content-block types - `tittle`, `paragraph`, `image`, `byline` -
-a minimal but useful set: a heading, body text, an image, and an attribution line.
+Five content-block types are supported: `tittle` (heading with H1-H6 level via `extra_data`), `paragraph` (rich text), `image` (photo with caption), `byline` (author/date attribution), and `gallery` (multi-image block). `tittle` and `paragraph` also receive `extra_data` (heading level and optional future metadata respectively).
 
 `entries.categories[]` (an `ObjectId[]` referencing `entry_categories._id`, per
 `plans/cms-entry-model-plan.md` §2.2) is resolved to category names and rendered as a small "tags"
@@ -345,10 +394,9 @@ block under the header. `entry_categories` documents are `{ _id, name: <map<lang
 a separate collection (kept normalized, since categories are shared across entries). An entry
 with no `categories` field/empty array renders with no tags block.
 
-**Not yet implemented**: `media`/`media_directories`, filtering the `/blog` listing by
-category, heading levels via `content[].extra_data` for `tittle`, and additional element
-types (gallery, table, forms, etc.) - see `develop_docs/plans/cms-entry-model-plan.md` for the
-full target schema.
+Image URLs stored in `header.image_url` and `content[].text` (for `image` blocks) follow the convention `_small`/`_half`/`_full` suffixes generated by `scripts/image-optimizer.sh`. `home_blog` and `entries_admin` use `image_url_variant(url, "_small")` for thumbnails; `entry_page`'s gallery renderer uses `_small` and `_full`. The base URL (without suffix) is a symlink to `_half` created by the optimizer.
+
+**Not yet implemented**: filtering the `/blog` listing by category, additional block types (image-single, image-paragraph, youtube-embed, code-text, list, table, separator, link) - see `develop_docs/plans/cms-entry-model-plan.md` for the full target schema.
 
 ### Home blog list (`/`)
 
@@ -426,14 +474,18 @@ menu(current_url, epoch)                        ── src/modules/menu/menu.c
   │     resolves name (map<lang,string>) to `lang` via resolve_lang_map()
   │     (src/db/bson_lang.c, shared with cms_entries.c)
   │
-  └─ for each item: menu-item_epoch<N>.html (link, name, separator)
+  ├─ for each item where item.link == current_url: menu-item-selected_epoch<N>.html
+  └─ for each other item:                          menu-item_epoch<N>.html
+       (both: 3 %s — link, name, separator)
 ```
 
-`menu` documents are `{ _id, link, name: <map<lang,string>>, order, enabled }`. `MENU_ITEM_LIMIT`
-(`src/db/cms_menu.h`, currently 20) bounds the result size, same fixed-array pattern as
-`HOME_BLOG_LIMIT`. If `cms_get_menu_items()` returns 0 items (DB not ready, empty collection, or
-a DB error), `menu()` falls back to a single built-in `{"/", "Home"}` item so the nav bar is
-never empty - the menu is decorative and must never fail the page.
+`menu` documents are `{ _id, link, name: <map<lang,string>>, order, enabled }`. `MENU_ITEM_LIMIT` (`src/db/cms_menu.h`, currently 20) bounds the result size. If `cms_get_menu_items()` returns 0 items (DB not ready, empty collection, or a DB error), `menu()` falls back to a single built-in `{"/", "Home"}` item so the nav bar is never empty.
+
+`menu-item-selected_epoch<N>.html` adds the CSS class `boat-rudder__navbar__menu_item--selected` (epoch 3) or equivalent styling for older epochs. The active item is determined by `strcmp(current_url, item.link)`:
+- Home page (`/`) always passes `"/"`.
+- Blog list (`/blog`) and all blog entries pass `"/blog"` — entries use the section URL so the Blog item stays highlighted.
+- Pages pass `"/page/<link>"` — matches menu items that point to that specific page.
+- Dashboard and other internal routes pass `"/"` (no menu item is highlighted).
 
 ---
 
@@ -442,17 +494,17 @@ never empty - the menu is decorative and must never fail the page.
 A small authentication slice sits alongside the CMS, sharing the same epoch/template
 infrastructure via a new generic page shell.
 
-### `html_builder/orchestrator.c`: `buildPageWebSite()`
+### `html_builder/orchestrator.c`: `buildPageWebSite()` / `buildPageWebSiteAtUrl()`
 
 ```c
 char *buildPageWebSite(int epoch, const char *page_title, char *html_content);
+char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                             const char *current_url);
 ```
 
-Wraps an arbitrary content fragment (`html_content`, already epoch-rendered) in
-`page_epoch<N>.html` (head + menu + footer), resolving `{{PAGE_TITLE}}` to
-`<title>page_title</title>` and the menu `%s`. Takes ownership of `html_content` (always
-frees it, even on failure). Used by `/login`, `/dashboard` and every error page - `/` keeps
-using `buildHomeWebSite()` and its own `container_epoch<N>.html`.
+Both wrap an arbitrary content fragment in `page_epoch<N>.html` (head + menu + footer), resolving `{{PAGE_TITLE}}` to `<title>page_title</title>`. `buildPageWebSiteAtUrl()` passes `current_url` to `menu()` so the matching nav item receives the `--selected` modifier class. `buildPageWebSite()` is a convenience wrapper that passes `"/"` (used by login, dashboard, error pages). Both take ownership of `html_content`. `/` keeps using `buildHomeWebSite()` which always passes `"/"`.
+
+`page_epoch3.html` also includes the gallery lightbox overlay (`#galleryLightbox`) and its inline JS (`openGalleryLightbox`, `closeGalleryLightbox`, `galleryLightboxNav`) — present on every page but invisible until a gallery image is clicked.
 
 ### `src/db/mongodb_manager.c`
 - `mongodb_manager_init(uri, db_name)`: calls `sodium_init()` (required once, before any
@@ -652,11 +704,9 @@ document instead of a 5-table relational model).
   `image`->`<figure><img><figcaption>`, `byline`->two `<span>`s), HTML-escaping field values for
   the preview only (the saved/rendered HTML itself follows the project's no-escaping
   convention, like every other admin form).
-- **Future work**: the other 8 the-retro-center block types (gallery, image-single,
-  image-paragraph, youtube-embed, code-text, list, table, link, separator, generic) and a media
-  library (`media`/`media_directories`, upload + gallery picker - currently
-  "proposed, not implemented" per `develop_docs/plans/cms-entry-model-plan.md`) are out of scope;
-  images are plain URL text inputs for now.
+- **Editor UX** (epoch 3): the editor uses a trc-editor design with a fixed top bar (save-all, autosave toggle, publish toggle, language tabs), a block type toolbar, and a two-column layout (left: meta + header sidebars; right: content blocks). Blocks default to a document-like preview mode; clicking a block enters edit mode showing the full form. Paragraph blocks have a WYSIWYG rich-text toolbar. Title blocks have H1-H6 level selectors. Gallery blocks show a thumbnail preview area with drag-and-drop reordering and a "Select photos" button that opens the media picker modal. Blocks support drag-and-drop reordering.
+- **Gallery block**: supported in editor (thumbnail preview, drag-drop reorder) and public view (see "Gallery block" below). Selecting photos opens the `/dashboard/api/media/modal` endpoint, which returns the media admin UI inside a modal overlay.
+- **Future work**: remaining block types (image-single, image-paragraph, youtube-embed, code-text, list, table, separator, link) — see `develop_docs/plans/cms-entry-model-plan.md`.
 
 ### Content language resolution (`src/db/cms_languages.c`, `src/db/language_catalog.c`)
 
@@ -774,8 +824,8 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
 - `cms_update_user(id_hex, email, role, new_password)`: `$set`s `email`/`role`, plus a freshly
   hashed `password` only if `new_password != ""` (a blank password leaves the stored hash
   unchanged). Fails on the same conditions as `cms_create_user()`, plus "not found".
-- `cms_delete_user(id_hex)`: `db.users.deleteOne({_id})`. Self-delete and last-admin protection
-  are enforced by the router (`/dashboard/users/<id>/delete`), not here.
+- `cms_delete_user(id_hex)`: `db.users.deleteOne({_id})`. Self-delete and last-admin protection are enforced by the router (`/dashboard/users/<id>/delete`), not here.
+- `cms_get_username_by_id(id_hex, out, out_size)`: reads the user's `email` and returns the part before `@`, sanitized to alphanumeric/dash/underscore/dot. Used by the media admin to build the physical directory path `html/content/posts/<username>/`.
 - `src/modules/users_admin/users_admin.c`:
   - `users_admin_list(epoch, error_message)` -> `dashboard/users/list_epoch<N>.html` (+
     `list-row_epoch<N>.html` per user with a "Role" column - "Administrador"/"Autor" - or
@@ -784,6 +834,35 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
     (email input, always-empty password input, a 2-option `role` `<select>`
     ("Administrador"/"Autor"), + `form-error_epoch<N>.html` if `error_message`). `id == ""` for
     "new user"; action is `/dashboard/users/new` or `/dashboard/users/<id>/edit`.
+
+### Media Admin (`/dashboard/media`, `src/db/cms_media.c`, `src/modules/media_admin/`)
+
+A media library for uploading and managing images used in entries. Requires a dashboard session (any role). Full documentation: [media-admin.md](media-admin.md).
+
+**Collections**:
+- `media` — uploaded file metadata: `{ _id, name, date, format, author_id, dir_id }`.
+- `media_directories` — folder structure: `{ _id, name, parent, author_id }`. Each directory maps to a physical folder at `html/content/posts/<username>/<dirname>/`.
+- `media_galleries` — gallery data for public rendering: `{ _id, content: [url, ...], entry_id }`. Created/updated automatically when saving an entry's `gallery` content block.
+
+**Image variants**: `scripts/image-optimizer.sh` processes each upload via ImageMagick and generates 5 variants (`_full`, `_half`, `_small`, `_medium`, `_micro`) before deleting the original. The base URL (without suffix) is a symlink to `_half`. Requires `imagemagick`, `jpegoptim`, `gifsicle`.
+
+**Routes**:
+
+| Route | Behavior |
+|---|---|
+| `GET /dashboard/media` | Full media admin page |
+| `GET /dashboard/api/media/contents` | Paginated photo grid (HTML fragment) |
+| `GET /dashboard/api/media/modal` | Media picker modal (for entry editor) |
+| `POST /dashboard/api/media/directory` | Create directory |
+| `POST /dashboard/api/media/directory/rename` | Rename directory + physical folder |
+| `POST /dashboard/api/media/directory/delete` | Delete (empty) directory |
+| `POST /dashboard/api/media/upload` | Multipart upload → optimizer → DB insert |
+| `GET /gallery/<id>` | **Public** gallery page (epoch-aware, no session required) |
+
+**Gallery block** (`elements/gallery/`, `src/modules/entry_page/entry_page.c`): the `gallery` content block type stores semicolon-separated image URLs in `content[].text` and the `media_galleries._id` in `extra_data`. When saving an entry with gallery blocks, the router calls `cms_upsert_media_gallery()` to keep the `media_galleries` collection in sync. Public rendering:
+- Epoch 3: CSS grid (3 columns), max 5 visible + "+N remaining" overlay. Click opens a full-screen lightbox with prev/next navigation and keyboard support (←/→/Esc).
+- Epochs 1-2: table of thumbnails linking to `/gallery/<id>?img=N`; the gallery page shows a main image with prev/next links and a thumbnail strip.
+- Epochs -1/0: text link to `/gallery/<id>`.
 
 ### Routing helpers (`src/web_server/http_router.c`)
 

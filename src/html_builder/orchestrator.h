@@ -19,4 +19,8 @@ char *buildHomeWebSite(int epoch, const char *lang);
 // be built. The caller must free() the returned buffer.
 char *buildPageWebSite(int epoch, const char *page_title, char *html_content);
 
+// Same as buildPageWebSite() but highlights the menu item matching current_url.
+char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                             const char *current_url);
+
 #endif // ORCHESTRATOR_H

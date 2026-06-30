@@ -11,7 +11,7 @@
 
 char *buildHomeWebSite(int epoch, const char *lang) {
     char *html_container    = container(epoch, "Boat Rudder - Home");
-    char *html_menu         = menu("/", epoch);
+    char *html_menu         = menu("/", epoch);  // home is always "/"
     char *html_slider       = slider(epoch);
     char *html_home_content = home_content(epoch, lang);
     char *html_home_blog    = home_blog(epoch, lang);
@@ -30,14 +30,15 @@ char *buildHomeWebSite(int epoch, const char *lang) {
     return result;
 }
 
-char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
+char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                             const char *current_url) {
     char *path = generate_url_theme("page/page_epoch%d.html", epoch);
     char *raw  = path ? read_file_to_string(path) : NULL;
     free(path);
 
     char *title_tag = build_title_tag(page_title);
     char *titled    = (raw && title_tag) ? str_replace_first(raw, "{{PAGE_TITLE}}", title_tag) : NULL;
-    char *html_menu = menu("/", epoch);
+    char *html_menu = menu(current_url ? current_url : "/", epoch);
 
     char *result = NULL;
     if (titled && html_menu && html_content) {
@@ -51,4 +52,8 @@ char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
     free(html_content);
 
     return result;
+}
+
+char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
+    return buildPageWebSiteAtUrl(epoch, page_title, html_content, "/");
 }

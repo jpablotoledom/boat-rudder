@@ -139,13 +139,21 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
             return;
         }
 
+        // For blog entries highlight the "/blog" menu item (section match).
+        // For pages use the full "/page/<link>" URL (menu items point to specific pages).
+        char current_url[256];
+        if (strcmp(expected_type, "blog") == 0)
+            snprintf(current_url, sizeof(current_url), "/blog");
+        else
+            snprintf(current_url, sizeof(current_url), "/page/%s", link);
+
         char *title   = strdup(entry.header_title);
         char *content = entry_page(&entry, epoch);
         cms_entry_free(&entry);
 
         char *body = NULL;
         if (content && title) {
-            body = buildPageWebSite(epoch, title, content); // frees content
+            body = buildPageWebSiteAtUrl(epoch, title, content, current_url);
         } else {
             free(content);
         }
@@ -1168,7 +1176,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 int epoch = resolve_epoch(&req);
 
                 char *content  = blog_list(epoch, content_lang);
-                char *body     = buildPageWebSite(epoch, "Boat Rudder - Blog", content);
+                char *body     = buildPageWebSiteAtUrl(epoch, "Boat Rudder - Blog", content, "/blog");
                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);

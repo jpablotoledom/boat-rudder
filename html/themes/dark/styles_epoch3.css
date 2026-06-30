@@ -115,6 +115,10 @@ h1, h2 {
   border: none;
 }
 
+.boat-rudder__navbar__menu_item--selected a {
+  color: #56e9fd;
+}
+
 .navbar__toggle {
   display: none;
   flex-direction: column;
@@ -160,8 +164,8 @@ h1, h2 {
 
 /* GENERIC PAGE (login, dashboard, error, ...) */
 .boat-rudder__page-content {
-  width: 80%;
-  max-width: 980px;
+  /* width: 80%;
+  max-width: 980px; */
   margin: 0 auto;
   padding: 40px 20px;
   min-height: 50vh;

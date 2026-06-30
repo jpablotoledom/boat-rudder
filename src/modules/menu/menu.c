@@ -17,17 +17,18 @@ static const CmsMenuItem FALLBACK_ITEMS[] = {
 #define FALLBACK_ITEM_COUNT (sizeof(FALLBACK_ITEMS) / sizeof(FALLBACK_ITEMS[0]))
 
 char *menu(const char *current_url, int epoch) {
-    (void)current_url;
+    char *menu_item_path    = generate_url_theme("menu/menu-item_epoch%d.html", epoch);
+    char *selected_item_path = generate_url_theme("menu/menu-item-selected_epoch%d.html", epoch);
+    char *separator_path    = generate_url_theme("menu/menu-item-separator_epoch%d.html", epoch);
+    char *menu_path         = generate_url_theme("menu/menu_epoch%d.html", epoch);
 
-    char *menu_item_path = generate_url_theme("menu/menu-item_epoch%d.html", epoch);
-    char *separator_path = generate_url_theme("menu/menu-item-separator_epoch%d.html", epoch);
-    char *menu_path      = generate_url_theme("menu/menu_epoch%d.html", epoch);
-
-    char *menu_item_tpl = menu_item_path ? read_file_to_string(menu_item_path) : NULL;
-    char *separator     = separator_path ? read_file_to_string(separator_path) : NULL;
-    char *menu_tpl      = menu_path      ? read_file_to_string(menu_path)      : NULL;
+    char *menu_item_tpl     = menu_item_path     ? read_file_to_string(menu_item_path)     : NULL;
+    char *selected_item_tpl = selected_item_path ? read_file_to_string(selected_item_path) : NULL;
+    char *separator         = separator_path     ? read_file_to_string(separator_path)     : NULL;
+    char *menu_tpl          = menu_path          ? read_file_to_string(menu_path)          : NULL;
 
     free(menu_item_path);
+    free(selected_item_path);
     free(separator_path);
     free(menu_path);
 
@@ -35,6 +36,7 @@ char *menu(const char *current_url, int epoch) {
     char *result = NULL;
 
     if (!menu_item_tpl || !separator || !menu_tpl) goto cleanup;
+    if (!selected_item_tpl) selected_item_tpl = strdup(menu_item_tpl);
 
     CmsMenuItem *db_items = NULL;
     size_t db_count = 0;
@@ -56,7 +58,9 @@ char *menu(const char *current_url, int epoch) {
     for (size_t i = 0; i < item_count; i++) {
         const char *sep = (i + 1 < item_count) ? separator : "";
 
-        char *item = render_template(menu_item_tpl, menu_items[i].link, menu_items[i].name, sep);
+        int is_selected = current_url && strcmp(current_url, menu_items[i].link) == 0;
+        const char *tpl = is_selected ? selected_item_tpl : menu_item_tpl;
+        char *item = render_template(tpl, menu_items[i].link, menu_items[i].name, sep);
         if (!item) {
             cms_menu_free(db_items, db_count);
             goto cleanup;
@@ -76,6 +80,7 @@ char *menu(const char *current_url, int epoch) {
 
 cleanup:
     free(menu_item_tpl);
+    free(selected_item_tpl);
     free(separator);
     free(menu_tpl);
     free(items);

@@ -351,6 +351,16 @@
       window._galleryTargetBlock = null;
     }
 
+    if (window.contentEditorGalleryType === 'gallery-block' && window._galleryTargetBlock && selectedIds.length > 0) {
+      var joined = selectedIds.join(';');
+      var galleryTextFields = window._galleryTargetBlock.querySelectorAll('.trc-block__lang-content [name="text"]');
+      galleryTextFields.forEach(function (f) { f.value = joined; });
+      var galleryPreview = window._galleryTargetBlock.querySelector('.trc-gallery-preview');
+      if (galleryPreview && typeof renderGalleryThumbs === 'function') renderGalleryThumbs(galleryPreview, joined);
+      if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
+      window._galleryTargetBlock = null;
+    }
+
     if (typeof setContentChanged === 'function')
       setContentChanged();
 

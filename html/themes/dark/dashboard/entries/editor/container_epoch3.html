@@ -34,6 +34,7 @@
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('tittle')">&sect; Title</button>
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('image')">&square; Image</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('gallery')">&#9632; Gallery</button>
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('byline')">&#9998; Byline</button>
   </div>
 
@@ -182,6 +183,7 @@
     var type = block.dataset.type;
     if (type === 'paragraph') initParagraphEditors(block);
     if (type === 'tittle') initBlockHeadingBtns(block);
+    if (type === 'gallery') initGalleryBlock(block);
     applyLangVisibility(block);
   }
 
@@ -216,6 +218,17 @@
       }
     } else if (type === 'byline') {
       preview.innerHTML = '<div class="trc-preview__byline"><span class="trc-preview__byline-author">' + escapeHtml(text) + '</span><span class="trc-preview__byline-date">' + escapeHtml(extra) + '</span></div>';
+    } else if (type === 'gallery') {
+      if (text) {
+        var urls = text.split(';').filter(Boolean);
+        var thumbs = urls.map(function (u) {
+          var t = u.trim().replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+          return '<img class="trc-preview__thumb" src="' + escapeHtml(t) + '" alt="">';
+        }).join('');
+        preview.innerHTML = thumbs || '<span class="trc-preview__empty">Empty gallery</span>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">Empty gallery</span>';
+      }
     } else {
       preview.innerHTML = '<span class="trc-preview__empty">[' + escapeHtml(type) + ']</span>';
     }
@@ -629,6 +642,88 @@
     } else {
       window.open('/dashboard', '_blank');
     }
+  };
+
+  /* ---- Gallery block ---- */
+  function initGalleryBlock(block) {
+    var gp = block.querySelector('.trc-gallery-preview');
+    if (!gp) return;
+    var panel = block.querySelector('.trc-block__lang-content[data-lang="' + currentLang + '"]');
+    var tf = panel ? panel.querySelector('[name="text"]') : null;
+    if (tf && tf.value) renderGalleryThumbs(gp, tf.value);
+  }
+
+  window.renderGalleryThumbs = function (container, value) {
+    container.innerHTML = '';
+    if (!value || !value.trim()) {
+      container.innerHTML = '<span class="trc-gallery-empty">No images selected</span>';
+      return;
+    }
+    value.split(';').forEach(function (url) {
+      url = url.trim();
+      if (!url) return;
+      var img = document.createElement('img');
+      img.src = url.replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+      img.className = 'trc-gallery-thumb';
+      img.alt = '';
+      img.draggable = true;
+      img.dataset.url = url;
+      container.appendChild(img);
+    });
+    initGalleryThumbDragDrop(container);
+  };
+
+  function initGalleryThumbDragDrop(container) {
+    var draggingThumb = null;
+    container.addEventListener('dragstart', function (e) {
+      draggingThumb = e.target.closest('.trc-gallery-thumb');
+      if (!draggingThumb) return;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(function () { if (draggingThumb) draggingThumb.classList.add('dragging'); }, 0);
+    });
+    container.addEventListener('dragend', function () {
+      if (draggingThumb) draggingThumb.classList.remove('dragging');
+      container.querySelectorAll('.trc-gallery-thumb').forEach(function (img) { img.classList.remove('drag-over'); });
+      draggingThumb = null;
+    });
+    container.addEventListener('dragenter', function (e) { e.preventDefault(); });
+    container.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (!draggingThumb) return;
+      var target = e.target.closest('.trc-gallery-thumb');
+      if (!target || target === draggingThumb) return;
+      container.querySelectorAll('.trc-gallery-thumb').forEach(function (img) { img.classList.remove('drag-over'); });
+      target.classList.add('drag-over');
+      var imgs = Array.from(container.querySelectorAll('.trc-gallery-thumb'));
+      if (imgs.indexOf(draggingThumb) < imgs.indexOf(target)) target.after(draggingThumb);
+      else target.before(draggingThumb);
+    });
+    container.addEventListener('drop', function (e) {
+      e.preventDefault();
+      syncGalleryInput(container);
+    });
+  }
+
+  function syncGalleryInput(container) {
+    var block = container.closest('.trc-block');
+    if (!block) return;
+    var urls = Array.from(container.querySelectorAll('.trc-gallery-thumb'))
+      .map(function (img) { return img.dataset.url; })
+      .filter(Boolean).join(';');
+    block.querySelectorAll('.trc-block__lang-content [name="text"]').forEach(function (tf) {
+      tf.value = urls;
+    });
+    setContentChanged();
+  }
+
+  window.openGalleryForBlock = function (btn) {
+    var block = btn.closest('.trc-block');
+    if (!block) return;
+    window._galleryTargetBlock = block;
+    window.contentEditorGalleryType = 'gallery-block';
+    window.contentEditorGalleryId = block.dataset.blockId;
+    window.galleryElementsToUpdate = [];
+    loadMediaModal();
   };
 
   /* ---- Gallery modal ---- */

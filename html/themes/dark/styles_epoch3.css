@@ -279,11 +279,11 @@ h1, h2 {
   margin-top: 10px;
 }
 
-.boat-rudder__dashboard__inline-form {
+/* .boat-rudder__dashboard__inline-form {
   display: flex;
   align-items: center;
   gap: 10px;
-}
+} */
 
 .boat-rudder__dashboard__inline-form form {
   margin: 0;
@@ -320,11 +320,11 @@ h1, h2 {
   display: block;
 }
 
-.boat-rudder__dashboard__categories {
+/* .boat-rudder__dashboard__categories {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
+} */
 
 /* HOME CONTENT */
 .boat-rudder__home-content {
@@ -530,6 +530,17 @@ h1, h2 {
     border-right: none;
     border-top: 1px solid #333333;
   }
+
+  .boat-rudder__gallery-container {
+    padding: 15px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .boat-rudder__gallery-item:nth-child(1) {
+    grid-column-start: span 1;
+  }
+  .boat-rudder__gallery-item:nth-child(4) {
+    grid-column-start: span 1;
+  }
 }
 
 @media (max-width: 500px) {
@@ -616,6 +627,98 @@ h1, h2 {
   border-radius: 12px;
   font-size: 0.85em;
 }
+
+/* ============================================================
+   GALLERY (public)
+   ============================================================ */
+.boat-rudder__gallery-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-gap: 20px;
+}
+
+.boat-rudder__gallery-row {
+  display: flex;
+  gap: 20px;
+}
+
+.boat-rudder__gallery-item {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.boat-rudder__gallery-item--single img {
+  max-width: 300px;
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.boat-rudder__gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  max-height: 300px;
+}
+
+.boat-rudder__gallery-item:nth-child(1) {
+  grid-column-start: span 1;
+}
+
+.boat-rudder__gallery-item:nth-child(4) {
+  grid-column-start: span 2;
+}
+
+/* "+N more" overlay */
+.boat-rudder__gallery-item--more {
+  position: relative; cursor: pointer;
+}
+.boat-rudder__gallery-more-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 700; color: #fff;
+  border-radius: 4px;
+}
+.boat-rudder__gallery-item--more:hover .boat-rudder__gallery-more-overlay {
+  background: rgba(0,0,0,0.4);
+}
+
+/* GALLERY LIGHTBOX */
+.boat-rudder__gallery-lightbox {
+  display: none; position: fixed; z-index: 2000;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.92);
+  align-items: center; justify-content: center;
+}
+.boat-rudder__gallery-lightbox__img {
+  max-width: 90vw; max-height: 85vh; object-fit: contain;
+  border-radius: 4px;
+}
+.boat-rudder__gallery-lightbox__close {
+  position: absolute; top: 16px; right: 24px;
+  color: #aaa; font-size: 32px; cursor: pointer; z-index: 2001;
+  line-height: 1;
+}
+.boat-rudder__gallery-lightbox__close:hover { color: #fff; }
+.boat-rudder__gallery-lightbox__prev,
+.boat-rudder__gallery-lightbox__next {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  background: rgba(255,255,255,0.1); border: none; color: #ddd;
+  font-size: 28px; padding: 16px 12px; cursor: pointer;
+  border-radius: 4px; z-index: 2001;
+}
+.boat-rudder__gallery-lightbox__prev { left: 16px; }
+.boat-rudder__gallery-lightbox__next { right: 16px; }
+.boat-rudder__gallery-lightbox__prev:hover,
+.boat-rudder__gallery-lightbox__next:hover { background: rgba(255,255,255,0.2); color: #fff; }
 
 /* ============================================================
    ENTRY EDITOR (trc-editor)

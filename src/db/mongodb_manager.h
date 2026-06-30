@@ -11,6 +11,7 @@
 #define LANGUAGES_COLLECTION        "languages"
 #define MEDIA_COLLECTION            "media"
 #define MEDIA_DIRECTORIES_COLLECTION "media_directories"
+#define MEDIA_GALLERIES_COLLECTION   "media_galleries"
 
 // Initializes the MongoDB client pool from `uri`/`db_name` (see
 // configs/settings.conf: mongodb_uri, mongodb_db). Must be called once from

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gallery</title>
+  <link rel="stylesheet" href="/themes/dark/styles_epoch3.css">
+  <style>
+    body { background: #000; margin: 0; }
+    .gallery-page { padding: 20px; max-width: 1000px; margin: 0 auto; }
+    .gallery-page__back { color: #888; text-decoration: none; display: inline-block; margin-bottom: 16px; }
+    .gallery-page__back:hover { color: #fff; }
+    .gallery-page__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .gallery-page__item img { width: 100%%; height: 150px; object-fit: cover; cursor: pointer; border-radius: 4px; display: block; }
+    .gallery-page__item img:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="gallery-page">
+    <a href="javascript:history.back()" class="gallery-page__back">&larr; Back</a>
+    <div class="gallery-page__grid">%s</div>
+  </div>
+</body>
+</html>

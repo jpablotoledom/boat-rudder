@@ -89,6 +89,7 @@ set(SOURCES
     src/db/cms_languages.c
     src/db/cms_users_admin.c
     src/db/cms_media.c
+    src/db/cms_media_galleries.c
     src/db/language_catalog.c
     src/db/session_manager.c
 )

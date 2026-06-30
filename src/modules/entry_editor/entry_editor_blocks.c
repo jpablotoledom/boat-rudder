@@ -62,6 +62,9 @@ char *entry_editor_render_block(const CmsContentBlockEdit *block,
     if (strcmp(block->type, "byline") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/byline_epoch%d.html",
                                    langs, lang_count, epoch);
+    if (strcmp(block->type, "gallery") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/gallery_epoch%d.html",
+                                   langs, lang_count, epoch);
     return strdup("");
 }
 

@@ -29,8 +29,11 @@
 #include "../modules/menu_admin/menu_admin.h"
 #include "../modules/users_admin/users_admin.h"
 #include "../db/cms_media.h"
+#include "../db/cms_media_galleries.h"
 #include "utils/multipart_parser.h"
 #include "../utils/build_epoch_response.h"
+#include "../utils/generate_url_theme.h"
+#include "../utils/read_file.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
 #include "../utils/json_utils.h"
@@ -1036,6 +1039,131 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 int epoch = resolve_epoch(&req);
                 serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch);
 
+            } else if (strncmp(decoded_url, "/gallery/", 9) == 0 && decoded_url[9] != '\0') {
+                int epoch = resolve_epoch(&req);
+                const char *gallery_id = decoded_url + 9;
+                const char *img_str = get_query_param(params, param_count, "img");
+                int img_index = img_str[0] ? atoi(img_str) : 0;
+
+                if (!mongodb_manager_is_ready() || strlen(gallery_id) != 24) {
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else {
+                    CmsMediaGallery gallery;
+                    if (!cms_get_media_gallery(gallery_id, &gallery)) {
+                        send_error_response(ctx, 404, "404 Not Found", epoch);
+                    } else if (epoch >= 3) {
+                        char *item_tpl_path = generate_url_theme("elements/gallery/gallery-page-item_epoch%d.html", epoch);
+                        char *item_tpl = item_tpl_path ? read_file_to_string(item_tpl_path) : NULL;
+                        free(item_tpl_path);
+                        if (!item_tpl) item_tpl = strdup("<a href=\"%s\" target=\"_blank\"><img src=\"%s\" style=\"width:200px;height:150px;object-fit:cover;margin:4px\"></a>\n");
+
+                        char *items_html = strdup("");
+                        for (size_t i = 0; items_html && i < gallery.url_count; i++) {
+                            char *full = image_url_variant(gallery.urls[i], "_full");
+                            char *small = image_url_variant(gallery.urls[i], "_small");
+                            char *item = (full && small) ? render_template(item_tpl, full, small) : NULL;
+                            if (item) items_html = str_append(items_html, item);
+                            free(item); free(full); free(small);
+                        }
+                        free(item_tpl);
+
+                        char *page_tpl_path = generate_url_theme("elements/gallery/gallery-page_epoch%d.html", epoch);
+                        char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
+                        free(page_tpl_path);
+                        if (!page_tpl) page_tpl = strdup("<html><body>%s</body></html>");
+
+                        char *page_html = items_html ? render_template(page_tpl, items_html) : NULL;
+                        free(items_html);
+                        free(page_tpl);
+
+                        if (page_html) {
+                            char *response = build_epoch_response(page_html, "", epoch);
+                            send_or_error(ctx, response, req.method, epoch);
+                        } else {
+                            send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+                        }
+                    } else {
+                        // Epochs -1/0/1/2: paginated gallery
+                        int count = (int)gallery.url_count;
+                        int cur = (img_index >= 0 && img_index < count) ? img_index : 0;
+                        int prev_idx = (cur - 1 + count) % count;
+                        int next_idx = (cur + 1) % count;
+
+                        char *html = strdup("");
+                        char back_link[256];
+                        snprintf(back_link, sizeof(back_link),
+                                 "<p><a href=\"javascript:history.back()\">&lt; Back</a></p>");
+                        html = str_append(html, back_link);
+
+                        if (epoch <= 0) {
+                            for (int i = 0; i < count && html; i++) {
+                                char link[256];
+                                snprintf(link, sizeof(link), "<p>[Image %d]</p>", i + 1);
+                                html = str_append(html, link);
+                            }
+                        } else {
+                            // Main image + prev/next
+                            char *main_url = (epoch == 1)
+                                ? image_url_variant(gallery.urls[cur], "_medium")
+                                : image_url_variant(gallery.urls[cur], "_half");
+                            if (epoch == 1 && main_url) {
+                                char *dot = strrchr(main_url, '.');
+                                if (dot) strcpy(dot, ".gif");
+                            }
+
+                            char main_block[1024];
+                            snprintf(main_block, sizeof(main_block),
+                                "<p>"
+                                "<a href=\"/gallery/%s?img=%d\"><b>[prev]</b></a> "
+                                "<img src=\"%s\" border=\"0\" alt=\"\"> "
+                                "<a href=\"/gallery/%s?img=%d\"><b>[next]</b></a>"
+                                "</p>",
+                                gallery_id, prev_idx, main_url ? main_url : "",
+                                gallery_id, next_idx);
+                            free(main_url);
+                            html = str_append(html, main_block);
+
+                            // Thumbnail strip
+                            html = str_append(html, "<p align=\"center\">");
+                            for (int i = 0; i < count && html; i++) {
+                                char *t = (epoch == 1)
+                                    ? image_url_variant(gallery.urls[i], "_micro")
+                                    : image_url_variant(gallery.urls[i], "_small");
+                                if (epoch == 1 && t) {
+                                    char *dot = strrchr(t, '.'); if (dot) strcpy(dot, ".gif");
+                                }
+                                int border = (i == cur) ? 3 : 1;
+                                char thumb[512];
+                                snprintf(thumb, sizeof(thumb),
+                                    "<a href=\"/gallery/%s?img=%d\">"
+                                    "<img src=\"%s\" width=\"80\" height=\"60\" border=\"%d\""
+                                    " hspace=\"2\" vspace=\"2\" alt=\"\"></a>",
+                                    gallery_id, i, t ? t : "", border);
+                                free(t);
+                                html = str_append(html, thumb);
+                            }
+                            html = str_append(html, "</p>");
+                        }
+
+                        char *page_tpl_path = generate_url_theme("elements/gallery/gallery-page_epoch%d.html", epoch);
+                        char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
+                        free(page_tpl_path);
+                        if (!page_tpl) page_tpl = strdup("<html><body>%s</body></html>");
+
+                        char *page_html = html ? render_template(page_tpl, html) : NULL;
+                        free(html);
+                        free(page_tpl);
+
+                        if (page_html) {
+                            char *response = build_epoch_response(page_html, "", epoch);
+                            send_or_error(ctx, response, req.method, epoch);
+                        } else {
+                            send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+                        }
+                    }
+                    cms_media_gallery_free(&gallery);
+                }
+
             } else if (strcmp(decoded_url, "/blog") == 0) {
                 int epoch = resolve_epoch(&req);
 
@@ -1475,6 +1603,21 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         }
 
                         if (cms_update_entry_content(id, langs, lang_count, blocks, (size_t)block_count) == 0) {
+                            for (int gi = 0; gi < block_count; gi++) {
+                                if (blocks[gi].type && strcmp(blocks[gi].type, "gallery") == 0 &&
+                                    blocks[gi].text_values && blocks[gi].text_values[0] &&
+                                    blocks[gi].text_values[0][0]) {
+                                    char gal_id[25];
+                                    const char *existing = blocks[gi].extra_data;
+                                    if (cms_upsert_media_gallery(
+                                            (existing && strlen(existing) == 24) ? existing : NULL,
+                                            id, blocks[gi].text_values[0], gal_id) == 0) {
+                                        free(blocks[gi].extra_data);
+                                        blocks[gi].extra_data = strdup(gal_id);
+                                        cms_update_entry_content(id, langs, lang_count, blocks, (size_t)block_count);
+                                    }
+                                }
+                            }
                             response = build_json_response("{\"ok\":true}");
                         } else {
                             response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");

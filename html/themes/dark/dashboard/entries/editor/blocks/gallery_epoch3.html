@@ -1,0 +1,38 @@
+    <div class="trc-block" data-block-id="%s" data-type="gallery" onclick="activateBlock(this)">
+      <span class="trc-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="trc-block__header">
+        <button class="trc-block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="trc-block__type-label type-gallery">&#9632; Gallery</span>
+        <div class="trc-block__header-actions">
+          <button class="trc-meta-btn" style="width:auto;margin:0;padding:3px 10px;font-size:11px"
+                  onclick="event.stopPropagation();openGalleryForBlock(this)">Select photos</button>
+          <button class="trc-block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="trc-block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="trc-block__drag">&#8942;</span>
+          <button class="trc-block__close-btn" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="trc-block__preview"></div>
+
+      <div class="trc-block__body">
+        <div class="trc-gallery-preview">
+          <span class="trc-gallery-empty">No images selected</span>
+        </div>
+
+        <div style="display:none">
+%s
+        </div>
+
+        <div class="trc-advanced">
+          <button class="trc-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="trc-advanced__panel">
+            <label class="trc-advanced__label">extra_data</label>
+            <input class="trc-advanced__input" type="text" oninput="syncAdvancedInput(this)">
+          </div>
+        </div>
+      </div>
+
+      <input name="extra_data" type="hidden" value="%s">
+    </div>

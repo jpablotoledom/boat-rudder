@@ -157,12 +157,8 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
 
         char *body = NULL;
         if (content && title) {
-            if (category_menu_html) {
-                body = buildBlogWebSiteAtUrl(epoch, title, content, current_url, category_menu_html);
-                category_menu_html = NULL; // ownership transferred
-            } else {
-                body = buildPageWebSiteAtUrl(epoch, title, content, current_url);
-            }
+            body = buildEntryWebSiteAtUrl(epoch, title, content, current_url, category_menu_html);
+            category_menu_html = NULL; // ownership transferred
         } else {
             free(content);
             free(category_menu_html);
@@ -1209,7 +1205,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 cms_categories_free(cats, cat_count);
 
                 char *content  = blog_list(epoch, content_lang);
-                char *body     = buildBlogWebSiteAtUrl(epoch, "Boat Rudder - Blog", content, "/blog", cat_menu);
+                char *body     = buildBlogListWebSiteAtUrl(epoch, "Boat Rudder - Blog", content, "/blog", cat_menu);
                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
@@ -1248,7 +1244,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     snprintf(page_title, sizeof(page_title), "Blog - %s", cat_name ? cat_name : cat_slug);
                     free(cat_name);
 
-                    char *body     = buildBlogWebSiteAtUrl(epoch, page_title, content, "/blog", cat_menu);
+                    char *body     = buildBlogListWebSiteAtUrl(epoch, page_title, content, "/blog", cat_menu);
                     char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);

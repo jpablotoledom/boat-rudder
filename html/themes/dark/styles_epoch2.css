@@ -110,6 +110,16 @@ a:link, a:visited {
   margin-top: 20px;
 }
 
+/* ENTRY PAGE WRAPPER */
+.boat-rudder__page-entry__container {
+  width: 100%;
+}
+
+.boat-rudder__page-entry {
+  width: 95%;
+  margin: 0 auto;
+}
+
 /* ENTRY PAGE */
 .br-entry-header {
   background-color: #000080;

@@ -23,12 +23,17 @@ char *buildPageWebSite(int epoch, const char *page_title, char *html_content);
 char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
                              const char *current_url);
 
-// Like buildPageWebSiteAtUrl() but also renders a category sub-menu bar below
-// the main navbar. Used for all blog pages (/blog, /blog/<slug>,
-// /blog/category/<slug>). Takes ownership of both `html_content` and
-// `category_menu_html` (frees them in all paths). If `category_menu_html` is
-// NULL the page renders identically to buildPageWebSiteAtUrl().
-char *buildBlogWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
-                             const char *current_url, char *category_menu_html);
+// Builds a blog listing page (/blog, /blog/category/*) using a full-width
+// template (no page-content constraint) for epoch 3. Appends category_menu_html
+// after the navbar. Takes ownership of html_content and category_menu_html.
+char *buildBlogListWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                                 const char *current_url, char *category_menu_html);
+
+// Builds a blog or page entry using page-entry_epoch*.html for epochs 2-3
+// (article + page-entry wrapper), falling back to page_epoch*.html for older
+// epochs. Appends category_menu_html (may be NULL) after the navbar.
+// Takes ownership of html_content and category_menu_html.
+char *buildEntryWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                              const char *current_url, char *category_menu_html);
 
 #endif // ORCHESTRATOR_H

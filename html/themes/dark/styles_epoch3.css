@@ -162,10 +162,23 @@ h1, h2 {
   padding-top: 35%;
 }
 
+/* ENTRY PAGE WRAPPER (blog and page entries) */
+.boat-rudder__page-entry__container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.boat-rudder__page-entry {
+  width: 80%;
+  max-width: 980px;
+  color: #ffffff;
+}
+
 /* GENERIC PAGE (login, dashboard, error, ...) */
 .boat-rudder__page-content {
-  /* width: 80%;
-  max-width: 980px; */
+  width: 80%;
+  max-width: 980px;
   margin: 0 auto;
   padding: 40px 20px;
   min-height: 50vh;

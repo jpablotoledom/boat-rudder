@@ -59,9 +59,10 @@ char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
     return buildPageWebSiteAtUrl(epoch, page_title, html_content, "/");
 }
 
-char *buildBlogWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
-                             const char *current_url, char *category_menu_html) {
-    char *path = generate_url_theme("page/page_epoch%d.html", epoch);
+static char *build_blog_page_internal(const char *tpl_fmt, int epoch,
+                                       const char *page_title, char *html_content,
+                                       const char *current_url, char *category_menu_html) {
+    char *path = generate_url_theme(tpl_fmt, epoch);
     char *raw  = path ? read_file_to_string(path) : NULL;
     free(path);
 
@@ -69,11 +70,9 @@ char *buildBlogWebSiteAtUrl(int epoch, const char *page_title, char *html_conten
     char *titled    = (raw && title_tag) ? str_replace_first(raw, "{{PAGE_TITLE}}", title_tag) : NULL;
     char *html_menu = menu(current_url ? current_url : "/", epoch);
 
-    // Concatenate category menu right after the main navbar HTML.
-    // Both fill the first %s slot in the page template.
     char *combined_nav;
     if (category_menu_html) {
-        combined_nav = str_append(html_menu, category_menu_html); // frees html_menu
+        combined_nav = str_append(html_menu, category_menu_html);
         free(category_menu_html);
         if (!combined_nav) combined_nav = strdup("");
     } else {
@@ -92,4 +91,16 @@ char *buildBlogWebSiteAtUrl(int epoch, const char *page_title, char *html_conten
     free(html_content);
 
     return result;
+}
+
+char *buildBlogListWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                                 const char *current_url, char *category_menu_html) {
+    const char *tpl = (epoch == 3) ? "page/page-blog_epoch%d.html" : "page/page_epoch%d.html";
+    return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url, category_menu_html);
+}
+
+char *buildEntryWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                              const char *current_url, char *category_menu_html) {
+    const char *tpl = (epoch >= 2) ? "page/page-entry_epoch%d.html" : "page/page_epoch%d.html";
+    return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url, category_menu_html);
 }

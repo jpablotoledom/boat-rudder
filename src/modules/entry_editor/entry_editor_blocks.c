@@ -34,6 +34,15 @@ static char *render_lang_fields(const CmsContentBlockEdit *block,
     return result;
 }
 
+// block id + extra_data only — for blocks with no per-language text.
+static char *render_notext_block(const CmsContentBlockEdit *block, const char *tpl_path, int epoch) {
+    char *tpl = load_template(tpl_path, epoch);
+    if (!tpl) return NULL;
+    char *result = render_template(tpl, block->id, block->extra_data ? block->extra_data : "");
+    free(tpl);
+    return result;
+}
+
 // block id + per-language text fields + one untranslated extra_data field.
 static char *render_extra_block(const CmsContentBlockEdit *block, const char *tpl_path,
                                  const CmsLanguageItem *langs, size_t lang_count, int epoch) {
@@ -64,6 +73,31 @@ char *entry_editor_render_block(const CmsContentBlockEdit *block,
                                    langs, lang_count, epoch);
     if (strcmp(block->type, "gallery") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/gallery_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "separator") == 0)
+        return render_notext_block(block, "dashboard/entries/editor/blocks/separator_epoch%d.html", epoch);
+    if (strcmp(block->type, "youtube-embed") == 0)
+        return render_notext_block(block, "dashboard/entries/editor/blocks/youtube-embed_epoch%d.html", epoch);
+    if (strcmp(block->type, "link") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/link_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "list") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/list_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "code-text") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/code-text_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "generic") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/generic_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "image-paragraph") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/image-paragraph_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "table") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/table_epoch%d.html",
+                                   langs, lang_count, epoch);
+    if (strcmp(block->type, "social-networks") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/social-networks_epoch%d.html",
                                    langs, lang_count, epoch);
     return strdup("");
 }

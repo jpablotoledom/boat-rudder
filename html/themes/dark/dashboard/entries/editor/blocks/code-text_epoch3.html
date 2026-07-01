@@ -1,0 +1,44 @@
+    <div class="trc-block" data-block-id="%s" data-type="code-text" onclick="activateBlock(this)">
+      <span class="trc-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="trc-block__header">
+        <button class="trc-block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="trc-block__type-label type-code-text">&#10092;/&#10093; Code</span>
+        <div class="trc-block__header-actions">
+          <button class="trc-block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="trc-block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="trc-block__drag">&#8942;</span>
+          <button class="trc-block__close-btn" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="trc-block__preview"></div>
+
+      <div class="trc-block__body">
+        <div class="trc-meta-group">
+          <label class="trc-advanced__label">Language</label>
+          <select class="trc-code-lang-select" onclick="event.stopPropagation()" onchange="syncCodeLang(this)"
+                  style="width:100%%;background:#2a2a2a;border:1px solid #3a3a3a;color:#e0e0e0;padding:4px;height:28px">
+            <option value="">Plain text</option>
+            <option value="javascript">JavaScript</option>
+            <option value="html">HTML</option>
+            <option value="c">C / C++</option>
+            <option value="python">Python</option>
+            <option value="css">CSS</option>
+            <option value="php">PHP</option>
+            <option value="bash">Bash</option>
+            <option value="sql">SQL</option>
+          </select>
+        </div>
+%s
+        <div class="trc-advanced">
+          <button class="trc-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="trc-advanced__panel">
+            <label class="trc-advanced__label">extra_data (language class)</label>
+            <input class="trc-advanced__input" type="text" oninput="syncAdvancedInput(this)">
+          </div>
+        </div>
+      </div>
+
+      <input name="extra_data" type="hidden" value="%s">
+    </div>

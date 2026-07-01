@@ -1,0 +1,40 @@
+    <div class="trc-block" data-block-id="%s" data-type="image-paragraph" onclick="activateBlock(this)">
+      <span class="trc-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="trc-block__header">
+        <button class="trc-block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="trc-block__type-label type-image-paragraph">&#9636; Image (float)</span>
+        <div class="trc-block__header-actions">
+          <button class="trc-block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="trc-block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="trc-block__drag">&#8942;</span>
+          <button class="trc-block__close-btn" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="trc-block__preview"></div>
+
+      <div class="trc-block__body">
+        <button class="trc-meta-btn" type="button" onclick="openImageGallery(this)">Select image</button>
+%s
+        <div class="trc-meta-group" style="margin-top:8px">
+          <label class="trc-advanced__label">Alignment</label>
+          <select class="trc-align-select" onclick="event.stopPropagation()" onchange="setAlignExtraData(this)"
+                  style="width:100%%;background:#2a2a2a;border:1px solid #3a3a3a;color:#e0e0e0;padding:4px;height:28px">
+            <option value="">None</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+
+        <div class="trc-advanced">
+          <button class="trc-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="trc-advanced__panel">
+            <label class="trc-advanced__label">extra_data (alignment: left / right)</label>
+            <input class="trc-advanced__input" type="text" oninput="syncAdvancedInput(this)">
+          </div>
+        </div>
+      </div>
+
+      <input name="extra_data" type="hidden" value="%s">
+    </div>

@@ -1,0 +1,52 @@
+    <div class="trc-block" data-block-id="%s" data-type="social-networks" onclick="activateBlock(this)">
+      <span class="trc-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="trc-block__header">
+        <button class="trc-block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="trc-block__type-label type-social-networks">&#9993; Social Network</span>
+        <div class="trc-block__header-actions">
+          <button class="trc-block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="trc-block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="trc-block__drag">&#8942;</span>
+          <button class="trc-block__close-btn" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="trc-block__preview"></div>
+
+      <div class="trc-block__body">
+        <div class="trc-meta-group">
+          <label class="trc-advanced__label">Network</label>
+          <div class="trc-social-picker" style="display:flex;align-items:center;gap:8px">
+            <img class="trc-social-icon-preview" src="/themes/dark/assets/social-networks/youtube.svg" alt="icon" width="28" height="28">
+            <select class="trc-social-icon-select" onclick="event.stopPropagation()" onchange="syncSocialIcon(this)"
+                    style="flex:1;background:#2a2a2a;border:1px solid #3a3a3a;color:#e0e0e0;padding:4px;height:28px">
+              <option value="youtube">YouTube</option>
+              <option value="instagram">Instagram</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="twitter">X / Twitter</option>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="github">GitHub</option>
+              <option value="twitch">Twitch</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="trc-meta-group">
+          <label class="trc-advanced__label">URL</label>
+          <input class="trc-social-url-input" type="text" placeholder="https://..."
+                 onclick="event.stopPropagation()" oninput="syncSocialUrl(this)">
+        </div>
+%s
+        <div class="trc-advanced">
+          <button class="trc-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="trc-advanced__panel">
+            <label class="trc-advanced__label">extra_data (icon|url)</label>
+            <input class="trc-advanced__input" type="text" oninput="syncAdvancedInput(this)">
+          </div>
+        </div>
+      </div>
+
+      <input name="extra_data" type="hidden" value="%s">
+    </div>

@@ -220,12 +220,217 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
     return result ? result : strdup("");
 }
 
+static char *render_separator(const CmsContentBlock *block, int epoch) {
+    char *tpl = load_template("elements/separator/separator_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+    char *result = render_template(tpl, block->extra_data ? block->extra_data : "");
+    free(tpl);
+    return result;
+}
+
+static char *render_link(const CmsContentBlock *block, int epoch) {
+    char *tpl = load_template("elements/link/link_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+    char *result = render_template(tpl,
+        block->extra_data ? block->extra_data : "#",
+        block->text       ? block->text       : "");
+    free(tpl);
+    return result;
+}
+
+static char *render_list(const CmsContentBlock *block, int epoch) {
+    if (!block->text || !block->text[0]) return strdup("");
+
+    int ordered = (block->extra_data && strcmp(block->extra_data, "ol") == 0);
+    const char *container_fmt = ordered
+        ? "elements/list/list-container-ol_epoch%d.html"
+        : "elements/list/list-container_epoch%d.html";
+
+    char *container_tpl = load_template(container_fmt, epoch);
+    char *item_tpl      = load_template("elements/list/list-item_epoch%d.html", epoch);
+    if (!container_tpl || !item_tpl) {
+        free(container_tpl); free(item_tpl);
+        return strdup("");
+    }
+
+    char *items = strdup("");
+    char *copy  = strdup(block->text);
+    char *saveptr = NULL;
+    for (char *tok = strtok_r(copy, "\n", &saveptr); tok; tok = strtok_r(NULL, "\n", &saveptr)) {
+        while (*tok == '\r') tok++;
+        char *end = tok + strlen(tok) - 1;
+        while (end >= tok && (*end == '\r' || *end == '\n')) *end-- = '\0';
+        if (!*tok) continue;
+        char *item = render_template(item_tpl, tok);
+        items = item ? str_append(items, item) : NULL;
+        free(item);
+    }
+    free(copy);
+
+    char *result = items ? render_template(container_tpl, items) : NULL;
+    free(items);
+    free(container_tpl);
+    free(item_tpl);
+    return result ? result : strdup("");
+}
+
+static char *youtube_to_embed(const char *url) {
+    if (!url || !url[0]) return NULL;
+    if (strstr(url, "youtube.com/embed/")) return strdup(url);
+    const char *v = strstr(url, "v=");
+    if (v) {
+        v += 2;
+        char id[12] = {0};
+        for (int i = 0; i < 11 && v[i] && v[i] != '&'; i++) id[i] = v[i];
+        if (id[0]) {
+            char *e = malloc(64);
+            if (e) snprintf(e, 64, "https://www.youtube.com/embed/%s", id);
+            return e;
+        }
+    }
+    const char *ytbe = strstr(url, "youtu.be/");
+    if (ytbe) {
+        ytbe += 9;
+        char id[12] = {0};
+        for (int i = 0; i < 11 && ytbe[i] && ytbe[i] != '?' && ytbe[i] != '&'; i++) id[i] = ytbe[i];
+        if (id[0]) {
+            char *e = malloc(64);
+            if (e) snprintf(e, 64, "https://www.youtube.com/embed/%s", id);
+            return e;
+        }
+    }
+    return strdup(url);
+}
+
+static char *render_youtube_embed(const CmsContentBlock *block, int epoch) {
+    if (!block->extra_data || !block->extra_data[0]) return strdup("");
+    char *tpl = load_template("elements/youtube-embed/youtube-embed_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+    char *embed = youtube_to_embed(block->extra_data);
+    char *result = embed ? render_template(tpl, embed) : NULL;
+    free(embed);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
+static char *render_code_text(const CmsContentBlock *block, int epoch) {
+    if (!block->text || !block->text[0]) return strdup("");
+    char *tpl = load_template("elements/code-text/code-text_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+    char *result = render_template(tpl,
+        block->extra_data ? block->extra_data : "",
+        block->text);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
+static char *render_generic(const CmsContentBlock *block, int epoch) {
+    char *tpl = load_template("elements/generic/generic_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+    char *result = render_template(tpl, block->text ? block->text : "");
+    free(tpl);
+    return result ? result : strdup("");
+}
+
+static char *render_image_paragraph(const CmsContentBlock *block, int epoch) {
+    if (!block->text || !block->text[0]) return strdup("");
+    char *tpl = load_template("elements/image-paragraph/image-paragraph_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+    char align_attr[32] = "";
+    const char *a = block->extra_data;
+    if (a && (strcmp(a, "left") == 0 || strcmp(a, "right") == 0))
+        snprintf(align_attr, sizeof(align_attr), "align=\"%s\"", a);
+    char *result = render_template(tpl, block->text, align_attr);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
+static char *render_table(const CmsContentBlock *block, int epoch) {
+    if (!block->text || !block->text[0]) return strdup("");
+
+    char *table_tpl  = load_template("elements/table/table_epoch%d.html",             epoch);
+    char *row_tpl    = load_template("elements/table/table-row_epoch%d.html",          epoch);
+    char *cell_tpl   = load_template("elements/table/table-cell_epoch%d.html",         epoch);
+    char *header_tpl = load_template("elements/table/table-header-cell_epoch%d.html",  epoch);
+    if (!table_tpl || !row_tpl || !cell_tpl || !header_tpl) {
+        free(table_tpl); free(row_tpl); free(cell_tpl); free(header_tpl);
+        return strdup("");
+    }
+
+    int has_header = (block->extra_data && strcmp(block->extra_data, "header") == 0);
+    char *rows_html = strdup("");
+    char *copy = strdup(block->text);
+    char *row_sp = NULL;
+    int row_idx = 0;
+
+    for (char *row_tok = strtok_r(copy, "\n", &row_sp);
+         row_tok && rows_html;
+         row_tok = strtok_r(NULL, "\n", &row_sp), row_idx++) {
+        while (*row_tok == '\r') row_tok++;
+        char *end = row_tok + strlen(row_tok) - 1;
+        while (end >= row_tok && (*end == '\r' || *end == '\n')) *end-- = '\0';
+        if (!*row_tok) continue;
+
+        char *cell_tpl_cur = (has_header && row_idx == 0) ? header_tpl : cell_tpl;
+        char *cells = strdup("");
+        char *row_copy = strdup(row_tok);
+        char *cell_sp  = NULL;
+        for (char *ct = strtok_r(row_copy, "|", &cell_sp); ct && cells; ct = strtok_r(NULL, "|", &cell_sp)) {
+            char *cell = render_template(cell_tpl_cur, ct);
+            cells = cell ? str_append(cells, cell) : NULL;
+            free(cell);
+        }
+        free(row_copy);
+        char *row = cells ? render_template(row_tpl, cells) : NULL;
+        rows_html = row ? str_append(rows_html, row) : NULL;
+        free(cells); free(row);
+    }
+    free(copy);
+
+    char *result = rows_html ? render_template(table_tpl, rows_html) : NULL;
+    free(rows_html);
+    free(table_tpl); free(row_tpl); free(cell_tpl); free(header_tpl);
+    return result ? result : strdup("");
+}
+
+static char *render_social_networks(const CmsContentBlock *block, int epoch) {
+    if (!block->extra_data || !block->extra_data[0]) return strdup("");
+    char *pipe = strchr(block->extra_data, '|');
+    if (!pipe) return strdup("");
+
+    char *tpl = load_template("elements/social-networks/social-networks_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+
+    char icon[64] = {0};
+    size_t icon_len = (size_t)(pipe - block->extra_data);
+    if (icon_len >= sizeof(icon)) icon_len = sizeof(icon) - 1;
+    strncpy(icon, block->extra_data, icon_len);
+    const char *url = pipe + 1;
+
+    char icon_path[256];
+    snprintf(icon_path, sizeof(icon_path), "/themes/dark/assets/social-networks/%s.svg", icon);
+
+    const char *name = (block->text && block->text[0]) ? block->text : icon;
+    char *result = render_template(tpl, url, icon_path, name, name);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
 static char *render_block(const CmsContentBlock *block, int epoch) {
-    if (strcmp(block->type, "tittle") == 0)    return render_tittle(block, epoch);
-    if (strcmp(block->type, "paragraph") == 0) return render_paragraph(block, epoch);
-    if (strcmp(block->type, "byline") == 0)    return render_byline(block, epoch);
-    if (strcmp(block->type, "image") == 0)     return render_image(block, epoch);
-    if (strcmp(block->type, "gallery") == 0)   return render_gallery(block, epoch);
+    if (strcmp(block->type, "tittle") == 0)          return render_tittle(block, epoch);
+    if (strcmp(block->type, "paragraph") == 0)       return render_paragraph(block, epoch);
+    if (strcmp(block->type, "byline") == 0)          return render_byline(block, epoch);
+    if (strcmp(block->type, "image") == 0)           return render_image(block, epoch);
+    if (strcmp(block->type, "gallery") == 0)         return render_gallery(block, epoch);
+    if (strcmp(block->type, "separator") == 0)       return render_separator(block, epoch);
+    if (strcmp(block->type, "link") == 0)            return render_link(block, epoch);
+    if (strcmp(block->type, "list") == 0)            return render_list(block, epoch);
+    if (strcmp(block->type, "youtube-embed") == 0)   return render_youtube_embed(block, epoch);
+    if (strcmp(block->type, "code-text") == 0)       return render_code_text(block, epoch);
+    if (strcmp(block->type, "generic") == 0)         return render_generic(block, epoch);
+    if (strcmp(block->type, "image-paragraph") == 0) return render_image_paragraph(block, epoch);
+    if (strcmp(block->type, "table") == 0)           return render_table(block, epoch);
+    if (strcmp(block->type, "social-networks") == 0) return render_social_networks(block, epoch);
     return strdup("");
 }
 

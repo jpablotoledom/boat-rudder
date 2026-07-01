@@ -36,6 +36,15 @@
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('image')">&square; Image</button>
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('gallery')">&#9632; Gallery</button>
     <button class="trc-block-toolbar__btn" onclick="insertNewComponent('byline')">&#9998; Byline</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('separator')">&#9135; Separator</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('link')">&#128279; Link</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('list')">&#9776; List</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('generic')">&#9965; HTML</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('image-paragraph')">&#9654; Img+Text</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('table')">&#9974; Table</button>
+    <button class="trc-block-toolbar__btn" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
   </div>
 
   <!-- Two-column body -->
@@ -184,6 +193,13 @@
     if (type === 'paragraph') initParagraphEditors(block);
     if (type === 'tittle') initBlockHeadingBtns(block);
     if (type === 'gallery') initGalleryBlock(block);
+    if (type === 'link') initLinkBlock(block);
+    if (type === 'list') initListBlock(block);
+    if (type === 'youtube-embed') initYouTubeBlock(block);
+    if (type === 'code-text') initCodeBlock(block);
+    if (type === 'image-paragraph') initImageParagraphBlock(block);
+    if (type === 'table') initTableBlock(block);
+    if (type === 'social-networks') initSocialBlock(block);
     applyLangVisibility(block);
   }
 
@@ -228,6 +244,58 @@
         preview.innerHTML = thumbs || '<span class="trc-preview__empty">Empty gallery</span>';
       } else {
         preview.innerHTML = '<span class="trc-preview__empty">Empty gallery</span>';
+      }
+    } else if (type === 'separator') {
+      preview.innerHTML = '<hr style="border:none;border-top:2px solid #555;margin:8px 0;">';
+    } else if (type === 'link') {
+      preview.innerHTML = extra
+        ? '<a href="#" class="trc-preview__link">' + escapeHtml(text || extra) + '</a>'
+        : '<span class="trc-preview__empty">No URL</span>';
+    } else if (type === 'list') {
+      if (text) {
+        var items = text.split('\n').filter(function (l) { return l.trim(); });
+        var tag = extra === 'ol' ? 'ol' : 'ul';
+        preview.innerHTML = '<' + tag + ' class="trc-preview__list">' +
+          items.map(function (l) { return '<li>' + escapeHtml(l.trim()) + '</li>'; }).join('') +
+          '</' + tag + '>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">Empty list</span>';
+      }
+    } else if (type === 'youtube-embed') {
+      preview.innerHTML = extra
+        ? '<div class="trc-preview__youtube">&#9654; ' + escapeHtml(extra) + '</div>'
+        : '<span class="trc-preview__empty">No YouTube URL</span>';
+    } else if (type === 'code-text') {
+      if (text) {
+        preview.innerHTML = '<pre class="trc-preview__code"><code>' + escapeHtml(text.substring(0, 200)) + (text.length > 200 ? '...' : '') + '</code></pre>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">Empty code block</span>';
+      }
+    } else if (type === 'generic') {
+      if (text) {
+        preview.innerHTML = '<div class="trc-preview__generic">' + text.substring(0, 300) + '</div>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">Empty HTML block</span>';
+      }
+    } else if (type === 'image-paragraph') {
+      if (text) {
+        preview.innerHTML = '<div class="trc-preview__image-paragraph"><img src="' + escapeHtml(text) + '" style="max-height:80px;"></div>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">No image</span>';
+      }
+    } else if (type === 'table') {
+      if (text) {
+        var rows = text.split('\n').filter(function (l) { return l.trim(); });
+        preview.innerHTML = '<div class="trc-preview__table">' + rows.length + ' row(s)</div>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">Empty table</span>';
+      }
+    } else if (type === 'social-networks') {
+      if (extra) {
+        var parts = extra.split('|');
+        preview.innerHTML = '<div class="trc-preview__social">' + escapeHtml(parts[0]) + (parts[1] ? ': ' + escapeHtml(parts[1]) : '') + '</div>';
+      } else {
+        preview.innerHTML = '<span class="trc-preview__empty">No social link</span>';
       }
     } else {
       preview.innerHTML = '<span class="trc-preview__empty">[' + escapeHtml(type) + ']</span>';
@@ -642,6 +710,152 @@
     } else {
       window.open('/dashboard', '_blank');
     }
+  };
+
+  /* ---- Link block ---- */
+  function initLinkBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var input = block.querySelector('.trc-link-url-input');
+    if (input && hidden) input.value = hidden.value;
+  }
+
+  window.syncLinkUrl = function (input) {
+    var block = input.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = input.value;
+    setContentChanged();
+  };
+
+  /* ---- List block ---- */
+  function initListBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var sel = block.querySelector('.trc-list-type-select');
+    if (sel && hidden) sel.value = hidden.value || 'ul';
+  }
+
+  window.setListType = function (sel) {
+    var block = sel.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = sel.value;
+    setContentChanged();
+  };
+
+  /* ---- YouTube block ---- */
+  function initYouTubeBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var input = block.querySelector('.trc-youtube-url-input');
+    if (input && hidden) input.value = hidden.value;
+    updateYouTubePreview(block);
+  }
+
+  window.syncYouTubeUrl = function (input) {
+    var block = input.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = input.value;
+    updateYouTubePreview(block);
+    setContentChanged();
+  };
+
+  function youtubeToEmbed(url) {
+    if (!url) return '';
+    if (url.indexOf('youtube.com/embed/') !== -1) return url;
+    var m = url.match(/[?&]v=([^&]{11})/);
+    if (m) return 'https://www.youtube.com/embed/' + m[1];
+    var m2 = url.match(/youtu\.be\/([^?]{11})/);
+    if (m2) return 'https://www.youtube.com/embed/' + m2[1];
+    return url;
+  }
+
+  function updateYouTubePreview(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var preview = block.querySelector('.trc-youtube-preview');
+    if (!preview) return;
+    var url = hidden ? hidden.value : '';
+    if (!url) { preview.innerHTML = ''; return; }
+    var embed = youtubeToEmbed(url);
+    preview.innerHTML = '<iframe width="100%%" height="180" src="' + escapeHtml(embed) + '" frameborder="0" allowfullscreen></iframe>';
+  }
+
+  /* ---- Code-text block ---- */
+  function initCodeBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var sel = block.querySelector('.trc-code-lang-select');
+    if (sel && hidden) sel.value = hidden.value || '';
+  }
+
+  window.syncCodeLang = function (sel) {
+    var block = sel.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = sel.value;
+    setContentChanged();
+  };
+
+  /* ---- Image-paragraph block ---- */
+  function initImageParagraphBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var sel = block.querySelector('.trc-align-select');
+    if (sel && hidden) sel.value = hidden.value || '';
+  }
+
+  window.setAlignExtraData = function (sel) {
+    var block = sel.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = sel.value;
+    setContentChanged();
+  };
+
+  /* ---- Table block ---- */
+  function initTableBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var cb = block.querySelector('.trc-table-header-toggle');
+    if (cb && hidden) cb.checked = (hidden.value === 'header');
+  }
+
+  window.setTableHeader = function (cb) {
+    var block = cb.closest('.trc-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = cb.checked ? 'header' : '';
+    setContentChanged();
+  };
+
+  /* ---- Social-networks block ---- */
+  function initSocialBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (!hidden) return;
+    var parts = hidden.value.split('|');
+    var iconSel = block.querySelector('.trc-social-icon-select');
+    var urlInput = block.querySelector('.trc-social-url-input');
+    if (iconSel) iconSel.value = parts[0] || '';
+    if (urlInput) urlInput.value = parts[1] || '';
+  }
+
+  function syncSocialExtraData(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var iconSel = block.querySelector('.trc-social-icon-select');
+    var urlInput = block.querySelector('.trc-social-url-input');
+    if (hidden) hidden.value = (iconSel ? iconSel.value : '') + '|' + (urlInput ? urlInput.value : '');
+  }
+
+  window.syncSocialIcon = function (sel) {
+    var block = sel.closest('.trc-block');
+    if (!block) return;
+    var preview = block.querySelector('.trc-social-icon-preview');
+    if (preview) preview.src = '/themes/dark/assets/social-networks/' + sel.value + '.svg';
+    syncSocialExtraData(block);
+    setContentChanged();
+  };
+
+  window.syncSocialUrl = function (input) {
+    var block = input.closest('.trc-block');
+    if (!block) return;
+    syncSocialExtraData(block);
+    setContentChanged();
   };
 
   /* ---- Gallery block ---- */

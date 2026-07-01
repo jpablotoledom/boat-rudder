@@ -1234,7 +1234,6 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     cms_categories_free(cats, cat_count);
                     send_error_response(ctx, 404, "404 Not Found", epoch);
                 } else {
-                    char *cat_menu = category_menu_render(cats, cat_count, cat_slug, epoch);
                     cms_categories_free(cats, cat_count);
 
                     char *content = blog_list_category(epoch, content_lang, cat_id);
@@ -1244,7 +1243,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     snprintf(page_title, sizeof(page_title), "Blog - %s", cat_name ? cat_name : cat_slug);
                     free(cat_name);
 
-                    char *body     = buildBlogListWebSiteAtUrl(epoch, page_title, content, "/blog", cat_menu);
+                    char *body     = buildBlogListWebSiteAtUrl(epoch, page_title, content, "/blog", NULL);
                     char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);
@@ -1252,14 +1251,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-
-                CmsCategoryItem *cats = NULL;
-                size_t cat_count = 0;
-                cms_get_categories(content_lang, &cats, &cat_count);
-                char *cat_menu = category_menu_render(cats, cat_count, NULL, epoch);
-                cms_categories_free(cats, cat_count);
-
-                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, cat_menu);
+                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL);
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");

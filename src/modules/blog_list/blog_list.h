@@ -11,4 +11,8 @@
 // allocation failure). The caller must free() the returned buffer.
 char *blog_list(int epoch, const char *lang);
 
+// Like blog_list() but filtered to entries belonging to `category_id_hex`
+// (a 24-char hex ObjectId). Returns a malloc'd string or NULL on failure.
+char *blog_list_category(int epoch, const char *lang, const char *category_id_hex);
+
 #endif // BLOG_LIST_H

@@ -17,6 +17,7 @@
 #include "../db/session_manager.h"
 #include "../html_builder/orchestrator.h"
 #include "../modules/blog_list/blog_list.h"
+#include "../modules/category_menu/category_menu.h"
 #include "../modules/categories_admin/categories_admin.h"
 #include "../modules/dashboard/dashboard.h"
 #include "../modules/entry_editor/entry_editor.h"
@@ -128,13 +129,16 @@ static void send_or_error(void *ctx, char *response, const char *method, int epo
 // entry_page() + buildPageWebSite(), used by both /page/<link>
 // (expected_type "page") and /blog/<link> (expected_type "blog"). Sends a
 // 404 if the entry doesn't exist, mongodb is not ready, or entry.type !=
-// expected_type.
+// expected_type. Takes ownership of `category_menu_html` (pass NULL for
+// non-blog pages).
 static void serve_cms_entry(void *ctx, const char *link, const char *expected_type,
-                             const char *lang, const char *method, int epoch) {
+                             const char *lang, const char *method, int epoch,
+                             char *category_menu_html) {
     CmsEntry entry;
     if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
         if (strcmp(entry.type, expected_type) != 0) {
             cms_entry_free(&entry);
+            free(category_menu_html);
             send_error_response(ctx, 404, "404 Not Found", epoch);
             return;
         }
@@ -153,15 +157,22 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
 
         char *body = NULL;
         if (content && title) {
-            body = buildPageWebSiteAtUrl(epoch, title, content, current_url);
+            if (category_menu_html) {
+                body = buildBlogWebSiteAtUrl(epoch, title, content, current_url, category_menu_html);
+                category_menu_html = NULL; // ownership transferred
+            } else {
+                body = buildPageWebSiteAtUrl(epoch, title, content, current_url);
+            }
         } else {
             free(content);
+            free(category_menu_html);
         }
         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
         free(title);
         free(body);
         send_or_error(ctx, response, method, epoch);
     } else {
+        free(category_menu_html);
         send_error_response(ctx, 404, "404 Not Found", epoch);
     }
 }
@@ -1045,7 +1056,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch);
+                serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch, NULL);
 
             } else if (strncmp(decoded_url, "/gallery/", 9) == 0 && decoded_url[9] != '\0') {
                 int epoch = resolve_epoch(&req);
@@ -1191,15 +1202,68 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             } else if (strcmp(decoded_url, "/blog") == 0) {
                 int epoch = resolve_epoch(&req);
 
+                CmsCategoryItem *cats = NULL;
+                size_t cat_count = 0;
+                cms_get_categories(content_lang, &cats, &cat_count);
+                char *cat_menu = category_menu_render(cats, cat_count, NULL, epoch);
+                cms_categories_free(cats, cat_count);
+
                 char *content  = blog_list(epoch, content_lang);
-                char *body     = buildPageWebSiteAtUrl(epoch, "Boat Rudder - Blog", content, "/blog");
+                char *body     = buildBlogWebSiteAtUrl(epoch, "Boat Rudder - Blog", content, "/blog", cat_menu);
                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
 
+            } else if (strncmp(decoded_url, "/blog/category/", 15) == 0 && decoded_url[15] != '\0') {
+                int epoch = resolve_epoch(&req);
+                const char *cat_slug = decoded_url + 15;
+
+                CmsCategoryItem *cats = NULL;
+                size_t cat_count = 0;
+                cms_get_categories(content_lang, &cats, &cat_count);
+
+                char *cat_id   = NULL;
+                char *cat_name = NULL;
+                for (size_t i = 0; i < cat_count; i++) {
+                    char *slug = slugify(cats[i].name);
+                    if (slug && strcmp(slug, cat_slug) == 0) {
+                        cat_id   = strdup(cats[i].id);
+                        cat_name = strdup(cats[i].name);
+                    }
+                    free(slug);
+                    if (cat_id) break;
+                }
+
+                if (!cat_id) {
+                    cms_categories_free(cats, cat_count);
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else {
+                    char *cat_menu = category_menu_render(cats, cat_count, cat_slug, epoch);
+                    cms_categories_free(cats, cat_count);
+
+                    char *content = blog_list_category(epoch, content_lang, cat_id);
+                    free(cat_id);
+
+                    char page_title[256];
+                    snprintf(page_title, sizeof(page_title), "Blog - %s", cat_name ? cat_name : cat_slug);
+                    free(cat_name);
+
+                    char *body     = buildBlogWebSiteAtUrl(epoch, page_title, content, "/blog", cat_menu);
+                    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+
             } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch);
+
+                CmsCategoryItem *cats = NULL;
+                size_t cat_count = 0;
+                cms_get_categories(content_lang, &cats, &cat_count);
+                char *cat_menu = category_menu_render(cats, cat_count, NULL, epoch);
+                cms_categories_free(cats, cat_count);
+
+                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, cat_menu);
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");

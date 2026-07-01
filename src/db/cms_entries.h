@@ -101,6 +101,13 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
 void cms_get_admin_entries(const char *lang, const char *type_filter, const char *created_by_hex,
                             CmsBlogListItem **out, size_t *out_count);
 
+// Like cms_get_blog_entries() but filtered to entries whose categories[] array
+// contains `category_id_hex` (a 24-char hex ObjectId). Pass BLOG_LIST_LIMIT
+// as `limit`. Same lang convention and allocation contract.
+void cms_get_blog_entries_by_category(const char *lang, size_t limit,
+                                       const char *category_id_hex,
+                                       CmsBlogListItem **out, size_t *out_count);
+
 // Frees every item's fields and the array itself. Safe to call with items == NULL.
 void cms_blog_list_free(CmsBlogListItem *items, size_t count);
 

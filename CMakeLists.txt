@@ -62,6 +62,7 @@ set(SOURCES
     src/modules/home_content/home_content.c
     src/modules/home_blog/home_blog.c
     src/modules/blog_list/blog_list.c
+    src/modules/category_menu/category_menu.c
     src/modules/entry_page/entry_page.c
     src/modules/login/login.c
     src/modules/dashboard/dashboard.c

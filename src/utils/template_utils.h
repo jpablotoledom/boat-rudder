@@ -25,4 +25,9 @@ char *build_title_tag(const char *page_title);
 // Returns a copy of the original if no extension is found. NULL on failure.
 char *image_url_variant(const char *url, const char *suffix);
 
+// Returns a new malloc'd URL slug from `name`: lowercased, spaces/hyphens/
+// underscores collapsed to a single hyphen, other non-alphanumeric characters
+// removed. e.g. "Operating Systems" -> "operating-systems". NULL on failure.
+char *slugify(const char *name);
+
 #endif // TEMPLATE_UTILS_H

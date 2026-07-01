@@ -1328,3 +1328,28 @@ h6.trc-preview__tittle { font-size: 13px; font-weight: 600; color: #aaa; }
 }
 .trc-media__photo:hover input[type="checkbox"],
 .trc-media__photo.selected input[type="checkbox"] { opacity: 1; }
+
+/* ── Category sub-menu ── */
+.boat-rudder__navbar__category_item {
+  padding: 6px;
+  border-right: 1px solid #fff;
+  color: #fff;
+}
+
+.boat-rudder__navbar__category_item a {
+  color: #fff;
+}
+
+.boat-rudder__navbar__category_item--selected a {
+  color: #56e9fd;
+}
+
+.boat-rudder__navbar__category_item:last-child {
+  border: none;
+}
+
+.boat-rudder__category__menu {
+  display: flex;
+  justify-content: center;
+  margin: 10px;
+}

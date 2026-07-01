@@ -8,6 +8,7 @@
 #include "../utils/read_file.h"
 #include "../utils/template_utils.h"
 #include <stdlib.h>
+#include <string.h>
 
 char *buildHomeWebSite(int epoch, const char *lang) {
     char *html_container    = container(epoch, "Boat Rudder - Home");
@@ -56,4 +57,39 @@ char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_conten
 
 char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
     return buildPageWebSiteAtUrl(epoch, page_title, html_content, "/");
+}
+
+char *buildBlogWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                             const char *current_url, char *category_menu_html) {
+    char *path = generate_url_theme("page/page_epoch%d.html", epoch);
+    char *raw  = path ? read_file_to_string(path) : NULL;
+    free(path);
+
+    char *title_tag = build_title_tag(page_title);
+    char *titled    = (raw && title_tag) ? str_replace_first(raw, "{{PAGE_TITLE}}", title_tag) : NULL;
+    char *html_menu = menu(current_url ? current_url : "/", epoch);
+
+    // Concatenate category menu right after the main navbar HTML.
+    // Both fill the first %s slot in the page template.
+    char *combined_nav;
+    if (category_menu_html) {
+        combined_nav = str_append(html_menu, category_menu_html); // frees html_menu
+        free(category_menu_html);
+        if (!combined_nav) combined_nav = strdup("");
+    } else {
+        combined_nav = html_menu;
+    }
+
+    char *result = NULL;
+    if (titled && combined_nav && html_content) {
+        result = render_template(titled, combined_nav, html_content);
+    }
+
+    free(raw);
+    free(title_tag);
+    free(titled);
+    free(combined_nav);
+    free(html_content);
+
+    return result;
 }

@@ -55,7 +55,7 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
     return result;
 }
 
-char *blog_list(int epoch, const char *lang) {
+static char *blog_list_internal(int epoch, const char *lang, const char *category_id_hex) {
     char *item_path    = generate_url_theme("home-blog/home-blog-item_epoch%d.html", epoch);
     char *content_path = generate_url_theme("blog-list/blog-list_epoch%d.html", epoch);
 
@@ -73,7 +73,10 @@ char *blog_list(int epoch, const char *lang) {
 
     if (!item_tpl || !content_tpl) goto cleanup;
 
-    cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &entries, &entry_count);
+    if (category_id_hex)
+        cms_get_blog_entries_by_category(lang, BLOG_LIST_LIMIT, category_id_hex, &entries, &entry_count);
+    else
+        cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &entries, &entry_count);
 
     if (entry_count == 0) {
         items = load_template("blog-list/empty_epoch%d.html", epoch);
@@ -94,4 +97,12 @@ cleanup:
     free(content_tpl);
     free(items);
     return result;
+}
+
+char *blog_list(int epoch, const char *lang) {
+    return blog_list_internal(epoch, lang, NULL);
+}
+
+char *blog_list_category(int epoch, const char *lang, const char *category_id_hex) {
+    return blog_list_internal(epoch, lang, category_id_hex);
 }

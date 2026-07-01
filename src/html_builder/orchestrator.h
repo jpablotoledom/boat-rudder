@@ -23,4 +23,12 @@ char *buildPageWebSite(int epoch, const char *page_title, char *html_content);
 char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
                              const char *current_url);
 
+// Like buildPageWebSiteAtUrl() but also renders a category sub-menu bar below
+// the main navbar. Used for all blog pages (/blog, /blog/<slug>,
+// /blog/category/<slug>). Takes ownership of both `html_content` and
+// `category_menu_html` (frees them in all paths). If `category_menu_html` is
+// NULL the page renders identically to buildPageWebSiteAtUrl().
+char *buildBlogWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
+                             const char *current_url, char *category_menu_html);
+
 #endif // ORCHESTRATOR_H

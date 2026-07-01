@@ -65,6 +65,27 @@ char *build_title_tag(const char *page_title) {
     return render_template("<title>%s</title>", page_title);
 }
 
+char *slugify(const char *name) {
+    if (!name) return strdup("");
+    size_t len = strlen(name);
+    char *slug = malloc(len + 1);
+    if (!slug) return NULL;
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)name[i];
+        if (c >= 'A' && c <= 'Z') {
+            slug[j++] = (char)(c + 32);
+        } else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            slug[j++] = (char)c;
+        } else if (c == ' ' || c == '-' || c == '_') {
+            if (j > 0 && slug[j - 1] != '-') slug[j++] = '-';
+        }
+    }
+    while (j > 0 && slug[j - 1] == '-') j--;
+    slug[j] = '\0';
+    return slug;
+}
+
 char *image_url_variant(const char *url, const char *suffix) {
     if (!url || !url[0]) return strdup("");
     if (!suffix || !suffix[0]) return strdup(url);

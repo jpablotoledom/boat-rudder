@@ -162,3 +162,27 @@ a:link, a:visited {
   margin-right: 6px;
   border: 1px solid #56e9fd;
 }
+
+/* Category sub-menu */
+.br-category-menu {
+  background: #111;
+  padding: 4px 8px;
+  border-bottom: 1px solid #333;
+}
+.br-category-item {
+  display: inline-block;
+  margin-right: 6px;
+}
+.br-category-item a {
+  color: #ccc;
+  text-decoration: none;
+  font-size: 0.85em;
+  padding: 2px 6px;
+}
+.br-category-item a:hover {
+  color: #56e9fd;
+}
+.br-category-item--selected a {
+  color: #56e9fd;
+  font-weight: bold;
+}

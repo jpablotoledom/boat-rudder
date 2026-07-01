@@ -1063,32 +1063,35 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *item_tpl_path = generate_url_theme("elements/gallery/gallery-page-item_epoch%d.html", epoch);
                         char *item_tpl = item_tpl_path ? read_file_to_string(item_tpl_path) : NULL;
                         free(item_tpl_path);
-                        if (!item_tpl) item_tpl = strdup("<a href=\"%s\" target=\"_blank\"><img src=\"%s\" style=\"width:200px;height:150px;object-fit:cover;margin:4px\"></a>\n");
-
-                        char *items_html = strdup("");
-                        for (size_t i = 0; items_html && i < gallery.url_count; i++) {
-                            char *full = image_url_variant(gallery.urls[i], "_full");
-                            char *small = image_url_variant(gallery.urls[i], "_small");
-                            char *item = (full && small) ? render_template(item_tpl, full, small) : NULL;
-                            if (item) items_html = str_append(items_html, item);
-                            free(item); free(full); free(small);
-                        }
-                        free(item_tpl);
 
                         char *page_tpl_path = generate_url_theme("elements/gallery/gallery-page_epoch%d.html", epoch);
                         char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
                         free(page_tpl_path);
-                        if (!page_tpl) page_tpl = strdup("<html><body>%s</body></html>");
 
-                        char *page_html = items_html ? render_template(page_tpl, items_html) : NULL;
-                        free(items_html);
-                        free(page_tpl);
-
-                        if (page_html) {
-                            char *response = build_epoch_response(page_html, "", epoch);
-                            send_or_error(ctx, response, req.method, epoch);
-                        } else {
+                        if (!item_tpl || !page_tpl) {
+                            free(item_tpl); free(page_tpl);
                             send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+                        } else {
+                            char *items_html = strdup("");
+                            for (size_t i = 0; items_html && i < gallery.url_count; i++) {
+                                char *full  = image_url_variant(gallery.urls[i], "_full");
+                                char *small = image_url_variant(gallery.urls[i], "_small");
+                                char *item  = (full && small) ? render_template(item_tpl, full, small) : NULL;
+                                if (item) items_html = str_append(items_html, item);
+                                free(item); free(full); free(small);
+                            }
+                            free(item_tpl);
+
+                            char *page_html = items_html ? render_template(page_tpl, items_html) : NULL;
+                            free(items_html);
+                            free(page_tpl);
+
+                            if (page_html) {
+                                char *response = build_epoch_response(page_html, "", epoch);
+                                send_or_error(ctx, response, req.method, epoch);
+                            } else {
+                                send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+                            }
                         }
                     } else {
                         // Epochs -1/0/1/2: paginated gallery
@@ -1097,76 +1100,89 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         int prev_idx = (cur - 1 + count) % count;
                         int next_idx = (cur + 1) % count;
 
-                        char *html = strdup("");
-                        char back_link[256];
-                        snprintf(back_link, sizeof(back_link),
-                                 "<p><a href=\"javascript:history.back()\">&lt; Back</a></p>");
-                        html = str_append(html, back_link);
-
-                        if (epoch <= 0) {
-                            for (int i = 0; i < count && html; i++) {
-                                char link[256];
-                                snprintf(link, sizeof(link), "<p>[Image %d]</p>", i + 1);
-                                html = str_append(html, link);
-                            }
-                        } else {
-                            // Main image + prev/next
-                            char *main_url = (epoch == 1)
-                                ? image_url_variant(gallery.urls[cur], "_medium")
-                                : image_url_variant(gallery.urls[cur], "_half");
-                            if (epoch == 1 && main_url) {
-                                char *dot = strrchr(main_url, '.');
-                                if (dot) strcpy(dot, ".gif");
-                            }
-
-                            char main_block[1024];
-                            snprintf(main_block, sizeof(main_block),
-                                "<p>"
-                                "<a href=\"/gallery/%s?img=%d\"><b>[prev]</b></a> "
-                                "<img src=\"%s\" border=\"0\" alt=\"\"> "
-                                "<a href=\"/gallery/%s?img=%d\"><b>[next]</b></a>"
-                                "</p>",
-                                gallery_id, prev_idx, main_url ? main_url : "",
-                                gallery_id, next_idx);
-                            free(main_url);
-                            html = str_append(html, main_block);
-
-                            // Thumbnail strip
-                            html = str_append(html, "<p align=\"center\">");
-                            for (int i = 0; i < count && html; i++) {
-                                char *t = (epoch == 1)
-                                    ? image_url_variant(gallery.urls[i], "_micro")
-                                    : image_url_variant(gallery.urls[i], "_small");
-                                if (epoch == 1 && t) {
-                                    char *dot = strrchr(t, '.'); if (dot) strcpy(dot, ".gif");
-                                }
-                                int border = (i == cur) ? 3 : 1;
-                                char thumb[512];
-                                snprintf(thumb, sizeof(thumb),
-                                    "<a href=\"/gallery/%s?img=%d\">"
-                                    "<img src=\"%s\" width=\"80\" height=\"60\" border=\"%d\""
-                                    " hspace=\"2\" vspace=\"2\" alt=\"\"></a>",
-                                    gallery_id, i, t ? t : "", border);
-                                free(t);
-                                html = str_append(html, thumb);
-                            }
-                            html = str_append(html, "</p>");
-                        }
+                        char *back_tpl = generate_url_theme("elements/gallery/gallery-page-back_epoch%d.html", epoch);
+                        char *back_str = back_tpl ? read_file_to_string(back_tpl) : NULL;
+                        free(back_tpl);
 
                         char *page_tpl_path = generate_url_theme("elements/gallery/gallery-page_epoch%d.html", epoch);
                         char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
                         free(page_tpl_path);
-                        if (!page_tpl) page_tpl = strdup("<html><body>%s</body></html>");
 
-                        char *page_html = html ? render_template(page_tpl, html) : NULL;
-                        free(html);
-                        free(page_tpl);
-
-                        if (page_html) {
-                            char *response = build_epoch_response(page_html, "", epoch);
-                            send_or_error(ctx, response, req.method, epoch);
-                        } else {
+                        if (!back_str || !page_tpl) {
+                            free(back_str); free(page_tpl);
                             send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+                        } else {
+                            char *html = render_template(back_str);
+                            free(back_str);
+
+                            if (epoch <= 0) {
+                                char *entry_tpl_path = generate_url_theme("elements/gallery/gallery-page-image-entry_epoch%d.html", epoch);
+                                char *entry_tpl = entry_tpl_path ? read_file_to_string(entry_tpl_path) : NULL;
+                                free(entry_tpl_path);
+                                if (entry_tpl) {
+                                    for (int i = 0; i < count && html; i++) {
+                                        char *line = render_template(entry_tpl, i + 1);
+                                        if (line) html = str_append(html, line);
+                                        free(line);
+                                    }
+                                    free(entry_tpl);
+                                }
+                            } else {
+                                char *main_tpl_path  = generate_url_theme("elements/gallery/gallery-page-main_epoch%d.html", epoch);
+                                char *main_tpl       = main_tpl_path ? read_file_to_string(main_tpl_path) : NULL;
+                                char *strip_s_path   = generate_url_theme("elements/gallery/gallery-page-thumbstrip-start_epoch%d.html", epoch);
+                                char *strip_s_tpl    = strip_s_path ? read_file_to_string(strip_s_path) : NULL;
+                                char *strip_e_path   = generate_url_theme("elements/gallery/gallery-page-thumbstrip-end_epoch%d.html", epoch);
+                                char *strip_e_tpl    = strip_e_path ? read_file_to_string(strip_e_path) : NULL;
+                                char *thumb_tpl_path = generate_url_theme("elements/gallery/gallery-page-thumb_epoch%d.html", epoch);
+                                char *thumb_tpl      = thumb_tpl_path ? read_file_to_string(thumb_tpl_path) : NULL;
+                                free(main_tpl_path); free(strip_s_path); free(strip_e_path); free(thumb_tpl_path);
+
+                                if (main_tpl && strip_s_tpl && strip_e_tpl && thumb_tpl) {
+                                    char *main_url = (epoch == 1)
+                                        ? image_url_variant(gallery.urls[cur], "_medium")
+                                        : image_url_variant(gallery.urls[cur], "_half");
+                                    if (epoch == 1 && main_url) {
+                                        char *dot = strrchr(main_url, '.'); if (dot) strcpy(dot, ".gif");
+                                    }
+                                    char *main_block = render_template(main_tpl,
+                                        gallery_id, prev_idx, main_url ? main_url : "",
+                                        gallery_id, next_idx);
+                                    free(main_url);
+                                    if (main_block) { html = str_append(html, main_block); free(main_block); }
+
+                                    char *strip_s = render_template(strip_s_tpl);
+                                    if (strip_s) { html = str_append(html, strip_s); free(strip_s); }
+
+                                    for (int i = 0; i < count && html; i++) {
+                                        char *t = (epoch == 1)
+                                            ? image_url_variant(gallery.urls[i], "_micro")
+                                            : image_url_variant(gallery.urls[i], "_small");
+                                        if (epoch == 1 && t) {
+                                            char *dot = strrchr(t, '.'); if (dot) strcpy(dot, ".gif");
+                                        }
+                                        int border = (i == cur) ? 3 : 1;
+                                        char *thumb = render_template(thumb_tpl, gallery_id, i, t ? t : "", border);
+                                        free(t);
+                                        if (thumb) { html = str_append(html, thumb); free(thumb); }
+                                    }
+
+                                    char *strip_e = render_template(strip_e_tpl);
+                                    if (strip_e) { html = str_append(html, strip_e); free(strip_e); }
+                                }
+                                free(main_tpl); free(strip_s_tpl); free(strip_e_tpl); free(thumb_tpl);
+                            }
+
+                            char *page_html = html ? render_template(page_tpl, html) : NULL;
+                            free(html);
+                            free(page_tpl);
+
+                            if (page_html) {
+                                char *response = build_epoch_response(page_html, "", epoch);
+                                send_or_error(ctx, response, req.method, epoch);
+                            } else {
+                                send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+                            }
                         }
                     }
                     cms_media_gallery_free(&gallery);

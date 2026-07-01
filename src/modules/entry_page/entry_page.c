@@ -82,39 +82,36 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
                               ? block->extra_data : NULL;
 
     if (epoch <= 0) {
-        char *tpl = load_template("elements/gallery/gallery_epoch%d.html", epoch);
-        if (!tpl) return strdup("");
         if (gallery_id) {
-            char link[128];
-            snprintf(link, sizeof(link), "<a href=\"/gallery/%s\">View gallery</a>", gallery_id);
-            char *result = render_template(tpl, link);
+            char *tpl = load_template("elements/gallery/gallery-link_epoch%d.html", epoch);
+            if (!tpl) return strdup("");
+            char *result = render_template(tpl, gallery_id);
             free(tpl);
-            return result;
+            return result ? result : strdup("");
         }
         int count = 1;
         for (const char *p = block->text; *p; p++) if (*p == ';') count++;
-        char count_str[32];
-        snprintf(count_str, sizeof(count_str), "Gallery: %d images", count);
-        char *result = render_template(tpl, count_str);
+        char *tpl = load_template("elements/gallery/gallery-nolink_epoch%d.html", epoch);
+        if (!tpl) return strdup("");
+        char *result = render_template(tpl, count);
         free(tpl);
-        return result;
+        return result ? result : strdup("");
     }
 
     if (epoch >= 3) {
         char *container_tpl = load_template("elements/gallery/gallery-container_epoch%d.html", epoch);
-        char *item_tpl = load_template("elements/gallery/gallery-item_epoch%d.html", epoch);
-        char *more_tpl = load_template("elements/gallery/gallery-item-more_epoch%d.html", epoch);
+        char *item_tpl      = load_template("elements/gallery/gallery-item_epoch%d.html", epoch);
+        char *more_tpl      = load_template("elements/gallery/gallery-item-more_epoch%d.html", epoch);
+        char *hidden_tpl    = load_template("elements/gallery/gallery-item-hidden_epoch%d.html", epoch);
         if (!container_tpl || !item_tpl) {
-            free(container_tpl); free(item_tpl); free(more_tpl);
+            free(container_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
             return strdup("");
         }
 
-        // Count total images
         int total = 0;
         for (const char *p = block->text; *p; p++) if (*p == ';') total++;
         total++;
 
-        // Collect all URLs
         char **urls = calloc(total, sizeof(char *));
         char *copy = strdup(block->text);
         char *saveptr = NULL;
@@ -134,23 +131,17 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
             char *full  = image_url_variant(urls[i], "_full");
 
             if (i < max_visible - 1 || remaining == 0) {
-                // Normal visible item
                 char *item = (thumb && full) ? render_template(item_tpl, thumb, full) : NULL;
                 if (item) items_html = str_append(items_html, item);
                 free(item);
             } else if (i == max_visible - 1 && remaining > 0 && more_tpl) {
-                // "+N" overlay item (uses the 5th image as background)
                 char *item = render_template(more_tpl, thumb, full, remaining + 1);
                 if (item) items_html = str_append(items_html, item);
                 free(item);
-            } else {
-                // Hidden items — still in DOM for lightbox navigation
-                char hidden[1024];
-                snprintf(hidden, sizeof(hidden),
-                    "<div class=\"boat-rudder__gallery-item\" style=\"display:none\">"
-                    "<img class=\"boat-rudder__gallery-item__image\" src=\"%s\" data-full=\"%s\" alt=\"\">"
-                    "</div>", thumb ? thumb : "", full ? full : "");
-                items_html = str_append(items_html, hidden);
+            } else if (hidden_tpl) {
+                char *item = render_template(hidden_tpl, thumb ? thumb : "", full ? full : "");
+                if (item) items_html = str_append(items_html, item);
+                free(item);
             }
             free(thumb);
             free(full);
@@ -161,15 +152,21 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
 
         char *result = items_html ? render_template(container_tpl, items_html) : NULL;
         free(items_html);
-        free(container_tpl);
-        free(item_tpl);
-        free(more_tpl);
+        free(container_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
         return result ? result : strdup("");
     }
 
     // Epochs 1-2: table layout with links to /gallery/<id>?img=N
-    char *wrap_tpl = load_template("elements/gallery/gallery_epoch%d.html", epoch);
-    if (!wrap_tpl) return strdup("");
+    char *wrap_tpl      = load_template("elements/gallery/gallery_epoch%d.html", epoch);
+    char *row_start_tpl = load_template("elements/gallery/gallery-row-start_epoch%d.html", epoch);
+    char *row_end_tpl   = load_template("elements/gallery/gallery-row-end_epoch%d.html", epoch);
+    char *cell_tpl      = gallery_id
+        ? load_template("elements/gallery/gallery-cell_epoch%d.html", epoch)
+        : load_template("elements/gallery/gallery-cell-nolink_epoch%d.html", epoch);
+    if (!wrap_tpl || !row_start_tpl || !row_end_tpl || !cell_tpl) {
+        free(wrap_tpl); free(row_start_tpl); free(row_end_tpl); free(cell_tpl);
+        return strdup("");
+    }
 
     char *rows_html = strdup("");
     char *copy = strdup(block->text);
@@ -183,36 +180,39 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
         if (!*tok) { tok = strtok_r(NULL, ";", &saveptr); continue; }
 
         char *thumb = (epoch == 1) ? image_url_variant(tok, "_micro") : image_url_variant(tok, "_small");
-        if (epoch == 1) {
-            char *dot = thumb ? strrchr(thumb, '.') : NULL;
-            if (dot) { strcpy(dot, ".gif"); }
+        if (epoch == 1 && thumb) {
+            char *dot = strrchr(thumb, '.'); if (dot) strcpy(dot, ".gif");
         }
 
-        char cell[1024];
-        if (gallery_id) {
-            snprintf(cell, sizeof(cell),
-                     "<td align=\"center\" width=\"33%%%%\">"
-                     "<a href=\"/gallery/%s?img=%d\">"
-                     "<img src=\"%s\" alt=\"\" width=\"150\" border=\"0\">"
-                     "</a></td>", gallery_id, img_idx, thumb ? thumb : "");
-        } else {
-            snprintf(cell, sizeof(cell),
-                     "<td align=\"center\" width=\"33%%%%\">"
-                     "<img src=\"%s\" alt=\"\" width=\"150\" border=\"0\">"
-                     "</td>", thumb ? thumb : "");
-        }
+        char *cell = gallery_id
+            ? render_template(cell_tpl, gallery_id, img_idx, thumb ? thumb : "")
+            : render_template(cell_tpl, thumb ? thumb : "");
         free(thumb);
 
-        if (col == 0) rows_html = str_append(rows_html, "<tr>");
-        rows_html = str_append(rows_html, cell);
+        if (col == 0) {
+            char *rs = render_template(row_start_tpl);
+            rows_html = str_append(rows_html, rs);
+            free(rs);
+        }
+        if (cell) { rows_html = str_append(rows_html, cell); free(cell); }
         col++;
-        if (col >= 3) { rows_html = str_append(rows_html, "</tr>"); col = 0; }
+        if (col >= 3) {
+            char *re = render_template(row_end_tpl);
+            rows_html = str_append(rows_html, re);
+            free(re);
+            col = 0;
+        }
 
         tok = strtok_r(NULL, ";", &saveptr);
         img_idx++;
     }
-    if (col > 0) rows_html = str_append(rows_html, "</tr>");
+    if (col > 0) {
+        char *re = render_template(row_end_tpl);
+        rows_html = str_append(rows_html, re);
+        free(re);
+    }
     free(copy);
+    free(row_start_tpl); free(row_end_tpl); free(cell_tpl);
 
     char *result = rows_html ? render_template(wrap_tpl, rows_html) : NULL;
     free(rows_html);

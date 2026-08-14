@@ -9,13 +9,12 @@
 char *users_admin_list(int epoch, const char *error_message);
 
 // /dashboard/users/new (id == "") and /dashboard/users/<id>/edit (id == hex
-// ObjectId). `email`/`role` are the user's current email/role ("" / "author"
-// for a new user). The password field is always rendered empty - on edit, a
-// blank submission leaves the stored password unchanged. `error_message` is
-// shown above the form if non-NULL/non-empty (e.g. after a failed save).
-// Returns a malloc'd string, or NULL on a missing template / allocation
-// failure.
-char *users_admin_form(int epoch, const char *id, const char *email, const char *role,
-                        const char *error_message);
+// ObjectId). `name`/`email`/`role` are the user's current values ("" / "" /
+// "author" for a new user). The password field is always rendered empty - on
+// edit, a blank submission leaves the stored password unchanged. `error_message`
+// is shown above the form if non-NULL/non-empty. Returns a malloc'd string, or
+// NULL on a missing template / allocation failure.
+char *users_admin_form(int epoch, const char *id, const char *name, const char *email,
+                        const char *role, const char *error_message);
 
 #endif // USERS_ADMIN_H

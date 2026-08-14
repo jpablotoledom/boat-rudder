@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(base-http-server C)
+project(boat-rudder C)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -95,14 +95,14 @@ set(SOURCES
     src/db/session_manager.c
 )
 
-add_executable(base-http-server ${SOURCES})
+add_executable(boat-rudder ${SOURCES})
 
-target_include_directories(base-http-server PRIVATE
+target_include_directories(boat-rudder PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${OPENSSL_INCLUDE_DIR}
 )
 
-target_link_libraries(base-http-server
+target_link_libraries(boat-rudder
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
@@ -110,4 +110,4 @@ target_link_libraries(base-http-server
     PkgConfig::SODIUM
 )
 
-install(TARGETS base-http-server RUNTIME DESTINATION bin)
+install(TARGETS boat-rudder RUNTIME DESTINATION bin)

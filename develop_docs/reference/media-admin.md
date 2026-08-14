@@ -10,7 +10,7 @@ cookie (`require_dashboard_session()`).
 
 ### Collections
 
-**`media`** — one document per uploaded file:
+**`media`** - one document per uploaded file:
 
 ```jsonc
 {
@@ -23,7 +23,7 @@ cookie (`require_dashboard_session()`).
 }
 ```
 
-**`media_directories`** — one document per folder:
+**`media_directories`** - one document per folder:
 
 ```jsonc
 {
@@ -34,7 +34,7 @@ cookie (`require_dashboard_session()`).
 }
 ```
 
-**`media_galleries`** — created/updated by the content save route for each `gallery` block:
+**`media_galleries`** - created/updated by the content save route for each `gallery` block:
 
 ```jsonc
 {
@@ -88,9 +88,9 @@ For each uploaded image, generates 5 variants and deletes the original:
 |---|---|---|
 | `_full` | original | JPEG (photos) or GIF (≤256 colors) |
 | `_half` | 1024 px | JPEG or GIF |
-| `_small` | 300 px | JPEG or GIF — used for thumbnails |
-| `_medium` | 600 px | always GIF — epoch 1/2 compatibility |
-| `_micro` | 180 px | always GIF — epoch 1 / Mosaic compatibility |
+| `_small` | 300 px | JPEG or GIF - used for thumbnails |
+| `_medium` | 600 px | always GIF - epoch 1/2 compatibility |
+| `_micro` | 180 px | always GIF - epoch 1 / Mosaic compatibility |
 
 Additionally creates a symlink `<original_name> → <basename>_half.<ext>` so the stored URL
 (without suffix) resolves via the static file server.
@@ -103,11 +103,11 @@ Riemersma dithering + gifsicle optimization). Photos generate `_full/_half/_smal
 
 ## 4. Page rendering (`src/modules/media_admin/media_admin.c`)
 
-- `media_admin_page(epoch, dirs, dir_count, items, item_count)` — renders `dashboard/media/media_epoch3.html` with directory sidebar HTML + initial photo grid HTML.
-- `media_admin_render_directories(dirs, count, epoch)` — renders each directory item via `media-directory_epoch3.html`, wrapped in `media-directory-container_epoch3.html`.
-- `media_admin_render_items(items, count, epoch)` — renders each photo card via `item-photo_epoch3.html`, constructing the thumbnail URL as `posts/<author>/<dir>/<basename>_small<ext>` and the full URL as `posts/<author>/<dir>/<basename><ext>`.
-- `media_admin_render_directory_item(dir, epoch)` — renders a single directory item (returned by the AJAX create/rename endpoints).
-- `media_admin_modal(epoch, dirs, dir_count, items, item_count)` — wraps `media_admin_page()` output inside `media-modal_epoch3.html` (`.boat-rudder__modal` overlay) for the entry editor picker.
+- `media_admin_page(epoch, dirs, dir_count, items, item_count)` - renders `dashboard/media/media_epoch3.html` with directory sidebar HTML + initial photo grid HTML.
+- `media_admin_render_directories(dirs, count, epoch)` - renders each directory item via `media-directory_epoch3.html`, wrapped in `media-directory-container_epoch3.html`.
+- `media_admin_render_items(items, count, epoch)` - renders each photo card via `item-photo_epoch3.html`, constructing the thumbnail URL as `posts/<author>/<dir>/<basename>_small<ext>` and the full URL as `posts/<author>/<dir>/<basename><ext>`.
+- `media_admin_render_directory_item(dir, epoch)` - renders a single directory item (returned by the AJAX create/rename endpoints).
+- `media_admin_modal(epoch, dirs, dir_count, items, item_count)` - wraps `media_admin_page()` output inside `media-modal_epoch3.html` (`.boat-rudder__modal` overlay) for the entry editor picker.
 
 ---
 
@@ -128,23 +128,23 @@ Riemersma dithering + gifsicle optimization). Photos generate `_full/_half/_smal
 All functions are declared on `window` so they remain available after `activateScripts()` re-executes the template's script when loaded in the entry editor modal.
 
 **Directory management**:
-- `newDirectoryBtnHandler()` — appends a text input to the directory list; `createNewDirectory()` POSTs on blur.
-- `selectDirectory(id)` — sets `#media-directory-selected`, clears the grid, loads page 1.
-- `renameDirectoryBtnHandler()` / `renameDirectory()` — toggle label/input; POST on blur.
-- `deleteDirectoryBtnHandler()` / `deleteDirectory(id)` — confirm + POST.
-- `validarCaracter(e)` — keypress validator for directory name input (`[a-zA-Z0-9_-]` only).
+- `newDirectoryBtnHandler()` - appends a text input to the directory list; `createNewDirectory()` POSTs on blur.
+- `selectDirectory(id)` - sets `#media-directory-selected`, clears the grid, loads page 1.
+- `renameDirectoryBtnHandler()` / `renameDirectory()` - toggle label/input; POST on blur.
+- `deleteDirectoryBtnHandler()` / `deleteDirectory(id)` - confirm + POST.
+- `validarCaracter(e)` - keypress validator for directory name input (`[a-zA-Z0-9_-]` only).
 
 **Content loading**:
-- `getMediaContents(directoryId, start, end)` — GET `/dashboard/api/media/contents?...`, appends returned HTML to `#media-content-dynamically`.
+- `getMediaContents(directoryId, start, end)` - GET `/dashboard/api/media/contents?...`, appends returned HTML to `#media-content-dynamically`.
 - Infinite scroll: `scroll` listener on `#media_content__charger`; loads next 30 items when near bottom.
 
 **Upload**:
-- `upload()` — iterates selected files (JPEG, PNG, GIF only), XHR POST to `/dashboard/api/media/upload` with progress bar per file; reloads directory on completion.
+- `upload()` - iterates selected files (JPEG, PNG, GIF only), XHR POST to `/dashboard/api/media/upload` with progress bar per file; reloads directory on completion.
 - Drag-and-drop zone: `dragover`/`dragleave`/`drop` on `#drop-zone`; file-input `change` listener.
 
 **Selection** (for the entry editor picker):
 - Click toggles `.selected` + checkbox; Shift+click for range selection.
-- `getSelectedMediaIds()` — collects selected URLs in selection order; writes to:
+- `getSelectedMediaIds()` - collects selected URLs in selection order; writes to:
   - `header` type: `#headerImageUrl` input + header image preview
   - `image-block` type: all lang text fields of `window._galleryTargetBlock`
   - `gallery-block` type: all lang text fields + calls `renderGalleryThumbs()`

@@ -34,7 +34,7 @@ static char *render_lang_fields(const CmsContentBlockEdit *block,
     return result;
 }
 
-// block id + extra_data only — for blocks with no per-language text.
+// block id + extra_data only - for blocks with no per-language text.
 static char *render_notext_block(const CmsContentBlockEdit *block, const char *tpl_path, int epoch) {
     char *tpl = load_template(tpl_path, epoch);
     if (!tpl) return NULL;

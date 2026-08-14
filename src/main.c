@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     }
 
     log_level = verbose_level;
-    LOG_INFO("base-http-server starting");
+    LOG_INFO("Boat Rudder starting");
     LOG_INFO("Config         : %s", config_path);
     LOG_INFO("Root directory : %s", root_directory);
     LOG_INFO("HTTP port      : %d", http_port);

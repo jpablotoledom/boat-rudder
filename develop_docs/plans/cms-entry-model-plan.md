@@ -1,8 +1,15 @@
 # CMS "Entry" Data Model - Embedded Schema
 
-> **Status**: `entries` (with embedded `header` and `content[]`) and `entry_categories` are
-> implemented - see [architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink).
-> `media`/`media_directories` (§2.3) remain a design proposal, not yet implemented.
+> **Status**: fully implemented, with one deviation from this document. `entries` (with embedded
+> `header` and `content[]`), `entry_categories`, `media` and `media_directories` all exist - see
+> [rendering.md, "CMS entries"](../reference/rendering.md) and
+> [media-admin.md](../reference/media-admin.md).
+>
+> **Deviation:** `header.author` was specified here as a `map<lang,string>` (§2.1). It is
+> implemented instead as `header.author_id`, an `ObjectId` reference into `users`, resolved to
+> `users.name` at render time. An author's name is a proper noun, not translated content, so a
+> per-language map was the wrong shape - and the reference keeps the name in one place when a
+> user is renamed.
 
 Diagram: [diagrams/cms-entry-model-embedded.puml](../diagrams/cms-entry-model-embedded.puml)
 
@@ -32,8 +39,8 @@ media_directories
 |---|---|
 | `entries` | page identity/routing + embedded `header` + embedded `content[]`, all translated text as `map<lang,string>` |
 | `entry_categories` | `{ _id, name: map<lang,string> }`, referenced from `entries.categories[]` |
-| `media` | proposed, not yet implemented (§2.3) |
-| `media_directories` | proposed, not yet implemented (§2.3) |
+| `media` | uploaded file metadata (§2.3) - implemented, see [media-admin.md](../reference/media-admin.md) |
+| `media_directories` | folder structure (§2.3) - implemented, see [media-admin.md](../reference/media-admin.md) |
 
 ### 1.1 Language code convention
 
@@ -50,7 +57,7 @@ Every embedded translation object is an **open map keyed by
   to a configured default (`en`) if a key is missing for the requested `lang`. This is
   implemented by `resolve_lang_map()` in `src/db/cms_entries.c`, which also bridges
   `configs/settings.conf`'s `lang="Eng"/"Esp"` convention to `en`/`es` (see
-  [architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink)).
+  [rendering.md, "CMS entries"](../reference/rendering.md)).
 - If region-specific variants are ever needed (e.g. `en-US` vs. `en-GB`), extend to
   [BCP 47](https://en.wikipedia.org/wiki/IETF_language_tag) tags - they're a superset
   of ISO 639-1, so plain `en`/`es` keys remain valid.
@@ -78,7 +85,8 @@ all the `translation` documents those referenced.
     "image_url": "/themes/dark/assets/blog/my-page.jpg",
     "title":   { "en": "My Page Title",  "es": "Título de mi página" },
     "summary": { "en": "A short teaser", "es": "Un resumen corto" },
-    "author":  { "en": "Pablo",          "es": "Pablo" },
+    "author_id": ObjectId,               // -> users._id, resolved to users.name at render time
+                                          // (this document originally specified a map; see Status)
     "date": ISODate("2026-06-01T00:00:00Z")
   },
 
@@ -108,8 +116,9 @@ all the `translation` documents those referenced.
 }
 ```
 
-`text`/`name`/`title`/`summary`/`author` are all maps following §1.1 - shown above with
-`en`/`es` populated, but any subset of ISO 639-1 codes is valid per document.
+`text`/`name`/`title`/`summary` are all maps following §1.1 - shown above with
+`en`/`es` populated, but any subset of ISO 639-1 codes is valid per document. `author_id` is the
+exception: a plain `ObjectId` reference, not a map (see Status above).
 
 Field-by-field mapping from the normalized model:
 
@@ -119,7 +128,7 @@ Field-by-field mapping from the normalized model:
 | `entries.header.*` | the entire `header` document (`entry_id` link is implicit - it's the parent doc) |
 | `entries.header.title` (map) | `header.tittle_id` -> `translation.{eng,esp}` |
 | `entries.header.summary` (map) | `header.summary_id` -> `translation.{eng,esp}` |
-| `entries.header.author` (map) | `header.author_id` -> `translation.{eng,esp}` |
+| `entries.header.author_id` (ObjectId -> `users._id`) | `header.author_id` -> `translation.{eng,esp}` (kept as a reference instead of flattening to a map - see Status) |
 | `entries.content[]` | the `content` collection (`entry_id` link is implicit) |
 | `entries.content[].text` (map) | `content.content_id` -> `translation.{eng,esp}` |
 | `entries.content[].order` | `content.order` (sort key, now sorted client-side or via `$unwind`+`$sort` only if needed for cross-entry queries) |
@@ -182,7 +191,7 @@ used by `cms_get_entry_by_link()` (`resolve_category_names()`). There is no `men
 
 `cms_get_blog_entries()` is parameterized by `limit`, reused by both the home blog list
 (`HOME_BLOG_LIMIT`) and the full `/blog` listing (`BLOG_LIST_LIMIT`) - see
-[architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog). Category-filtered
+[rendering.md, "Blog list"](../reference/rendering.md). Category-filtered
 listing (`getBlogItemsByCategory`-style queries) remains a future increment.
 
 ### 3.3 Editing a page (dashboard / future editor)
@@ -243,16 +252,16 @@ adding, or removing content blocks is just array manipulation within one documen
 
 ## 6. Relationship to Boat Rudder's current code
 
-The `entries` collection (with embedded `header` and `content[]`) and `entry_categories`
-described above are implemented and wired into the `/page/<link>` route - see
-[architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink),
-`src/db/cms_entries.c`, and `src/modules/entry_page/entry_page.c`. The currently
-implemented `content[].type`s are `tittle`, `paragraph`, `image`, and `byline`.
+Everything described above is implemented and wired into the `/page/<link>`, `/blog/<link>`,
+`/blog` and `/blog/category/<slug>` routes - see
+[rendering.md, "CMS entries"](../reference/rendering.md),
+`src/db/cms_entries.c`, and `src/modules/entry_page/entry_page.c`. Fourteen `content[].type`s
+are implemented; heading levels via `content[].extra_data` for `tittle`, category filtering of
+the blog listing, and `media`/`media_directories` (§2.3) all landed as well.
 
-Still proposed, not yet implemented: `media`/`media_directories` (§2.3), filtering the
-`/blog` listing by category, heading levels via `content[].extra_data` for
-`tittle`, and additional element types (gallery, table, forms, etc.). When these land,
-rendering follows the same pattern as the implemented types: per-type "element"
-templates loaded via `generate_url_theme` + `read_file_to_string` + `render_template`
-per `content[].type`/epoch, per Boat Rudder's
-[no-embedded-HTML convention](../reference/architecture.md#templates-htmlthemestheme).
+Still open: the `image-single` element type, and older-epoch (-1..2) templates for the nine
+block types that currently only have an epoch 3 variant. When these land, rendering follows the
+same pattern as the implemented types: per-type "element" templates loaded via
+`generate_url_theme` + `read_file_to_string` + `render_template` per `content[].type`/epoch, per
+Boat Rudder's
+[rendering.md, "Templates"](../reference/rendering.md).

@@ -45,6 +45,8 @@ void cms_get_users(CmsUserAdminItem **out, size_t *out_count) {
             bson_oid_to_string(bson_iter_oid(&iter), id_str);
 
         items[count].id = strdup(id_str);
+        items[count].name = (bson_iter_init_find(&iter, doc, "name") && BSON_ITER_HOLDS_UTF8(&iter))
+            ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
         items[count].email = (bson_iter_init_find(&iter, doc, "email") && BSON_ITER_HOLDS_UTF8(&iter))
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
         items[count].role = (bson_iter_init_find(&iter, doc, "role") && BSON_ITER_HOLDS_UTF8(&iter))
@@ -71,6 +73,7 @@ void cms_users_admin_free(CmsUserAdminItem *items, size_t count) {
 
     for (size_t i = 0; i < count; i++) {
         free(items[i].id);
+        free(items[i].name);
         free(items[i].email);
         free(items[i].role);
     }
@@ -174,7 +177,7 @@ int cms_count_admins(void) {
     return (int)count;
 }
 
-int cms_create_user(const char *email, const char *password, const char *role) {
+int cms_create_user(const char *name, const char *email, const char *password, const char *role) {
     if (!is_valid_role(role)) return -1;
 
     mongoc_collection_t *collection = mongodb_manager_get_collection(USERS_COLLECTION);
@@ -197,6 +200,7 @@ int cms_create_user(const char *email, const char *password, const char *role) {
     }
 
     bson_t *doc = BCON_NEW(
+        "name", BCON_UTF8(name),
         "email", BCON_UTF8(email),
         "password", BCON_UTF8(hash),
         "role", BCON_UTF8(role)
@@ -209,7 +213,7 @@ int cms_create_user(const char *email, const char *password, const char *role) {
     return ok ? 0 : -1;
 }
 
-int cms_update_user(const char *id_hex, const char *email, const char *role,
+int cms_update_user(const char *id_hex, const char *name, const char *email, const char *role,
                      const char *new_password) {
     if (!bson_oid_is_valid(id_hex, strlen(id_hex))) return -1;
     if (!is_valid_role(role)) return -1;
@@ -238,6 +242,7 @@ int cms_update_user(const char *id_hex, const char *email, const char *role,
     bson_init(&update);
     bson_t set_doc;
     bson_append_document_begin(&update, "$set", -1, &set_doc);
+    bson_append_utf8(&set_doc, "name", -1, name, -1);
     bson_append_utf8(&set_doc, "email", -1, email, -1);
     bson_append_utf8(&set_doc, "role", -1, role, -1);
 
@@ -291,6 +296,32 @@ int cms_delete_user(const char *id_hex) {
     bson_destroy(query);
     mongoc_collection_destroy(collection);
     return (ok && deleted > 0) ? 0 : -1;
+}
+
+char *cms_get_user_name_by_id(const char *id_hex) {
+    if (!id_hex || !bson_oid_is_valid(id_hex, strlen(id_hex))) return strdup("");
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(USERS_COLLECTION);
+    if (!collection) return strdup("");
+
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, id_hex);
+    bson_t *query = BCON_NEW("_id", BCON_OID(&oid));
+
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    char *result = NULL;
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        if (bson_iter_init_find(&iter, doc, "name") && BSON_ITER_HOLDS_UTF8(&iter))
+            result = strdup(bson_iter_utf8(&iter, NULL));
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return result ? result : strdup("");
 }
 
 int cms_get_username_by_id(const char *id_hex, char *out, size_t out_size) {

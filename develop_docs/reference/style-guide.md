@@ -264,7 +264,7 @@ the request path originates from the client.
 - **`FIO42-C` - close every file descriptor / `SSL*` / socket on every exit
   path**, including error paths. This is what the `cleanup:` label pattern
   (§5) exists for.
-- **Set socket timeouts** (`SO_RCVTIMEO`/`SO_SNDTIMEO`, already 5s) on every
+- **Set socket timeouts** (`SO_RCVTIMEO`/`SO_SNDTIMEO`, currently 30 s - raised from 5 s so large uploads can complete) on every
   new connection so a slow/hostile client can't hold a thread forever.
 - **TLS context lifetime:** `tls_create_context()` /
   `tls_free_context()` must remain a matched pair with a single owner

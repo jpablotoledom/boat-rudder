@@ -1,20 +1,21 @@
 #!/bin/bash
-# bhs.sh - base-http-server main script
+# boat_rudder_builder.sh - Boat Rudder main script
 #
-# Usage: ./bhs.sh <action1> [action2] ...
+# Usage: ./boat_rudder_builder.sh <action1> [action2] ...
 #
 # Actions:
 #   compiledebug   Compile with debug symbols and AddressSanitizer
 #   compileprod    Compile optimized for production
+#   clean          Remove build/ and bin/ (forces a full recompile next time)
 #   rundebug       Run locally in debug mode (GDB on Linux, LLDB on macOS)
 #   createcert     Generate a self-signed TLS certificate for local development
 #   install        Compile and install as a systemd service (Linux only)
 #   uninstall      Stop and remove the systemd service (Linux only)
 #
 # Actions can be combined:
-#   ./bhs.sh compiledebug rundebug
-#   ./bhs.sh createcert compiledebug rundebug
-#   ./bhs.sh compileprod install
+#   ./boat_rudder_builder.sh compiledebug rundebug
+#   ./boat_rudder_builder.sh createcert compiledebug rundebug
+#   ./boat_rudder_builder.sh compileprod install
 
 # Resolve script location so it works from any directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,6 +28,7 @@ if [ $# -lt 1 ]; then
     echo "  Actions:"
     echo "    compiledebug   Compile with debug symbols and AddressSanitizer"
     echo "    compileprod    Compile optimized for production"
+    echo "    clean          Remove build/ and bin/ (forces a full recompile)"
     echo "    rundebug       Run locally in debug mode"
     echo "    createcert     Generate a self-signed TLS certificate (local dev)"
     echo "    install        Install as a systemd service  (Linux only, requires sudo)"
@@ -50,6 +52,10 @@ for action in "$@"; do
             echo "Compiling (production)..."
             ./scripts/compile_prod.sh
             ;;
+        clean)
+            echo "Cleaning build artifacts..."
+            ./scripts/clean.sh
+            ;;
         rundebug)
             echo "Running in debug mode..."
             ./scripts/run_debug.sh
@@ -69,7 +75,7 @@ for action in "$@"; do
         *)
             echo ""
             echo "  Unknown action: '$action'"
-            echo "  Valid actions: compiledebug, compileprod, rundebug, createcert, install, uninstall"
+            echo "  Valid actions: compiledebug, compileprod, clean, rundebug, createcert, install, uninstall"
             echo ""
             exit 1
             ;;

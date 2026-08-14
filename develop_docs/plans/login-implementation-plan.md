@@ -1,8 +1,11 @@
 # Login Feature - Implementation Plan
 
-> **Status**: Planning document only. No source code, templates, CMake, or config files are
-> changed by this document. It describes the work required to add a login flow, a protected
-> `/dashboard` page, and centralized epoch-aware error pages to Boat Rudder.
+> **Status**: implemented. Login, sessions, the protected `/dashboard` and the centralized
+> epoch-aware error pages all shipped as described here - see
+> [dashboard.md, "Login, Dashboard and Logout"](../reference/dashboard.md).
+> `/dashboard` has since grown well past the "Welcome to dashboard" placeholder this document
+> planned (entries listing and editor, media library, Categories / Languages / Menu / Users
+> maintainers, two roles); this document is kept as the design record of the original increment.
 
 ---
 
@@ -81,7 +84,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(MONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
 ...
-target_link_libraries(base-http-server
+target_link_libraries(boat-rudder
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
@@ -616,7 +619,7 @@ src/modules/error/error.c
 New link libraries:
 
 ```cmake
-target_link_libraries(base-http-server
+target_link_libraries(boat-rudder
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads

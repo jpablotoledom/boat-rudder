@@ -39,7 +39,7 @@ CONTAINER --> ORCH : html_container\n(4x %s placeholders)
 ORCH -> MENU : menu("/", epoch)
 activate MENU
 MENU -> MENU : load menu_epoch<N>,\nmenu-item_epoch<N>,\nmenu-item-separator_epoch<N>
-loop for each route in MENU_ROUTES
+loop for each item in cms_get_menu_items(lang)
   MENU -> MENU : render_template(menu-item_tpl,\nlink, label, separator)
   MENU -> MENU : str_append(items, item)
 end
@@ -54,7 +54,7 @@ SLIDER --> ORCH : html_slider
 ORCH -> HOME : home_content(epoch, lang)
 activate HOME
 HOME -> HOME : load home-content_epoch<N>,\nhome-content-item_epoch<N>
-loop for each entry in UPDATES
+loop for each entry in UPDATES (static array)
   HOME -> HOME : render_template(item_tpl,\ntitle, date, text)
   HOME -> HOME : str_append(items, item)
 end
@@ -62,10 +62,10 @@ HOME -> HOME : render_template(content_tpl, items)
 deactivate HOME
 HOME --> ORCH : html_home_content
 
-ORCH -> BLOG : home_blog(epoch)
+ORCH -> BLOG : home_blog(epoch, lang)
 activate BLOG
 BLOG -> BLOG : load home-blog_epoch<N>,\nhome-blog-item_epoch<N>
-loop for each entry in BLOG_POSTS
+loop for each entry in cms_get_blog_entries(lang, HOME_BLOG_LIMIT)
   BLOG -> BLOG : render_template(item_tpl,\nimage, link, title, summary, author, date)\n(epoch -1/0: title, date, summary)
   BLOG -> BLOG : str_append(items, item)
 end

@@ -40,7 +40,8 @@ typedef struct {
 
     // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
     // for the requested lang. NULL/0 if the entry has no categories.
-    char  **category_names;
+    char  **category_names; // display name
+    char  **category_links; // URL slug: "/blog/category/<slug>"
     size_t  category_count;
 
     CmsContentBlock *content;
@@ -74,7 +75,8 @@ typedef struct {
 
     // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
     // for the requested lang. NULL/0 if the entry has no categories.
-    char  **category_names;
+    char  **category_names; // display name
+    char  **category_links; // URL slug: "/blog/category/<slug>"
     size_t  category_count;
 } CmsBlogListItem;
 

@@ -1,4 +1,4 @@
-# base-http-server - Data Flow
+# Boat Rudder - Data Flow
 
 This document describes how data moves through the server from the moment a TCP connection arrives until the response is fully sent.
 
@@ -18,6 +18,9 @@ main()
   │     sodium_init()  ← required once before any libsodium call
   │     mongoc_init() + mongoc_client_pool_new()
   │     failure → logged, server continues; /login and /dashboard return 503 (see §5b/§5c)
+  │
+  ├─ cms_languages_ensure_seeded()   ← only if mongodb_manager_init() succeeded
+  │     inserts {code:"en", name:"English", is_default:true} iff `languages` is empty
   │
   ├─ server_start(root_dir, ssl_enabled, ssl_cert, ssl_key, http_port, https_port)
   │     ├─ socket(AF_INET, SOCK_STREAM) → server_fd_http
@@ -84,7 +87,7 @@ Each connection runs in its own pthread.
 connection_thread(thread_args)
   │
   ├─ malloc(connection_ctx_t) { client_socket, ssl }
-  ├─ setsockopt SO_RCVTIMEO = 5s, SO_SNDTIMEO = 5s
+  ├─ setsockopt SO_RCVTIMEO = 30s, SO_SNDTIMEO = 30s   ← raised from 5s for large uploads
   │
   ├─ [if ssl != NULL]
   │     SSL_accept(ssl)  ← TLS handshake
@@ -135,15 +138,27 @@ http_route(read_func, ctx, root_directory)
   ├─ url_parse(url, route, sizeof(route), params, &param_count) → route + QueryParam[]
   ├─ url_decode(route) → decoded_url
   │
+  ├─ content_lang = cms_resolve_default_lang()   ← db.languages.findOne({is_default:true})
+  │
   ├─ ROUTE DISPATCH:
-  │     GET/HEAD, route == "/"          → dynamic home page  ───────────►  see §5a
-  │     GET/HEAD, route == "/login"     → login page (epoch-aware)  ─────►  see §5b
-  │     GET/HEAD, route == "/dashboard" → dashboard or 302 /login  ──────►  see §5b
-  │     GET/HEAD, route == "/logout"    → destroy session, 302 /  ───────►  see §5b
-  │     POST,     route == "/login"     → authenticate, 302 /dashboard ─►  see §5b
-  │     GET/HEAD, other route           → serve_static_file()  ─────────►  see §5
+  │     GET/HEAD, route == "/"           → dynamic home page  ──────────►  see §5a
+  │     GET/HEAD, "/blog"                → blog listing + category bar
+  │     GET/HEAD, "/blog/category/<slug>"→ blog listing filtered by category (404 if no match)
+  │     GET/HEAD, "/blog/<link>"         → CMS entry, type must be "blog"
+  │     GET/HEAD, "/page/<link>"         → CMS entry, type must be "page"
+  │     GET/HEAD, "/gallery/<id>"        → public gallery page (epoch-aware)
+  │     GET/HEAD, route == "/login"      → login page (epoch-aware)  ────►  see §5b
+  │     GET/HEAD, route == "/dashboard"  → dashboard or 302 /login  ─────►  see §5b
+  │     GET/HEAD, route == "/logout"     → destroy session, 302 /  ──────►  see §5b
+  │     POST,     route == "/login"      → authenticate, 302 /dashboard ─►  see §5b
+  │     GET/POST, "/dashboard/..."       → admin area (session-guarded; entries editor,
+  │                                        media, categories, languages, menu, users)
+  │     GET/HEAD, other route            → serve_static_file()  ─────────►  see §5
   │     OPTIONS → send 204
   │     other → send 405 Method Not Allowed
+  │
+  │     Every dynamic route resolves its epoch via resolve_epoch(req) and wraps its
+  │     content with one of the html_builder/orchestrator.c page builders.
   │
   │     Any non-2xx/3xx response (400/403/404/405/431/500/503) is rendered
   │     via send_error_response(ctx, status_code, status_line, epoch)  ──►  see §5c
@@ -172,21 +187,31 @@ GET/HEAD "/"  (http_router.c)
   │     │     read_file_to_string() → tpl (4x %s: menu, slider, home_content, home_blog; {{PAGE_TITLE}})
   │     │
   │     ├─ menu("/", epoch)
-  │     │     reads menu_epoch%d.html, menu-item_epoch%d.html, menu-item-separator_epoch%d.html
-  │     │     for each route in MENU_ROUTES: render_template(menu_item_tpl, link, label, sep)
+  │     │     cms_get_menu_items(lang, &items, &count)  ── db.menu.find({enabled:true})
+  │     │       .sort({order:1}); falls back to a single built-in {"/", "Home"} item
+  │     │       if the query returns nothing (DB down, empty collection, error)
+  │     │     reads menu_epoch%d.html, menu-item_epoch%d.html,
+  │     │       menu-item-selected_epoch%d.html, menu-item-separator_epoch%d.html
+  │     │     per item: render_template(menu_item_tpl, link, name, sep)
+  │     │       (the item whose link == current_url uses the -selected template)
   │     │     → str_append into items, then render_template(menu_tpl, items)
   │     │
   │     ├─ slider(epoch)
   │     │     generate_url_theme("slider/slider_epoch%d.html", epoch) → read_file_to_string()
   │     │
   │     ├─ home_content(epoch, lang)
-  │     │     for each entry in UPDATES: render_template(item_tpl, title, date, text)
+  │     │     for each entry in the static UPDATES[] array: render_template(item_tpl, title, date, text)
   │     │     → str_append into items, then render_template(content_tpl, items)
+  │     │     (still the only static content source left - see the roadmap)
   │     │
-  │     ├─ home_blog(epoch)
+  │     ├─ home_blog(epoch, lang)
+  │     │     cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &items, &count) ── db.entries.find(
+  │     │       {type:"blog", enabled:true}).sort({"header.date":-1}).limit(HOME_BLOG_LIMIT)
   │     │     reads home-blog_epoch%d.html, home-blog-item_epoch%d.html
-  │     │     for each entry in BLOG_POSTS: render_template(item_tpl, image, link, title, summary, author, date)
-  │     │     (epoch -1/0: render_template(item_tpl, title, date, summary))
+  │     │     per item: render_template(item_tpl, image, link, title, summary, author,
+  │     │                                categories, date)
+  │     │     (epoch -1/0: title, date, summary, categories)
+  │     │     count == 0 → home-blog/empty_epoch%d.html; never fails the page
   │     │     → str_append into items, then render_template(content_tpl, items)
   │     │
   │     ├─ NULL check: any of the 5 pieces missing → goto cleanup, free non-NULL pieces
@@ -295,9 +320,14 @@ GET/HEAD "/dashboard"  (http_router.c)
         │     -1 → DB error
         │
         ├─ == 1?
-        │     → content = dashboard(epoch)            ── modules/dashboard
+        │     → role = cms_get_user_role(user_id)     ── "admin" | "author"
+        │       content = dashboard(epoch, content_lang, user_id, role)  ── modules/dashboard
+        │         epoch 3: nav links (admin only) + entries table
+        │           admin  → entries_admin_rows(epoch, lang, NULL, NULL)     (every entry)
+        │           author → entries_admin_rows(epoch, lang, "blog", user_id) (own posts only)
+        │         other epochs: static "Welcome to dashboard" fragment
         │       body = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content)
-        │       200 OK ("Welcome to dashboard")
+        │       200 OK
         │
         └─ != 1 (0 or -1)?
               → response = build_redirect_response("/login", "", epoch)
@@ -432,7 +462,7 @@ main loop exits
         mongoc_client_pool_destroy() + mongoc_cleanup()
 ```
 
-Active threads finish naturally (they check nothing from main, they just run to completion with the 5 s socket timeout as backstop).
+Active threads finish naturally (they check nothing from main, they just run to completion with the 30 s socket timeout as backstop).
 
 ---
 

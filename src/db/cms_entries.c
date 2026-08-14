@@ -1,7 +1,9 @@
 #include "cms_entries.h"
 #include "bson_lang.h"
+#include "cms_users_admin.h"
 #include "mongodb_manager.h"
 #include "../utils/log.h"
+#include "../utils/template_utils.h"
 #include <bson/bson.h>
 #include <mongoc/mongoc.h>
 #include <stdio.h>
@@ -39,7 +41,14 @@ static void resolve_header_fields(const bson_t *doc, const char *lang,
 
     *title   = resolve_lang_map(&header, "title", lang);
     *summary = resolve_lang_map(&header, "summary", lang);
-    *author  = resolve_lang_map(&header, "author", lang);
+
+    if (bson_iter_init_find(&hiter, &header, "author_id") && BSON_ITER_HOLDS_OID(&hiter)) {
+        char author_id_hex[25];
+        bson_oid_to_string(bson_iter_oid(&hiter), author_id_hex);
+        *author = cms_get_user_name_by_id(author_id_hex);
+    } else {
+        *author = strdup("");
+    }
 
     date[0] = '\0';
     if (bson_iter_init_find(&hiter, &header, "date") && BSON_ITER_HOLDS_DATE_TIME(&hiter)) {
@@ -55,12 +64,13 @@ static void parse_header(const bson_t *doc, const char *lang, CmsEntry *out) {
                            &out->header_summary, &out->header_author, out->header_date);
 }
 
-// Resolves doc.categories[] (ObjectId[]) to entry_categories.name, resolved to `lang`.
-// *out_names/*out_count are NULL/0 on any failure - categories are decorative and must
-// never fail the caller.
+// Resolves doc.categories[] (ObjectId[]) to entry_categories.name (resolved to
+// `lang`) and a URL slug ("/blog/category/<slug>"). *out_names/*out_links/*out_count
+// are NULL/0 on any failure - categories are decorative and must never fail the caller.
 static void resolve_category_names(const bson_t *doc, const char *lang,
-                                    char ***out_names, size_t *out_count) {
+                                    char ***out_names, char ***out_links, size_t *out_count) {
     *out_names = NULL;
+    *out_links = NULL;
     *out_count = 0;
 
     bson_iter_t iter;
@@ -115,7 +125,10 @@ static void resolve_category_names(const bson_t *doc, const char *lang,
     free(oids);
 
     char **names = calloc(oid_count, sizeof(char *));
-    if (!names) {
+    char **links = calloc(oid_count, sizeof(char *));
+    if (!names || !links) {
+        free(names);
+        free(links);
         bson_destroy(&query);
         mongoc_collection_destroy(collection);
         return;
@@ -124,8 +137,19 @@ static void resolve_category_names(const bson_t *doc, const char *lang,
     mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, &query, NULL, NULL);
     size_t found = 0;
     const bson_t *cdoc;
-    while (found < oid_count && mongoc_cursor_next(cursor, &cdoc))
-        names[found++] = resolve_lang_map(cdoc, "name", lang);
+    while (found < oid_count && mongoc_cursor_next(cursor, &cdoc)) {
+        names[found] = resolve_lang_map(cdoc, "name", lang);
+        char *slug = slugify(names[found]);
+        char *link = NULL;
+        if (slug) {
+            size_t len = strlen("/blog/category/") + strlen(slug) + 1;
+            link = malloc(len);
+            if (link) snprintf(link, len, "/blog/category/%s", slug);
+            free(slug);
+        }
+        links[found] = link ? link : strdup("#");
+        found++;
+    }
 
     bson_error_t error;
     if (mongoc_cursor_error(cursor, &error))
@@ -136,11 +160,12 @@ static void resolve_category_names(const bson_t *doc, const char *lang,
     mongoc_collection_destroy(collection);
 
     *out_names = names;
+    *out_links = links;
     *out_count = found;
 }
 
 static void parse_categories(const bson_t *doc, const char *lang, CmsEntry *out) {
-    resolve_category_names(doc, lang, &out->category_names, &out->category_count);
+    resolve_category_names(doc, lang, &out->category_names, &out->category_links, &out->category_count);
 }
 
 static int compare_blocks_by_order(const void *a, const void *b) {
@@ -245,9 +270,12 @@ void cms_entry_free(CmsEntry *entry) {
     free(entry->header_summary);
     free(entry->header_author);
 
-    for (size_t i = 0; i < entry->category_count; i++)
+    for (size_t i = 0; i < entry->category_count; i++) {
         free(entry->category_names[i]);
+        free(entry->category_links[i]);
+    }
     free(entry->category_names);
+    free(entry->category_links);
 
     for (size_t i = 0; i < entry->content_count; i++) {
         free(entry->content[i].type);
@@ -277,7 +305,7 @@ static void populate_entry_list_item(const bson_t *doc, const char *lang, CmsBlo
 
     resolve_header_fields(doc, lang, &item->header_image_url, &item->header_title,
                            &item->header_summary, &item->header_author, item->header_date);
-    resolve_category_names(doc, lang, &item->category_names, &item->category_count);
+    resolve_category_names(doc, lang, &item->category_names, &item->category_links, &item->category_count);
 }
 
 void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count) {
@@ -435,9 +463,12 @@ void cms_blog_list_free(CmsBlogListItem *items, size_t count) {
         free(items[i].header_summary);
         free(items[i].header_author);
 
-        for (size_t j = 0; j < items[i].category_count; j++)
+        for (size_t j = 0; j < items[i].category_count; j++) {
             free(items[i].category_names[j]);
+            free(items[i].category_links[j]);
+        }
         free(items[i].category_names);
+        free(items[i].category_links);
     }
 
     free(items);

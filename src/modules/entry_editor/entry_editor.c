@@ -70,13 +70,14 @@ static char *render_header_sidebar(const CmsEntryEdit *entry, const CmsLanguageI
     char *panels = strdup("");
     for (size_t i = 0; panels && i < lang_count; i++) {
         char *panel = render_template(panel_tpl, langs[i].code, entry->header_title_values[i],
-                                       entry->header_summary_values[i], entry->header_author_values[i]);
+                                       entry->header_summary_values[i]);
         panels = panel ? str_append(panels, panel) : NULL;
         free(panel);
     }
 
+    const char *author_name = entry->header_author_name ? entry->header_author_name : "";
     char *result = panels
-        ? render_template(tpl, entry->header_image_url, entry->header_date, panels)
+        ? render_template(tpl, entry->header_image_url, entry->header_date, author_name, panels)
         : NULL;
 
     free(panels);

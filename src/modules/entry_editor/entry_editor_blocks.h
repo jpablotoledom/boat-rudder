@@ -8,7 +8,7 @@
 // Renders one content block's edit form: a toolbar (move/remove buttons), one
 // "blocks/lang-field_epoch%d.html" per language for block->text_values[i], a
 // type-specific extra field for "image"/"byline" (bound to block->extra_data),
-// and an empty ".boat-rudder__entry-editor__block-preview" div filled by the
+// and an empty ".boat-rudder__entry-editor__block__preview" div filled by the
 // editor's JS. Used both for the full editor page (entry_editor_render_blocks())
 // and for the POST /dashboard/api/entries/<id>/blocks "add block" response
 // (same HTML either way). Unknown types render "" (defensive, mirrors

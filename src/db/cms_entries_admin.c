@@ -1,4 +1,5 @@
 #include "cms_entries_admin.h"
+#include "cms_users_admin.h"
 #include "mongodb_manager.h"
 #include "../utils/log.h"
 #include <bson/bson.h>
@@ -86,7 +87,7 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
                                size_t lang_count, CmsEntryEdit *out) {
     out->header_title_values   = calloc(lang_count, sizeof(char *));
     out->header_summary_values = calloc(lang_count, sizeof(char *));
-    out->header_author_values  = calloc(lang_count, sizeof(char *));
+    out->header_author_name    = NULL;
     out->header_date[0]        = '\0';
 
     bson_iter_t iter;
@@ -95,8 +96,8 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
         for (size_t i = 0; i < lang_count; i++) {
             out->header_title_values[i]   = strdup("");
             out->header_summary_values[i] = strdup("");
-            out->header_author_values[i]  = strdup("");
         }
+        out->header_author_name = strdup("");
         return;
     }
 
@@ -114,7 +115,14 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
     for (size_t i = 0; i < lang_count; i++) {
         out->header_title_values[i]   = exact_lang_value(&header, "title", langs[i].code);
         out->header_summary_values[i] = exact_lang_value(&header, "summary", langs[i].code);
-        out->header_author_values[i]  = exact_lang_value(&header, "author", langs[i].code);
+    }
+
+    if (bson_iter_init_find(&hiter, &header, "author_id") && BSON_ITER_HOLDS_OID(&hiter)) {
+        char author_id_hex[25];
+        bson_oid_to_string(bson_iter_oid(&hiter), author_id_hex);
+        out->header_author_name = cms_get_user_name_by_id(author_id_hex);
+    } else {
+        out->header_author_name = strdup("");
     }
 
     if (bson_iter_init_find(&hiter, &header, "date") && BSON_ITER_HOLDS_DATE_TIME(&hiter)) {
@@ -260,11 +268,10 @@ void cms_entry_edit_free(CmsEntryEdit *entry, size_t lang_count) {
     for (size_t i = 0; i < lang_count; i++) {
         if (entry->header_title_values)   free(entry->header_title_values[i]);
         if (entry->header_summary_values) free(entry->header_summary_values[i]);
-        if (entry->header_author_values)  free(entry->header_author_values[i]);
     }
     free(entry->header_title_values);
     free(entry->header_summary_values);
-    free(entry->header_author_values);
+    free(entry->header_author_name);
 
     for (size_t i = 0; i < entry->content_count; i++) {
         free(entry->content[i].id);
@@ -297,12 +304,17 @@ char *cms_create_entry(const char *created_by_id_hex, const char *type) {
     bson_append_array_end(&doc, &categories_arr);
     bson_t header_doc;
     bson_append_document_begin(&doc, "header", -1, &header_doc);
+    if (created_by_id_hex && bson_oid_is_valid(created_by_id_hex, strlen(created_by_id_hex))) {
+        bson_oid_t author_oid;
+        bson_oid_init_from_string(&author_oid, created_by_id_hex);
+        bson_append_oid(&header_doc, "author_id", -1, &author_oid);
+    }
     bson_append_document_end(&doc, &header_doc);
     bson_t content_arr;
     bson_append_array_begin(&doc, "content", -1, &content_arr);
     bson_append_array_end(&doc, &content_arr);
 
-    if (bson_oid_is_valid(created_by_id_hex, strlen(created_by_id_hex))) {
+    if (created_by_id_hex && bson_oid_is_valid(created_by_id_hex, strlen(created_by_id_hex))) {
         bson_oid_t created_by_oid;
         bson_oid_init_from_string(&created_by_oid, created_by_id_hex);
         bson_append_oid(&doc, "created_by", -1, &created_by_oid);
@@ -369,8 +381,7 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
 
 int cms_update_entry_header(const char *id_hex, const char *image_url, const char *date,
                              const CmsLanguageItem *langs, size_t lang_count,
-                             char *const *title_values, char *const *summary_values,
-                             char *const *author_values) {
+                             char *const *title_values, char *const *summary_values) {
     if (!bson_oid_is_valid(id_hex, strlen(id_hex))) return -1;
 
     mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
@@ -392,8 +403,6 @@ int cms_update_entry_header(const char *id_hex, const char *image_url, const cha
         bson_append_utf8(&set_doc, key, -1, title_values[i], -1);
         snprintf(key, sizeof(key), "header.summary.%s", langs[i].code);
         bson_append_utf8(&set_doc, key, -1, summary_values[i], -1);
-        snprintf(key, sizeof(key), "header.author.%s", langs[i].code);
-        bson_append_utf8(&set_doc, key, -1, author_values[i], -1);
     }
 
     int year, month, day;

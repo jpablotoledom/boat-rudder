@@ -1,7 +1,14 @@
 # Site Settings (banner, colors, logo, favicon, site name) - Feasibility & Plan
 
-> **Status**: proposal, not implemented. This is a documentation-only deliverable -
-> no DB schema, C code, or templates described here exist yet.
+> **Status**: approved, not yet implemented. This is a documentation-only deliverable - no DB
+> schema, C code or templates described here exist yet.
+>
+> This increment is how Boat Rudder stops shipping site-specific text in its source. Everything a
+> visitor reads that identifies the site - name, banner, favicon, logo, brand colors and the
+> `<title>` of every page - moves into the `site_settings` collection and becomes editable from
+> the dashboard. The literals in the templates and in `http_router.c` stay as the *product
+> defaults* ("Boat Rudder"), used verbatim when the collection is empty or MongoDB is down, so a
+> fresh install still renders exactly as it does today.
 
 Diagram: [diagrams/site-settings-components.puml](../diagrams/site-settings-components.puml)
 
@@ -33,12 +40,11 @@ colors" doesn't mean the same thing in every epoch:
 | **Colors** | n/a - WML has no color model | n/a - plain HTML, no `bgcolor`/CSS | inline HTML attributes: `<body bgcolor="#000080" text="#FFFFFF" link="#56E9FD" vlink="#9999FF">` | hardcoded hex in `styles_epoch2.css` (~21 colors), no `:root`/custom properties | hardcoded hex in `styles_epoch3.css` (~76 colors, eclectic neon palette), no `:root`/custom properties |
 | **Site name** | literal `BOAT RUDDER` in `container_epoch-1.html`, `home-content_epoch-1.html`, `page_epoch-1.html`, `slider_epoch-1.html` | same, 4 files | same, 4 files (`<font><b>BOAT RUDDER</b></font>`) | same, 4 files (`<h1>BOAT RUDDER</h1>` etc.) | same, 4 files + `menu/menu_epoch3.html` |
 
-No media library exists (`media`/`media_directories` are still "proposed, not
-implemented" per [cms-entry-model-plan.md](cms-entry-model-plan.md) §2.3), so any
-image setting (banner/logo/favicon) is realistically a **URL/path string**, the same
-convention already used for `entries.header.image_url` in the
-[entry editor](../reference/entry-editor.md) - "paste a URL to an asset under
-`/themes/dark/assets/...`", not "upload a file".
+Each image setting (banner/logo/favicon) is stored as a **URL/path string**, the same convention
+already used for `entries.header.image_url`. Since this plan was first written the media library
+has shipped ([media-admin.md](../reference/media-admin.md)), so the settings form can reuse the
+media picker modal (`GET /dashboard/api/media/modal`) exactly as the entry editor's header
+sidebar does - "pick an image" rather than "paste a URL" - while still storing a plain string.
 
 ## 3. Recommendation / scope
 
@@ -173,7 +179,7 @@ in shape to the entry editor's header sidebar than to `entries_admin`'s table.
     `/dashboard/settings`.
 - `/dashboard` gains a "Site settings" link (alongside the existing
   Categories/Languages/Menu/Entries maintainer links), per
-  [architecture.md, "Dashboard maintainers"](../reference/architecture.md#dashboard-maintainers-entries-categories-languages-and-menu).
+  [dashboard.md, "Dashboard maintainers"](../reference/dashboard.md).
 
 ## 7. Rendering changes (consumers of `site_settings`)
 
@@ -193,6 +199,13 @@ Per [the diagram](../diagrams/site-settings-components.puml):
   the DB call for those epochs).
 - **`menu()`** (`src/modules/menu/menu.c`): epoch3's `menu_epoch3.html` has a
   hardcoded "BOAT RUDDER" site-name link - gains a `site_name` `%s` placeholder.
+- **Page titles** (`src/web_server/http_router.c`): every dynamic route builds its title as a
+  literal - `"Boat Rudder - Login"`, `"Boat Rudder - Dashboard"` (~20 call sites),
+  `"Boat Rudder - Blog"`, `"Boat Rudder - Media"`, `"Boat Rudder - Error %d"`. Each becomes
+  `"<site_name> - <page>"`, built with the `site_name` from `cms_get_site_settings()`. The
+  router already resolves `content_lang` once per request; `site_settings` fits the same shape
+  (one read per request, reused by every branch). This is the largest single group of visible
+  literals and the main reason this increment exists.
 - The other ~12 occurrences of the literal "Boat Rudder"/"BOAT RUDDER" (epoch -1/0/1/2
   `container`/`home-content`/`page`/`slider` templates) each gain one `%s` placeholder
   and one new `render_template()` argument (`site_name`) in their respective module

@@ -63,8 +63,8 @@ cleanup:
     return result;
 }
 
-char *users_admin_form(int epoch, const char *id, const char *email, const char *role,
-                        const char *error_message) {
+char *users_admin_form(int epoch, const char *id, const char *name, const char *email,
+                        const char *role, const char *error_message) {
     char *form_tpl = load_template("dashboard/users/form_epoch%d.html", epoch);
 
     char *error_html = NULL;
@@ -89,7 +89,7 @@ char *users_admin_form(int epoch, const char *id, const char *email, const char 
     const char *password_label = (id && id[0])
         ? "Nueva contrasena (dejar en blanco para no cambiar)" : "Password";
 
-    result = render_template(form_tpl, error_html ? error_html : "", action, email,
+    result = render_template(form_tpl, error_html ? error_html : "", action, name, email,
                               password_label,
                               strcmp(role, "admin") == 0 ? " selected" : "",
                               strcmp(role, "author") == 0 ? " selected" : "");

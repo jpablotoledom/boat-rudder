@@ -1,15 +1,15 @@
-# base-http-server - Build & Operations Scripts
+# Boat Rudder - Build & Operations Scripts
 
-This document covers `bhs.sh`, the central management script for `base-http-server`, and every sub-script it delegates to.
+This document covers `boat_rudder_builder.sh`, the central management script for Boat Rudder, and every sub-script it delegates to.
 
 ---
 
 ## Overview
 
-`bhs.sh` is the single entry point for all build, run, and deployment operations. It accepts one or more **actions** as positional arguments and executes them in the order they are given.
+`boat_rudder_builder.sh` is the single entry point for all build, run, and deployment operations. It accepts one or more **actions** as positional arguments and executes them in the order they are given.
 
 ```
-./bhs.sh <action1> [action2] [action3] ...
+./boat_rudder_builder.sh <action1> [action2] [action3] ...
 ```
 
 Actions are independent and sequential. If an action fails, the script stops immediately and does not proceed to the next action.
@@ -22,6 +22,7 @@ Actions are independent and sequential. If an action fails, the script stops imm
 |---|---|---|
 | `compiledebug` | Build with debug symbols + AddressSanitizer | No |
 | `compileprod` | Build optimized for production | No |
+| `clean` | Remove `build/` and `bin/` | No |
 | `rundebug` | Run locally (auto-selects GDB / LLDB / direct) | Auto (if port < 1024) |
 | `createcert` | Generate a self-signed TLS certificate | No |
 | `install` | Compile prod + install as systemd service | Yes |
@@ -36,23 +37,38 @@ Actions are independent and sequential. If an action fails, the script stops imm
 Compiles the project in **Debug** mode with AddressSanitizer (`-fsanitize=address`) enabled.
 
 **What it does:**
-1. Deletes `build/` and `bin/` directories.
-2. Runs `cmake -DCMAKE_BUILD_TYPE=Debug` and `cmake --build`.
-3. Assembles a self-contained `bin/` directory:
-   - `bin/base-http-server` - the compiled binary
-   - `bin/configs/` - copy of `configs/`
-   - `bin/html/` - copy of `html/` (if it exists)
-   - `bin/ssl/` - copy of `ssl/` (only if it contains `.pem` files)
-4. Deletes `build/` after assembly.
+1. Runs `cmake -DCMAKE_BUILD_TYPE=Debug` and `cmake --build` in `build/debug/`.
+2. Copies the resulting binary to `bin/boat-rudder`.
+
+`bin/` holds **the binary and nothing else**. The server runs from the project root and reads
+`./configs`, `./html` and `./ssl` directly, so there is no second copy of the content tree to
+keep in sync - and editing a template, a config value or a certificate takes effect on the next
+run with no recompile.
 
 **Delegates to:** `scripts/compile_debug.sh`
 
-**Output:** `bin/base-http-server` (with ASan instrumentation)
+**Output:** `bin/boat-rudder` (with ASan instrumentation)
+
+### Incremental builds
+
+`build/` is **kept between runs**, with one directory per build type - `build/debug/` and
+`build/release/`. CMake stores an object file per `.c` plus the header dependency graph there, so
+each compile only rebuilds what actually changed, and switching between debug and production
+does not invalidate the other one's objects.
+
+| | Files recompiled | Time |
+|---|---|---|
+| From clean (`./boat_rudder_builder.sh clean` first) | 52 | ~2.7 s |
+| After editing one `.c` | 1 | ~0.7 s |
+| After editing a widely-included header (`utils/log.h`) | 19 | ~1.1 s |
+
+`build/` costs ~6 MB for both build types and is git-ignored. Run `./boat_rudder_builder.sh clean` to remove it
+along with `bin/` when a full rebuild is wanted.
 
 **Typical use:**
 ```bash
-./bhs.sh compiledebug
-./bhs.sh compiledebug rundebug
+./boat_rudder_builder.sh compiledebug
+./boat_rudder_builder.sh compiledebug rundebug
 ```
 
 ---
@@ -62,37 +78,50 @@ Compiles the project in **Debug** mode with AddressSanitizer (`-fsanitize=addres
 Compiles the project in **Release** mode, fully optimized for production.
 
 **What it does:**
-1. Deletes `build/` and `bin/` directories.
-2. Runs `cmake -DCMAKE_BUILD_TYPE=Release` and `cmake --build`.
-3. Strips debug symbols from the binary with `strip` (if available).
-4. Assembles `bin/` the same way as `compiledebug`.
-5. Deletes `build/` after assembly.
+1. Runs `cmake -DCMAKE_BUILD_TYPE=Release` and `cmake --build` in `build/release/`.
+2. Copies the binary to `bin/boat-rudder` and strips **that copy** (never the build output, which
+   would make the next incremental build ship an already-stripped binary).
 
 **Delegates to:** `scripts/compile_prod.sh`
 
-**Output:** `bin/base-http-server` (optimized, stripped)
+**Output:** `bin/boat-rudder` (optimized, stripped)
 
 **Typical use:**
 ```bash
-./bhs.sh compileprod
-./bhs.sh compileprod install
+./boat_rudder_builder.sh compileprod
+./boat_rudder_builder.sh compileprod install
+```
+
+---
+
+### `clean`
+
+Removes `build/` and `bin/` - every build artifact and nothing else. `configs/`, `html/`, `ssl/`
+and `db_backup/` are live data and are never touched.
+
+**Delegates to:** `scripts/clean.sh`
+
+**Typical use:**
+```bash
+./boat_rudder_builder.sh clean                # next compile starts from scratch
+./boat_rudder_builder.sh clean compiledebug
 ```
 
 ---
 
 ### `rundebug`
 
-Runs the debug binary locally. Automatically syncs `configs/` and `ssl/` from the project root to `bin/` before starting, so configuration changes take effect without recompiling.
+Runs the debug binary locally, from the project root, against the live `configs/`, `html/` and
+`ssl/` directories - so a config change, a template edit or a new certificate applies on the next
+run without recompiling.
 
 **What it does:**
-1. Verifies `bin/base-http-server` exists.
-2. Creates `bin/html/` if it does not exist.
-3. Copies `configs/settings.conf` → `bin/configs/settings.conf`.
-4. Copies `ssl/*.pem` → `bin/ssl/` (if `ssl/` contains files).
-5. Sends `SIGTERM` to any running instance of `base-http-server`.
-6. Reads `http_port`, `https_port`, and `ssl_enabled` from the config.
-7. On **Linux**: re-executes itself with `sudo` if any configured port is < 1024 and the current user is not root.
-8. Selects a debugger based on OS and availability:
+1. Verifies `bin/boat-rudder` exists.
+2. Creates `html/` if it does not exist.
+3. Sends `SIGTERM` to any running instance of `boat-rudder`.
+4. Reads `http_port`, `https_port`, and `ssl_enabled` from the config.
+5. On **Linux**: re-executes itself with `sudo` if any configured port is < 1024 and the current user is not root.
+6. Selects a debugger based on OS and availability:
 
 | Platform | Debugger found | Behavior |
 |---|---|---|
@@ -104,15 +133,15 @@ Runs the debug binary locally. Automatically syncs `configs/` and `ssl/` from th
 
 **Binary arguments passed:**
 ```
-base-http-server -c ./bin/configs/settings.conf ./bin/html
+boat-rudder -c ./configs/settings.conf ./html
 ```
 
 **Delegates to:** `scripts/run_debug.sh`
 
 **Typical use:**
 ```bash
-./bhs.sh rundebug
-./bhs.sh compiledebug rundebug
+./boat_rudder_builder.sh rundebug
+./boat_rudder_builder.sh compiledebug rundebug
 ```
 
 ---
@@ -127,8 +156,10 @@ Generates a **self-signed RSA 4096-bit TLS certificate** for local development. 
 3. The certificate is valid for **730 days (2 years)** and includes:
    - `CN=localhost`
    - `SAN: DNS:localhost`, `DNS:127.0.0.1`, `IP:127.0.0.1`
-4. If `bin/` exists, copies both files to `bin/ssl/` immediately so `rundebug` picks them up without recompiling.
-5. Prints the certificate details (validity dates, subject, SANs).
+4. Prints the certificate details (validity dates, subject, SANs).
+
+`rundebug` reads `./ssl/` directly, so the new certificate is picked up on the next run - no
+copy step, no recompile.
 
 **Delegates to:** `scripts/create_local_cert.sh`
 
@@ -136,16 +167,14 @@ Generates a **self-signed RSA 4096-bit TLS certificate** for local development. 
 ```
 ssl/cert.pem    - X.509 certificate (PEM)
 ssl/key.pem     - RSA private key (PEM, unencrypted)
-bin/ssl/cert.pem
-bin/ssl/key.pem
 ```
 
 > **Note:** After generating the certificate, make sure `ssl_enabled=1` is set in `configs/settings.conf`.
 
 **Typical use:**
 ```bash
-./bhs.sh createcert
-./bhs.sh createcert compiledebug rundebug
+./boat_rudder_builder.sh createcert
+./boat_rudder_builder.sh createcert compiledebug rundebug
 ```
 
 ---
@@ -156,41 +185,44 @@ Compiles the project for production and installs it as a **systemd service**.
 
 > **Linux only.** Running this action on macOS exits with an error and suggests using `rundebug` instead.
 
-> **Requires `sudo`.** `bhs.sh` calls `sudo ./scripts/install.sh` automatically.
+> **Requires `sudo`.** `boat_rudder_builder.sh` calls `sudo ./scripts/install.sh` automatically.
 
 **What it does:**
 1. Calls `compile_prod.sh` to produce a fresh release binary.
-2. Creates `/usr/local/bin/base-http-server/` and copies into it:
-   - `base-http-server` (binary, marked executable)
+2. Creates `/usr/local/bin/boat-rudder/` and copies into it, straight from the project root:
+   - `boat-rudder` (binary from `bin/`, marked executable)
    - `configs/`
    - `html/` (creates an empty one with a warning if absent)
    - `ssl/` (only if it contains `.pem` files)
-3. Copies `scripts/base-http-server.service` to `/etc/systemd/system/`.
+
+   This is the one place where the content tree really is copied: the installed service runs
+   from `/usr/local/bin/boat-rudder/`, independent of the source checkout.
+3. Copies `scripts/boat-rudder.service` to `/etc/systemd/system/`.
 4. Runs `systemctl daemon-reload`, `systemctl enable`, `systemctl start`.
 5. Prints the service status and the log tail command.
 
-**Install path:** `/usr/local/bin/base-http-server/`
+**Install path:** `/usr/local/bin/boat-rudder/`
 
-**Service name:** `base-http-server`
+**Service name:** `boat-rudder`
 
 **Delegates to:** `scripts/install.sh`
 
 **After install:**
 ```bash
 # Check status
-systemctl status base-http-server
+systemctl status boat-rudder
 
 # Follow logs
-journalctl -u base-http-server -f
+journalctl -u boat-rudder -f
 
 # Restart after config changes
-systemctl restart base-http-server
+systemctl restart boat-rudder
 ```
 
 **Typical use:**
 ```bash
-./bhs.sh install
-./bhs.sh compileprod install   # same effect - install always recompiles
+./boat_rudder_builder.sh install
+./boat_rudder_builder.sh compileprod install   # same effect - install always recompiles
 ```
 
 ---
@@ -201,21 +233,21 @@ Stops and completely removes the systemd service and all installed files.
 
 > **Linux only.** Exits with an error on macOS.
 
-> **Requires `sudo`.** `bhs.sh` calls `sudo ./scripts/uninstall.sh` automatically.
+> **Requires `sudo`.** `boat_rudder_builder.sh` calls `sudo ./scripts/uninstall.sh` automatically.
 
 **What it does:**
 1. Stops the service with `systemctl stop`.
 2. Disables the service with `systemctl disable`.
-3. Removes `/etc/systemd/system/base-http-server.service`.
+3. Removes `/etc/systemd/system/boat-rudder.service`.
 4. Runs `systemctl daemon-reload`.
-5. Removes `/usr/local/bin/base-http-server/` recursively.
-6. Lists any remaining units matching `base-http-server` for verification.
+5. Removes `/usr/local/bin/boat-rudder/` recursively.
+6. Lists any remaining units matching `boat-rudder` for verification.
 
 **Delegates to:** `scripts/uninstall.sh`
 
 **Typical use:**
 ```bash
-./bhs.sh uninstall
+./boat_rudder_builder.sh uninstall
 ```
 
 ---
@@ -226,13 +258,13 @@ Actions are executed left to right. Any combination is valid as long as order is
 
 ```bash
 # Compile debug and run immediately
-./bhs.sh compiledebug rundebug
+./boat_rudder_builder.sh compiledebug rundebug
 
 # Generate cert, compile debug, run
-./bhs.sh createcert compiledebug rundebug
+./boat_rudder_builder.sh createcert compiledebug rundebug
 
 # Compile production and install as service
-./bhs.sh compileprod install
+./boat_rudder_builder.sh compileprod install
 ```
 
 ---
@@ -240,46 +272,37 @@ Actions are executed left to right. Any combination is valid as long as order is
 ## Project Layout After `compiledebug` or `compileprod`
 
 ```
-base-http-server/
-├── bin/                        # Self-contained runtime directory
-│   ├── base-http-server        # Compiled binary
-│   ├── configs/
-│   │   └── settings.conf
-│   ├── html/                   # Static files + retro-compatible CMS templates
-│   │   └── themes/dark/...
-│   └── ssl/                    # TLS certificate and key (if present)
-│       ├── cert.pem
-│       └── key.pem
+boat-rudder/
+├── build/                      # Kept between compiles for incremental builds
+│   ├── debug/                  # Objects + dependency graph, Debug + ASan
+│   └── release/                # Objects + dependency graph, Release
+├── bin/
+│   └── boat-rudder             # Compiled binary - the only thing bin/ ever contains
 ├── configs/
-│   └── settings.conf           # Source config (synced to bin/ on rundebug)
+│   └── settings.conf           # Read live at runtime
 ├── ssl/
-│   ├── cert.pem                # Source certificate
+│   ├── cert.pem                # Read live at runtime
 │   └── key.pem
-└── html/
-    └── themes/dark/...         # Source static files + CMS templates
+└── html/                       # Document root: templates, assets and uploaded media
+    ├── themes/dark/...
+    └── content/posts/...       # Media uploads land here
 ```
 
-`bin/` is self-contained: it can be copied to any location and run directly.
+The binary is **not** self-contained: it resolves `./configs`, `./html` and `./ssl` relative to
+its working directory, which is why every script `cd`s to the project root before starting it.
+To run it from somewhere else, use `install` - that is what assembles a standalone
+`/usr/local/bin/boat-rudder/` tree.
 
 ---
 
 ## Configuration File (`configs/settings.conf`)
 
-`rundebug` always syncs `configs/settings.conf` from the project root to `bin/` before starting, so you can edit the config without recompiling.
+`rundebug` always syncs `configs/settings.conf` from the project root into `bin/` before
+starting, so the config can be edited without recompiling. `install` copies it into
+`/usr/local/bin/boat-rudder/configs/`.
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `verbose_level` | int | `3` | Log verbosity: `0`=none `1`=error `2`=warn `3`=info `4`=debug |
-| `http_port` | int | `8080` | HTTP listening port. Ports < 1024 require root on Linux. |
-| `https_port` | int | `8443` | HTTPS listening port. Only used when `ssl_enabled=1`. |
-| `ssl_enabled` | int | `0` | Set to `1` to enable HTTPS. Requires valid `ssl_cert` and `ssl_key`. |
-| `ssl_cert` | string | `./ssl/cert.pem` | Path to the PEM certificate file (relative to the working directory). |
-| `ssl_key` | string | `./ssl/key.pem` | Path to the PEM private key file (relative to the working directory). |
-| `trusted_proxies` | string | *(empty)* | Comma-separated list of trusted reverse proxy IPs. When set, `X-Real-IP` and `X-Forwarded-For` headers are honored only from these IPs. |
-| `theme` | string | `dark` | Active theme under `html/themes/<theme>/`, used by the retro-compatible CMS for `/`. |
-| `lang` | string | `Eng` | Content language passed to the home page content module. |
-| `public_url` | string | *(empty)* | Public base URL of the site (reserved for future SEO/canonical links). |
-| `force_epoch` | int | *(unset = auto-detect)* | Forces the browser epoch for `/` (`-1`=WML, `0`=pre-standard, `1`=early, `2`=middle, `3`=modern), bypassing `detect_epoch()`. Any value outside `-1..3` keeps auto-detection. |
+Every key is documented in **[configuration.md](configuration.md)**, the single configuration
+reference.
 
 ---
 
@@ -289,13 +312,13 @@ base-http-server/
 
 ```bash
 # 1. Generate a self-signed certificate
-./bhs.sh createcert
+./boat_rudder_builder.sh createcert
 
 # 2. Enable HTTPS in configs/settings.conf
 #    ssl_enabled=1
 
 # 3. Compile and run
-./bhs.sh compiledebug rundebug
+./boat_rudder_builder.sh compiledebug rundebug
 ```
 
 > **Browser warning:** Self-signed certificates are not trusted by browsers by default.
@@ -307,7 +330,7 @@ base-http-server/
 1. Obtain a certificate from your CA (e.g., `certbot --standalone`).
 2. Copy the certificate and key to `ssl/cert.pem` and `ssl/key.pem`.
 3. Set `ssl_enabled=1` in `configs/settings.conf`.
-4. Run `./bhs.sh install`.
+4. Run `./boat_rudder_builder.sh install`.
 
 The systemd service is configured with `Restart=on-failure` - if the process crashes, it restarts automatically after 5 seconds.
 
@@ -331,10 +354,36 @@ These scripts are not meant to be called directly but can be if needed. All of t
 |---|---|---|
 | `scripts/compile_debug.sh` | `compiledebug` | `./scripts/compile_debug.sh` |
 | `scripts/compile_prod.sh` | `compileprod`, `install` | `./scripts/compile_prod.sh` |
+| `scripts/clean.sh` | `clean` | `./scripts/clean.sh` |
 | `scripts/run_debug.sh` | `rundebug` | `./scripts/run_debug.sh` |
 | `scripts/create_local_cert.sh` | `createcert` | `./scripts/create_local_cert.sh` |
 | `scripts/install.sh` | `install` | `sudo ./scripts/install.sh` |
 | `scripts/uninstall.sh` | `uninstall` | `sudo ./scripts/uninstall.sh` |
+| `scripts/image-optimizer.sh` | the server, via `popen()` on every media upload | `./scripts/image-optimizer.sh <in_dir> <out_dir> [file]` |
+| `scripts/mongodb_start.sh` | nothing (manual) | `./scripts/mongodb_start.sh` |
+| `scripts/mongodb_dump.sh` | nothing (manual) | `./scripts/mongodb_dump.sh` |
+| `scripts/mongodb_restore.sh` | nothing (manual) | `./scripts/mongodb_restore.sh` |
+| `scripts/show/banner`, `scripts/show/divbar` | sourced by the other scripts for console output | not standalone |
+
+### `scripts/image-optimizer.sh`
+
+Invoked by the server itself (not by `boat_rudder_builder.sh`) after every media upload. Generates 5 variants
+per image - `_full`, `_half`, `_small`, `_medium`, `_micro` - deletes the original and symlinks
+the base filename to `_half`. Requires `imagemagick`, `jpegoptim` and `gifsicle`; without them
+uploads still succeed but no variants are produced, so thumbnails and the retro epochs break.
+Full details in [media-admin.md](media-admin.md).
+
+### MongoDB helpers
+
+| Script | Purpose |
+|---|---|
+| `mongodb_start.sh` | Starts the local MongoDB service (systemd, with a SysV fallback). |
+| `mongodb_dump.sh` | `mongodump` of this site's database into `./db_backup/<db>/`. |
+| `mongodb_restore.sh` | `mongorestore --drop` of `./db_backup/<db>/` back into the database. |
+
+Both dump and restore read the database name from `mongodb_db` in `configs/settings.conf`, so
+they follow whichever site this checkout is configured for - no database name is hardcoded.
+`mongodb_restore.sh` **drops the existing collections** before restoring.
 
 ---
 
@@ -344,13 +393,22 @@ These scripts are not meant to be called directly but can be if needed. All of t
 
 ```bash
 # Debian / Ubuntu
-sudo apt install cmake gcc libssl-dev
+sudo apt install cmake gcc libssl-dev libmongoc-dev libsodium-dev
 
 # Fedora / RHEL
-sudo dnf install cmake gcc openssl-devel
+sudo dnf install cmake gcc openssl-devel mongo-c-driver-devel libsodium-devel
 
 # Arch / Manjaro
-sudo pacman -S cmake gcc openssl
+sudo pacman -S cmake gcc openssl mongo-c-driver libsodium
+```
+
+`libmongoc` and `libsodium` are not optional: the CMake build links them unconditionally for the
+database-backed CMS, the dashboard and Argon2id password hashing.
+
+Runtime dependencies (not needed to compile, but the media library is broken without them):
+
+```bash
+sudo apt install mongodb-org imagemagick jpegoptim gifsicle
 ```
 
 Optional (for `rundebug` with debugger):
@@ -361,7 +419,8 @@ sudo apt install gdb
 ### macOS
 
 ```bash
-brew install cmake openssl
+brew install cmake openssl mongo-c-driver libsodium
+brew install imagemagick jpegoptim gifsicle   # runtime, for the media library
 
 # Pass OpenSSL location to CMake (Homebrew installs it to a non-default path)
 cmake -B build -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)

@@ -13,6 +13,7 @@
 // One "users" document, for the /dashboard/users admin listing.
 typedef struct {
     char *id;    // hex ObjectId (24 chars + NUL)
+    char *name;
     char *email;
     char *role;  // "admin" | "author" (missing field -> "admin")
 } CmsUserAdminItem;
@@ -46,16 +47,20 @@ int cms_get_user_role(const char *id_hex, char *out_role, size_t out_role_size);
 int cms_count_admins(void);
 
 // Hashes `password` (crypto_pwhash_str, Argon2id) and inserts
-// {email, password, role}. Returns 0 on success, -1 if email already exists,
-// role is not "admin"/"author", or on a DB error.
-int cms_create_user(const char *email, const char *password, const char *role);
+// {name, email, password, role}. Returns 0 on success, -1 if email already
+// exists, role is not "admin"/"author", or on a DB error.
+int cms_create_user(const char *name, const char *email, const char *password, const char *role);
 
-// db.users.updateOne({_id: id_hex}, {$set: {email, role[, password]}}).
+// db.users.updateOne({_id: id_hex}, {$set: {name, email, role[, password]}}).
 // `new_password`, if non-empty, is hashed and included in the update.
 // Returns 0 on success, -1 if id_hex is invalid/not found, email belongs to
 // another user, role is not "admin"/"author", or on a DB error.
-int cms_update_user(const char *id_hex, const char *email, const char *role,
+int cms_update_user(const char *id_hex, const char *name, const char *email, const char *role,
                      const char *new_password);
+
+// db.users.findOne({_id: id_hex}) -> malloc'd name string, or "" on not found.
+// Caller must free the returned string.
+char *cms_get_user_name_by_id(const char *id_hex);
 
 // db.users.deleteOne({_id: id_hex}). Returns 0 on success, -1 if id_hex is
 // invalid, the document doesn't exist, or on a DB error. Self-delete /

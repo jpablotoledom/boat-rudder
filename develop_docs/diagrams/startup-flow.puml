@@ -1,6 +1,6 @@
 @startuml startup-flow
 
-title base-http-server - Startup & Shutdown Activity
+title Boat Rudder - Startup & Shutdown Activity
 
 skinparam backgroundColor #FAFAFA
 skinparam activity {

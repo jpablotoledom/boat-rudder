@@ -1,6 +1,6 @@
 @startuml sequence-https
 
-title base-http-server - HTTPS Request Sequence
+title Boat Rudder - HTTPS Request Sequence
 
 skinparam backgroundColor #FAFAFA
 skinparam sequenceArrowThickness 1.5

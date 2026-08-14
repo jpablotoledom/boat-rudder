@@ -3,18 +3,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-BINARY="./bin/base-http-server"
+BINARY="./bin/boat-rudder"
 HTML_DIR="./html"
 CONFIG="./configs/settings.conf"
 
 source ./scripts/show/divbar
-echo "Starting base-http-server in debug mode..."
+echo "Starting Boat Rudder in debug mode..."
 source ./scripts/show/divbar
 
 # Verify binary exists
 if [ ! -f "$BINARY" ]; then
     echo "Error: binary not found at $BINARY"
-    echo "Run './bhs.sh compiledebug' first."
+    echo "Run './boat_rudder_builder.sh compiledebug' first."
     exit 1
 fi
 
@@ -24,17 +24,13 @@ if [ ! -d "$HTML_DIR" ]; then
     mkdir -p "$HTML_DIR"
 fi
 
-# Sync configs and ssl from source to bin/ so changes take effect without recompiling
-cp -f ./configs/settings.conf ./bin/configs/settings.conf 2>/dev/null || true
-if [ -d ./ssl ] && [ -n "$(ls -A ./ssl 2>/dev/null)" ]; then
-    mkdir -p ./bin/ssl
-    cp -f ./ssl/*.pem ./bin/ssl/ 2>/dev/null || true
-fi
+# No syncing needed: the server is started from the project root with
+# -c ./configs/settings.conf and ./html, so it always reads the live files.
 
 # Kill any existing instance
-if pkill -0 -f "bin/base-http-server" 2>/dev/null; then
+if pkill -0 -f "bin/boat-rudder" 2>/dev/null; then
     echo "Stopping existing instance..."
-    pkill -TERM -f "bin/base-http-server" 2>/dev/null || true
+    pkill -TERM -f "bin/boat-rudder" 2>/dev/null || true
     sleep 1
 fi
 

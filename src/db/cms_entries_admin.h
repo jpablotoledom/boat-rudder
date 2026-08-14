@@ -32,7 +32,7 @@ typedef struct {
     char   *header_image_url;
     char  **header_title_values;   // parallel to langs[], exact header.title.<lang>
     char  **header_summary_values; // parallel to langs[], exact header.summary.<lang>
-    char  **header_author_values;  // parallel to langs[], exact header.author.<lang>
+    char   *header_author_name;    // display name from users collection (via header.author_id)
     char    header_date[16];       // "YYYY-MM-DD", "" if absent
 
     CmsContentBlockEdit *content; // sorted by order
@@ -68,15 +68,13 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
 
 // db.entries.updateOne({_id: id_hex}, {$set: {
 //   "header.image_url": image_url,
-//   "header.title.<lang>": title_values[i], "header.summary.<lang>": summary_values[i],
-//   "header.author.<lang>": author_values[i] for each langs[i],
-//   "header.date": <date as BSON UTC datetime> (only if date != "")
+//   "header.title.<lang>": title_values[i], "header.summary.<lang>": summary_values[i]
+//   for each langs[i], "header.date": <date as BSON UTC datetime> (only if date != "")
 // }}). `date` is "YYYY-MM-DD" or "" (leaves header.date untouched). Returns 0 on
 // success, -1 if id_hex is invalid, on a DB error, or if mongodb is not ready.
 int cms_update_entry_header(const char *id_hex, const char *image_url, const char *date,
                              const CmsLanguageItem *langs, size_t lang_count,
-                             char *const *title_values, char *const *summary_values,
-                             char *const *author_values);
+                             char *const *title_values, char *const *summary_values);
 
 // db.entries.updateOne({_id: id_hex}, {$set: {content: [...]}}) - full array
 // replace, sourced from blocks[0..block_count). Every blocks[i].id must already

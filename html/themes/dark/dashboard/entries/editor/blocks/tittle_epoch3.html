@@ -1,36 +1,36 @@
-    <div class="trc-block" data-block-id="%s" data-type="tittle" onclick="activateBlock(this)">
-      <span class="trc-block__grip" title="Drag to reorder">&#8942;</span>
+    <div class="boat-rudder__entry-editor__block" data-block-id="%s" data-type="tittle" onclick="activateBlock(this)">
+      <span class="boat-rudder__entry-editor__block__grip" title="Drag to reorder">&#8942;</span>
 
-      <div class="trc-block__header">
-        <button class="trc-block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
-        <span class="trc-block__type-label type-tittle">&sect; Title</span>
-        <div class="trc-block__header-actions">
-          <button class="trc-block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
-          <button class="trc-block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
-          <span class="trc-block__drag">&#8942;</span>
-          <button class="trc-block__close-btn" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+      <div class="boat-rudder__entry-editor__block__header">
+        <button class="boat-rudder__entry-editor__block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="boat-rudder__entry-editor__block__type-label type-tittle">&sect; Title</span>
+        <div class="boat-rudder__entry-editor__block__header-actions">
+          <button class="boat-rudder__entry-editor__block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="boat-rudder__entry-editor__block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="boat-rudder__entry-editor__block__drag">&#8942;</span>
+          <button class="boat-rudder__entry-editor__block__close-btn" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
         </div>
       </div>
 
-      <div class="trc-block__preview"></div>
+      <div class="boat-rudder__entry-editor__block__preview"></div>
 
-      <div class="trc-block__body">
+      <div class="boat-rudder__entry-editor__block__body">
 %s
-        <div class="trc-heading-btns">
-          <span class="trc-heading-label">Level:</span>
-          <button class="trc-heading-btn" data-level="1" onclick="setHeadingLevel(this,1)">H1</button>
-          <button class="trc-heading-btn" data-level="2" onclick="setHeadingLevel(this,2)">H2</button>
-          <button class="trc-heading-btn" data-level="3" onclick="setHeadingLevel(this,3)">H3</button>
-          <button class="trc-heading-btn" data-level="4" onclick="setHeadingLevel(this,4)">H4</button>
-          <button class="trc-heading-btn" data-level="5" onclick="setHeadingLevel(this,5)">H5</button>
-          <button class="trc-heading-btn" data-level="6" onclick="setHeadingLevel(this,6)">H6</button>
+        <div class="boat-rudder__entry-editor__heading-btns">
+          <span class="boat-rudder__entry-editor__heading-label">Level:</span>
+          <button class="boat-rudder__entry-editor__heading-btn" data-level="1" onclick="setHeadingLevel(this,1)">H1</button>
+          <button class="boat-rudder__entry-editor__heading-btn" data-level="2" onclick="setHeadingLevel(this,2)">H2</button>
+          <button class="boat-rudder__entry-editor__heading-btn" data-level="3" onclick="setHeadingLevel(this,3)">H3</button>
+          <button class="boat-rudder__entry-editor__heading-btn" data-level="4" onclick="setHeadingLevel(this,4)">H4</button>
+          <button class="boat-rudder__entry-editor__heading-btn" data-level="5" onclick="setHeadingLevel(this,5)">H5</button>
+          <button class="boat-rudder__entry-editor__heading-btn" data-level="6" onclick="setHeadingLevel(this,6)">H6</button>
         </div>
 
-        <div class="trc-advanced">
-          <button class="trc-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
-          <div class="trc-advanced__panel">
-            <label class="trc-advanced__label">extra_data (heading level: 1&ndash;6)</label>
-            <input class="trc-advanced__input" type="text" oninput="syncAdvancedInput(this)">
+        <div class="boat-rudder__entry-editor__advanced">
+          <button class="boat-rudder__entry-editor__advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="boat-rudder__entry-editor__advanced__panel">
+            <label class="boat-rudder__entry-editor__advanced__label">extra_data (heading level: 1&ndash;6)</label>
+            <input class="boat-rudder__entry-editor__advanced__input" type="text" oninput="syncAdvancedInput(this)">
           </div>
         </div>
       </div>

@@ -1,0 +1,21 @@
+[Unit]
+Description=Boat Rudder - Retro-compatible HTTP/HTTPS CMS server
+After=network.target
+
+[Service]
+TimeoutStopSec=10
+KillSignal=SIGTERM
+SendSIGKILL=yes
+ExecStart=/usr/local/bin/boat-rudder/boat-rudder \
+    -c /usr/local/bin/boat-rudder/configs/settings.conf \
+    /usr/local/bin/boat-rudder/html
+WorkingDirectory=/usr/local/bin/boat-rudder
+Restart=on-failure
+RestartSec=5
+User=root
+Group=root
+StandardOutput=append:/var/log/boat-rudder.log
+StandardError=append:/var/log/boat-rudder.log
+
+[Install]
+WantedBy=multi-user.target

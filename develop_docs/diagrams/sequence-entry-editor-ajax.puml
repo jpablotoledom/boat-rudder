@@ -38,8 +38,8 @@ ADMIN -> MONGO : updateOne({_id}, {$set: {link, type,\nenabled, categories: [...
 ADMIN --> ROUTER : 0 | -1
 ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
 
-BROWSER -> ROUTER : POST .../header\nimage_url, date,\ntitle_<lang>/summary_<lang>/author_<lang>
-ROUTER -> ADMIN : cms_update_entry_header(id, image_url, date,\nlangs, title/summary/author values)
+BROWSER -> ROUTER : POST .../header\nimage_url, date,\ntitle_<lang>/summary_<lang>\n(author is read-only: header.author_id)
+ROUTER -> ADMIN : cms_update_entry_header(id, image_url, date,\nlangs, title/summary values)
 ADMIN -> MONGO : updateOne({_id}, {$set: {\n"header.image_url", "header.date",\n"header.title.<lang>", ...}})
 ADMIN --> ROUTER : 0 | -1
 ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}

@@ -1,6 +1,6 @@
 @startuml class-structures
 
-title base-http-server - Data Structures
+title Boat Rudder - Data Structures
 
 skinparam backgroundColor #FAFAFA
 skinparam class {

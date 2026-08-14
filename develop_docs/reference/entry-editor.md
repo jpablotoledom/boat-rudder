@@ -1,9 +1,9 @@
 # Entry Editor (`/dashboard/entries/<id>/edit`)
 
-An AJAX content editor for one `entries` document — meta (link/type/enabled/categories),
-header (cover image, date, per-language title/summary/author) and `content[]` blocks — with
-live preview, drag-and-drop reordering, rich-text editing, and optional autosave. **`EPOCH_MODERN`
-only**, session-guarded via `require_dashboard_session()`.
+An AJAX content editor for one `entries` document - meta (link/type/enabled/categories),
+header (cover image, date, per-language title/summary, read-only author) and `content[]` blocks
+- with live preview, drag-and-drop reordering, rich-text editing, and optional autosave.
+**`EPOCH_MODERN` only**, session-guarded via `require_dashboard_session_role()`.
 
 ---
 
@@ -12,10 +12,10 @@ only**, session-guarded via `require_dashboard_session()`.
 ```c
 typedef struct {
     char  *id;          // content[]._id as 24-char hex
-    char  *type;        // "tittle" | "paragraph" | "image" | "byline" | "gallery"
+    char  *type;        // one of the 14 block types - see §3
     int    order;
-    char **text_values; // parallel to langs[] — exact text.<lang> ("" if absent)
-    char  *extra_data;  // untranslated; heading level for "tittle", gallery _id for "gallery"
+    char **text_values; // parallel to langs[] - exact text.<lang> ("" if absent)
+    char  *extra_data;  // untranslated; heading level for "tittle", gallery _id for "gallery", ...
 } CmsContentBlockEdit;
 
 typedef struct {
@@ -29,7 +29,7 @@ typedef struct {
     char   *header_image_url;
     char  **header_title_values;   // parallel to langs[]
     char  **header_summary_values;
-    char  **header_author_values;
+    char   *header_author_name;    // resolved from header.author_id -> users.name
     char    header_date[16];       // "YYYY-MM-DD", "" if absent
 
     CmsContentBlockEdit *content;  // sorted by order
@@ -39,11 +39,15 @@ typedef struct {
 
 `cms_get_entry_for_edit(id_hex, langs, lang_count, &entry)` reads one `entries` document with
 **no `enabled` filter** and **no language fallback** (exact `text.<lang>` per language, `""` if
-absent). Eight functions cover the full lifecycle — see `architecture.md` §"Entry editor".
+absent). Eight functions cover the full lifecycle - see [dashboard.md, "Entry editor"](dashboard.md).
 
-All four block types (`tittle`, `paragraph`, `image`, `byline`) and the new `gallery` type use
-`render_extra_block()`, so they all receive `extra_data` in the editor template (3 `%s`:
-block_id, lang_fields, extra_data).
+**The author is a reference, not translated text.** `entries.header.author_id` is an `ObjectId`
+into `users`, set once at creation time; `cms_get_entry_for_edit()` resolves it to a single
+`header_author_name` display string via `cms_get_user_name_by_id()`. It is rendered read-only in
+the header sidebar and is not part of the `/header` save payload.
+
+Every block type uses `render_extra_block()`, so they all receive `extra_data` in the editor
+template (3 `%s`: block_id, lang_fields, extra_data).
 
 ---
 
@@ -56,14 +60,15 @@ block_id, lang_fields, extra_data).
   autosave toggle, publish toggle (wired to the hidden `enabled` checkbox), language tabs.
 - **Block type toolbar** (fixed, second bar): quick-insert buttons for each supported block type.
 - **Left sidebar**: meta section (`meta_epoch3.html` + `category-option_epoch3.html` per
-  category) and header section (`header_epoch3.html` + one `header-lang-tab_epoch3.html` per
-  language — title/summary/author as separate tabs + image preview thumbnail + date input).
-- **Right main area**: `blocks_epoch3.html` — the ordered list of content blocks and the
+  category) and header section (`header_epoch3.html` - image preview thumbnail, date input and
+  a read-only author name - plus one `header-lang-tab_epoch3.html` per language, each holding
+  that language's title and summary).
+- **Right main area**: `blocks_epoch3.html` - the ordered list of content blocks and the
   "+ Add block" dropdown.
 
 `lang-tab-button_epoch3.html` renders one language-switcher `<button data-lang="<code>">` per
 language, displayed in the topbar. Clicking a language button calls `setLang(code)`, which
-toggles every `.trc-block__lang-content[data-lang]` across the entire page (header sidebar +
+toggles every `.boat-rudder__entry-editor__block__lang-content[data-lang]` across the entire page (header sidebar +
 every content block).
 
 ---
@@ -71,17 +76,30 @@ every content block).
 ## 3. Block rendering (`src/modules/entry_editor/entry_editor_blocks.c`)
 
 `entry_editor_render_block(&block, langs, lang_count, epoch)` renders one block's edit form.
-All block types use `render_extra_block()` (3 `%s`: block_id, lang_fields, extra_data):
+All block types use `render_extra_block()` (3 `%s`: block_id, lang_fields, extra_data). All
+templates live under `blocks/` and are **epoch 3 only**, consistent with the editor itself:
 
 | Type | Template | Extra field |
 |---|---|---|
-| `tittle` | `blocks/tittle_epoch3.html` | `extra_data` = heading level (1-6) |
-| `paragraph` | `blocks/paragraph_epoch3.html` | `extra_data` unused |
-| `image` | `blocks/image_epoch3.html` | `extra_data` = caption/alt text |
-| `byline` | `blocks/byline_epoch3.html` | `extra_data` = date |
-| `gallery` | `blocks/gallery_epoch3.html` | `extra_data` = `media_galleries._id` |
+| `tittle` | `blocks/tittle_epoch3.html` | heading level (1-6) |
+| `paragraph` | `blocks/paragraph_epoch3.html` | unused |
+| `image` | `blocks/image_epoch3.html` | caption / alt text |
+| `byline` | `blocks/byline_epoch3.html` | date |
+| `gallery` | `blocks/gallery_epoch3.html` | `media_galleries._id` |
+| `separator` | `blocks/separator_epoch3.html` | style modifier |
+| `link` | `blocks/link_epoch3.html` | target URL |
+| `list` | `blocks/list_epoch3.html` | `"ol"` for ordered, else unordered |
+| `table` | `blocks/table_epoch3.html` | `"header"` to make row 0 a header row |
+| `code-text` | `blocks/code-text_epoch3.html` | language label |
+| `youtube-embed` | `blocks/youtube-embed_epoch3.html` | video URL |
+| `image-paragraph` | `blocks/image-paragraph_epoch3.html` | `"left"` / `"right"` |
+| `social-networks` | `blocks/social-networks_epoch3.html` | `"<icon>\|<url>"` |
+| `generic` | `blocks/generic_epoch3.html` | unused |
 
-`blocks/lang-field_epoch3.html` — one `<div class="trc-block__lang-content" data-lang="<code>">` wrapping a `<textarea name="text">` per language.
+These are the same 14 types `entry_page.c`'s `render_block()` renders publicly - the editor and
+the public renderer are kept deliberately in sync. Unknown types render `""` in both.
+
+`blocks/lang-field_epoch3.html` - one `<div class="boat-rudder__entry-editor__block__lang-content" data-lang="<code>">` wrapping a `<textarea name="text">` per language.
 
 `entry_editor_render_blocks(&entry, langs, lang_count, epoch)` renders all blocks and wraps them in `blocks_epoch3.html` (holds the block list + "+ Add block" dropdown).
 
@@ -89,68 +107,82 @@ All block types use `render_extra_block()` (3 `%s`: block_id, lang_fields, extra
 
 ## 4. Client-side editor (`container_epoch3.html` inline `<script>`)
 
-No external `.js` file — same convention as `container/container_epoch3.html`. An IIFE reads
+No external `.js` file - same convention as `container/container_epoch3.html`. An IIFE reads
 `data-entry-id` and `data-langs` off `#entryEditor` and wires up:
 
 ### Language switching
-- `setLang(code)` — updates all `.trc-lang-btn` active states, calls `applyLangVisibility(document)` (shows only `[data-lang=code]` panels) and `refreshAllPreviews()`.
+- `setLang(code)` - updates all `.boat-rudder__entry-editor__lang-btn` active states, calls `applyLangVisibility(document)` (shows only `[data-lang=code]` panels) and `refreshAllPreviews()`.
 
 ### Preview / edit mode
-- `activateBlock(el)` — deactivates the previously active block, adds `.trc-block--editing` to the clicked block, calls `initBlockEditors(block)` (paragraph → rich text, title → heading buttons, gallery → thumbnail preview).
-- `deactivateBlock(el)` — removes `.trc-block--editing`, calls `refreshBlockPreview(block)`.
-- `refreshBlockPreview(blockEl)` — generates preview HTML for each block type:
-  - `tittle` → `<hN class="trc-preview__tittle">`, level from `extra_data`
-  - `paragraph` → `<div class="trc-preview__paragraph">` with raw rich-text HTML
-  - `image` → `<figure class="trc-preview__image"><img><figcaption>`
-  - `byline` → `<div class="trc-preview__byline">`
-  - `gallery` → inline thumbnail strip (`<img class="trc-preview__thumb">` per URL)
+- `activateBlock(el)` - deactivates the previously active block, adds `.boat-rudder__entry-editor__block--editing` to the clicked block, calls `initBlockEditors(block)` (paragraph → rich text, title → heading buttons, gallery → thumbnail preview).
+- `deactivateBlock(el)` - removes `.boat-rudder__entry-editor__block--editing`, calls `refreshBlockPreview(block)`.
+- `refreshBlockPreview(blockEl)` - generates preview HTML for all 14 block types, reading the
+  current language's text field and `extra_data`:
+  - `tittle` → `<hN class="boat-rudder__entry-editor__preview__tittle">`, level from `extra_data`
+  - `paragraph` → `<div class="boat-rudder__entry-editor__preview__paragraph">` with raw rich-text HTML
+  - `image` → `<figure class="boat-rudder__entry-editor__preview__image"><img><figcaption>`
+  - `byline` → `<div class="boat-rudder__entry-editor__preview__byline">`
+  - `gallery` → inline thumbnail strip (`<img class="boat-rudder__entry-editor__preview__thumb">` per URL)
+  - `separator` → an `<hr>`; `link` → an `<a>`; `list` → `<ul>`/`<ol>` per line
+  - `code-text` → `<pre><code>` truncated to 200 chars; `generic` → raw HTML truncated to 300
+  - `youtube-embed`, `table`, `social-networks` → compact summaries (URL, row count, icon/URL)
+    rather than a real embed
+  - Each type renders a `<span class="boat-rudder__entry-editor__preview__empty">` placeholder when its field is blank.
+  Values are HTML-escaped for the preview only; `paragraph` and `generic` intentionally inject
+  raw HTML, since that is what those blocks store.
 
 ### Rich text (paragraph blocks)
-`initParagraphEditors(block)` — for each `.trc-block__lang-content` panel: creates a
-`<div class="trc-richtext" contenteditable>` div above the hidden textarea, syncs content via
+`initParagraphEditors(block)` - for each `.boat-rudder__entry-editor__block__lang-content` panel: creates a
+`<div class="boat-rudder__entry-editor__richtext" contenteditable>` div above the hidden textarea, syncs content via
 `syncRichtext()`. The rich-text toolbar (two rows: formatting + alignment/lists/source) is
-injected via `insertAdjacentHTML`. Paste handler strips external styles/classes. `toggleSource(btn)` toggles between the contenteditable view and a raw `<textarea class="trc-source-editor">`.
+injected via `insertAdjacentHTML`. Paste handler strips external styles/classes. `toggleSource(btn)` toggles between the contenteditable view and a raw `<textarea class="boat-rudder__entry-editor__source-editor">`.
 
 ### Heading levels (title blocks)
-`initBlockHeadingBtns(block)` — reads `extra_data` and marks the matching H1-H6 button active.
-`setHeadingLevel(btn, level)` — updates `extra_data`, refreshes preview.
+`initBlockHeadingBtns(block)` - reads `extra_data` and marks the matching H1-H6 button active.
+`setHeadingLevel(btn, level)` - updates `extra_data`, refreshes preview.
 
 ### Gallery blocks
-- `initGalleryBlock(block)` — reads the first lang's text field (semicolon URLs) and calls `renderGalleryThumbs()`.
-- `renderGalleryThumbs(container, value)` — renders 56×56 px `<img class="trc-gallery-thumb">` draggable thumbnails using `_small` variant URLs.
-- `initGalleryThumbDragDrop(container)` — HTML5 drag-and-drop to reorder thumbnails; on drop calls `syncGalleryInput()`.
-- `syncGalleryInput(container)` — writes reordered URLs back to all lang text fields.
-- `openGalleryForBlock(btn)` / `openImageGallery(btn)` — fetch `/dashboard/api/media/modal`, inject into `#modalContainer`, execute inline scripts so `selectDirectory`, `upload`, etc. work.
+- `initGalleryBlock(block)` - reads the first lang's text field (semicolon URLs) and calls `renderGalleryThumbs()`.
+- `renderGalleryThumbs(container, value)` - renders 56×56 px `<img class="boat-rudder__entry-editor__gallery-thumb">` draggable thumbnails using `_small` variant URLs.
+- `initGalleryThumbDragDrop(container)` - HTML5 drag-and-drop to reorder thumbnails; on drop calls `syncGalleryInput()`.
+- `syncGalleryInput(container)` - writes reordered URLs back to all lang text fields.
+- `openGalleryForBlock(btn)` / `openImageGallery(btn)` - fetch `/dashboard/api/media/modal`, inject into `#modalContainer`, execute inline scripts so `selectDirectory`, `upload`, etc. work.
 
 ### Save functions
-- `saveMeta()` — POSTs `link`, `type`, `enabled` (checkbox), `categories` (multi) to `.../meta`.
-- `saveHeader()` — POSTs `image_url`, `date`, `title_<lang>`, `summary_<lang>`, `author_<lang>` to `.../header`.
-- `saveContent()` — POSTs `content_count` + per-block `id`/`type`/`order`/`extra_data`/`text_<lang>` to `.../content`.
-- `editorSaveAll()` — runs all three in parallel via `Promise.all()`.
+- `saveMeta()` - POSTs `link`, `type`, `enabled` (checkbox), `categories` (multi) to `.../meta`.
+- `saveHeader()` - POSTs `image_url`, `date`, `title_<lang>`, `summary_<lang>` to `.../header`. The author is read-only and never submitted.
+- `saveContent()` - POSTs `content_count` + per-block `id`/`type`/`order`/`extra_data`/`text_<lang>` to `.../content`.
+- `editorSaveAll()` - runs all three in parallel via `Promise.all()`.
 
 ### Other
-- `togglePublish()` — toggles the hidden `enabled` checkbox + publish-switch UI.
-- `toggleAutoSave()` — enables/disables the 3-second autosave timer.
-- `insertNewComponent(type)` / `removeComponent(btn)` — POST to `.../blocks` / `.../blocks/<id>/delete`; patch `#entryBlocks` directly.
-- `moveBlockUp/Down(btn)` — client-side DOM reorder; persisted on next `saveContent()`.
-- Drag-and-drop block reorder — mousedown on `.trc-block__grip` or `.trc-block__drag`, ghost clone, placeholder indicator; reindexes order on mouseup.
+- `togglePublish()` - toggles the hidden `enabled` checkbox + publish-switch UI.
+- `toggleAutoSave()` - enables/disables the 3-second autosave timer.
+- `insertNewComponent(type)` / `removeComponent(btn)` - POST to `.../blocks` / `.../blocks/<id>/delete`; patch `#entryBlocks` directly.
+- `moveBlockUp/Down(btn)` - client-side DOM reorder; persisted on next `saveContent()`.
+- Drag-and-drop block reorder - mousedown on `.boat-rudder__entry-editor__block__grip` or `.boat-rudder__entry-editor__block__drag`, ghost clone, placeholder indicator; reindexes order on mouseup.
 
 ---
 
 ## 5. Routes
 
-| Route | Method | Behavior |
-|---|---|---|
-| `/dashboard/entries/new` | `POST` | `cms_create_entry()`, redirect to `.../edit` |
-| `/dashboard/entries/<id>/edit` | `GET` | `entry_editor_page()` via `buildPageWebSite()` |
-| `/dashboard/entries/<id>/delete` | `POST` | `cms_delete_entry()`, redirect `/dashboard` |
-| `/dashboard/api/entries/<id>/meta` | `POST` | `cms_update_entry_meta()`. JSON response. |
-| `/dashboard/api/entries/<id>/header` | `POST` | `cms_update_entry_header()`. JSON response. |
-| `/dashboard/api/entries/<id>/content` | `POST` | `cms_update_entry_content()` + gallery upsert. JSON response. |
-| `/dashboard/api/entries/<id>/blocks` | `POST` | `cms_add_entry_content_block()` + render. `{"ok":true,"block_id":"...","html":"..."}` |
-| `/dashboard/api/entries/<id>/blocks/<block_id>/delete` | `POST` | `cms_remove_entry_content_block()`. JSON response. |
+Every route below is `EPOCH_MODERN` only (`302 /dashboard` otherwise) and passes through
+`require_dashboard_session_role()`. The five `/api/` endpoints share one ownership gate:
+`404 {"ok":false,"error":"not found"}` if `<id>` doesn't resolve via `cms_get_entry_for_edit()`,
+`403 {"ok":false,"error":"forbidden"}` if `can_edit_entry(role, user_id, &entry)` is false (an
+Autor may only edit their own `type:"blog"` entries - see
+[dashboard.md, "Roles and privileges"](dashboard.md)).
+All of them answer `application/json; charset=UTF-8`.
 
-All routes: `epoch != EPOCH_MODERN` → `302 /dashboard`. Session guard via `require_dashboard_session_role()`.
+| Route | Method | Request → response |
+|---|---|---|
+| `/dashboard/entries/new` | `POST` | `cms_create_entry(user_id, type)` - `type` forced to `"blog"` for an Autor, `"page"` for an Administrador - then `302 .../edit` |
+| `/dashboard/entries/<id>/edit` | `GET` | `entry_editor_page()` via `buildPageWebSite()`; `404` on a bad ObjectId, `302 /dashboard` if `!can_edit_entry()` |
+| `/dashboard/entries/<id>/delete` | `POST` | `require_admin_session()` - Administrador only. `cms_delete_entry()`, `302 /dashboard` |
+| `.../api/entries/<id>/meta` | `POST` | `link`, `enabled` (checkbox), `categories` (multi-value); `type` is read from the form for an Administrador (default `"page"`) and forced to `"blog"` for an Autor, so a post can never become a page. `cms_update_entry_meta()` → `{"ok":true}` \| `400 {"ok":false,"error":"update failed"}` |
+| `.../api/entries/<id>/header` | `POST` | `image_url`, `date`, and `title_<lang>`/`summary_<lang>` per `cms_get_languages()` entry. The author is **not** submitted (`header.author_id` is set at creation and shown read-only). `cms_update_entry_header()` → same shape |
+| `.../api/entries/<id>/content` | `POST` | `content_count` (capped at 200) plus `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>` per block → `CmsContentBlockEdit[]` → `cms_update_entry_content()` (full `content[]` replace) + gallery upsert (§6) → same shape |
+| `.../api/entries/<id>/blocks` | `POST` | `type`, `order` → `cms_add_entry_content_block()` (`$push` of an empty block), rendered via `entry_editor_render_block()` → `{"ok":true,"block_id":"...","html":"..."}` (HTML escaped with `json_escape_alloc()`) \| `400 ... "create failed"` |
+| `.../api/entries/<id>/blocks/<block_id>/delete` | `POST` | `cms_remove_entry_content_block()` (`$pull` by `_id`) → same shape (`"error":"remove failed"`) |
 
 ---
 
@@ -171,6 +203,5 @@ URLs into the target block's text fields (gallery) or the header `image_url` inp
 
 ## 7. Future work
 
-- Remaining the-retro-center block types: `image-single`, `image-paragraph`, `youtube-embed`,
-  `code-text`, `list`, `table`, `separator`, `link`, `generic`.
+- The `image-single` block type (the last block type from the legacy editor not yet ported).
 - A `/gallery/<slug>` human-readable URL (currently `_id` hex only).

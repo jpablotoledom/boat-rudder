@@ -1,42 +1,42 @@
-<a href="/dashboard" id="media-back-btn" class="trc-admin__back-btn" style="display:none">&#8592; Dashboard</a>
+<a href="/dashboard" id="media-back-btn" class="boat-rudder__admin__back-btn" style="display:none">&#8592; Dashboard</a>
 
-<div class="trc-media">
+<div class="boat-rudder__media">
 
   <!-- Left: Directories -->
-  <div class="trc-media__sidebar">
-    <div class="trc-media__sidebar-header">
-      <span class="trc-media__sidebar-title">Directories</span>
-      <div class="trc-media__dir-actions">
-        <button class="trc-media__dir-btn" onclick="newDirectoryBtnHandler()">+ New</button>
-        <button id="btn-dir-rename" class="trc-media__dir-btn" onclick="renameDirectoryBtnHandler()" disabled>Rename</button>
-        <button id="btn-dir-delete" class="trc-media__dir-btn trc-media__dir-btn--danger" onclick="deleteDirectoryBtnHandler()" disabled>Delete</button>
+  <div class="boat-rudder__media__sidebar">
+    <div class="boat-rudder__media__sidebar-header">
+      <span class="boat-rudder__media__sidebar-title">Directories</span>
+      <div class="boat-rudder__media__dir-actions">
+        <button class="boat-rudder__media__dir-btn" onclick="newDirectoryBtnHandler()">+ New</button>
+        <button id="btn-dir-rename" class="boat-rudder__media__dir-btn" onclick="renameDirectoryBtnHandler()" disabled>Rename</button>
+        <button id="btn-dir-delete" class="boat-rudder__media__dir-btn boat-rudder__media__dir-btn--danger" onclick="deleteDirectoryBtnHandler()" disabled>Delete</button>
       </div>
     </div>
     %s
   </div>
 
   <!-- Right: Content -->
-  <div class="trc-media__main">
+  <div class="boat-rudder__media__main">
 
-    <div class="trc-media__upload-zone" id="drop-zone">
-      <div class="trc-media__upload-label">
+    <div class="boat-rudder__media__upload-zone" id="drop-zone">
+      <div class="boat-rudder__media__upload-label">
         Drop files here or
-        <label for="media-file-input" class="trc-media__upload-browse">browse from your computer</label>
+        <label for="media-file-input" class="boat-rudder__media__upload-browse">browse from your computer</label>
       </div>
-      <input name="media-file-input" id="media-file-input" type="file" multiple class="trc-media__file-input">
+      <input name="media-file-input" id="media-file-input" type="file" multiple class="boat-rudder__media__file-input">
       <input name="media-directory-selected" id="media-directory-selected" type="hidden" value="">
       <input name="media-content-start" id="media-content-start" type="hidden" value="0">
       <input name="media-content-end" id="media-content-end" type="hidden" value="30">
     </div>
 
-    <div id="upload-feedback" class="trc-media__upload-feedback"></div>
+    <div id="upload-feedback" class="boat-rudder__media__upload-feedback"></div>
 
-    <div class="trc-media__grid-toolbar">
-      <button class="trc-media__select-btn" onclick="getSelectedMediaIds()">Use selected</button>
+    <div class="boat-rudder__media__grid-toolbar">
+      <button class="boat-rudder__media__select-btn" onclick="getSelectedMediaIds()">Use selected</button>
     </div>
 
-    <div id="media_content__charger" class="trc-media__grid-scroll">
-      <div id="media-content-dynamically" class="trc-media__grid">
+    <div id="media_content__charger" class="boat-rudder__media__grid-scroll">
+      <div id="media-content-dynamically" class="boat-rudder__media__grid">
         %s
       </div>
     </div>
@@ -58,11 +58,11 @@
   var selectionCounter = 0;
 
   document.body.addEventListener('click', function (e) {
-    var item = e.target.closest('.trc-media__photo');
+    var item = e.target.closest('.boat-rudder__media__photo');
     if (!item) return;
     e.preventDefault();
     var checkbox = item.querySelector('input[type="checkbox"]');
-    var items = Array.from(document.querySelectorAll('.trc-media__photo'));
+    var items = Array.from(document.querySelectorAll('.boat-rudder__media__photo'));
     var index = items.indexOf(item);
     if (e.target.tagName.toLowerCase() === 'input') return;
 
@@ -89,7 +89,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
-      document.querySelectorAll('.trc-media__photo').forEach(function (item) {
+      document.querySelectorAll('.boat-rudder__media__photo').forEach(function (item) {
         item.querySelector('input[type="checkbox"]').checked = false;
         item.classList.remove('selected');
         delete item.dataset.selectedAt;
@@ -104,7 +104,7 @@
     var list = document.getElementById('media-directory-contents-list');
     var li = document.createElement('li');
     li.id = 'new-directory-container';
-    li.innerHTML = '<input type="text" class="trc-media__dir-new-input" onblur="createNewDirectory()" onkeypress="return validarCaracter(event)" id="new-directory-name" placeholder="Directory name">';
+    li.innerHTML = '<input type="text" class="boat-rudder__media__dir-new-input" onblur="createNewDirectory()" onkeypress="return validarCaracter(event)" id="new-directory-name" placeholder="Directory name">';
     list.appendChild(li);
     document.getElementById('new-directory-name').focus();
   };
@@ -134,9 +134,9 @@
     document.getElementById('media-content-end').value = '30';
     if (baseDir) baseDir.value = directoryId;
 
-    document.querySelectorAll('.trc-media__dir-item.selected')
+    document.querySelectorAll('.boat-rudder__media__dir-item.selected')
       .forEach(function (item) { item.classList.remove('selected'); });
-    var selected = document.querySelector('.trc-media__dir-item[onclick*="' + directoryId + '"]');
+    var selected = document.querySelector('.boat-rudder__media__dir-item[onclick*="' + directoryId + '"]');
     if (selected) selected.classList.add('selected');
 
     var btnRename = document.getElementById('btn-dir-rename');
@@ -251,10 +251,10 @@
   // Upload
   function addUploadFeedback(container, filename, extraClass) {
     var item = document.createElement('div');
-    item.className = 'trc-media__progress-item' + (extraClass ? ' ' + extraClass : '');
+    item.className = 'boat-rudder__media__progress-item' + (extraClass ? ' ' + extraClass : '');
     item.innerHTML =
-      '<span class="trc-media__progress-name" title="' + filename + '">' + filename + '</span>' +
-      '<div class="trc-media__progress-bar-wrap"><div class="trc-media__progress-bar"></div></div>';
+      '<span class="boat-rudder__media__progress-name" title="' + filename + '">' + filename + '</span>' +
+      '<div class="boat-rudder__media__progress-bar-wrap"><div class="boat-rudder__media__progress-bar"></div></div>';
     container.appendChild(item);
     return item;
   }
@@ -285,7 +285,7 @@
         return;
       }
       var progressItem = addUploadFeedback(feedbackEl, file.name, '');
-      var progressBar = progressItem.querySelector('.trc-media__progress-bar');
+      var progressBar = progressItem.querySelector('.boat-rudder__media__progress-bar');
       var formData = new FormData();
       formData.append('media-directory-selected', baseDir ? baseDir.value : '');
       formData.append('file', file);
@@ -316,11 +316,11 @@
   // "Use selected" button
   window.getSelectedMediaIds = function () {
     var selected = Array.from(
-      document.querySelectorAll('.trc-media__photo.selected input[type="hidden"][name="media-item-url"]')
+      document.querySelectorAll('.boat-rudder__media__photo.selected input[type="hidden"][name="media-item-url"]')
     );
     var selectedItems = selected
       .map(function (input) {
-        return { value: input.value, selectedAt: parseInt(input.closest('.trc-media__photo').dataset.selectedAt || '0', 10) };
+        return { value: input.value, selectedAt: parseInt(input.closest('.boat-rudder__media__photo').dataset.selectedAt || '0', 10) };
       })
       .sort(function (a, b) { return a.selectedAt - b.selectedAt; });
 
@@ -345,7 +345,7 @@
     }
 
     if (window.contentEditorGalleryType === 'image-block' && window._galleryTargetBlock && selectedIds.length > 0) {
-      var textFields = window._galleryTargetBlock.querySelectorAll('.trc-block__lang-content [name="text"]');
+      var textFields = window._galleryTargetBlock.querySelectorAll('.boat-rudder__entry-editor__block__lang-content [name="text"]');
       textFields.forEach(function (f) { f.value = selectedIds[0]; });
       if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
       window._galleryTargetBlock = null;
@@ -353,9 +353,9 @@
 
     if (window.contentEditorGalleryType === 'gallery-block' && window._galleryTargetBlock && selectedIds.length > 0) {
       var joined = selectedIds.join(';');
-      var galleryTextFields = window._galleryTargetBlock.querySelectorAll('.trc-block__lang-content [name="text"]');
+      var galleryTextFields = window._galleryTargetBlock.querySelectorAll('.boat-rudder__entry-editor__block__lang-content [name="text"]');
       galleryTextFields.forEach(function (f) { f.value = joined; });
-      var galleryPreview = window._galleryTargetBlock.querySelector('.trc-gallery-preview');
+      var galleryPreview = window._galleryTargetBlock.querySelector('.boat-rudder__entry-editor__gallery-preview');
       if (galleryPreview && typeof renderGalleryThumbs === 'function') renderGalleryThumbs(galleryPreview, joined);
       if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
       window._galleryTargetBlock = null;

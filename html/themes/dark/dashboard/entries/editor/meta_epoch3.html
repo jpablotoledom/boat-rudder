@@ -1,12 +1,12 @@
-    <div class="trc-meta-section" id="metaSidebar">
-      <div class="trc-meta-section__title">Entry Settings</div>
+    <div class="boat-rudder__entry-editor__meta-section" id="metaSidebar">
+      <div class="boat-rudder__entry-editor__meta-section__title">Entry Settings</div>
 
-      <div class="trc-meta-group">
+      <div class="boat-rudder__entry-editor__meta-group">
         <label for="entryLink">URL slug</label>
         <input name="link" id="entryLink" type="text" value="%s" oninput="setContentChanged()">
       </div>
 
-      <div class="trc-meta-group">
+      <div class="boat-rudder__entry-editor__meta-group">
         <label for="entryType">Type</label>
         <select name="type" id="entryType" onchange="setContentChanged()">
           <option value="page"%s>Page</option>
@@ -14,7 +14,7 @@
         </select>
       </div>
 
-      <div class="trc-meta-group">
+      <div class="boat-rudder__entry-editor__meta-group">
         <label>Categories</label>
         <select name="categories" id="entryCategories" multiple size="6" onchange="setContentChanged()">
 %s

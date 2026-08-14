@@ -6,15 +6,28 @@ the requesting browser can understand - from 1999-era WAP phones to modern HTML5
 while every other path (`/themes/...`, `/assets/...`, `/favicon.ico`, ...) is served as a
 plain static file.
 
+Boat Rudder grew out of `base-http-server`, a minimal standalone static file server; that
+ancestry survives only as the shape of the web-server half. Everything in this repository - the
+`boat-rudder` binary and systemd service, the source tree, the `boat-rudder__*` CSS namespace -
+is Boat Rudder. A **site** built with it (its MongoDB database, its theme, its content) is a
+separate concern that never appears in the source: the site name, banner and page titles a
+visitor reads are content, and the templates ship "Boat Rudder" only as the default until a site
+overrides it.
+
 This document is a high-level tour of the whole project: the web server foundation, the
 retro-compatible CMS concept, the **epoch** strategy that drives it, and the request lifecycle,
 illustrated with diagrams. For deeper detail see:
 
-- [reference/architecture.md](reference/architecture.md) - full component breakdown.
+- [reference/architecture.md](reference/architecture.md) - the server foundation, plus a map of
+  every other document.
+- [reference/rendering.md](reference/rendering.md) - epochs, templates and every public page.
+- [reference/dashboard.md](reference/dashboard.md) - login, sessions, roles and the maintainers.
 - [reference/entry-editor.md](reference/entry-editor.md) - the `/dashboard/entries/<id>/edit` AJAX content editor.
 - [reference/media-admin.md](reference/media-admin.md) - the `/dashboard/media` media library.
+- [reference/configuration.md](reference/configuration.md) - every `configs/settings.conf` key.
 - [reference/data-flow.md](reference/data-flow.md) - step-by-step data flow, including the dynamic `/` route.
-- [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts (`bhs.sh`).
+- [reference/scripts.md](reference/scripts.md) - build, run and deployment scripts (`boat_rudder_builder.sh`).
+- [reference/style-guide.md](reference/style-guide.md) - C conventions and security rules.
 - [plans/](plans/) - per-feature implementation plans.
 - [diagrams/](diagrams/) - PlantUML source files for every diagram in this document.
 
@@ -24,7 +37,7 @@ illustrated with diagrams. For deeper detail see:
 
 ```
                  ┌─────────────────────────────────────────────┐
-                 │              base-http-server               │
+                 │                 boat-rudder                 │
                  │   (C17, OpenSSL, pthreads, select() loop)   │
                  └──────────────────────┬──────────────────────┘
                                         │
@@ -162,10 +175,19 @@ html/themes/dark/
 ├── home-content/
 │   ├── home-content_epoch{-1,0,1,2,3}.html
 │   └── home-content-item_epoch{-1,0,1,2,3}.html
-└── home-blog/
-    ├── home-blog_epoch{-1,0,1,2,3}.html
-    └── home-blog-item_epoch{-1,0,1,2,3}.html
+├── home-blog/
+│   ├── home-blog_epoch{-1,0,1,2,3}.html
+│   └── home-blog-item_epoch{-1,0,1,2,3}.html
+├── category-menu/
+│   └── category-menu{,-item,-item-selected}_epoch{-1,0,1,2,3}.html
+├── elements/<block-type>/          (one dir per content block type)
+└── dashboard/                       (admin pages, epoch 3 only)
 ```
+
+The tree above shows the home page's components; the full set also covers the page shell
+(`page/`), the blog listing (`blog-list/`), CMS entries (`entry/`), content blocks
+(`elements/`), errors (`error/`) and the dashboard. See
+[reference/rendering.md](reference/rendering.md) for the complete inventory.
 
 Adding a new theme means adding a new `html/themes/<name>/` tree with the same file layout and
 pointing `theme=<name>` in `configs/settings.conf`.
@@ -283,10 +305,10 @@ fragment for a given epoch:
 | Module | Signature | Responsibility |
 |---|---|---|
 | `modules/container` | `char *container(int epoch)` | Page shell (`<head>`/`<body>` wrapper), resolves `{{PAGE_TITLE}}`, exposes 4 `%s` slots (menu, slider, home content, home blog) |
-| `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from a static `MENU_ROUTES[]` table, joining items with the epoch's separator |
+| `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from the `menu` collection (`cms_get_menu_items()`), joining items with the epoch's separator and marking the item matching `current_url`; falls back to a single built-in `{"/", "Home"}` item if the query returns nothing |
 | `modules/slider` | `char *slider(int epoch)` | Hero/banner (mainbanner) block, static per epoch |
-| `modules/home_content` | `char *home_content(int epoch, const char *lang)` | Welcome text + a static "updates" list, one item per `home-content-item_epoch<N>.html` |
-| `modules/home_blog` | `char *home_blog(int epoch)` | "Latest Blog Posts" gallery, one item per `home-blog-item_epoch<N>.html`, from a static `BLOG_POSTS[]` table |
+| `modules/home_content` | `char *home_content(int epoch, const char *lang)` | Welcome text + an "updates" list from the static `UPDATES[]` array - the last hard-coded content source left (see §9) |
+| `modules/home_blog` | `char *home_blog(int epoch, const char *lang)` | "Latest Blog Posts" gallery, one item per `home-blog-item_epoch<N>.html`, from the `entries` collection (`cms_get_blog_entries()`, `type: "blog"`, newest first, capped at `HOME_BLOG_LIMIT`) |
 
 `src/html_builder/orchestrator.c` ties them together:
 
@@ -401,7 +423,8 @@ a complete HTTP response (status line, `Content-Type` per the table in §2.2, se
 
 The CMS sits on top of a generic, dependency-light static file server:
 
-- **Language/standard**: C17, built with CMake. Only external dependency: OpenSSL.
+- **Language/standard**: C17, built with CMake. External dependencies: OpenSSL for the server
+  itself, plus libmongoc and libsodium for the database-backed CMS and the dashboard.
 - **Concurrency**: one main thread runs a `select()`-based accept loop; each accepted
   connection is handled by a **detached pthread**.
 - **Limits**: a global cap of 200 concurrent connections and per-IP rate limiting (500
@@ -414,9 +437,16 @@ The CMS sits on top of a generic, dependency-light static file server:
   - `GET`/`HEAD /` → the dynamic CMS pipeline described in §2.
   - `GET`/`HEAD /login` → if a valid session cookie is present, `302 /dashboard`; otherwise the
     login form (epoch3) or "not available" message (other epochs).
-  - `GET`/`HEAD /dashboard` → the static "Welcome to dashboard" page if a valid session cookie
-    is present, otherwise `302 /login`.
+  - `GET`/`HEAD /dashboard` → the admin home (entries listing, plus the Categories / Languages /
+    Menu / Users links for an Administrador) if a valid session cookie is present, otherwise
+    `302 /login`.
   - `GET`/`HEAD /logout` → destroys the session (if any) and `302 /` with a cleared cookie.
+  - `GET`/`HEAD /blog`, `/blog/category/<slug>`, `/blog/<link>`, `/page/<link>`, `/gallery/<id>`
+    → the database-backed CMS pages (see §8 and
+    [reference/rendering.md](reference/rendering.md)).
+  - `GET`/`POST /dashboard/...` → the admin area: entries listing and editor, media library,
+    Categories, Languages, Menu and Users maintainers (see
+    [reference/dashboard.md](reference/dashboard.md)).
   - `POST /login` → `EPOCH_MODERN` only; verifies credentials against MongoDB and on success
     sets a session cookie and redirects to `/dashboard`. See §5.
   - `GET`/`HEAD <anything else>` → `serve_static_file()` against the `html/` root, with
@@ -466,7 +496,7 @@ CONTAINER --> ORCH : html_container\n(4x %s placeholders)
 ORCH -> MENU : menu("/", epoch)
 activate MENU
 MENU -> MENU : load menu_epoch<N>,\nmenu-item_epoch<N>,\nmenu-item-separator_epoch<N>
-loop for each route in MENU_ROUTES
+loop for each item in cms_get_menu_items(lang)
   MENU -> MENU : render_template(menu-item_tpl,\nlink, label, separator)
   MENU -> MENU : str_append(items, item)
 end
@@ -481,7 +511,7 @@ SLIDER --> ORCH : html_slider
 ORCH -> HOME : home_content(epoch, lang)
 activate HOME
 HOME -> HOME : load home-content_epoch<N>,\nhome-content-item_epoch<N>
-loop for each entry in UPDATES
+loop for each entry in UPDATES (static array)
   HOME -> HOME : render_template(item_tpl,\ntitle, date, text)
   HOME -> HOME : str_append(items, item)
 end
@@ -489,10 +519,10 @@ HOME -> HOME : render_template(content_tpl, items)
 deactivate HOME
 HOME --> ORCH : html_home_content
 
-ORCH -> BLOG : home_blog(epoch)
+ORCH -> BLOG : home_blog(epoch, lang)
 activate BLOG
 BLOG -> BLOG : load home-blog_epoch<N>,\nhome-blog-item_epoch<N>
-loop for each entry in BLOG_POSTS
+loop for each entry in cms_get_blog_entries(lang, HOME_BLOG_LIMIT)
   BLOG -> BLOG : render_template(item_tpl,\nimage, link, title, summary, author, date)\n(epoch -1/0: title, date, summary)
   BLOG -> BLOG : str_append(items, item)
 end
@@ -649,46 +679,32 @@ even missing-asset 404s in the visitor's epoch. If template rendering itself fai
 
 ## 6. Configuration
 
-`configs/settings.conf` controls both the server and the CMS:
+`configs/settings.conf` controls both the server and the CMS. Every key - ports, TLS, trusted
+proxies, `theme`, the `lang` fallback, `force_epoch`, the MongoDB connection and the session TTL
+- is documented once in **[reference/configuration.md](reference/configuration.md)**.
 
-```ini
-verbose_level=3           # 0=none 1=error 2=warn 3=info 4=debug
-http_port=8080
-https_port=8443
-ssl_enabled=0             # 1 to enable HTTPS
-ssl_cert=./ssl/cert.pem
-ssl_key=./ssl/key.pem
-trusted_proxies=          # comma-separated IPs of trusted reverse proxies
+Three of them shape what this document describes:
 
-theme=dark                 # active theme under html/themes/<theme>/
-lang=Eng                   # content language passed to home_content
-public_url=                # public base URL (reserved for future SEO/canonical links)
-#force_epoch=3             # force a browser epoch for "/" (-1..3), omit to auto-detect
-
-# MongoDB connection (login/sessions, epoch3 only). If the connection fails
-# at startup, /login and /dashboard serve a 503 error page; the rest of the
-# site (epoch CMS + static files) is unaffected.
-mongodb_uri=mongodb://localhost:27017
-mongodb_db=boat_rudder
-
-# Session cookie lifetime, in seconds (default: 24h).
-session_ttl_seconds=86400
-```
-
-`generate_url_theme()` always resolves templates as `./html/themes/<theme>/...`, relative to the
-server's working directory - independent of the `<root_directory>` argument used for static
-file serving (which also points at `html/`).
+- **`theme`** selects the template tree: every fragment resolves as
+  `./html/themes/<theme>/...` through `generate_url_theme()`, relative to the server's working
+  directory and independent of the `<root_directory>` argument used for static file serving
+  (which also points at `html/`).
+- **`force_epoch`** pins the epoch for every dynamic route instead of detecting it from
+  `User-Agent` - the fastest way to inspect a retro layout from a modern browser (§2.2).
+- **`lang`** is only a fallback. The real content language comes from the `languages`
+  collection; `lang` is consulted when MongoDB is unavailable or no language is marked as
+  default (§8).
 
 ---
 
 ## 7. Building and Running
 
 ```bash
-./bhs.sh compiledebug      # Debug build + AddressSanitizer, assembled into bin/
-./bhs.sh rundebug           # Run bin/base-http-server -c bin/configs/settings.conf bin/html
+./boat_rudder_builder.sh compiledebug      # Debug build + AddressSanitizer, assembled into bin/
+./boat_rudder_builder.sh rundebug           # Run bin/boat-rudder -c ./configs/settings.conf ./html
 ```
 
-See [reference/scripts.md](reference/scripts.md) for the full `bhs.sh` reference (production
+See [reference/scripts.md](reference/scripts.md) for the full `boat_rudder_builder.sh` reference (production
 builds, systemd install, TLS certificate generation).
 
 ---
@@ -697,26 +713,32 @@ builds, systemd install, TLS certificate generation).
 
 Features added after the initial home-page MVP:
 
-- **CMS entries**: `/blog/<link>` and `/page/<link>` served from a MongoDB `entries` collection with per-language `header` (image, title, summary, author, date) and an ordered `content[]` array of typed blocks.
-- **Blog listing** (`/blog`) and home "Latest Blog Posts" section.
-- **Content block types**: `tittle` (H1-H6), `paragraph` (rich text), `image`, `byline`, `gallery`.
+- **CMS entries**: `/blog/<link>` and `/page/<link>` served from a MongoDB `entries` collection with a per-language `header` (image, title, summary, date) plus an `author_id` reference into `users`, and an ordered `content[]` array of typed blocks.
+- **Blog listing** (`/blog`), **category-filtered listing** (`/blog/category/<slug>`) with a category bar under the navbar, and the home "Latest Blog Posts" section.
+- **Content block types** (14): `tittle` (H1-H6), `paragraph` (rich text), `image`, `byline` and `gallery` on every epoch; `separator`, `link`, `list`, `table`, `code-text`, `youtube-embed`, `image-paragraph`, `social-networks` and `generic` on epoch 3 only.
 - **Gallery**: epoch 3 CSS grid with lightbox (click to open, prev/next, ESC); epochs 1-2 paginated viewer; `/gallery/<id>` public route.
 - **Media admin** (`/dashboard/media`): directory management, drag-and-drop upload, `scripts/image-optimizer.sh` (5 variants per image via ImageMagick), paginated grid, media picker modal for the entry editor.
-- **Entry editor** (`/dashboard/entries/<id>/edit`): trc-editor UX with fixed top bar, preview/edit toggle per block, rich-text for paragraphs, heading-level buttons for titles, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.
+- **Entry editor** (`/dashboard/entries/<id>/edit`): document-style editor UX with a fixed top bar, preview/edit toggle per block, rich-text for paragraphs, heading-level buttons for titles, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.
 - **Authentication**: login (Argon2id via libsodium), session cookies, roles (Administrador / Autor).
-- **Dashboard maintainers**: Categories, Languages, Menu, Users.
-- **Active menu item**: `--selected` CSS modifier on the nav item matching the current URL.
+- **Dashboard maintainers**: Categories, Languages, Menu, Users (with a display `name` used as the entry author).
+- **Active menu item**: `--selected` CSS modifier on the nav item matching the current URL, and on the active category in the category bar.
 - **Language admin**: `languages` collection drives content language; `/dashboard/languages` to add/remove/set default.
 - **Multipart body reading**: router reads full POST body based on `Content-Length` (supports file uploads up to 10 MiB).
 
 ## 9. Roadmap (not yet implemented)
 
+- **Site settings from MongoDB** (`site_settings` collection + `/dashboard/settings`): site name,
+  banner, favicon, logo, brand colors and every page `<title>`, so nothing a visitor reads about
+  the site's identity stays hardcoded in the source - see
+  [plans/site-settings-plan.md](plans/site-settings-plan.md). This is the next planned increment.
 - Theme (`light`) switching and per-visitor language selection via query string / cookie.
 - A real content source for `home_content` (replacing the static `UPDATES[]` array).
-- Remaining content block types: `image-single`, `image-paragraph`, `youtube-embed`, `code-text`, `list`, `table`, `separator`, `link`.
-- Blog listing filtered by category.
+- Older-epoch (-1..2) templates for the nine epoch-3-only content block types - they currently render as empty output on retro browsers.
+- The `image-single` block type.
+- Pagination for `/blog` and `/blog/category/<slug>` (both are capped at `BLOG_LIST_LIMIT`, currently 50).
 - SEO metadata (Open Graph, JSON-LD) for epoch 3.
 - QR code generation for gallery pages on epochs -1/0 (currently shows text links).
+- Human-readable gallery URLs (`/gallery/<slug>`; today the route takes the `_id` hex only).
 
 ---
 

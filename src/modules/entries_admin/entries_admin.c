@@ -30,7 +30,9 @@ static char *render_categories(const CmsBlogListItem *item, int epoch) {
 
     char *result = strdup("");
     for (size_t i = 0; result && i < item->category_count; i++) {
-        char *tag = render_template(item_tpl, item->category_names[i]);
+        char *tag = (epoch >= 3)
+            ? render_template(item_tpl, item->category_links[i], item->category_names[i])
+            : render_template(item_tpl, item->category_names[i]);
         result = tag ? str_append(result, tag) : NULL;
         free(tag);
     }

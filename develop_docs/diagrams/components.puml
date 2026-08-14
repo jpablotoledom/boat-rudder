@@ -1,6 +1,6 @@
 @startuml components
 
-title base-http-server - Component Diagram
+title Boat Rudder - Component Diagram
 
 skinparam componentStyle rectangle
 skinparam backgroundColor #FAFAFA

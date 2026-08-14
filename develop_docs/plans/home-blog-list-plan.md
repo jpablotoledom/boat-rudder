@@ -1,7 +1,7 @@
 # Home Blog List - database-backed `entries` (type: "blog")
 
 > **Status**: implemented - see
-> [architecture.md, "Home blog list"](../reference/architecture.md#home-blog-list).
+> [rendering.md, "Home blog list"](../reference/rendering.md).
 
 ## 1. Context & Goal
 
@@ -11,7 +11,7 @@ placeholder with no database backing.
 
 The `entries` collection (embedded `header` + `content[]` + `categories[]`, see
 [cms-entry-model-plan.md](cms-entry-model-plan.md) and
-[architecture.md, "CMS entries"](../reference/architecture.md#cms-entries-get-pagelink)) already supports
+[rendering.md, "CMS entries"](../reference/rendering.md)) already supports
 an `entries.type` field with values `"page"` and (per the target schema) `"blog"`. This
 increment makes the home blog list read real `entries` documents where `type == "blog"` and
 `enabled == true`, ordered by `header.date` (newest first), reusing the exact same
@@ -22,7 +22,7 @@ Out of scope: category-filtered listing (`getBlogItemsByCategory`-style queries)
 future increment per `cms-entry-model-plan.md` §3.2. A dashboard editor for blog entries is
 also out of scope. (The dedicated `/blog` listing route, and `/blog/<link>` for individual
 articles, were implemented as a separate increment - see
-[architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog).)
+[rendering.md, "Blog list"](../reference/rendering.md).)
 
 ## 2. DB layer (`src/db/cms_entries.h` / `cms_entries.c`)
 
@@ -99,7 +99,7 @@ Implementation notes:
   `cms_entries.c`, alongside the other `MAX_*`-style constants) - the home list always
   shows at most the 10 most recent `type: "blog"` entries. The `/blog` listing route
   (implemented separately - see
-  [architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog)) reuses the
+  [rendering.md, "Blog list"](../reference/rendering.md)) reuses the
   same query with a higher `BLOG_LIST_LIMIT`.
 - The result count is at most `HOME_BLOG_LIMIT`, so the output array can be a fixed-size
   `CmsBlogListItem[HOME_BLOG_LIMIT]` allocated once (`calloc(HOME_BLOG_LIMIT, ...)`) and
@@ -154,7 +154,7 @@ No new collection constants needed - `cms_get_blog_entries()` queries
 
 ### 3.2 Template changes (`html/themes/dark/home-blog/`)
 
-Per §6.4, category tags are shown for **all 5 epochs** (matching how the-retro-center's
+Per §6.4, category tags are shown for **all 5 epochs** (matching how the legacy site's
 home blog list always shows categories, regardless of epoch).
 
 - **`home-blog-item_epoch{3,2,1}.html`**: add one more `%s` placeholder for the rendered
@@ -277,12 +277,12 @@ text) to `styles_epoch3.css` / `styles_epoch2.css`.
 1. **Result limit**: `cms_get_blog_entries()` caps the home list at the **10** most
    recent `type: "blog"` entries via `HOME_BLOG_LIMIT = 10` (§2.3). The `/blog` listing
    route (implemented separately - see
-   [architecture.md, "Blog list"](../reference/architecture.md#blog-list-blog)) reuses the
+   [rendering.md, "Blog list"](../reference/rendering.md)) reuses the
    same query with `BLOG_LIST_LIMIT = 50`.
 
 2. **No `menu` field on `entries`** - separate `menu` collection. Implemented as a
    separate increment - see
-   [architecture.md, "Menu"](../reference/architecture.md#menu-all-pages). Site
+   [rendering.md, "Menu"](../reference/rendering.md). Site
    navigation (`src/modules/menu/menu.c`) is backed by its own `menu` collection of link
    documents, `{ _id, link, name: map<lang,string>, order, enabled }`. This decouples
    the top nav from `entries` entirely, so menu items can point anywhere (external URLs,

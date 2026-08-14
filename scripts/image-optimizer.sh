@@ -3,11 +3,11 @@
 # Usage: image-optimizer.sh input_folder output_folder [input_file]
 #
 # Generates these variants from each image:
-#   _full  — original resolution, optimized
-#   _half  — max 1024px,  JPEG or GIF (same format as source)
-#   _small — max  300px,  JPEG or GIF (same format as source)
-#   _medium— max  600px,  always GIF  (epoch1/2 browser compatibility)
-#   _micro — max  180px,  always GIF  (epoch1 Mosaic 1.0 compatibility)
+#   _full  - original resolution, optimized
+#   _half  - max 1024px,  JPEG or GIF (same format as source)
+#   _small - max  300px,  JPEG or GIF (same format as source)
+#   _medium- max  600px,  always GIF  (epoch1/2 browser compatibility)
+#   _micro - max  180px,  always GIF  (epoch1 Mosaic 1.0 compatibility)
 
 INPUT_DIR="$1"
 OUTPUT_DIR="$2"
@@ -31,7 +31,7 @@ is_suitable_for_gif() {
     [ "$NUM_COLORS" -le 256 ]
 }
 
-# Resize keeping aspect ratio — only shrinks, never enlarges
+# Resize keeping aspect ratio - only shrinks, never enlarges
 resize_image() {
     local src="$1" dst="$2" max="$3"
     magick "$src" -auto-orient -resize "${max}x${max}>" "$dst"

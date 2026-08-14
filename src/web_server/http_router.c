@@ -877,7 +877,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
-                        char *content  = users_admin_form(epoch, "", "", "author", NULL);
+                        char *content  = users_admin_form(epoch, "", "", "", "author", NULL);
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -897,7 +897,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char email[256];
                         char role[USER_ROLE_BUF_SIZE];
                         if (cms_get_user_values(id, email, sizeof(email), role, sizeof(role)) == 0) {
-                            char *content  = users_admin_form(epoch, id, email, role, NULL);
+                            char *name = cms_get_user_name_by_id(id);
+                            char *content  = users_admin_form(epoch, id, name ? name : "", email, role, NULL);
+                            free(name);
                             char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
@@ -1581,7 +1583,6 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                         char **title_values   = calloc(lang_count, sizeof(char *));
                         char **summary_values = calloc(lang_count, sizeof(char *));
-                        char **author_values  = calloc(lang_count, sizeof(char *));
                         for (size_t i = 0; i < lang_count; i++) {
                             char field[40], value[1024];
 
@@ -1592,14 +1593,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             snprintf(field, sizeof(field), "summary_%s", langs[i].code);
                             parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
                             summary_values[i] = strdup(value);
-
-                            snprintf(field, sizeof(field), "author_%s", langs[i].code);
-                            parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                            author_values[i] = strdup(value);
                         }
 
                         if (cms_update_entry_header(id, image_url, date, langs, lang_count,
-                                                     title_values, summary_values, author_values) == 0) {
+                                                     title_values, summary_values) == 0) {
                             response = build_json_response("{\"ok\":true}");
                         } else {
                             response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
@@ -1609,11 +1606,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         for (size_t i = 0; i < lang_count; i++) {
                             free(title_values[i]);
                             free(summary_values[i]);
-                            free(author_values[i]);
                         }
                         free(title_values);
                         free(summary_values);
-                        free(author_values);
                     }
 
                     cms_entry_edit_free(&entry, lang_count);
@@ -1888,14 +1883,15 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
                 if (require_admin_session(ctx, &req, epoch, user_id)) {
-                    char email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    char name[256], email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    parse_urlencoded_field(req.body, req.body_length, "name", name, sizeof(name));
                     parse_user_form(&req, email, sizeof(email), password, sizeof(password), role, sizeof(role));
 
                     char *response;
-                    if (cms_create_user(email, password, role) == 0) {
+                    if (cms_create_user(name, email, password, role) == 0) {
                         response = build_redirect_response("/dashboard/users", "", epoch);
                     } else {
-                        char *content  = users_admin_form(epoch, "", email, role,
+                        char *content  = users_admin_form(epoch, "", name, email, role,
                                               "No se pudo crear el usuario. Verifica el email y la contrasena.");
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -1915,20 +1911,21 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
                 if (require_admin_session(ctx, &req, epoch, user_id)) {
-                    char email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    char name[256], email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    parse_urlencoded_field(req.body, req.body_length, "name", name, sizeof(name));
                     parse_user_form(&req, email, sizeof(email), password, sizeof(password), role, sizeof(role));
 
                     char *response;
                     if (strcmp(id, user_id) == 0 && strcmp(role, "admin") != 0 && cms_count_admins() == 1) {
-                        char *content  = users_admin_form(epoch, id, email, role,
+                        char *content  = users_admin_form(epoch, id, name, email, role,
                                               "No puedes quitarte el unico rol de administrador.");
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
-                    } else if (cms_update_user(id, email, role, password) == 0) {
+                    } else if (cms_update_user(id, name, email, role, password) == 0) {
                         response = build_redirect_response("/dashboard/users", "", epoch);
                     } else {
-                        char *content  = users_admin_form(epoch, id, email, role,
+                        char *content  = users_admin_form(epoch, id, name, email, role,
                                               "No se pudo actualizar el usuario. Verifica el email.");
                         char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;

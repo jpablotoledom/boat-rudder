@@ -3,12 +3,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-INSTALL_DIR="/usr/local/bin/base-http-server"
-SERVICE_NAME="base-http-server"
+INSTALL_DIR="/usr/local/bin/boat-rudder"
+SERVICE_NAME="boat-rudder"
 SYSTEMD_DIR="/etc/systemd/system"
 
 source ./scripts/show/divbar
-echo "Uninstalling base-http-server ..."
+echo "Uninstalling Boat Rudder ..."
 source ./scripts/show/divbar
 
 if [ "$(uname -s)" != "Linux" ]; then

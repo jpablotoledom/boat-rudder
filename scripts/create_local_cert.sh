@@ -3,7 +3,7 @@
 # Output: ssl/cert.pem and ssl/key.pem
 # Valid for 2 years, covers localhost and 127.0.0.1.
 #
-# Usage: ./bhs.sh createcert
+# Usage: ./boat_rudder_builder.sh createcert
 #   or:  ./scripts/create_local_cert.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,13 +45,7 @@ openssl x509 -in "$CERT" -noout -text 2>/dev/null \
     | grep -E "Not Before:|Not After :|Subject:|DNS:|IP Address:"
 echo ""
 
-# Also copy into bin/ssl/ if bin/ exists (so rundebug picks it up immediately)
-if [ -d ./bin ]; then
-    mkdir -p ./bin/ssl
-    cp "$CERT" ./bin/ssl/cert.pem
-    cp "$KEY"  ./bin/ssl/key.pem
-    echo "Copied to bin/ssl/ as well."
-fi
+# No copy into bin/ is needed: the server reads ./ssl/ from the project root.
 
 source ./scripts/show/divbar
 echo "Done! Enable HTTPS in configs/settings.conf:"

@@ -506,82 +506,6 @@ h2 {
   font-size: 25px;
 }
 
-@media (max-width: 1200px) {
-  .boat-rudder__navbar__title_onslidelogo {
-    /* margin: 12vh auto; */
-    font-size: 5vw;
-  }
-}
-
-@media (max-width: 800px) {
-  .boat-rudder__navbar__title {
-    margin-right: 0;
-  }
-
-  .boat-rudder__navbar__title_onslidelogo {
-    font-size: 6vw;
-    margin: 10vh auto;
-  }
-
-  .boat-rudder__navbar__content {
-    justify-content: center;
-    position: initial;
-  }
-
-  .navbar__toggle {
-    display: flex;
-  }
-
-  .boat-rudder__navbar__menu {
-    display: none;
-    position: absolute;
-    top: 75px;
-    left: 0;
-    width: 100%;
-    margin-left: 0;
-    flex-direction: column;
-    background-color: #000000;
-    z-index: 999;
-  }
-
-  .boat-rudder__navbar__menu.menu--open {
-    display: flex;
-  }
-
-  .boat-rudder__navbar__menu_item {
-    text-align: center;
-    padding: 12px;
-    border-right: none;
-    border-top: 1px solid #333333;
-  }
-
-  .boat-rudder__gallery-container {
-    padding: 15px;
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .boat-rudder__gallery-item:nth-child(1) {
-    grid-column-start: span 1;
-  }
-  .boat-rudder__gallery-item:nth-child(4) {
-    grid-column-start: span 1;
-  }
-}
-
-@media (max-width: 500px) {
-  .boat-rudder__mainbanner__top-padding {
-    padding-top: 45%;
-  }
-
-  .boat-rudder__navbar__title {
-    margin-left: 35px;
-  }
-
-  .boat-rudder__navbar__title_onslidelogo {
-    font-size: 13vw;
-    margin: 20vh auto;
-  }
-}
-
 /* ENTRY PAGE */
 .boat-rudder__entry-header {
   background-color: #0000006b;
@@ -1462,12 +1386,6 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   width: 560px;
   height: 315px;
 }
-@media (max-width: 768px) {
-  .boat-rudder__youtube-embed__video iframe { width: 450px; height: 253px; }
-}
-@media (max-width: 500px) {
-  .boat-rudder__youtube-embed__video iframe { width: auto; height: auto; }
-}
 
 .boat-rudder__code-text-container {
   min-height: 100px;
@@ -1573,4 +1491,140 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder__entry-editor__image-options select {
   width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a;
   color: #e0e0e0; padding: 4px; height: 28px; border-radius: 3px;
+}
+
+/* ---- Language selector (nav bar drop-down + /language page) ---- */
+
+/* Options bar pinned to the right edge of the viewport: it sits outside
+   __content so the centred menu can grow without pushing it around. */
+.boat-rudder__navbar__options {
+  position: fixed;
+  right: 15px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  height: 74px;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.boat-rudder__navbar__lang { position: relative; display: inline-block; }
+.boat-rudder__navbar__lang__btn {
+  background: none; border: 1px solid transparent; color: inherit;
+  font: inherit; padding: 4px 10px; cursor: pointer; border-radius: 3px;
+}
+.boat-rudder__navbar__lang__btn:hover { border-color: currentColor; }
+.boat-rudder__navbar__lang__menu {
+  display: none; position: absolute; right: 0; top: 100%;
+  min-width: 160px; z-index: 50;
+  background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px;
+  padding: 4px 0;
+}
+.boat-rudder__navbar__lang.lang--open .boat-rudder__navbar__lang__menu { display: block; }
+.boat-rudder__navbar__lang__item {
+  display: block; padding: 6px 14px; color: #d4d4d4; text-decoration: none;
+  white-space: nowrap;
+}
+.boat-rudder__navbar__lang__item:hover { background: #2a2a2a; color: #fff; }
+.boat-rudder__navbar__lang__item--active { color: #56e9fd; font-weight: bold; }
+
+.boat-rudder__language { max-width: 480px; margin: 40px auto; }
+.boat-rudder__language__list { display: flex; flex-direction: column; gap: 2px; }
+.boat-rudder__language__item {
+  display: block; padding: 10px 14px; color: #d4d4d4; text-decoration: none;
+  border: 1px solid #2a2a2a; border-radius: 3px;
+}
+.boat-rudder__language__item:hover { background: #2a2a2a; color: #fff; }
+.boat-rudder__language__item--active { color: #56e9fd; font-weight: bold; }
+
+/*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
+/* RESPONSIVE */
+@media (max-width: 1200px) {
+  .boat-rudder__navbar__title_onslidelogo {
+    /* margin: 12vh auto; */
+    font-size: 5vw;
+  }
+}
+
+@media (max-width: 800px) {
+  .boat-rudder__navbar__title {
+    margin-right: 0;
+  }
+
+  .boat-rudder__navbar__title_onslidelogo {
+    font-size: 6vw;
+    margin: 10vh auto;
+  }
+
+  .boat-rudder__navbar__content {
+    justify-content: center;
+    position: initial;
+  }
+
+  .navbar__toggle {
+    display: flex;
+  }
+
+  .boat-rudder__navbar__menu {
+    display: none;
+    position: absolute;
+    top: 75px;
+    left: 0;
+    width: 100%;
+    margin-left: 0;
+    flex-direction: column;
+    background-color: #000000;
+    z-index: 999;
+  }
+
+  .boat-rudder__navbar__menu.menu--open {
+    display: flex;
+  }
+
+  .boat-rudder__navbar__menu_item {
+    text-align: center;
+    padding: 12px;
+    border-right: none;
+    border-top: 1px solid #333333;
+  }
+
+  .boat-rudder__gallery-container {
+    padding: 15px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .boat-rudder__gallery-item:nth-child(1) {
+    grid-column-start: span 1;
+  }
+  .boat-rudder__gallery-item:nth-child(4) {
+    grid-column-start: span 1;
+  }
+
+  /* Small screens: the hamburger owns the left edge and the title the centre,
+     so the selector stays right but gets tighter. */
+  .boat-rudder__navbar__options { right: 8px; }
+  .boat-rudder__navbar__lang__btn { padding: 4px 6px; font-size: 14px; }
+}
+
+@media (max-width: 768px) {
+  .boat-rudder__youtube-embed__video iframe { width: 450px; height: 253px; }
+}
+
+@media (max-width: 500px) {
+  .boat-rudder__mainbanner__top-padding {
+    padding-top: 45%;
+  }
+
+  .boat-rudder__navbar__title {
+    margin-left: 35px;
+  }
+
+  .boat-rudder__navbar__title_onslidelogo {
+    font-size: 13vw;
+    margin: 20vh auto;
+  }
+
+  .boat-rudder__youtube-embed__video iframe { width: auto; height: auto; }
+
+  .boat-rudder__navbar__lang__btn { font-size: 13px; }
+  .boat-rudder__navbar__lang__menu { min-width: 140px; }
 }

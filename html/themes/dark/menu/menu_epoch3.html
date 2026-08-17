@@ -15,6 +15,12 @@
 %s
       </div>
     </div>
+
+    <!-- Pinned to the right edge, outside __content, like the previous site's
+         options bar - it must not shift when the centred menu grows. -->
+    <div class="boat-rudder__navbar__options" id="optionsMenu">
+%s
+    </div>
   </div>
 </div>
 
@@ -66,5 +72,29 @@
   toggleBtn.addEventListener('click', () => {
     navbarMenu.classList.toggle('menu--open');
   });
+
+  // Language drop-down. Every entry is a plain link to /language/set, so this
+  // only toggles visibility - with JS off the same links live on /language.
+  const langBtn = document.getElementById('navbarLangBtn');
+  const langWrap = document.getElementById('navbarLang');
+  if (langBtn && langWrap) {
+    langBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = langWrap.classList.toggle('lang--open');
+      langBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', (e) => {
+      if (!langWrap.contains(e.target)) {
+        langWrap.classList.remove('lang--open');
+        langBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        langWrap.classList.remove('lang--open');
+        langBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
 })();
 </script>

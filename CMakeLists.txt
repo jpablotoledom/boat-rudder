@@ -54,6 +54,7 @@ set(SOURCES
     src/utils/build_epoch_response.c
     src/utils/json_utils.c
     src/utils/qr_generator/qr_generator.c
+    src/utils/request_lang.c
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
@@ -65,6 +66,7 @@ set(SOURCES
     src/modules/blog_list/blog_list.c
     src/modules/category_menu/category_menu.c
     src/modules/entry_page/entry_page.c
+    src/modules/language_page/language_page.c
     src/modules/login/login.c
     src/modules/dashboard/dashboard.c
     src/modules/error/error.c

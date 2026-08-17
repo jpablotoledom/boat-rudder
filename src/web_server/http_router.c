@@ -25,6 +25,7 @@
 #include "../modules/entry_page/entry_page.h"
 #include "../modules/error/error.h"
 #include "../modules/languages_admin/languages_admin.h"
+#include "../modules/language_page/language_page.h"
 #include "../modules/login/login.h"
 #include "../modules/media_admin/media_admin.h"
 #include "../modules/menu_admin/menu_admin.h"
@@ -35,6 +36,7 @@
 #include "../utils/build_epoch_response.h"
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
+#include "../utils/request_lang.h"
 #include "../utils/config_loader.h"
 #include "../utils/detect_epoch.h"
 #include "../utils/json_utils.h"
@@ -622,8 +624,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         char decoded_url[2048];
         url_decode(decoded_url, route);
 
+        // Resolve the request's language once, before anything renders: the
+        // menu reads it too, several layers down (see utils/request_lang.h).
+        request_lang_set(get_header_value(&req, "Cookie"));
+        request_path_set(decoded_url);
         char content_lang[16];
-        cms_resolve_default_lang(content_lang, sizeof(content_lang));
+        strncpy(content_lang, request_lang(), sizeof(content_lang) - 1);
+        content_lang[sizeof(content_lang) - 1] = '\0';
 
         char id[32];
         char block_id[32];
@@ -1050,6 +1057,43 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 build_session_clear_cookie_header(clear_cookie, sizeof(clear_cookie));
 
                 char *response = build_redirect_response("/", clear_cookie, epoch);
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (strcmp(decoded_url, "/language/set") == 0) {
+                // Stores the choice and bounces back. A plain GET on purpose:
+                // it has to work from a nav-bar link on a browser with no
+                // JavaScript and no form support to speak of.
+                int epoch = resolve_epoch(&req);
+
+                // url_parse() leaves query values percent-encoded, so "%2Fblog"
+                // has to be decoded before it can be recognised as a path.
+                char return_raw[512];
+                url_decode(return_raw, get_query_param(params, param_count, "return"));
+
+                char safe_return[512];
+                language_sanitize_return(return_raw, safe_return, sizeof(safe_return));
+
+                char code[16];
+                char extra[192] = "";
+                if (request_lang_validate(get_query_param(params, param_count, "code"),
+                                           code, sizeof(code))) {
+                    // One year: the choice should outlive the browsing session.
+                    snprintf(extra, sizeof(extra),
+                             "Set-Cookie: lang=%s; Path=/; Max-Age=31536000; SameSite=Lax\r\n",
+                             code);
+                }
+
+                char *response = build_redirect_response(safe_return, extra, epoch);
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (strcmp(decoded_url, "/language") == 0) {
+                int epoch = resolve_epoch(&req);
+                char return_raw[512];
+                url_decode(return_raw, get_query_param(params, param_count, "return"));
+                char *content = language_page(epoch, return_raw);
+                char *body    = content ? buildPageWebSite(epoch, "Language", content) : NULL;
+                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                free(body);
                 send_or_error(ctx, response, req.method, epoch);
 
             } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {

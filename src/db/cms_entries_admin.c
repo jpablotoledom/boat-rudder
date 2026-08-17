@@ -89,6 +89,7 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
     out->header_summary_values = calloc(lang_count, sizeof(char *));
     out->header_author_name    = NULL;
     out->header_date[0]        = '\0';
+    out->header_hide_author    = false;
 
     bson_iter_t iter;
     if (!bson_iter_init_find(&iter, doc, "header") || !BSON_ITER_HOLDS_DOCUMENT(&iter)) {
@@ -117,6 +118,11 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
         out->header_summary_values[i] = exact_lang_value(&header, "summary", langs[i].code);
     }
 
+    if (bson_iter_init_find(&hiter, &header, "hide_author") && BSON_ITER_HOLDS_BOOL(&hiter))
+        out->header_hide_author = bson_iter_bool(&hiter);
+
+    // The editor always shows the real author name, even when the public views
+    // hide it, so the owner stays visible to whoever is editing.
     if (bson_iter_init_find(&hiter, &header, "author_id") && BSON_ITER_HOLDS_OID(&hiter)) {
         char author_id_hex[25];
         bson_oid_to_string(bson_iter_oid(&hiter), author_id_hex);
@@ -380,6 +386,7 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
 }
 
 int cms_update_entry_header(const char *id_hex, const char *image_url, const char *date,
+                             bool hide_author,
                              const CmsLanguageItem *langs, size_t lang_count,
                              char *const *title_values, char *const *summary_values) {
     if (!bson_oid_is_valid(id_hex, strlen(id_hex))) return -1;
@@ -396,6 +403,7 @@ int cms_update_entry_header(const char *id_hex, const char *image_url, const cha
     bson_t set_doc;
     bson_append_document_begin(&update, "$set", -1, &set_doc);
     bson_append_utf8(&set_doc, "header.image_url", -1, image_url, -1);
+    bson_append_bool(&set_doc, "header.hide_author", -1, hide_author);
 
     for (size_t i = 0; i < lang_count; i++) {
         char key[40];
@@ -424,7 +432,7 @@ int cms_update_entry_header(const char *id_hex, const char *image_url, const cha
 }
 
 int cms_update_entry_content(const char *id_hex, const CmsLanguageItem *langs,
-                              size_t lang_count, const CmsContentBlockEdit *blocks,
+                              size_t lang_count, CmsContentBlockEdit *blocks,
                               size_t block_count) {
     if (!bson_oid_is_valid(id_hex, strlen(id_hex))) return -1;
 
@@ -444,10 +452,20 @@ int cms_update_entry_content(const char *id_hex, const CmsLanguageItem *langs,
 
     size_t n = 0;
     for (size_t i = 0; i < block_count; i++) {
-        if (!bson_oid_is_valid(blocks[i].id, strlen(blocks[i].id))) continue;
-
         bson_oid_t block_oid;
-        bson_oid_init_from_string(&block_oid, blocks[i].id);
+        if (blocks[i].id && bson_oid_is_valid(blocks[i].id, strlen(blocks[i].id))) {
+            bson_oid_init_from_string(&block_oid, blocks[i].id);
+        } else {
+            // Blocks written before content[]._id existed (or imported without
+            // one) reach the editor with an empty id. Mint one instead of
+            // dropping the block - skipping it here would silently erase it
+            // from the $set'd array.
+            bson_oid_init(&block_oid, NULL);
+            char new_id[25];
+            bson_oid_to_string(&block_oid, new_id);
+            free(blocks[i].id);
+            blocks[i].id = strdup(new_id);
+        }
 
         char key[16];
         snprintf(key, sizeof(key), "%zu", n++);

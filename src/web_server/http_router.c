@@ -1578,8 +1578,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     } else {
                         char image_url[1024];
                         char date[16];
+                        char hide_author_str[8];
                         parse_urlencoded_field(req.body, req.body_length, "image_url", image_url, sizeof(image_url));
                         parse_urlencoded_field(req.body, req.body_length, "date", date, sizeof(date));
+                        // Unchecked checkboxes are not submitted at all, so an
+                        // absent field means "show the author".
+                        parse_urlencoded_field(req.body, req.body_length, "hide_author",
+                                               hide_author_str, sizeof(hide_author_str));
+                        bool hide_author = (strcmp(hide_author_str, "1") == 0);
 
                         char **title_values   = calloc(lang_count, sizeof(char *));
                         char **summary_values = calloc(lang_count, sizeof(char *));
@@ -1595,7 +1601,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             summary_values[i] = strdup(value);
                         }
 
-                        if (cms_update_entry_header(id, image_url, date, langs, lang_count,
+                        if (cms_update_entry_header(id, image_url, date, hide_author, langs, lang_count,
                                                      title_values, summary_values) == 0) {
                             response = build_json_response("{\"ok\":true}");
                         } else {
@@ -1690,7 +1696,19 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                     }
                                 }
                             }
-                            response = build_json_response("{\"ok\":true}");
+                            // Hand back the (possibly freshly minted) block ids
+                            // so the editor's data-block-id attributes stay in
+                            // sync with what is now stored.
+                            size_t ids_size = 32 + (size_t)block_count * 28;
+                            char *ids_json = malloc(ids_size);
+                            size_t off = (size_t)snprintf(ids_json, ids_size, "{\"ok\":true,\"ids\":[");
+                            for (int i = 0; i < block_count; i++)
+                                off += (size_t)snprintf(ids_json + off, ids_size - off, "%s\"%s\"",
+                                                        i ? "," : "",
+                                                        blocks[i].id ? blocks[i].id : "");
+                            snprintf(ids_json + off, ids_size - off, "]}");
+                            response = build_json_response(ids_json);
+                            free(ids_json);
                         } else {
                             response = build_json_response_status("{\"ok\":false,\"error\":\"update failed\"}", "400 Bad Request");
                         }

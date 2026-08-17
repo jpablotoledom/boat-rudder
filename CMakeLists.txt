@@ -53,6 +53,7 @@ set(SOURCES
     src/utils/template_utils.c
     src/utils/build_epoch_response.c
     src/utils/json_utils.c
+    src/utils/qr_generator/qr_generator.c
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
@@ -102,12 +103,21 @@ target_include_directories(boat-rudder PRIVATE
     ${OPENSSL_INCLUDE_DIR}
 )
 
+# libqrencode: retro epochs render YouTube blocks as a scannable QR code
+# (no iframe before HTML5), so the encoder is a hard dependency. Ships no
+# pkg-config file; qrencode_minimal.h declares the two symbols we use.
+find_library(QRENCODE_LIBRARY NAMES qrencode libqrencode.so.4)
+if(NOT QRENCODE_LIBRARY)
+    message(FATAL_ERROR "libqrencode not found - install libqrencode4 (runtime) or libqrencode-dev")
+endif()
+
 target_link_libraries(boat-rudder
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
     PkgConfig::MONGOC
     PkgConfig::SODIUM
+    ${QRENCODE_LIBRARY}
 )
 
 install(TARGETS boat-rudder RUNTIME DESTINATION bin)

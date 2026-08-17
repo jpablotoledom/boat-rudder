@@ -45,8 +45,9 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
         char *thumb = image_url_variant(item->header_image_url, "_small");
         result = (link_url && thumb)
             ? render_template(item_tpl, thumb, link_url, item->header_title,
-                               item->header_summary, item->header_author, categories_html,
-                               item->header_date)
+                               item->header_summary,
+                               item->header_hide_author ? "" : item->header_author,
+                               categories_html, item->header_date)
             : NULL;
         free(thumb);
         free(link_url);

@@ -1,6 +1,7 @@
 #ifndef CMS_ENTRIES_H
 #define CMS_ENTRIES_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 // Maximum number of "entries" documents (type == "blog", enabled == true) returned by
@@ -37,6 +38,7 @@ typedef struct {
     char *header_summary;
     char *header_author;
     char  header_date[16]; // "YYYY-MM-DD", empty if absent
+    bool  header_hide_author; // header.hide_author: public views omit the byline
 
     // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
     // for the requested lang. NULL/0 if the entry has no categories.
@@ -72,6 +74,7 @@ typedef struct {
     char *header_summary;
     char *header_author;
     char  header_date[16]; // "YYYY-MM-DD", empty if absent
+    bool  header_hide_author; // header.hide_author: public views omit the byline
 
     // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
     // for the requested lang. NULL/0 if the entry has no categories.

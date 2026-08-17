@@ -345,8 +345,11 @@
     }
 
     if (window.contentEditorGalleryType === 'image-block' && window._galleryTargetBlock && selectedIds.length > 0) {
+      // Stored bare, without a size suffix: render_image() picks the variant
+      // per epoch, the same way gallery blocks work.
       var textFields = window._galleryTargetBlock.querySelectorAll('.boat-rudder__entry-editor__block__lang-content [name="text"]');
       textFields.forEach(function (f) { f.value = selectedIds[0]; });
+      if (typeof renderImagePreview === 'function') renderImagePreview(window._galleryTargetBlock);
       if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
       window._galleryTargetBlock = null;
     }

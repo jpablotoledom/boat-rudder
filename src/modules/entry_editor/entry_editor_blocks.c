@@ -5,8 +5,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-// <textarea> row count for blocks/lang-field_epoch%d.html.
-#define BLOCK_TEXT_ROWS 3
+// <textarea> row bounds for blocks/lang-field_epoch%d.html. The box opens tall
+// enough for its content - a six-item list in three rows left half of it out of
+// sight - and is capped so a long block does not push the rest of the editor
+// off screen. Past the cap the textarea scrolls, and it can be resized by hand.
+#define BLOCK_TEXT_ROWS_MIN 3
+#define BLOCK_TEXT_ROWS_MAX 20
+
+// Rows needed to show `text` without scrolling, clamped to the bounds above.
+static int text_rows(const char *text) {
+    if (!text) return BLOCK_TEXT_ROWS_MIN;
+
+    int lines = 1;
+    for (const char *p = text; *p; p++)
+        if (*p == '\n') lines++;
+
+    if (lines < BLOCK_TEXT_ROWS_MIN) return BLOCK_TEXT_ROWS_MIN;
+    if (lines > BLOCK_TEXT_ROWS_MAX) return BLOCK_TEXT_ROWS_MAX;
+    return lines;
+}
 
 static char *load_template(const char *subpath_fmt, int epoch) {
     char *path = generate_url_theme(subpath_fmt, epoch);
@@ -25,7 +42,9 @@ static char *render_lang_fields(const CmsContentBlockEdit *block,
 
     char *result = strdup("");
     for (size_t i = 0; result && i < lang_count; i++) {
-        char *field = render_template(field_tpl, langs[i].code, BLOCK_TEXT_ROWS, block->text_values[i]);
+        char *field = render_template(field_tpl, langs[i].code,
+                                       text_rows(block->text_values[i]),
+                                       block->text_values[i]);
         result = field ? str_append(result, field) : NULL;
         free(field);
     }
@@ -57,6 +76,23 @@ static char *render_extra_block(const CmsContentBlockEdit *block, const char *tp
     return result;
 }
 
+// Like render_extra_block(), but feeds extra_data before the language fields.
+// The image block shows a picture instead of its path, so the path inputs live
+// at the bottom inside the Advanced panel while the caption stays above them -
+// which reverses the order the two placeholders appear in the template.
+static char *render_image_block(const CmsContentBlockEdit *block,
+                                 const CmsLanguageItem *langs, size_t lang_count, int epoch) {
+    char *tpl = load_template("dashboard/entries/editor/blocks/image_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+
+    char *fields = render_lang_fields(block, langs, lang_count, epoch);
+    char *result = fields ? render_template(tpl, block->id, block->extra_data, fields) : NULL;
+
+    free(fields);
+    free(tpl);
+    return result;
+}
+
 char *entry_editor_render_block(const CmsContentBlockEdit *block,
                                  const CmsLanguageItem *langs, size_t lang_count, int epoch) {
     if (strcmp(block->type, "tittle") == 0)
@@ -66,8 +102,7 @@ char *entry_editor_render_block(const CmsContentBlockEdit *block,
         return render_extra_block(block, "dashboard/entries/editor/blocks/paragraph_epoch%d.html",
                                    langs, lang_count, epoch);
     if (strcmp(block->type, "image") == 0)
-        return render_extra_block(block, "dashboard/entries/editor/blocks/image_epoch%d.html",
-                                   langs, lang_count, epoch);
+        return render_image_block(block, langs, lang_count, epoch);
     if (strcmp(block->type, "byline") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/byline_epoch%d.html",
                                    langs, lang_count, epoch);

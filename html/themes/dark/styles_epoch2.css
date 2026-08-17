@@ -196,3 +196,33 @@ a:link, a:visited {
   color: #56e9fd;
   font-weight: bold;
 }
+
+/* Content blocks rendered only in retro epochs (ported from the old site) */
+.boat-rudder__image-paragraph {
+  margin-right: 20px;
+  margin-bottom: 20px;
+}
+.boat-rudder__youtube-qr {
+  text-align: center;
+}
+
+/* Paragraph variants (see the epoch 3 sheet for the rationale) */
+.boat-rudder__paragraph--lead {
+  font-size: 18px;
+}
+.boat-rudder__paragraph--note {
+  font-size: 20px;
+  color: burlywood;
+}
+
+/* Image block size and alignment (see the epoch 3 sheet for the rationale) */
+.br-entry-image--w100 { width: 100%; }
+.br-entry-image--w50  { width: 50%; }
+.br-entry-image--w30  { width: 30%; }
+
+.br-entry-image--left   { margin-left: 0; margin-right: auto; text-align: left; }
+.br-entry-image--center { margin-left: auto; margin-right: auto; text-align: center; }
+.br-entry-image--right  { margin-left: auto; margin-right: 0; text-align: right; }
+.br-entry-image--w100 img,
+.br-entry-image--w50 img,
+.br-entry-image--w30 img { width: 100%; }

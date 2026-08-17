@@ -193,6 +193,7 @@
     if (type === 'paragraph') initParagraphEditors(block);
     if (type === 'tittle') initBlockHeadingBtns(block);
     if (type === 'gallery') initGalleryBlock(block);
+    if (type === 'image') initImageBlock(block);
     if (type === 'link') initLinkBlock(block);
     if (type === 'list') initListBlock(block);
     if (type === 'youtube-embed') initYouTubeBlock(block);
@@ -228,7 +229,12 @@
       preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__paragraph">' + (text || '<span class="boat-rudder__entry-editor__preview__empty">Empty paragraph</span>') + '</div>';
     } else if (type === 'image') {
       if (text) {
-        preview.innerHTML = '<figure class="boat-rudder__entry-editor__preview__image"><img src="' + escapeHtml(text) + '" alt="' + escapeHtml(extra) + '"><figcaption>' + escapeHtml(extra) + '</figcaption></figure>';
+        // The stored path has no size suffix; only the generated variants exist
+        // on disk, so the preview asks for the thumbnail like galleries do.
+        var imgThumb = text.trim().replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+        // extra_data is "caption|width|align": only the first field is text.
+        var imgCaption = extra.split('|')[0];
+        preview.innerHTML = '<figure class="boat-rudder__entry-editor__preview__image"><img src="' + escapeHtml(imgThumb) + '" alt="' + escapeHtml(imgCaption) + '"><figcaption>' + escapeHtml(imgCaption) + '</figcaption></figure>';
       } else {
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">No image URL</span>';
       }
@@ -523,6 +529,10 @@
     var params = new URLSearchParams();
     params.set('image_url', sidebar.querySelector('[name="image_url"]').value);
     params.set('date', sidebar.querySelector('[name="date"]').value);
+    // Sent explicitly as 1/0: an unchecked checkbox submits nothing on its own,
+    // so the server could not tell "unchecked" from "field absent".
+    var hideAuthor = sidebar.querySelector('[name="hide_author"]');
+    params.set('hide_author', hideAuthor && hideAuthor.checked ? '1' : '0');
     for (var i = 0; i < langs.length; i++) {
       var code = langs[i];
       var panel = sidebar.querySelector('.boat-rudder__entry-editor__block__lang-content[data-lang="' + code + '"]');
@@ -555,6 +565,13 @@
       }
     }
     return postForm(apiUrl('/content'), params).then(function (data) {
+      // Blocks stored before content[]._id existed come back with a server-minted
+      // id; adopt it so per-block delete and gallery edits target the right block.
+      if (data.ok && data.ids) {
+        for (var k = 0; k < blocks.length && k < data.ids.length; k++) {
+          if (data.ids[k]) blocks[k].dataset.blockId = data.ids[k];
+        }
+      }
       setStatus(data.ok ? 'Content saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
       return data;
     });
@@ -854,6 +871,71 @@
     var block = input.closest('.boat-rudder__entry-editor__block');
     if (!block) return;
     syncSocialExtraData(block);
+    setContentChanged();
+  };
+
+  /* ---- Image block ---- */
+  // Opening a block hides its preview and shows the body, so the body needs its
+  // own picture: otherwise editing an image would show only the path textareas.
+  window.renderImagePreview = function (block) {
+    var container = block.querySelector('.boat-rudder__entry-editor__image-preview');
+    if (!container) return;
+    var panel = block.querySelector('.boat-rudder__entry-editor__block__lang-content[data-lang="' + currentLang + '"]');
+    var field = panel ? panel.querySelector('[name="text"]') : null;
+    var url = field && field.value ? field.value.trim() : '';
+
+    container.innerHTML = '';
+    if (!url) {
+      container.innerHTML = '<span class="boat-rudder__entry-editor__gallery-empty">No image selected</span>';
+      return;
+    }
+    var img = document.createElement('img');
+    // Paths are stored bare; only the generated variants exist on disk.
+    img.src = url.replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+    img.className = 'boat-rudder__entry-editor__image-thumb';
+    img.alt = '';
+
+    // Mirror the chosen size and alignment so the controls show their effect.
+    var opts = (block.querySelector('[name="extra_data"]') || {}).value || '';
+    var parts = opts.split('|');
+    var width = ['100', '50', '30'].indexOf(parts[1]) >= 0 ? parts[1] : '100';
+    var align = ['left', 'center', 'right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
+    img.style.width = width + '%';
+    container.style.justifyContent =
+      align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+
+    container.appendChild(img);
+  };
+
+  // extra_data packs "caption|width|align"; the three controls read from and
+  // write back to that single hidden field. A value with no '|' is all caption,
+  // which is how blocks written before these options look.
+  function initImageBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var parts = hidden ? hidden.value.split('|') : [];
+    var caption = block.querySelector('.boat-rudder__entry-editor__image-caption');
+    var size = block.querySelector('.boat-rudder__entry-editor__image-size');
+    var align = block.querySelector('.boat-rudder__entry-editor__image-align');
+    if (caption) caption.value = parts[0] || '';
+    if (size) size.value = ['100', '50', '30'].indexOf(parts[1]) >= 0 ? parts[1] : '100';
+    if (align) align.value = ['left', 'center', 'right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
+    renderImagePreview(block);
+  }
+
+  window.syncImageOptions = function (el) {
+    var block = el.closest('.boat-rudder__entry-editor__block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    var caption = block.querySelector('.boat-rudder__entry-editor__image-caption');
+    var size = block.querySelector('.boat-rudder__entry-editor__image-size');
+    var align = block.querySelector('.boat-rudder__entry-editor__image-align');
+    if (hidden) {
+      hidden.value = (caption ? caption.value : '') + '|' +
+                     (size ? size.value : '100') + '|' +
+                     (align ? align.value : 'center');
+    }
+    renderImagePreview(block);
+    refreshBlockPreview(block);
     setContentChanged();
   };
 

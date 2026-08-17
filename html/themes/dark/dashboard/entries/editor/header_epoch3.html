@@ -18,6 +18,10 @@
       <div class="boat-rudder__entry-editor__meta-group">
         <label>Author</label>
         <span class="boat-rudder__entry-editor__meta-readonly">%s</span>
+        <label class="boat-rudder__entry-editor__meta-check">
+          <input name="hide_author" id="headerHideAuthor" type="checkbox" %s onchange="setContentChanged()">
+          Hide author on the public page
+        </label>
       </div>
 
       <div id="headerLangPanels">

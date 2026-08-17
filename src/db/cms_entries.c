@@ -16,8 +16,9 @@
 // malloc'd ("" on absence); date is "YYYY-MM-DD" or "" if absent.
 static void resolve_header_fields(const bson_t *doc, const char *lang,
                                    char **image_url, char **title, char **summary,
-                                   char **author, char date[16]) {
+                                   char **author, char date[16], bool *hide_author) {
     bson_iter_t iter;
+    *hide_author = false;
 
     if (!bson_iter_init_find(&iter, doc, "header") || !BSON_ITER_HOLDS_DOCUMENT(&iter)) {
         *image_url = strdup("");
@@ -42,6 +43,13 @@ static void resolve_header_fields(const bson_t *doc, const char *lang,
     *title   = resolve_lang_map(&header, "title", lang);
     *summary = resolve_lang_map(&header, "summary", lang);
 
+    // header.hide_author lets a page opt out of showing a byline (pages like
+    // "Projects" are not authored articles). The name is still resolved so the
+    // dashboard listing can show who owns the entry; only public surfaces
+    // honour the flag.
+    if (bson_iter_init_find(&hiter, &header, "hide_author") && BSON_ITER_HOLDS_BOOL(&hiter))
+        *hide_author = bson_iter_bool(&hiter);
+
     if (bson_iter_init_find(&hiter, &header, "author_id") && BSON_ITER_HOLDS_OID(&hiter)) {
         char author_id_hex[25];
         bson_oid_to_string(bson_iter_oid(&hiter), author_id_hex);
@@ -61,7 +69,8 @@ static void resolve_header_fields(const bson_t *doc, const char *lang,
 
 static void parse_header(const bson_t *doc, const char *lang, CmsEntry *out) {
     resolve_header_fields(doc, lang, &out->header_image_url, &out->header_title,
-                           &out->header_summary, &out->header_author, out->header_date);
+                           &out->header_summary, &out->header_author, out->header_date,
+                           &out->header_hide_author);
 }
 
 // Resolves doc.categories[] (ObjectId[]) to entry_categories.name (resolved to
@@ -304,7 +313,8 @@ static void populate_entry_list_item(const bson_t *doc, const char *lang, CmsBlo
         ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
 
     resolve_header_fields(doc, lang, &item->header_image_url, &item->header_title,
-                           &item->header_summary, &item->header_author, item->header_date);
+                           &item->header_summary, &item->header_author, item->header_date,
+                           &item->header_hide_author);
     resolve_category_names(doc, lang, &item->category_names, &item->category_links, &item->category_count);
 }
 

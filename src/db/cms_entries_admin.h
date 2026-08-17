@@ -34,6 +34,7 @@ typedef struct {
     char  **header_summary_values; // parallel to langs[], exact header.summary.<lang>
     char   *header_author_name;    // display name from users collection (via header.author_id)
     char    header_date[16];       // "YYYY-MM-DD", "" if absent
+    bool    header_hide_author;    // header.hide_author: public views omit the byline
 
     CmsContentBlockEdit *content; // sorted by order
     size_t content_count;
@@ -67,23 +68,27 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
                            bool enabled, char *const *category_ids, size_t category_count);
 
 // db.entries.updateOne({_id: id_hex}, {$set: {
-//   "header.image_url": image_url,
+//   "header.image_url": image_url, "header.hide_author": hide_author,
 //   "header.title.<lang>": title_values[i], "header.summary.<lang>": summary_values[i]
 //   for each langs[i], "header.date": <date as BSON UTC datetime> (only if date != "")
-// }}). `date` is "YYYY-MM-DD" or "" (leaves header.date untouched). Returns 0 on
-// success, -1 if id_hex is invalid, on a DB error, or if mongodb is not ready.
+// }}). `date` is "YYYY-MM-DD" or "" (leaves header.date untouched).
+// `hide_author` keeps the entry's author_id but stops public views from showing
+// the byline - for pages that are not authored articles. Returns 0 on success,
+// -1 if id_hex is invalid, on a DB error, or if mongodb is not ready.
 int cms_update_entry_header(const char *id_hex, const char *image_url, const char *date,
+                             bool hide_author,
                              const CmsLanguageItem *langs, size_t lang_count,
                              char *const *title_values, char *const *summary_values);
 
 // db.entries.updateOne({_id: id_hex}, {$set: {content: [...]}}) - full array
-// replace, sourced from blocks[0..block_count). Every blocks[i].id must already
-// be a valid 24-char hex id (new blocks are created individually via
-// cms_add_entry_content_block() before this is ever called); blocks with an
-// invalid id are skipped. Returns 0 on success, -1 if id_hex is invalid, on a
-// DB error, or if mongodb is not ready.
+// replace, sourced from blocks[0..block_count). Blocks normally arrive with a
+// valid 24-char hex id (new ones are created individually via
+// cms_add_entry_content_block()), but a block whose id is empty or invalid is
+// *not* dropped: it is minted a fresh ObjectId, and blocks[i].id is replaced
+// with that hex id so the caller can hand it back to the editor. Returns 0 on
+// success, -1 if id_hex is invalid, on a DB error, or if mongodb is not ready.
 int cms_update_entry_content(const char *id_hex, const CmsLanguageItem *langs,
-                              size_t lang_count, const CmsContentBlockEdit *blocks,
+                              size_t lang_count, CmsContentBlockEdit *blocks,
                               size_t block_count);
 
 // db.entries.updateOne({_id: id_hex},

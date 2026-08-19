@@ -384,7 +384,6 @@ h2 {
 .boat-rudder__home-blog {
   width: 100%;
   display: flex;
-  /* background-image: url('/themes/dark/assets/home-blog/matrix-grid_epoch3.gif'); */
   background-image: url('/themes/dark/assets/home-content/matrix-grid_epoch3.gif');
   background-repeat: repeat-y;
   background-size: contain;

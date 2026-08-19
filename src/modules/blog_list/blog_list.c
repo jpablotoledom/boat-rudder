@@ -1,5 +1,6 @@
 #include "blog_list.h"
 #include "../../db/cms_entries.h"
+#include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
@@ -24,7 +25,7 @@ static char *render_item_categories(const CmsBlogListItem *item, int epoch) {
 
     char *result = strdup("");
     for (size_t i = 0; result && i < item->category_count; i++) {
-        char *tag = (epoch >= 3)
+        char *tag = (epoch >= EPOCH_MIDDLE)
             ? render_template(item_tpl, item->category_links[i], item->category_names[i])
             : render_template(item_tpl, item->category_names[i]);
         result = tag ? str_append(result, tag) : NULL;

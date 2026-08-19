@@ -248,7 +248,7 @@ static char *render_categories(const CmsEntry *entry, int epoch) {
 
     char *items = strdup("");
     for (size_t i = 0; items && i < entry->category_count; i++) {
-        char *item = (epoch >= 3)
+        char *item = (epoch >= EPOCH_MIDDLE)
             ? render_template(item_tpl, entry->category_links[i], entry->category_names[i])
             : render_template(item_tpl, entry->category_names[i]);
         items = str_append(items, item);

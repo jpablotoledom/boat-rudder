@@ -1,4 +1,5 @@
 #include "orchestrator.h"
+#include "../utils/detect_epoch.h"
 #include "../modules/container/container.h"
 #include "../modules/home_blog/home_blog.h"
 #include "../modules/home_content/home_content.h"
@@ -95,7 +96,10 @@ static char *build_blog_page_internal(const char *tpl_fmt, int epoch,
 
 char *buildBlogListWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
                                  const char *current_url, char *category_menu_html) {
-    const char *tpl = (epoch == 3) ? "page/page-blog_epoch%d.html" : "page/page_epoch%d.html";
+    // Epochs 2-3 have a full-width listing wrapper; older ones fall back to the
+    // generic page shell, which is all their layout supports.
+    const char *tpl = (epoch >= EPOCH_MIDDLE) ? "page/page-blog_epoch%d.html"
+                                              : "page/page_epoch%d.html";
     return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url, category_menu_html);
 }
 

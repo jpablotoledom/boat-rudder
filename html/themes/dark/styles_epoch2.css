@@ -30,6 +30,14 @@ a:link, a:visited {
   text-align: center;
 }
 
+.br-menu__item a {
+  color: #ffffff;
+}
+
+.br-menu__item--selected a {
+  color: #56e9fd;
+}
+
 .br-menu__separator {
   width: 1px;
   background-color: #ffffff;
@@ -66,6 +74,7 @@ a:link, a:visited {
 
 .br-home-blog {
   padding: 20px;
+    background-image: url('/themes/dark/assets/home-content/matrix-grid_epoch3.gif');
 }
 
 .boat-rudder__home-blog__item {

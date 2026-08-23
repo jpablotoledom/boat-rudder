@@ -1,4 +1,5 @@
 #include "entries_admin.h"
+#include "../../utils/category_tags.h"
 #include "../../db/cms_entries.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
@@ -19,30 +20,9 @@ static const char *type_label(const char *type) {
     return type;
 }
 
-// Renders item->category_names as concatenated category tags (see
-// blog_list.c's render_item_categories()). Returns "" if the item has no
-// categories.
-static char *render_categories(const CmsBlogListItem *item, int epoch) {
-    if (item->category_count == 0) return strdup("");
-
-    char *item_tpl = load_template("elements/category/category_epoch%d.html", epoch);
-    if (!item_tpl) return strdup("");
-
-    char *result = strdup("");
-    for (size_t i = 0; result && i < item->category_count; i++) {
-        char *tag = (epoch >= 3)
-            ? render_template(item_tpl, item->category_links[i], item->category_names[i])
-            : render_template(item_tpl, item->category_names[i]);
-        result = tag ? str_append(result, tag) : NULL;
-        free(tag);
-    }
-
-    free(item_tpl);
-    return result;
-}
-
 static char *render_row(const CmsBlogListItem *item, const char *row_tpl, int epoch) {
-    char *categories = render_categories(item, epoch);
+    char *categories = category_tags_render(item->category_links, item->category_names,
+                                             item->category_count, epoch);
     if (!categories) return NULL;
 
     const char *link_prefix = strcmp(item->type, "blog") == 0 ? "blog" : "page";

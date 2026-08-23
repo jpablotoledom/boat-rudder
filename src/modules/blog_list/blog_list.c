@@ -1,4 +1,5 @@
 #include "blog_list.h"
+#include "../../utils/category_tags.h"
 #include "../../db/cms_entries.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
@@ -14,30 +15,9 @@ static char *load_template(const char *subpath_fmt, int epoch) {
     return tpl;
 }
 
-// Renders item->category_names as concatenated category tags, without the
-// entry-categories wrapper - the placeholder already sits inside the item's
-// own byline container. Returns "" if the item has no categories.
-static char *render_item_categories(const CmsBlogListItem *item, int epoch) {
-    if (item->category_count == 0) return strdup("");
-
-    char *item_tpl = load_template("elements/category/category_epoch%d.html", epoch);
-    if (!item_tpl) return strdup("");
-
-    char *result = strdup("");
-    for (size_t i = 0; result && i < item->category_count; i++) {
-        char *tag = (epoch >= EPOCH_MIDDLE)
-            ? render_template(item_tpl, item->category_links[i], item->category_names[i])
-            : render_template(item_tpl, item->category_names[i]);
-        result = tag ? str_append(result, tag) : NULL;
-        free(tag);
-    }
-
-    free(item_tpl);
-    return result;
-}
-
 static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int epoch) {
-    char *categories_html = render_item_categories(item, epoch);
+    char *categories_html = category_tags_render(item->category_links, item->category_names,
+                                                  item->category_count, epoch);
     if (!categories_html) return NULL;
 
     char *result;
@@ -61,9 +41,12 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
     return result;
 }
 
-static char *blog_list_internal(int epoch, const char *lang, const char *category_id_hex) {
+// The one implementation. `heading` is printed above the list; `limit` caps
+// the query; `category_id_hex` filters it when non-NULL.
+static char *render_list(int epoch, const char *lang, const char *heading,
+                          int limit, const char *category_id_hex) {
     char *item_path    = generate_url_theme("home-blog/home-blog-item_epoch%d.html", epoch);
-    char *content_path = generate_url_theme("blog-list/blog-list_epoch%d.html", epoch);
+    char *content_path = generate_url_theme("home-blog/home-blog_epoch%d.html", epoch);
 
     char *item_tpl    = item_path    ? read_file_to_string(item_path)    : NULL;
     char *content_tpl = content_path ? read_file_to_string(content_path) : NULL;
@@ -80,12 +63,12 @@ static char *blog_list_internal(int epoch, const char *lang, const char *categor
     if (!item_tpl || !content_tpl) goto cleanup;
 
     if (category_id_hex)
-        cms_get_blog_entries_by_category(lang, BLOG_LIST_LIMIT, category_id_hex, &entries, &entry_count);
+        cms_get_blog_entries_by_category(lang, limit, category_id_hex, &entries, &entry_count);
     else
-        cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &entries, &entry_count);
+        cms_get_blog_entries(lang, limit, &entries, &entry_count);
 
     if (entry_count == 0) {
-        items = load_template("blog-list/empty_epoch%d.html", epoch);
+        items = load_template("home-blog/empty_epoch%d.html", epoch);
     } else {
         items = strdup("");
         for (size_t i = 0; items && i < entry_count; i++) {
@@ -95,7 +78,7 @@ static char *blog_list_internal(int epoch, const char *lang, const char *categor
         }
     }
 
-    if (items) result = render_template(content_tpl, items);
+    if (items) result = render_template(content_tpl, heading, items);
 
 cleanup:
     cms_blog_list_free(entries, entry_count);
@@ -105,10 +88,14 @@ cleanup:
     return result;
 }
 
+char *home_blog(int epoch, const char *lang) {
+    return render_list(epoch, lang, "Latest Blog Posts", HOME_BLOG_LIMIT, NULL);
+}
+
 char *blog_list(int epoch, const char *lang) {
-    return blog_list_internal(epoch, lang, NULL);
+    return render_list(epoch, lang, "Blog", BLOG_LIST_LIMIT, NULL);
 }
 
 char *blog_list_category(int epoch, const char *lang, const char *category_id_hex) {
-    return blog_list_internal(epoch, lang, category_id_hex);
+    return render_list(epoch, lang, "Blog", BLOG_LIST_LIMIT, category_id_hex);
 }

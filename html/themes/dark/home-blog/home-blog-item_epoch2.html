@@ -1,32 +1,49 @@
 <tr>
   <td>
-    <table class="boat-rudder__home-blog__item" border="1" bordercolor="#7b0a74" cellspacing="0" cellpadding="10" bgcolor="#101010" width="100%">
+    <table class="boat-rudder__home-blog__item" border="0" cellspacing="0" cellpadding="0" width="100%%">
       <tr>
-        <td class="boat-rudder__home-blog__item__image" valign="top" width="100%">
-          <table width="100%">
+        <td>
+          <table border="1" bordercolor="#7b0a74" cellspacing="0" cellpadding="10" width="100%%" background="/themes/dark/assets/home-content/background-blog-list-xl.gif">
             <tr>
-              <td>
-                <a href="%2$s">
-                  <img src="%1$s" alt="" width="180" border="0" align="left" hspace="5" vspace="5">
-                </a>
-
-                <a href="%2$s">
-                  <h2><font face="Arial, Helvetica">%3$s</font></h2>
-                </a>
-
-                <p><font face="Arial, Helvetica">%4$s</font></p>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <table class="boat-rudder__home-blog__item__container" width="100%%">
+              <td class="boat-rudder__home-blog__item__image" valign="top">
+                <table width="100%%" border="0" cellspacing="0" cellpadding="0">
                   <tr>
-                    <td align="left"><font face="Arial, Helvetica" color="#8fc2ba">%5$s</font></td>
-                    <td align="center"><font face="Arial, Helvetica" color="#888888">%6$s</font></td>
-                    <td align="right"><font face="Arial, Helvetica" color="#fba8f6">%7$s</font></td>
+                    <!-- Thumbnail and text sit in two cells, not an align="left"
+                         float: Netscape 4 does not keep a float inside its cell,
+                         so it escaped into the byline row below and printed the
+                         author across the picture. -->
+                    <td valign="top" width="190">
+                      <a href="%2$s">
+                        <img src="%1$s" alt="" width="180" border="0" hspace="5" vspace="5">
+                      </a>
+                    </td>
+                    <td valign="top">
+                      <a href="%2$s">
+                        <h2><font face="Arial, Helvetica">%3$s</font></h2>
+                      </a>
+
+                      <p><font face="Arial, Helvetica">%4$s</font></p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2">
+                      <table class="boat-rudder__home-blog__item__container" width="100%%" border="0" cellspacing="0" cellpadding="0">
+                        <tr><td height="10"></td></tr>
+                        <tr>
+                          <td align="left"><font face="Arial, Helvetica" color="#8fc2ba">%5$s</font></td>
+                          <td align="center"><font face="Arial, Helvetica" color="#888888">%6$s</font></td>
+                          <td align="right"><font face="Arial, Helvetica" color="#fba8f6">%7$s</font></td>
+                        </tr>
+                      </table>
+                    </td>
                   </tr>
                 </table>
               </td>
+            </tr>
+          </table>
+          <table>
+            <tr>
+              <td height="20"></td>
             </tr>
           </table>
         </td>

@@ -1,4 +1,6 @@
 #include "entry_page.h"
+#include "../../utils/category_tags.h"
+#include "../../utils/image_size.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/qr_generator/qr_generator.h"
@@ -7,6 +9,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// Widest an image may be drawn on the retro epochs, in pixels.
+//
+// Their browsers ran on 640x480 screens, and there is no reflow to rescue a
+// layout that overshoots: the page simply grows a horizontal scrollbar and the
+// text runs off the right edge. The budget at 640 is roughly 620 usable once
+// the vertical scrollbar is taken out, 95% of that for the content table, less
+// its 10px cellpadding on each side and the image's own 5px hspace - about
+// 560. Capping a little under that keeps a full-width image inside the column.
+#define RETRO_MAX_IMAGE_WIDTH 550
 
 // Where generated QR assets are written. Matches generate_url_theme(), which
 // likewise resolves templates against "./html" from the process working dir.
@@ -133,11 +145,13 @@ static char *render_byline(const CmsContentBlock *block, int epoch) {
 static char *image_for_epoch(const char *url, int epoch) {
     if (!url || !url[0]) return strdup("");
 
-    const char *suffix = (epoch >= EPOCH_MODERN) ? "_full"
-                       : (epoch == EPOCH_MIDDLE) ? "_half"
-                                                 : "_medium";
+    const char *suffix = (epoch >= EPOCH_MODERN) ? "_full" : "_medium";
     char *variant = image_url_variant(url, suffix);
-    if (variant && epoch == EPOCH_EARLY) {
+
+    // image-optimizer.sh writes _medium and _micro as GIF (only _full/_half/
+    // _small stay JPEG), so the extension has to follow the variant or the
+    // file is a 404.
+    if (variant && epoch < EPOCH_MODERN) {
         char *dot = strrchr(variant, '.');
         if (dot) strcpy(dot, ".gif");
     }
@@ -197,10 +211,14 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
     }
 
     char *src = image_for_epoch(block->text, epoch);
-    // Clicking the image opens it at full size: epoch 3 hands it to the same
+    // Clicking the image opens a bigger copy: epoch 3 hands it to the same
     // lightbox the galleries use, older epochs just link to the file, since
     // that viewer needs a media_galleries id an image block has no room for.
-    char *full = image_url_variant(block->text, "_full");
+    // They get `_half` (capped at 1024px) rather than the original: a machine
+    // of that era has neither the memory nor the link for a full-resolution
+    // photo, and 1024 already exceeds anything it can display.
+    const char *open_suffix = (epoch >= EPOCH_MODERN) ? "_full" : "_half";
+    char *full = image_url_variant(block->text, open_suffix);
     if (!src || !full) {
         free(src);
         free(full);
@@ -208,23 +226,37 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
         return NULL;
     }
 
-    if (epoch == EPOCH_EARLY) {
-        // No CSS this far back: size and alignment go in HTML attributes.
-        char width_attr[16];
-        snprintf(width_attr, sizeof(width_attr), "%s%%", o.width);
+    if (epoch < EPOCH_MODERN) {
+        // Netscape 4 and IE 5 apply stylesheets only in part - `margin: auto`
+        // on a block is exactly the sort of thing they get wrong - so size and
+        // alignment travel as HTML attributes instead: align on the cell,
+        // width on the image. Epoch 1 lays it out with <p align>, epoch 2 with
+        // a table.
+        //
+        // The width has to be in pixels. Percentages on <img width> came with
+        // HTML 4.0, and a browser of this era meeting one draws the image zero
+        // pixels wide - it loads, it just cannot be seen. So the author's
+        // 100/50/30 is resolved against the real width of the file being
+        // served. If that width cannot be read the attribute is dropped and
+        // the image comes out at its natural size, which beats not at all.
+        char width_attr[32] = "";
+        int intrinsic = image_intrinsic_width(src);
+        int percent = atoi(o.width);
+        if (intrinsic > 0 && percent > 0) {
+            int px = intrinsic * percent / 100;
+            if (px > RETRO_MAX_IMAGE_WIDTH) px = RETRO_MAX_IMAGE_WIDTH;
+            if (px < 1) px = 1;
+            // Only the width is emitted, never the height, so the browser
+            // scales the other axis and the picture keeps its proportions.
+            snprintf(width_attr, sizeof(width_attr), "width=\"%d\"", px);
+        }
         result = render_template(tpl, o.align, full, src, width_attr, o.caption, o.caption);
     } else {
-        // Each epoch's stylesheet names the block differently, so the modifier
-        // classes have to match the base class used by that epoch's template.
-        const char *base = (epoch >= EPOCH_MODERN) ? "boat-rudder__entry-image"
-                                                   : "br-entry-image";
         char mods[128];
-        snprintf(mods, sizeof(mods), " %s--w%s %s--%s", base, o.width, base, o.align);
-        // Epoch 3 puts the full-size URL in data-full for the lightbox;
-        // epoch 2 wraps the image in a plain link to it.
-        result = (epoch >= EPOCH_MODERN)
-            ? render_template(tpl, mods, src, full, o.caption, o.caption)
-            : render_template(tpl, mods, full, src, o.caption, o.caption);
+        snprintf(mods, sizeof(mods), " boat-rudder__entry-image--w%s boat-rudder__entry-image--%s",
+                 o.width, o.align);
+        // The full-size URL rides along in data-full for the lightbox.
+        result = render_template(tpl, mods, src, full, o.caption, o.caption);
     }
 
     free(src);
@@ -238,28 +270,35 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
 static char *render_categories(const CmsEntry *entry, int epoch) {
     if (entry->category_count == 0) return strdup("");
 
-    char *item_tpl = load_template("elements/category/category_epoch%d.html", epoch);
     char *wrap_tpl = load_template("entry/entry-categories_epoch%d.html", epoch);
-    if (!item_tpl || !wrap_tpl) {
-        free(item_tpl);
-        free(wrap_tpl);
-        return strdup("");
-    }
+    if (!wrap_tpl) return strdup("");
 
-    char *items = strdup("");
-    for (size_t i = 0; items && i < entry->category_count; i++) {
-        char *item = (epoch >= EPOCH_MIDDLE)
-            ? render_template(item_tpl, entry->category_links[i], entry->category_names[i])
-            : render_template(item_tpl, entry->category_names[i]);
-        items = str_append(items, item);
-        free(item);
-    }
-
+    char *items = category_tags_render(entry->category_links, entry->category_names,
+                                        entry->category_count, epoch);
     char *result = items ? render_template(wrap_tpl, items) : NULL;
+
     free(items);
-    free(item_tpl);
     free(wrap_tpl);
     return result;
+}
+
+// One shape for every epoch: a container holding rows, each row holding items.
+// Epochs that have no notion of a row - WML, text, and the epoch-3 grid - use a
+// row template that is just its contents, so the loop below never branches.
+// `per_row` is how many items a row holds before it is closed; 0 means one row.
+static int gallery_columns(int epoch) {
+    return (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) ? 3 : 0;
+}
+
+// Thumbnail variant for the inline gallery. Epoch 1 predates progressive JPEG,
+// so it gets the GIF the optimizer writes.
+static char *gallery_thumb(const char *url, int epoch) {
+    if (epoch == EPOCH_EARLY) {
+        char *t = image_url_variant(url, "_micro");
+        if (t) { char *dot = strrchr(t, '.'); if (dot) strcpy(dot, ".gif"); }
+        return t;
+    }
+    return image_url_variant(url, "_small");
 }
 
 static char *render_gallery(const CmsContentBlock *block, int epoch) {
@@ -268,142 +307,111 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
     const char *gallery_id = (block->extra_data && strlen(block->extra_data) == 24)
                               ? block->extra_data : NULL;
 
-    if (epoch <= 0) {
-        if (gallery_id) {
-            char *tpl = load_template("elements/gallery/gallery-link_epoch%d.html", epoch);
-            if (!tpl) return strdup("");
-            char *result = render_template(tpl, gallery_id);
-            free(tpl);
-            return result ? result : strdup("");
-        }
-        int count = 1;
-        for (const char *p = block->text; *p; p++) if (*p == ';') count++;
-        char *tpl = load_template("elements/gallery/gallery-nolink_epoch%d.html", epoch);
-        if (!tpl) return strdup("");
-        char *result = render_template(tpl, count);
-        free(tpl);
-        return result ? result : strdup("");
-    }
-
-    if (epoch >= 3) {
-        char *container_tpl = load_template("elements/gallery/gallery-container_epoch%d.html", epoch);
-        char *item_tpl      = load_template("elements/gallery/gallery-item_epoch%d.html", epoch);
-        char *more_tpl      = load_template("elements/gallery/gallery-item-more_epoch%d.html", epoch);
-        char *hidden_tpl    = load_template("elements/gallery/gallery-item-hidden_epoch%d.html", epoch);
-        if (!container_tpl || !item_tpl) {
-            free(container_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
-            return strdup("");
-        }
-
-        int total = 0;
-        for (const char *p = block->text; *p; p++) if (*p == ';') total++;
-        total++;
-
-        char **urls = calloc(total, sizeof(char *));
-        char *copy = strdup(block->text);
-        char *saveptr = NULL;
-        int count = 0;
-        for (char *tok = strtok_r(copy, ";", &saveptr); tok && count < total; tok = strtok_r(NULL, ";", &saveptr)) {
-            while (*tok == ' ') tok++;
-            if (*tok) urls[count++] = strdup(tok);
-        }
-        free(copy);
-
-        int max_visible = (count <= 5) ? count : 5;
-        int remaining = count - max_visible;
-
-        char *items_html = strdup("");
-        for (int i = 0; i < count && items_html; i++) {
-            char *thumb = image_url_variant(urls[i], "_small");
-            char *full  = image_url_variant(urls[i], "_full");
-
-            if (i < max_visible - 1 || remaining == 0) {
-                char *item = (thumb && full) ? render_template(item_tpl, thumb, full) : NULL;
-                if (item) items_html = str_append(items_html, item);
-                free(item);
-            } else if (i == max_visible - 1 && remaining > 0 && more_tpl) {
-                char *item = render_template(more_tpl, thumb, full, remaining + 1);
-                if (item) items_html = str_append(items_html, item);
-                free(item);
-            } else if (hidden_tpl) {
-                char *item = render_template(hidden_tpl, thumb ? thumb : "", full ? full : "");
-                if (item) items_html = str_append(items_html, item);
-                free(item);
-            }
-            free(thumb);
-            free(full);
-        }
-
-        for (int i = 0; i < count; i++) free(urls[i]);
-        free(urls);
-
-        char *result = items_html ? render_template(container_tpl, items_html) : NULL;
-        free(items_html);
-        free(container_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
-        return result ? result : strdup("");
-    }
-
-    // Epochs 1-2: table layout with links to /gallery/<id>?img=N
-    char *wrap_tpl      = load_template("elements/gallery/gallery_epoch%d.html", epoch);
-    char *row_start_tpl = load_template("elements/gallery/gallery-row-start_epoch%d.html", epoch);
-    char *row_end_tpl   = load_template("elements/gallery/gallery-row-end_epoch%d.html", epoch);
-    char *cell_tpl      = gallery_id
-        ? load_template("elements/gallery/gallery-cell_epoch%d.html", epoch)
-        : load_template("elements/gallery/gallery-cell-nolink_epoch%d.html", epoch);
-    if (!wrap_tpl || !row_start_tpl || !row_end_tpl || !cell_tpl) {
-        free(wrap_tpl); free(row_start_tpl); free(row_end_tpl); free(cell_tpl);
+    char *wrap_tpl   = load_template("elements/gallery/gallery_epoch%d.html", epoch);
+    char *row_tpl    = load_template("elements/gallery/gallery-row_epoch%d.html", epoch);
+    char *item_tpl   = load_template("elements/gallery/gallery-item_epoch%d.html", epoch);
+    char *more_tpl   = load_template("elements/gallery/gallery-item-more_epoch%d.html", epoch);
+    char *hidden_tpl = load_template("elements/gallery/gallery-item-hidden_epoch%d.html", epoch);
+    if (!wrap_tpl || !row_tpl || !item_tpl) {
+        free(wrap_tpl); free(row_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
         return strdup("");
     }
 
-    char *rows_html = strdup("");
+    // Split the semicolon-separated list of image paths.
+    int total = 1;
+    for (const char *p = block->text; *p; p++) if (*p == ';') total++;
+    char **urls = calloc((size_t)total, sizeof(char *));
     char *copy = strdup(block->text);
-    char *saveptr = NULL;
-    char *tok = strtok_r(copy, ";", &saveptr);
-    int col = 0;
-    int img_idx = 0;
-
-    while (tok && rows_html) {
-        while (*tok == ' ') tok++;
-        if (!*tok) { tok = strtok_r(NULL, ";", &saveptr); continue; }
-
-        char *thumb = (epoch == 1) ? image_url_variant(tok, "_micro") : image_url_variant(tok, "_small");
-        if (epoch == 1 && thumb) {
-            char *dot = strrchr(thumb, '.'); if (dot) strcpy(dot, ".gif");
+    int count = 0;
+    if (urls && copy) {
+        char *saveptr = NULL;
+        for (char *tok = strtok_r(copy, ";", &saveptr); tok && count < total;
+             tok = strtok_r(NULL, ";", &saveptr)) {
+            while (*tok == ' ') tok++;
+            if (*tok) urls[count++] = strdup(tok);
         }
-
-        char *cell = gallery_id
-            ? render_template(cell_tpl, gallery_id, img_idx, thumb ? thumb : "")
-            : render_template(cell_tpl, thumb ? thumb : "");
-        free(thumb);
-
-        if (col == 0) {
-            char *rs = render_template(row_start_tpl);
-            rows_html = str_append(rows_html, rs);
-            free(rs);
-        }
-        if (cell) { rows_html = str_append(rows_html, cell); free(cell); }
-        col++;
-        if (col >= 3) {
-            char *re = render_template(row_end_tpl);
-            rows_html = str_append(rows_html, re);
-            free(re);
-            col = 0;
-        }
-
-        tok = strtok_r(NULL, ";", &saveptr);
-        img_idx++;
-    }
-    if (col > 0) {
-        char *re = render_template(row_end_tpl);
-        rows_html = str_append(rows_html, re);
-        free(re);
     }
     free(copy);
-    free(row_start_tpl); free(row_end_tpl); free(cell_tpl);
+
+    // Epoch 3 shows the first few and folds the rest behind a "+N" tile.
+    // Epochs 1-2 cap harder and cut the rest entirely, with a "View all"
+    // link/note after the gallery instead of a tile: a machine of that era is
+    // the one actually paying for every image in the block, not just the
+    // reader's patience, and an article can carry a gallery of 20+ photos.
+    int cap = (epoch >= EPOCH_MODERN) ? 5
+            : (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) ? 3 : 0;
+    int max_visible = (cap > 0 && count > cap) ? cap : count;
+    int remaining   = count - max_visible;
+
+    int per_row = gallery_columns(epoch);
+    char *rows_html = strdup("");
+    char *row_html  = strdup("");
+    int col = 0;
+
+    // Epochs 1-2 simply never render the images past the cap - not hidden
+    // markup, nothing sent for them at all. Epoch 3's overflow tile is the
+    // only case that renders every item and hides the rest with CSS.
+    int render_count = (epoch >= EPOCH_MODERN) ? count : max_visible;
+
+    for (int i = 0; i < render_count && rows_html && row_html; i++) {
+        char *thumb = gallery_thumb(urls[i], epoch);
+        char *full  = image_url_variant(urls[i], "_full");
+
+        // Where the block names a gallery the item opens the viewer at this
+        // image; otherwise it opens the picture itself, so the item is never
+        // a dead end and no separate "no link" template is needed.
+        char *href = gallery_id ? render_template("/gallery/%s?img=%d", gallery_id, i)
+                                : (full ? strdup(full) : strdup(""));
+
+        const char *tpl = item_tpl;
+        char *item;
+        if (epoch >= EPOCH_MODERN && remaining > 0 && i == max_visible - 1 && more_tpl)
+            item = render_template(more_tpl, thumb ? thumb : "", full ? full : "", remaining + 1);
+        else if (epoch >= EPOCH_MODERN && i >= max_visible && hidden_tpl)
+            item = render_template(hidden_tpl, thumb ? thumb : "", full ? full : "");
+        else
+            item = render_template(tpl, href ? href : "", thumb ? thumb : "", full ? full : "");
+
+        free(thumb); free(full); free(href);
+        if (item) { row_html = str_append(row_html, item); free(item); }
+
+        if (per_row > 0 && ++col >= per_row) {
+            char *row = render_template(row_tpl, row_html);
+            if (row) { rows_html = str_append(rows_html, row); free(row); }
+            free(row_html); row_html = strdup(""); col = 0;
+        }
+    }
+
+    // The last row, or the only one when the epoch does not use rows.
+    if (rows_html && row_html && (col > 0 || per_row == 0)) {
+        char *row = render_template(row_tpl, row_html);
+        if (row) { rows_html = str_append(rows_html, row); free(row); }
+    }
+    free(row_html);
+
+    for (int i = 0; i < count; i++) free(urls[i]);
+    free(urls);
 
     char *result = rows_html ? render_template(wrap_tpl, rows_html) : NULL;
     free(rows_html);
-    free(wrap_tpl);
+
+    // "View all" goes after the closing table, not inside a row - it names
+    // how many photos were left out, and where to see them.
+    if (result && cap > 0 && count > cap) {
+        char *view_all = NULL;
+        if (gallery_id) {
+            char *tpl = load_template("elements/gallery/gallery-view-all_epoch%d.html", epoch);
+            if (tpl) view_all = render_template(tpl, gallery_id, count);
+            free(tpl);
+        } else {
+            char *tpl = load_template("elements/gallery/gallery-view-all-count_epoch%d.html", epoch);
+            if (tpl) view_all = render_template(tpl, count);
+            free(tpl);
+        }
+        if (view_all) { result = str_append(result, view_all); free(view_all); }
+    }
+
+    free(wrap_tpl); free(row_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
     return result ? result : strdup("");
 }
 
@@ -437,12 +445,14 @@ static char *render_link(const CmsContentBlock *block, int epoch) {
 static char *render_list(const CmsContentBlock *block, int epoch) {
     if (!block->text || !block->text[0]) return strdup("");
 
-    int ordered = (block->extra_data && strcmp(block->extra_data, "ol") == 0);
-    const char *container_fmt = ordered
-        ? "elements/list/list-container-ol_epoch%d.html"
-        : "elements/list/list-container_epoch%d.html";
+    // One container template for both kinds; the tag itself is an argument,
+    // and it comes last so that WML - which has no list element and prints the
+    // items in a plain <p> - simply leaves it unused rather than skipping a
+    // position, which printf does not define.
+    const char *tag = (block->extra_data && strcmp(block->extra_data, "ol") == 0)
+        ? "ol" : "ul";
 
-    char *container_tpl = load_template(container_fmt, epoch);
+    char *container_tpl = load_template("elements/list/list-container_epoch%d.html", epoch);
     char *item_tpl      = load_template("elements/list/list-item_epoch%d.html", epoch);
     if (!container_tpl || !item_tpl) {
         free(container_tpl); free(item_tpl);
@@ -463,7 +473,7 @@ static char *render_list(const CmsContentBlock *block, int epoch) {
     }
     free(copy);
 
-    char *result = items ? render_template(container_tpl, items) : NULL;
+    char *result = items ? render_template(container_tpl, items, tag) : NULL;
     free(items);
     free(container_tpl);
     free(item_tpl);
@@ -575,6 +585,28 @@ static char *render_generic(const CmsContentBlock *block, int epoch) {
     return result ? result : strdup("");
 }
 
+// Unlike `image`/`gallery`, an image-paragraph block stores its path with the
+// `_full` size suffix already baked in, not the bare path the renderer usually
+// appends one to. Epochs 1-2 need the much lighter `_micro` instead, so the
+// existing suffix has to be swapped out, not stacked under another one.
+static char *image_paragraph_src(const char *stored_path, int epoch) {
+    if (epoch != EPOCH_EARLY && epoch != EPOCH_MIDDLE) return strdup(stored_path);
+
+    char *base = strdup(stored_path);
+    if (!base) return NULL;
+    char *marker = strstr(base, "_full.");
+    if (marker) memmove(marker, marker + 5, strlen(marker + 5) + 1);
+
+    char *variant = image_url_variant(base, "_micro");
+    free(base);
+    // _micro is always GIF (image-optimizer.sh), regardless of source format.
+    if (variant) {
+        char *dot = strrchr(variant, '.');
+        if (dot) strcpy(dot, ".gif");
+    }
+    return variant;
+}
+
 static char *render_image_paragraph(const CmsContentBlock *block, int epoch) {
     if (!block->text || !block->text[0]) return strdup("");
     char *tpl = load_template("elements/image-paragraph/image-paragraph_epoch%d.html", epoch);
@@ -583,7 +615,9 @@ static char *render_image_paragraph(const CmsContentBlock *block, int epoch) {
     const char *a = block->extra_data;
     if (a && (strcmp(a, "left") == 0 || strcmp(a, "right") == 0))
         snprintf(align_attr, sizeof(align_attr), "align=\"%s\"", a);
-    char *result = render_template(tpl, block->text, align_attr);
+    char *src = image_paragraph_src(block->text, epoch);
+    char *result = src ? render_template(tpl, src, align_attr) : NULL;
+    free(src);
     free(tpl);
     return result ? result : strdup("");
 }
@@ -713,9 +747,10 @@ char *entry_page(const CmsEntry *entry, int epoch) {
 
     char *meta_html;
     const char *author = entry->header_author ? entry->header_author : "";
-    // With hide_author set (or no author at all) the byline block is dropped
-    // entirely rather than emitted empty, so the entry starts at its content.
-    if (epoch >= 3 && !entry->header_hide_author && author[0]) {
+    // With hide_author set (or no author at all) the byline is dropped entirely
+    // rather than emitted empty, so the entry starts at its content. Every
+    // epoch has an entry-meta template; the older ones just say it plainly.
+    if (!entry->header_hide_author && author[0]) {
         char *meta_tpl = load_template("entry/entry-meta_epoch%d.html", epoch);
         meta_html = meta_tpl ? render_template(meta_tpl, author, categories_html) : categories_html;
         free(meta_tpl);

@@ -36,7 +36,7 @@ endif
 if (Netscape 4 / MSIE 5-8 / old Firefox-Chrome?) then (yes)
   #E8F5E9:epoch = 2 (EPOCH_MIDDLE);
   :Content-Type = text/html; charset=UTF-8;
-  :Template style: HTML4 + CSS1\n(styles_epoch2.css), simple classes;
+  :Template style: HTML 3.2 tables,\npresentational attributes;
   stop
 endif
 

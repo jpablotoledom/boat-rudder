@@ -18,7 +18,6 @@ actor Client
 participant "http_router" as ROUTER
 participant "detect_epoch" as EPOCH
 participant "orchestrator\n(buildHomeWebSite)" as ORCH
-participant "container" as CONTAINER
 participant "menu" as MENU
 participant "slider" as SLIDER
 participant "home_content" as HOME
@@ -32,9 +31,7 @@ EPOCH --> ROUTER : epoch (-1..3)
 ROUTER -> ORCH : buildHomeWebSite(epoch, lang)
 activate ORCH
 
-ORCH -> CONTAINER : container(epoch)
-CONTAINER -> CONTAINER : generate_url_theme + read_file\n+ str_replace_first({{PAGE_TITLE}})
-CONTAINER --> ORCH : html_container\n(4x %s placeholders)
+ORCH -> ORCH : read page/page-home_epoch<N>.html\n(4x %s placeholders, {{FOOTER}})
 
 ORCH -> MENU : menu("/", epoch)
 activate MENU

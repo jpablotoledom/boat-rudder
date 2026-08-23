@@ -86,7 +86,7 @@ epochs:
 | `-1` | `EPOCH_WML` | WAP 1.x phones (Nokia WAP, UP.Browser) | `text/vnd.wap.wml` | WML `<card>` deck, no HTML, text + `<a>` links only |
 | `0` | `EPOCH_PRESTANDARD` | Text browsers (Lynx, Cello, Line Mode Browser) | `text/html` | Bare `<html>`, no styling attributes, `<h1>/<h2>/<hr>/<a>` only |
 | `1` | `EPOCH_EARLY` | Mosaic, Netscape 1-2, MSIE ≤ 4 | `text/html` | HTML 3.2, `<table>` layout, `<font>`, `bgcolor`, no CSS/JS |
-| `2` | `EPOCH_MIDDLE` | Netscape 4, MSIE 5-8, early Firefox/Chrome | `text/html; charset=UTF-8` | HTML4 + CSS1 (`styles_epoch2.css`), simple classes |
+| `2` | `EPOCH_MIDDLE` | Netscape 4, MSIE 5-8, early Firefox/Chrome | `text/html; charset=UTF-8` | HTML 3.2 tables, presentational attributes, no external stylesheet |
 | `3` | `EPOCH_MODERN` | Current browsers | `text/html; charset=UTF-8` | HTML5 + CSS3 (`styles_epoch3.css`), responsive |
 
 Classification is a simple, dependency-free substring/version heuristic over `User-Agent`, with
@@ -137,7 +137,7 @@ endif
 if (Netscape 4 / MSIE 5-8 / old Firefox-Chrome?) then (yes)
   #E8F5E9:epoch = 2 (EPOCH_MIDDLE);
   :Content-Type = text/html; charset=UTF-8;
-  :Template style: HTML4 + CSS1\n(styles_epoch2.css), simple classes;
+  :Template style: HTML 3.2 tables,\npresentational attributes;
   stop
 endif
 
@@ -158,14 +158,12 @@ Every visual building block of the home page lives under
 
 ```
 html/themes/dark/
-├── styles_epoch2.css
 ├── styles_epoch3.css
-├── container/
-│   ├── container_epoch-1.html   (WML)
-│   ├── container_epoch0.html    (plain text)
-│   ├── container_epoch1.html    (tables + <font>)
-│   ├── container_epoch2.html    (HTML4 + CSS1)
-│   └── container_epoch3.html    (HTML5 + CSS3)
+├── page/                            (one fragment per page type)
+│   ├── page-home_epoch{-1,0,1,2,3}.html    (home: 4 regions)
+│   ├── page_epoch{-1,0,1,2,3}.html         (generic: nav + content)
+│   ├── page-entry_epoch{2,3}.html          (a db.entries document)
+│   └── page-blog_epoch{2,3}.html           (the blog listing)
 ├── menu/
 │   ├── menu_epoch{-1,0,1,2,3}.html
 │   ├── menu-item_epoch{-1,0,1,2,3}.html
@@ -178,14 +176,19 @@ html/themes/dark/
 ├── home-blog/
 │   ├── home-blog_epoch{-1,0,1,2,3}.html
 │   └── home-blog-item_epoch{-1,0,1,2,3}.html
+├── layout/                          (chrome shared by every page of an epoch)
+│   ├── layout_epoch{-1,0,1,2,3}.html
+│   ├── footer_epoch{-1,0,1,2,3}.html
+│   ├── lightbox_epoch3.html
+│   └── home-modal_epoch3.html
 ├── category-menu/
-│   └── category-menu{,-item,-item-selected}_epoch{-1,0,1,2,3}.html
+│   └── category-menu{,-item,-item-selected,-separator}_epoch{-1,0,1,2,3}.html
 ├── elements/<block-type>/          (one dir per content block type)
 └── dashboard/                       (admin pages, epoch 3 only)
 ```
 
 The tree above shows the home page's components; the full set also covers the page shell
-(`page/`), the blog listing (`blog-list/`), CMS entries (`entry/`), content blocks
+(`page/`), the blog listing (`home-blog/`), CMS entries (`entry/`), content blocks
 (`elements/`), errors (`error/`) and the dashboard. See
 [reference/rendering.md](reference/rendering.md) for the complete inventory.
 
@@ -211,8 +214,8 @@ re-interpret `%s` argument contents.
 @startuml template-composition
 title Boat Rudder - Template Composition (per epoch N)
 
-object "container_epoch<N>.html" as CONTAINER {
-  {{PAGE_TITLE}} -> literal replace
+object "page/page-home_epoch<N>.html" as CONTAINER {
+  {{FOOTER}} -> literal replace
   %s (1) -> menu
   %s (2) -> slider
   %s (3) -> home_content
@@ -304,11 +307,10 @@ fragment for a given epoch:
 
 | Module | Signature | Responsibility |
 |---|---|---|
-| `modules/container` | `char *container(int epoch)` | Page shell (`<head>`/`<body>` wrapper), resolves `{{PAGE_TITLE}}`, exposes 4 `%s` slots (menu, slider, home content, home blog) |
 | `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from the `menu` collection (`cms_get_menu_items()`), joining items with the epoch's separator and marking the item matching `current_url`; falls back to a single built-in `{"/", "Home"}` item if the query returns nothing |
 | `modules/slider` | `char *slider(int epoch)` | Hero/banner (mainbanner) block, static per epoch |
 | `modules/home_content` | `char *home_content(int epoch, const char *lang)` | Welcome text + an "updates" list from the static `UPDATES[]` array - the last hard-coded content source left (see §9) |
-| `modules/home_blog` | `char *home_blog(int epoch, const char *lang)` | "Latest Blog Posts" gallery, one item per `home-blog-item_epoch<N>.html`, from the `entries` collection (`cms_get_blog_entries()`, `type: "blog"`, newest first, capped at `HOME_BLOG_LIMIT`) |
+| `modules/blog_list` | `home_blog()`, `blog_list()`, `blog_list_category()` | One component in three appearances. All render `home-blog/home-blog_epoch<N>.html` (2 `%s`: heading, items) with one `home-blog-item_epoch<N>.html` per entry, from the `entries` collection (`type: "blog"`, newest first). They differ only in the heading, the limit (`HOME_BLOG_LIMIT` / `BLOG_LIST_LIMIT`) and whether the query filters by category |
 
 `src/html_builder/orchestrator.c` ties them together:
 
@@ -341,11 +343,10 @@ package "html_builder" {
 }
 
 package "modules" {
-    [container] as CONTAINER
     [menu] as MENU
     [slider] as SLIDER
     [home_content] as HOME
-    [home_blog] as BLOG
+    [blog_list] as BLOG
 }
 
 package "utils" {
@@ -365,20 +366,17 @@ ROUTER --> RESP : build_epoch_response(body, epoch)
 ROUTER --> STATIC : [route != "/"]
 STATIC --> FS : open() / read()
 
-ORCH --> CONTAINER
 ORCH --> MENU
 ORCH --> SLIDER
 ORCH --> HOME
 ORCH --> BLOG
-ORCH --> TPL : render_template(container,\nmenu, slider, home_content, home_blog)
+ORCH --> TPL : render_template(page-home,\nmenu, slider, home_content, home_blog)
 
-CONTAINER --> URLTHEME
 MENU --> URLTHEME
 SLIDER --> URLTHEME
 HOME --> URLTHEME
 BLOG --> URLTHEME
 
-CONTAINER --> READFILE
 MENU --> READFILE
 SLIDER --> READFILE
 HOME --> READFILE
@@ -387,7 +385,6 @@ BLOG --> READFILE
 MENU --> TPL : per item:\nrender_template + str_append
 HOME --> TPL : per item:\nrender_template + str_append
 BLOG --> TPL : per item:\nrender_template + str_append
-CONTAINER --> TPL : str_replace_first({{PAGE_TITLE}})
 
 URLTHEME --> CONFIG : reads "theme"
 URLTHEME --> FS : "./html/themes/<theme>/<component>_epoch<N>.html"
@@ -475,7 +472,6 @@ actor Client
 participant "http_router" as ROUTER
 participant "detect_epoch" as EPOCH
 participant "orchestrator\n(buildHomeWebSite)" as ORCH
-participant "container" as CONTAINER
 participant "menu" as MENU
 participant "slider" as SLIDER
 participant "home_content" as HOME
@@ -489,9 +485,7 @@ EPOCH --> ROUTER : epoch (-1..3)
 ROUTER -> ORCH : buildHomeWebSite(epoch, lang)
 activate ORCH
 
-ORCH -> CONTAINER : container(epoch)
-CONTAINER -> CONTAINER : generate_url_theme + read_file\n+ str_replace_first({{PAGE_TITLE}})
-CONTAINER --> ORCH : html_container\n(4x %s placeholders)
+ORCH -> ORCH : read page/page-home_epoch<N>.html\n(4x %s placeholders, {{FOOTER}})
 
 ORCH -> MENU : menu("/", epoch)
 activate MENU
@@ -562,9 +556,10 @@ In short:
 2. `http_router` resolves the epoch: if `force_epoch` in `configs/settings.conf` is set to a value
    in `{-1, 0, 1, 2, 3}`, that value is used directly; otherwise `detect_epoch(User-Agent)`
    classifies the request into one of those epochs.
-3. `buildHomeWebSite(epoch, lang)` assembles the page from `container` + `menu` + `slider` +
-   `home_content` + `home_blog`, all resolved via `generate_url_theme()` against
-   `./html/themes/<theme>/...`.
+3. `buildHomeWebSite(epoch, lang)` assembles the page from its `page-home` fragment + `menu` +
+   `slider` + `home_content` + `home_blog`, all resolved via `generate_url_theme()` against
+   `./html/themes/<theme>/...`, then wraps the result in the epoch's `layout` (doctype, head,
+   body, footer) via `page_layout_wrap()`.
 4. `build_epoch_response(body, "", epoch)` wraps the body with the correct `Content-Type` and
    security headers.
 5. For `HEAD /`, the response is truncated right after the header block (`\r\n\r\n`) before being
@@ -715,7 +710,7 @@ Features added after the initial home-page MVP:
 
 - **CMS entries**: `/blog/<link>` and `/page/<link>` served from a MongoDB `entries` collection with a per-language `header` (image, title, summary, date) plus an `author_id` reference into `users`, and an ordered `content[]` array of typed blocks.
 - **Blog listing** (`/blog`), **category-filtered listing** (`/blog/category/<slug>`) with a category bar under the navbar, and the home "Latest Blog Posts" section.
-- **Content block types** (14): `tittle` (H1-H6), `paragraph` (rich text), `image`, `byline` and `gallery` on every epoch; `separator`, `link`, `list`, `table`, `code-text`, `youtube-embed`, `image-paragraph`, `social-networks` and `generic` on epoch 3 only.
+- **Content block types** (14): `tittle` (H1-H6), `paragraph` (rich text), `image`, `byline`, `gallery`, `separator`, `link`, `list`, `table`, `code-text`, `youtube-embed`, `image-paragraph` and `social-networks` on every epoch; `generic` on epoch 3 only. Retro epochs degrade per type rather than dropping the block: `youtube-embed` becomes a scannable QR code, `image` links to the full-size file, and text-only clients get captions without images.
 - **Gallery**: epoch 3 CSS grid with lightbox (click to open, prev/next, ESC); epochs 1-2 paginated viewer; `/gallery/<id>` public route.
 - **Media admin** (`/dashboard/media`): directory management, drag-and-drop upload, `scripts/image-optimizer.sh` (5 variants per image via ImageMagick), paginated grid, media picker modal for the entry editor.
 - **Entry editor** (`/dashboard/entries/<id>/edit`): document-style editor UX with a fixed top bar, preview/edit toggle per block, rich-text for paragraphs, heading-level buttons for titles, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.
@@ -733,11 +728,12 @@ Features added after the initial home-page MVP:
   [plans/site-settings-plan.md](plans/site-settings-plan.md). This is the next planned increment.
 - Theme (`light`) switching and per-visitor language selection via query string / cookie.
 - A real content source for `home_content` (replacing the static `UPDATES[]` array).
-- Older-epoch (-1..2) templates for the nine epoch-3-only content block types - they currently render as empty output on retro browsers.
-- The `image-single` block type.
+- The `image-single` block type (legacy entries using it were migrated to `image`).
 - Pagination for `/blog` and `/blog/category/<slug>` (both are capped at `BLOG_LIST_LIMIT`, currently 50).
 - SEO metadata (Open Graph, JSON-LD) for epoch 3.
-- QR code generation for gallery pages on epochs -1/0 (currently shows text links).
+- QR code generation for gallery *pages* on epochs -1/0 (currently text links). The generator
+  already exists in `utils/qr_generator/` - it backs `youtube-embed` on retro epochs - so this
+  is a matter of wiring it into the `/gallery/<id>` route.
 - Human-readable gallery URLs (`/gallery/<slug>`; today the route takes the `_id` hex only).
 
 ---

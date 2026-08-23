@@ -245,7 +245,7 @@ text) to `styles_epoch3.css` / `styles_epoch2.css`.
      link: "first-post", type: "blog", enabled: true,
      categories: [c1],
      header: {
-       image_url: "/themes/dark/assets/home-blog/sample.jpg",
+       image_url: "/themes/dark/assets/home-content/sample.gif",
        title:   { en: "First Post",  es: "Primera Entrada" },
        summary: { en: "Hello world", es: "Hola mundo" },
        author:  { en: "Boat Rudder Crew", es: "Tripulación de Boat Rudder" },

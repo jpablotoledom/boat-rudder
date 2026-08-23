@@ -45,6 +45,9 @@ set(SOURCES
 
     # General utilities
     src/utils/config_loader.c
+    src/utils/image_size.c
+    src/utils/category_tags.c
+    src/html_builder/page_layout.c
     src/utils/log.c
     src/utils/http_utils.c
     src/utils/detect_epoch.c
@@ -58,11 +61,9 @@ set(SOURCES
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
-    src/modules/container/container.c
     src/modules/menu/menu.c
     src/modules/slider/slider.c
     src/modules/home_content/home_content.c
-    src/modules/home_blog/home_blog.c
     src/modules/blog_list/blog_list.c
     src/modules/category_menu/category_menu.c
     src/modules/entry_page/entry_page.c

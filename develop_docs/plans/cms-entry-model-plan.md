@@ -259,9 +259,10 @@ Everything described above is implemented and wired into the `/page/<link>`, `/b
 are implemented; heading levels via `content[].extra_data` for `tittle`, category filtering of
 the blog listing, and `media`/`media_directories` (§2.3) all landed as well.
 
-Still open: the `image-single` element type, and older-epoch (-1..2) templates for the nine
-block types that currently only have an epoch 3 variant. When these land, rendering follows the
-same pattern as the implemented types: per-type "element" templates loaded via
+Still open: the `image-single` element type. Every other block type now has a template for all
+five epochs - retro clients degrade per type (a `youtube-embed` becomes a scannable QR code, an
+`image` becomes a link to the full-size file) rather than dropping the block. When `image-single`
+lands, rendering follows the same pattern as the implemented types: per-type "element" templates loaded via
 `generate_url_theme` + `read_file_to_string` + `render_template` per `content[].type`/epoch, per
 Boat Rudder's
 [rendering.md, "Templates"](../reference/rendering.md).

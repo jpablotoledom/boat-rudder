@@ -1112,7 +1112,27 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     CmsMediaGallery gallery;
                     if (!cms_get_media_gallery(gallery_id, &gallery)) {
                         send_error_response(ctx, 404, "404 Not Found", epoch);
-                    } else if (epoch >= 3) {
+                    } else {
+                    // The "< Back" link goes to the entry the gallery belongs
+                    // to, named by its title, so a reader who followed a link
+                    // into the gallery can find their way back to what they
+                    // were reading - not just to wherever they happened to
+                    // click in from. Falls back to the browser history when
+                    // the entry cannot be resolved (e.g. a gallery left
+                    // without a parent after the entry was deleted).
+                    char back_url[280] = "";
+                    char back_title[256] = "";
+                    bool has_backlink = cms_get_entry_backlink(gallery.entry_id, content_lang,
+                                                                back_url, sizeof(back_url),
+                                                                back_title, sizeof(back_title));
+                    const char *back_href = has_backlink ? back_url : "javascript:history.back()";
+                    char back_label[300];
+                    if (has_backlink && back_title[0])
+                        snprintf(back_label, sizeof(back_label), "Back to %s", back_title);
+                    else
+                        snprintf(back_label, sizeof(back_label), "Back");
+
+                    if (epoch >= 3) {
                         char *item_tpl_path = generate_url_theme("elements/gallery/gallery-page-item_epoch%d.html", epoch);
                         char *item_tpl = item_tpl_path ? read_file_to_string(item_tpl_path) : NULL;
                         free(item_tpl_path);
@@ -1135,7 +1155,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             }
                             free(item_tpl);
 
-                            char *page_html = items_html ? render_template(page_tpl, items_html) : NULL;
+                            char *page_html = items_html ? render_template(page_tpl, back_href, back_label, items_html) : NULL;
                             free(items_html);
                             free(page_tpl);
 
@@ -1153,20 +1173,21 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         int prev_idx = (cur - 1 + count) % count;
                         int next_idx = (cur + 1) % count;
 
-                        char *back_tpl = generate_url_theme("elements/gallery/gallery-page-back_epoch%d.html", epoch);
-                        char *back_str = back_tpl ? read_file_to_string(back_tpl) : NULL;
-                        free(back_tpl);
-
+                        // The "< Back" link is fixed markup baked into the page
+                        // shell itself (gallery-page_epoch<N>.html) - it never
+                        // varies and takes no argument, so it does not need its
+                        // own template. Epoch 3's shell already did this; the
+                        // others used to render a separate gallery-page-back
+                        // file and prepend it here, which duplicated the link
+                        // on epoch 0, whose shell already carried its own copy.
                         char *page_tpl_path = generate_url_theme("elements/gallery/gallery-page_epoch%d.html", epoch);
                         char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
                         free(page_tpl_path);
 
-                        if (!back_str || !page_tpl) {
-                            free(back_str); free(page_tpl);
+                        if (!page_tpl) {
                             send_error_response(ctx, 500, "500 Internal Server Error", epoch);
                         } else {
-                            char *html = render_template(back_str);
-                            free(back_str);
+                            char *html = strdup("");
 
                             if (epoch <= 0) {
                                 char *entry_tpl_path = generate_url_theme("elements/gallery/gallery-page-image-entry_epoch%d.html", epoch);
@@ -1183,31 +1204,48 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             } else {
                                 char *main_tpl_path  = generate_url_theme("elements/gallery/gallery-page-main_epoch%d.html", epoch);
                                 char *main_tpl       = main_tpl_path ? read_file_to_string(main_tpl_path) : NULL;
-                                char *strip_s_path   = generate_url_theme("elements/gallery/gallery-page-thumbstrip-start_epoch%d.html", epoch);
-                                char *strip_s_tpl    = strip_s_path ? read_file_to_string(strip_s_path) : NULL;
-                                char *strip_e_path   = generate_url_theme("elements/gallery/gallery-page-thumbstrip-end_epoch%d.html", epoch);
-                                char *strip_e_tpl    = strip_e_path ? read_file_to_string(strip_e_path) : NULL;
+                                // One wrapper, %s in the middle - not a start/end
+                                // pair. A template is a hole to fill, not two
+                                // halves of one to reassemble by hand.
+                                char *strip_path     = generate_url_theme("elements/gallery/gallery-page-thumbstrip_epoch%d.html", epoch);
+                                char *strip_tpl       = strip_path ? read_file_to_string(strip_path) : NULL;
                                 char *thumb_tpl_path = generate_url_theme("elements/gallery/gallery-page-thumb_epoch%d.html", epoch);
                                 char *thumb_tpl      = thumb_tpl_path ? read_file_to_string(thumb_tpl_path) : NULL;
-                                free(main_tpl_path); free(strip_s_path); free(strip_e_path); free(thumb_tpl_path);
+                                // The same row template the inline gallery uses.
+                                char *row_path       = generate_url_theme("elements/gallery/gallery-row_epoch%d.html", epoch);
+                                char *row_tpl         = row_path ? read_file_to_string(row_path) : NULL;
+                                free(main_tpl_path); free(strip_path); free(thumb_tpl_path); free(row_path);
 
-                                if (main_tpl && strip_s_tpl && strip_e_tpl && thumb_tpl) {
-                                    char *main_url = (epoch == 1)
-                                        ? image_url_variant(gallery.urls[cur], "_medium")
-                                        : image_url_variant(gallery.urls[cur], "_half");
-                                    if (epoch == 1 && main_url) {
-                                        char *dot = strrchr(main_url, '.'); if (dot) strcpy(dot, ".gif");
-                                    }
+                                if (main_tpl && strip_tpl && thumb_tpl && row_tpl) {
+                                    // The main image is the point of this page,
+                                    // so it gets `_half` (capped at 1024px)
+                                    // rather than the 600px `_medium` used for
+                                    // images inline in an article. `_half`
+                                    // keeps the source format, so unlike
+                                    // `_medium` it is not rewritten to GIF.
+                                    char *main_url = image_url_variant(gallery.urls[cur], "_half");
+
+                                    // The width goes in pixels, read from the
+                                    // file. A percentage on <img> is HTML 4.0
+                                    // and these browsers draw it zero-wide;
+                                    // they also never reflow, so the image is
+                                    // capped to the width of the screen they
+                                    // ran on. Narrower images keep their own
+                                    // size rather than being blown up.
                                     char *main_block = render_template(main_tpl,
                                         gallery_id, prev_idx, main_url ? main_url : "",
                                         gallery_id, next_idx);
                                     free(main_url);
                                     if (main_block) { html = str_append(html, main_block); free(main_block); }
 
-                                    char *strip_s = render_template(strip_s_tpl);
-                                    if (strip_s) { html = str_append(html, strip_s); free(strip_s); }
-
-                                    for (int i = 0; i < count && html; i++) {
+                                    // Six thumbnails per row. They are 80px wide
+                                    // plus padding, and these browsers do not
+                                    // reflow a table row: one long strip would
+                                    // push the page well past a 640px screen.
+                                    char *thumbs_html = strdup("");
+                                    char *row_html    = strdup("");
+                                    int col = 0;
+                                    for (int i = 0; i < count && thumbs_html && row_html; i++) {
                                         char *t = (epoch == 1)
                                             ? image_url_variant(gallery.urls[i], "_micro")
                                             : image_url_variant(gallery.urls[i], "_small");
@@ -1217,16 +1255,28 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                         int border = (i == cur) ? 3 : 1;
                                         char *thumb = render_template(thumb_tpl, gallery_id, i, t ? t : "", border);
                                         free(t);
-                                        if (thumb) { html = str_append(html, thumb); free(thumb); }
-                                    }
 
-                                    char *strip_e = render_template(strip_e_tpl);
-                                    if (strip_e) { html = str_append(html, strip_e); free(strip_e); }
+                                        if (thumb) { row_html = str_append(row_html, thumb); free(thumb); }
+                                        if (++col >= 6) {
+                                            char *row = render_template(row_tpl, row_html);
+                                            if (row) { thumbs_html = str_append(thumbs_html, row); free(row); }
+                                            free(row_html); row_html = strdup(""); col = 0;
+                                        }
+                                    }
+                                    if (col > 0 && thumbs_html && row_html) {
+                                        char *row = render_template(row_tpl, row_html);
+                                        if (row) { thumbs_html = str_append(thumbs_html, row); free(row); }
+                                    }
+                                    free(row_html);
+
+                                    char *strip = thumbs_html ? render_template(strip_tpl, thumbs_html) : NULL;
+                                    free(thumbs_html);
+                                    if (strip) { html = str_append(html, strip); free(strip); }
                                 }
-                                free(main_tpl); free(strip_s_tpl); free(strip_e_tpl); free(thumb_tpl);
+                                free(main_tpl); free(strip_tpl); free(thumb_tpl); free(row_tpl);
                             }
 
-                            char *page_html = html ? render_template(page_tpl, html) : NULL;
+                            char *page_html = html ? render_template(page_tpl, back_href, back_label, html) : NULL;
                             free(html);
                             free(page_tpl);
 
@@ -1238,6 +1288,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             }
                         }
                     }
+                    } // close the back-link scope
                     cms_media_gallery_free(&gallery);
                 }
 

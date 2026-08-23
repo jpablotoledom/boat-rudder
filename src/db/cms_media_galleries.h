@@ -23,4 +23,14 @@ bool cms_get_media_gallery(const char *id_hex, CmsMediaGallery *out);
 
 void cms_media_gallery_free(CmsMediaGallery *g);
 
+// Resolves the public URL and title of the entry a gallery belongs to, for
+// the gallery page's "< Back to <title>" link. `entry_id_hex` is
+// CmsMediaGallery.entry_id. `out_url` becomes "/blog/<link>" or
+// "/page/<link>" depending on the entry's type; `out_title` is the title in
+// `lang`, falling back to "" if the entry cannot be found.
+// Returns true if the entry was found.
+bool cms_get_entry_backlink(const char *entry_id_hex, const char *lang,
+                             char *out_url, size_t url_size,
+                             char *out_title, size_t title_size);
+
 #endif

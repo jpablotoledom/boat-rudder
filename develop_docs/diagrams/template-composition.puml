@@ -9,8 +9,8 @@ skinparam object {
     FontColor #1A1A1A
 }
 
-object "container_epoch<N>.html" as CONTAINER {
-  {{PAGE_TITLE}} -> literal replace
+object "page/page-home_epoch<N>.html" as CONTAINER {
+  {{FOOTER}} -> literal replace
   %s (1) -> menu
   %s (2) -> slider
   %s (3) -> home_content

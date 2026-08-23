@@ -182,9 +182,8 @@ GET/HEAD "/"  (http_router.c)
   │     force_epoch (config_loader, default unset) overrides detection when in range
   │
   ├─ body = buildHomeWebSite(epoch, lang)         ── html_builder/orchestrator.c
-  │     ├─ container(epoch)
-  │     │     generate_url_theme("container/container_epoch%d.html", epoch)
-  │     │     read_file_to_string() → tpl (4x %s: menu, slider, home_content, home_blog; {{PAGE_TITLE}})
+  │     ├─ generate_url_theme("page/page-home_epoch%d.html", epoch)
+  │     │     read_file_to_string() → tpl (4x %s: menu, slider, home_content, home_blog; {{FOOTER}})
   │     │
   │     ├─ menu("/", epoch)
   │     │     cms_get_menu_items(lang, &items, &count)  ── db.menu.find({enabled:true})

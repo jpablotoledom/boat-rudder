@@ -59,16 +59,16 @@ boat-rudder/
 │   │       ├── multipart_parser.c/h     # multipart/form-data body parser (file uploads)
 │   │       └── memmem_compat.h          # Portable memmem() shim (used by multipart parser)
 │   ├── html_builder/
-│   │   └── orchestrator.c/h             # buildHomeWebSite() / buildPageWebSite() /
-│   │                                    # buildPageWebSiteAtUrl() / buildBlogListWebSiteAtUrl() /
-│   │                                    # buildEntryWebSiteAtUrl(): assemble pages per epoch
+│   │   ├── orchestrator.c/h             # buildHomeWebSite() / buildPageWebSite() /
+│   │   │                                # buildPageWebSiteAtUrl() / buildBlogListWebSiteAtUrl() /
+│   │   │                                # buildEntryWebSiteAtUrl(): assemble pages per epoch
+│   │   └── page_layout.c/h              # page_layout_wrap(): splices a fragment into the
+│   │                                    # epoch's layout, footer, and (epoch 3) lightbox/home-modal
 │   ├── modules/
-│   │   ├── container/container.c/h      # Page shell (head/body wrapper) per epoch
 │   │   ├── menu/menu.c/h                # Nav menu with active-item highlighting per epoch
 │   │   ├── slider/slider.c/h            # Hero/banner block per epoch
 │   │   ├── home_content/home_content.c/h# Home page body content per epoch
-│   │   ├── home_blog/home_blog.c/h      # "Latest Blog Posts" gallery per epoch
-│   │   ├── blog_list/blog_list.c/h      # /blog and /blog/category/<slug> listing per epoch
+│   │   ├── blog_list/blog_list.c/h      # home section, /blog and category listing, one component
 │   │   ├── category_menu/category_menu.c/h # Category sub-menu bar under the navbar (blog pages)
 │   │   ├── entry_page/entry_page.c/h    # Public CMS entry renderer (content[] blocks only)
 │   │   ├── entry_editor/               # AJAX entry editor (dashboard, EPOCH_MODERN only)
@@ -101,11 +101,16 @@ boat-rudder/
 │       ├── http_utils.c/h               # MIME detection, URL encode/decode, path sanitizer,
 │       │                                # trusted proxy check
 │       ├── detect_epoch.c/h             # User-Agent → epoch heuristic
+│       ├── qr_generator/                # QR codes for retro epochs (GIF/WBMP/text)
 │       ├── read_file.c/h                # read_file_to_string(): malloc'd file contents
 │       ├── template_utils.c/h           # render_template, str_replace_first, str_append,
 │       │                                # image_url_variant(), slugify()
 │       ├── json_utils.c/h               # json_escape_alloc(): escape a string for a JSON literal
 │       ├── generate_url_theme.c/h       # Builds ./html/themes/<theme>/... paths per epoch
+│       ├── image_size.c/h               # image_intrinsic_width(): GIF header width, for
+│       │                                # sizing retro-epoch images without CSS
+│       ├── category_tags.c/h            # category_tags_render(): shared category-tag loop
+│       │                                # used by blog_list, entries_admin and entry_page
 │       └── build_epoch_response.c/h     # Wraps rendered HTML with epoch-correct headers,
 │                                         # plus status-line and redirect variants
 ├── scripts/
@@ -257,8 +262,22 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 - `memmem_compat.h`: portable `memmem()` implementation used internally by the parser.
 
 ### `utils/template_utils.c` (additions)
-- `image_url_variant(url, suffix)` → new malloc'd URL with `suffix` inserted before the file extension. Example: `image_url_variant("/content/posts/user/dir/photo.jpg", "_small")` → `"/content/posts/user/dir/photo_small.jpg"`. Used by `home_blog`, `blog_list`, `entries_admin`, and `entry_page` to generate thumbnail and full-size URLs from the base URL stored in `header.image_url` / `content[].text`.
+- `image_url_variant(url, suffix)` → new malloc'd URL with `suffix` inserted before the file extension. Example: `image_url_variant("/content/posts/user/dir/photo.jpg", "_small")` → `"/content/posts/user/dir/photo_small.jpg"`. Used by `home_blog`, `blog_list`, `entries_admin`, and `entry_page` to generate thumbnail and full-size URLs from the base URL stored in `header.image_url` / `content[].text`. Those fields always hold the **bare** path: callers append the variant they need, and must not assume the bare path resolves on its own (see [rendering.md](rendering.md)).
 - `slugify(name)` → new malloc'd, lowercased URL slug: `[a-z0-9]` kept as-is, `A-Z` lowercased, spaces/`-`/`_` collapsed into a single `-`, every other byte dropped, trailing `-` trimmed. Example: `slugify("Retro Hardware")` → `"retro-hardware"`. Used to build and match `/blog/category/<slug>` URLs (`cms_entries.c`, `category_menu.c`, `http_router.c`). Slugs are **derived, not stored** - the category's `name` in the current content language is the source of truth, so a category renamed in the admin changes its public URL.
+
+### `utils/qr_generator/`
+- Ported from the legacy CMS (`../the-retro-center-old`) so `youtube-embed` blocks work before
+  HTML5: retro epochs cannot embed a player, so they show a QR code the reader scans.
+- `generate_youtube_qr()` (GIF, epochs 1-2), `generate_youtube_qr_wbmp()` (WML) and
+  `generate_qr_halfblock_text()` / `generate_youtube_qr_text()` (Unicode half-blocks, epoch 0).
+  `extract_youtube_id()` accepts only `[A-Za-z0-9_-]`, since the id is interpolated into
+  filesystem paths.
+- Encodes the matrix with **libqrencode** (declared in `qrencode_minimal.h`; the library ships
+  no pkg-config file, so `CMakeLists.txt` locates it with `find_library`). The GIF and WBMP
+  writers are pure C in this module - the original shelled out to ImageMagick per render.
+- Assets are cached under `html/content/qr/` (gitignored). Each writer builds a private temp
+  file and `rename()`s it into place, and the LZW dictionary is allocated per call, because
+  connection threads render pages concurrently and would otherwise interleave writes.
 
 ### `utils/json_utils.c`
 - `json_escape_alloc(src)` → new malloc'd copy of `src` escaped for embedding inside a JSON string literal (escapes `"`, `\` and control characters; UTF-8 multi-byte sequences pass through unchanged). Used by the entry editor's AJAX endpoints to embed rendered HTML in a JSON response (`/dashboard/api/entries/<id>/blocks`).

@@ -21,8 +21,15 @@ char *category_menu_render(const CmsCategoryItem *categories, size_t count,
     char *selected_tpl = path ? read_file_to_string(path) : NULL;
     free(path);
 
+    // What goes *between* two items, never before the first or after the last.
+    // Epochs that separate the items by layout - a row of <td> in epoch 1, a
+    // flex container in epoch 3 - hold nothing but whitespace here.
+    path = generate_url_theme("category-menu/category-menu-separator_epoch%d.html", epoch);
+    char *separator_tpl = path ? read_file_to_string(path) : NULL;
+    free(path);
+
     if (!container_tpl || !item_tpl) {
-        free(container_tpl); free(item_tpl); free(selected_tpl);
+        free(container_tpl); free(item_tpl); free(selected_tpl); free(separator_tpl);
         return strdup("");
     }
     if (!selected_tpl) selected_tpl = strdup(item_tpl);
@@ -34,12 +41,13 @@ char *category_menu_render(const CmsCategoryItem *categories, size_t count,
         const char *tpl = is_selected ? selected_tpl : item_tpl;
         char *item = render_template(tpl, slug ? slug : "", categories[i].name);
         free(slug);
-        if (item) items = str_append(items, item);
+        if (separator_tpl && i > 0) items = str_append(items, separator_tpl);
+        if (items && item) items = str_append(items, item);
         free(item);
     }
 
     char *result = items ? render_template(container_tpl, items) : NULL;
     free(items);
-    free(container_tpl); free(item_tpl); free(selected_tpl);
+    free(container_tpl); free(item_tpl); free(selected_tpl); free(separator_tpl);
     return result ? result : strdup("");
 }

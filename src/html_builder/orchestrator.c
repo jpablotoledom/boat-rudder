@@ -1,7 +1,7 @@
 #include "orchestrator.h"
+#include "page_layout.h"
 #include "../utils/detect_epoch.h"
-#include "../modules/container/container.h"
-#include "../modules/home_blog/home_blog.h"
+#include "../modules/blog_list/blog_list.h"
 #include "../modules/home_content/home_content.h"
 #include "../modules/menu/menu.h"
 #include "../modules/slider/slider.h"
@@ -11,19 +11,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Home and the blog listing lay their content over the tiled backdrop; the
+// content pages leave the body plain. Epoch 2 is the only layout with the slot.
+#define BODY_BACKDROP " background=\"/themes/dark/assets/home-content/matrix-grid_epoch1-xl.gif\""
+
 char *buildHomeWebSite(int epoch, const char *lang) {
-    char *html_container    = container(epoch, "Boat Rudder - Home");
+    // Home's fragment, alongside the other three under page/: it is the one
+    // with four regions, which is why it cannot be the same file as the rest.
+    char *path = generate_url_theme("page/page-home_epoch%d.html", epoch);
+    char *raw  = path ? read_file_to_string(path) : NULL;
+    free(path);
+
     char *html_menu         = menu("/", epoch);  // home is always "/"
     char *html_slider       = slider(epoch);
     char *html_home_content = home_content(epoch, lang);
     char *html_home_blog    = home_blog(epoch, lang);
 
     char *result = NULL;
-    if (html_container && html_menu && html_slider && html_home_content && html_home_blog) {
-        result = render_template(html_container, html_menu, html_slider, html_home_content, html_home_blog);
+    if (raw && html_menu && html_slider && html_home_content && html_home_blog) {
+        char *fragment = render_template(raw, html_menu, html_slider,
+                                          html_home_content, html_home_blog);
+        result = page_layout_wrap(fragment, "Boat Rudder - Home", epoch, BODY_BACKDROP);
     }
 
-    free(html_container);
+    free(raw);
     free(html_menu);
     free(html_slider);
     free(html_home_content);
@@ -38,18 +49,15 @@ char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_conten
     char *raw  = path ? read_file_to_string(path) : NULL;
     free(path);
 
-    char *title_tag = build_title_tag(page_title);
-    char *titled    = (raw && title_tag) ? str_replace_first(raw, "{{PAGE_TITLE}}", title_tag) : NULL;
     char *html_menu = menu(current_url ? current_url : "/", epoch);
 
     char *result = NULL;
-    if (titled && html_menu && html_content) {
-        result = render_template(titled, html_menu, html_content);
+    if (raw && html_menu && html_content) {
+        char *fragment = render_template(raw, html_menu, html_content);
+        result = page_layout_wrap(fragment, page_title, epoch, NULL);
     }
 
     free(raw);
-    free(title_tag);
-    free(titled);
     free(html_menu);
     free(html_content);
 
@@ -62,13 +70,12 @@ char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
 
 static char *build_blog_page_internal(const char *tpl_fmt, int epoch,
                                        const char *page_title, char *html_content,
-                                       const char *current_url, char *category_menu_html) {
+                                       const char *current_url, char *category_menu_html,
+                                       const char *body_background) {
     char *path = generate_url_theme(tpl_fmt, epoch);
     char *raw  = path ? read_file_to_string(path) : NULL;
     free(path);
 
-    char *title_tag = build_title_tag(page_title);
-    char *titled    = (raw && title_tag) ? str_replace_first(raw, "{{PAGE_TITLE}}", title_tag) : NULL;
     char *html_menu = menu(current_url ? current_url : "/", epoch);
 
     char *combined_nav;
@@ -81,13 +88,12 @@ static char *build_blog_page_internal(const char *tpl_fmt, int epoch,
     }
 
     char *result = NULL;
-    if (titled && combined_nav && html_content) {
-        result = render_template(titled, combined_nav, html_content);
+    if (raw && combined_nav && html_content) {
+        char *fragment = render_template(raw, combined_nav, html_content);
+        result = page_layout_wrap(fragment, page_title, epoch, body_background);
     }
 
     free(raw);
-    free(title_tag);
-    free(titled);
     free(combined_nav);
     free(html_content);
 
@@ -100,11 +106,14 @@ char *buildBlogListWebSiteAtUrl(int epoch, const char *page_title, char *html_co
     // generic page shell, which is all their layout supports.
     const char *tpl = (epoch >= EPOCH_MIDDLE) ? "page/page-blog_epoch%d.html"
                                               : "page/page_epoch%d.html";
-    return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url, category_menu_html);
+    // The listing shares home's backdrop; an article does not.
+    return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url,
+                                     category_menu_html, BODY_BACKDROP);
 }
 
 char *buildEntryWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
                               const char *current_url, char *category_menu_html) {
     const char *tpl = (epoch >= 2) ? "page/page-entry_epoch%d.html" : "page/page_epoch%d.html";
-    return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url, category_menu_html);
+    return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url,
+                                     category_menu_html, NULL);
 }

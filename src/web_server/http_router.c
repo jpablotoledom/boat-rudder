@@ -38,6 +38,7 @@
 #include "../utils/read_file.h"
 #include "../utils/request_lang.h"
 #include "../utils/config_loader.h"
+#include "../utils/qr_generator/qr_generator.h"
 #include "../utils/detect_epoch.h"
 #include "../utils/json_utils.h"
 #include "../utils/log.h"
@@ -51,6 +52,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -62,6 +64,27 @@ static const char *get_header_value(HttpRequest *req, const char *key) {
             return req->headers[i].value;
     }
     return NULL;
+}
+
+// HTTP/1.0 (RFC 1945) requires a redirect's Location to be an absolute URI;
+// a bare path like "/" is only legal from RFC 2616 onward. Some HTTP/1.0-era
+// clients (NCSA Mosaic among them) take that literally and instead of
+// resolving the path against the current page, prepend "http://" straight
+// onto it - "/" becomes the schemeless, hostless "http:///", which then
+// fails as a DNS lookup on an empty hostname. Building the absolute form
+// ourselves, from the Host the client itself just connected with, sidesteps
+// the ambiguity entirely. Falls back to the bare path if the request had no
+// Host header (rare, but then there is no better address to build from).
+static char *absolute_location(void *ctx, HttpRequest *req, const char *path) {
+    const char *host = get_header_value(req, "Host");
+    if (!host || !host[0]) return NULL;
+
+    const char *scheme = ((connection_ctx_t *)ctx)->ssl ? "https" : "http";
+    size_t len = strlen(scheme) + strlen(host) + strlen(path) + 4;
+    char *out = malloc(len);
+    if (!out) return NULL;
+    snprintf(out, len, "%s://%s%s", scheme, host, path);
+    return out;
 }
 
 static void send_simple(void *ctx, const char *status, const char *body) {
@@ -135,7 +158,7 @@ static void send_or_error(void *ctx, char *response, const char *method, int epo
 // non-blog pages).
 static void serve_cms_entry(void *ctx, const char *link, const char *expected_type,
                              const char *lang, const char *method, int epoch,
-                             char *category_menu_html) {
+                             char *category_menu_html, int page) {
     CmsEntry entry;
     if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
         if (strcmp(entry.type, expected_type) != 0) {
@@ -154,7 +177,7 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
             snprintf(current_url, sizeof(current_url), "/page/%s", link);
 
         char *title   = strdup(entry.header_title);
-        char *content = entry_page(&entry, epoch);
+        char *content = entry_page(&entry, epoch, page, NULL);
         cms_entry_free(&entry);
 
         char *body = NULL;
@@ -474,7 +497,53 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             RAW_REQUEST_SIZE - 1 - bytes_read);
         if (ret > 0) {
             bytes_read += ret;
-            if (strstr(raw_request, "\r\n\r\n")) break;
+            raw_request[bytes_read] = '\0';
+
+            // A real HTTP/0.9 "simple request" is just "GET /path" - no
+            // version token, and per spec no headers or blank-line
+            // terminator ever follow it. That looks identical to an
+            // ordinary request still mid-transmission until the request
+            // line itself is checked for a version token: waiting for
+            // "\r\n\r\n" here left a real Cello 1.x image fetch hanging
+            // forever, since it never sends one for at least some requests.
+            int has_versioned_line = 0;
+            const char *line_end = strstr(raw_request, "\r\n");
+            if (!line_end) line_end = strchr(raw_request, '\n');
+            if (line_end) {
+                size_t line_len = (size_t)(line_end - raw_request);
+                if (line_len < 700) {
+                    char first_line[700];
+                    memcpy(first_line, raw_request, line_len);
+                    first_line[line_len] = '\0';
+                    char m[16], u[600], v[16];
+                    int fields = sscanf(first_line, "%15s %599s %15s", m, u, v);
+                    if (fields == 2) break;
+                    has_versioned_line = (fields == 3);
+                }
+            }
+
+            // Ordinary request: wait for the blank line ending the header
+            // block. A bare '\n' (no '\r') is accepted too, rather than
+            // waiting forever for a "\r\n\r\n" a line-ending quirk like that
+            // would never actually send.
+            if (strstr(raw_request, "\r\n\r\n") || strstr(raw_request, "\n\n")) break;
+
+            // A real HTTP/1.0 request line with zero headers (or a few) and
+            // no blank-line terminator at all - a real Cello 1.x fetching an
+            // <img>, confirmed live: it sends a version token, sometimes a
+            // header or two, and never the blank line that would normally
+            // end the block. Waiting for one it will never send meant a
+            // silent 30s hang and then no response whatsoever. A brief
+            // pause to see whether more is actually still arriving tells
+            // the two cases apart without misreading a merely-slow,
+            // well-formed multi-packet request as complete. TLS clients are
+            // never this old, so this only runs for plain connections.
+            if (has_versioned_line && !((connection_ctx_t *)ctx)->ssl) {
+                struct pollfd pfd = { .fd = ((connection_ctx_t *)ctx)->client_socket, .events = POLLIN };
+                if (poll(&pfd, 1, 400) <= 0) break;
+                continue;
+            }
+
             if (bytes_read >= (int)RAW_REQUEST_SIZE - 1) {
                 LOG_WARN("Headers exceed %d bytes", RAW_REQUEST_SIZE);
                 send_error_response(ctx, 431, "431 Request Header Fields Too Large", EPOCH_PRESTANDARD);
@@ -552,13 +621,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         goto cleanup;
     }
 
-    {
-        char m[16], u[2048], p[16];
-        if (sscanf(raw_request, "%15s %2047s %15s", m, u, p) != 3 ||
-            strncmp(p, "HTTP/", 5) != 0) {
-            send_error_response(ctx, 400, "400 Bad Request", EPOCH_PRESTANDARD);
-            goto cleanup;
-        }
+    // A real HTTP/0.9 simple request (req.protocol left "" by
+    // parse_http_request - see http_request_parser.c) legitimately has no
+    // "HTTP/..." token at all; every other request must have one.
+    if (req.protocol[0] != '\0' && strncmp(req.protocol, "HTTP/", 5) != 0) {
+        send_error_response(ctx, 400, "400 Bad Request", EPOCH_PRESTANDARD);
+        goto cleanup;
     }
 
     LOG_INFO("%s %s %s", req.method, req.url, req.protocol);
@@ -626,7 +694,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
         // Resolve the request's language once, before anything renders: the
         // menu reads it too, several layers down (see utils/request_lang.h).
-        request_lang_set(get_header_value(&req, "Cookie"));
+        request_lang_set(get_header_value(&req, "Cookie"),
+                          get_query_param(params, param_count, "lang"));
         request_path_set(decoded_url);
         char content_lang[16];
         strncpy(content_lang, request_lang(), sizeof(content_lang) - 1);
@@ -1083,7 +1152,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                              code);
                 }
 
-                char *response = build_redirect_response(safe_return, extra, epoch);
+                char *abs_return = absolute_location(ctx, &req, safe_return);
+                char *response = build_redirect_response(abs_return ? abs_return : safe_return,
+                                                          extra, epoch);
+                free(abs_return);
                 send_or_error(ctx, response, req.method, epoch);
 
             } else if (strcmp(decoded_url, "/language") == 0) {
@@ -1098,7 +1170,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch, NULL);
+                int page = atoi(get_query_param(params, param_count, "page"));
+                serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch, NULL, page);
 
             } else if (strncmp(decoded_url, "/gallery/", 9) == 0 && decoded_url[9] != '\0') {
                 int epoch = resolve_epoch(&req);
@@ -1190,17 +1263,56 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             char *html = strdup("");
 
                             if (epoch <= 0) {
-                                char *entry_tpl_path = generate_url_theme("elements/gallery/gallery-page-image-entry_epoch%d.html", epoch);
-                                char *entry_tpl = entry_tpl_path ? read_file_to_string(entry_tpl_path) : NULL;
-                                free(entry_tpl_path);
-                                if (entry_tpl) {
-                                    for (int i = 0; i < count && html; i++) {
-                                        char *line = render_template(entry_tpl, i + 1);
+                                // Text-only browsers (epoch 0) and WAP phones
+                                // (WML) can't show any of the actual photos -
+                                // "[Image 1] [Image 2] ..." was markup with
+                                // nothing behind it to view. A QR code that
+                                // resolves to this same gallery gives the
+                                // reader a real way to see it: scan it with
+                                // the phone that's sitting right next to the
+                                // old machine. Mirrors the previous site.
+                                char gallery_path[300];
+                                snprintf(gallery_path, sizeof(gallery_path), "/gallery/%s", gallery_id);
+
+                                char gallery_url[600];
+                                if (public_url[0]) {
+                                    snprintf(gallery_url, sizeof(gallery_url), "%s%s", public_url, gallery_path);
+                                } else {
+                                    char *abs = absolute_location(ctx, &req, gallery_path);
+                                    snprintf(gallery_url, sizeof(gallery_url), "%s", abs ? abs : gallery_path);
+                                    free(abs);
+                                }
+
+                                char *qr_tpl_path = generate_url_theme("elements/gallery/gallery-page-qr_epoch%d.html", epoch);
+                                char *qr_tpl = qr_tpl_path ? read_file_to_string(qr_tpl_path) : NULL;
+                                free(qr_tpl_path);
+
+                                if (qr_tpl && epoch == EPOCH_WML) {
+                                    char qr_dir[512];
+                                    snprintf(qr_dir, sizeof(qr_dir), "%s/content/qr", root_directory);
+                                    mkdir(qr_dir, 0755);
+
+                                    char qr_fs_path[512];
+                                    snprintf(qr_fs_path, sizeof(qr_fs_path), "%s/content/qr/gallery-%s.wbmp",
+                                             root_directory, gallery_id);
+                                    char qr_web_path[280];
+                                    snprintf(qr_web_path, sizeof(qr_web_path), "/content/qr/gallery-%s.wbmp", gallery_id);
+
+                                    if (generate_qr_wbmp(gallery_url, qr_fs_path) == 0) {
+                                        char *line = render_template(qr_tpl, qr_web_path, gallery_url, gallery_url);
                                         if (line) html = str_append(html, line);
                                         free(line);
                                     }
-                                    free(entry_tpl);
+                                } else if (qr_tpl) {
+                                    char *qr_text = generate_qr_halfblock_text(gallery_url);
+                                    if (qr_text) {
+                                        char *line = render_template(qr_tpl, qr_text, gallery_url, gallery_url);
+                                        if (line) html = str_append(html, line);
+                                        free(line);
+                                    }
+                                    free(qr_text);
                                 }
+                                free(qr_tpl);
                             } else {
                                 char *main_tpl_path  = generate_url_theme("elements/gallery/gallery-page-main_epoch%d.html", epoch);
                                 char *main_tpl       = main_tpl_path ? read_file_to_string(main_tpl_path) : NULL;
@@ -1211,19 +1323,23 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 char *strip_tpl       = strip_path ? read_file_to_string(strip_path) : NULL;
                                 char *thumb_tpl_path = generate_url_theme("elements/gallery/gallery-page-thumb_epoch%d.html", epoch);
                                 char *thumb_tpl      = thumb_tpl_path ? read_file_to_string(thumb_tpl_path) : NULL;
-                                // The same row template the inline gallery uses.
-                                char *row_path       = generate_url_theme("elements/gallery/gallery-row_epoch%d.html", epoch);
-                                char *row_tpl         = row_path ? read_file_to_string(row_path) : NULL;
-                                free(main_tpl_path); free(strip_path); free(thumb_tpl_path); free(row_path);
+                                free(main_tpl_path); free(strip_path); free(thumb_tpl_path);
 
-                                if (main_tpl && strip_tpl && thumb_tpl && row_tpl) {
-                                    // The main image is the point of this page,
-                                    // so it gets `_half` (capped at 1024px)
-                                    // rather than the 600px `_medium` used for
-                                    // images inline in an article. `_half`
-                                    // keeps the source format, so unlike
-                                    // `_medium` it is not rewritten to GIF.
-                                    char *main_url = image_url_variant(gallery.urls[cur], "_half");
+                                if (main_tpl && strip_tpl && thumb_tpl) {
+                                    // The main image is the point of this page.
+                                    // Epoch 2 gets `_half` (capped at 1024px,
+                                    // keeps the source format); epoch 1 predates
+                                    // progressive JPEG entirely and can only
+                                    // show GIF, so it gets `_medium` instead,
+                                    // rewritten to .gif like every other epoch-1
+                                    // image on the site.
+                                    char *main_url = (epoch == EPOCH_EARLY)
+                                        ? image_url_variant(gallery.urls[cur], "_medium")
+                                        : image_url_variant(gallery.urls[cur], "_half");
+                                    if (epoch == EPOCH_EARLY && main_url) {
+                                        char *dot = strrchr(main_url, '.');
+                                        if (dot) strcpy(dot, ".gif");
+                                    }
 
                                     // The width goes in pixels, read from the
                                     // file. A percentage on <img> is HTML 4.0
@@ -1238,14 +1354,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                     free(main_url);
                                     if (main_block) { html = str_append(html, main_block); free(main_block); }
 
-                                    // Six thumbnails per row. They are 80px wide
-                                    // plus padding, and these browsers do not
-                                    // reflow a table row: one long strip would
-                                    // push the page well past a 640px screen.
+                                    // No table, no fixed columns: each thumbnail
+                                    // is just an inline <a><img>, so the browser
+                                    // wraps as many as fit the screen it's
+                                    // actually running on rather than however
+                                    // many happened to fit whatever screen a
+                                    // fixed column count was chosen for.
                                     char *thumbs_html = strdup("");
-                                    char *row_html    = strdup("");
-                                    int col = 0;
-                                    for (int i = 0; i < count && thumbs_html && row_html; i++) {
+                                    for (int i = 0; i < count && thumbs_html; i++) {
                                         char *t = (epoch == 1)
                                             ? image_url_variant(gallery.urls[i], "_micro")
                                             : image_url_variant(gallery.urls[i], "_small");
@@ -1256,24 +1372,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                         char *thumb = render_template(thumb_tpl, gallery_id, i, t ? t : "", border);
                                         free(t);
 
-                                        if (thumb) { row_html = str_append(row_html, thumb); free(thumb); }
-                                        if (++col >= 6) {
-                                            char *row = render_template(row_tpl, row_html);
-                                            if (row) { thumbs_html = str_append(thumbs_html, row); free(row); }
-                                            free(row_html); row_html = strdup(""); col = 0;
-                                        }
+                                        if (thumb) { thumbs_html = str_append(thumbs_html, thumb); free(thumb); }
                                     }
-                                    if (col > 0 && thumbs_html && row_html) {
-                                        char *row = render_template(row_tpl, row_html);
-                                        if (row) { thumbs_html = str_append(thumbs_html, row); free(row); }
-                                    }
-                                    free(row_html);
 
                                     char *strip = thumbs_html ? render_template(strip_tpl, thumbs_html) : NULL;
                                     free(thumbs_html);
                                     if (strip) { html = str_append(html, strip); free(strip); }
                                 }
-                                free(main_tpl); free(strip_tpl); free(thumb_tpl); free(row_tpl);
+                                free(main_tpl); free(strip_tpl); free(thumb_tpl);
                             }
 
                             char *page_html = html ? render_template(page_tpl, back_href, back_label, html) : NULL;
@@ -1349,7 +1455,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL);
+                int page = atoi(get_query_param(params, param_count, "page"));
+                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL, page);
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");

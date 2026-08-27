@@ -2,10 +2,12 @@
 #include "detect_epoch.h"
 #include "generate_url_theme.h"
 #include "read_file.h"
+#include "request_lang.h"
 #include "template_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define SECURITY_HEADERS \
     "X-Content-Type-Options: nosniff\r\n" \
@@ -15,12 +17,238 @@ static const char *content_type_for_epoch(int epoch) {
     switch (epoch) {
         case EPOCH_WML:
             return "text/vnd.wap.wml";
-        case EPOCH_PRESTANDARD:
         case EPOCH_EARLY:
+            // No charset parameter: real Mosaic (2.1.1 confirmed) matches
+            // Content-Type against its configured MIME viewers literally,
+            // charset parameter and all, and "text/html; charset=iso-8859-1"
+            // simply isn't a type it knows - "Undefined Viewer for MIME
+            // Type" instead of the page. HTTP's own default charset is
+            // ISO-8859-1 (RFC 1945/2616) if none is given, which is exactly
+            // what the body now actually is (see utf8_to_latin1()), so
+            // leaving the header bare still lands on the right charset.
             return "text/html";
         default:
+            // Epoch 0's realistic reader is a terminal browser (Lynx/w3m/
+            // ELinks) running today in a UTF-8 locale, not a genuinely
+            // pre-Unicode machine like epoch 1's Mosaic - and that's the
+            // same audience the QR blocks' Unicode half-blocks are drawn
+            // for (see qr_generator.c), so this stays UTF-8 rather than
+            // getting the epoch 1/WML Latin-1 treatment.
             return "text/html; charset=UTF-8";
     }
+}
+
+// Every stored/authored string in the CMS is UTF-8, but UTF-8 wasn't defined
+// until 1993 and didn't reach the web until HTML 4 (1997) - epoch 0/1 (and
+// WML) predate it entirely and assume ISO-8859-1, HTTP's own default charset
+// (RFC 1945/2616). Handed raw UTF-8 bytes with no matching charset, they
+// render each encoded character as two/three separate Latin-1 glyphs (the
+// "SÃguenos" / "niÃ±o" mangling): the fix is to actually transcode the body
+// to Latin-1 instead of just relabeling the header. Only the Latin-1 range
+// (U+0000-U+00FF - ASCII plus the accented Western European letters the CMS
+// content actually uses) survives; anything further out (a stray emoji,
+// CJK, ...) has no Latin-1 byte to become, so it degrades to '?' rather than
+// corrupting the byte stream.
+static char *utf8_to_latin1(const char *utf8) {
+    size_t len = strlen(utf8);
+    char *out = malloc(len + 1);
+    if (!out) return NULL;
+
+    const unsigned char *p = (const unsigned char *)utf8;
+    char *w = out;
+    while (*p) {
+        if (*p < 0x80) {
+            *w++ = (char)*p++;
+        } else if ((*p & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
+            unsigned int cp = ((unsigned int)(p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+            *w++ = (cp <= 0xFF) ? (char)cp : '?';
+            p += 2;
+        } else if ((*p & 0xF0) == 0xE0 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80) {
+            *w++ = '?'; // U+0800-U+FFFF - always past the Latin-1 range
+            p += 3;
+        } else if ((*p & 0xF8) == 0xF0 && (p[1] & 0xC0) == 0x80 &&
+                   (p[2] & 0xC0) == 0x80 && (p[3] & 0xC0) == 0x80) {
+            *w++ = '?'; // U+10000 and up
+            p += 4;
+        } else {
+            *w++ = '?'; // not valid UTF-8 - skip the one bad byte and resync
+            p += 1;
+        }
+    }
+    *w = '\0';
+    return out;
+}
+
+// Epoch 0/1 (and WML) have no way to remember a language choice across a
+// click: there is no redirect-safe way to set a cookie for them (see
+// request_lang.h / language_page.c - HTTP/1.0-era clients choke on a
+// redirect's Location unless it happens to be a full absolute URI, which a
+// same-origin app cannot always supply). So instead of threading "?lang=xx"
+// through every module that ever builds a link - menu, categories, blog
+// list, galleries, pagination... - every site-relative href in the finished
+// page gets it stitched on right here, in the one place every one of those
+// pages passes through before going out. "Site-relative" means it starts
+// with a single '/' - "//host/..." (protocol-relative), "http(s)://...",
+// "mailto:", "javascript:" and "#fragment" links are left alone.
+static char *inject_lang_into_links(const char *html, const char *lang) {
+    size_t lang_len = strlen(lang);
+    size_t extra_per_link = lang_len + 10; // worst case: "&amp;lang=" + code
+
+    size_t link_count = 0;
+    for (const char *p = html; (p = strstr(p, "href=\"")) != NULL; p += 6) link_count++;
+    if (link_count == 0) return strdup(html);
+
+    char *out = malloc(strlen(html) + link_count * extra_per_link + 1);
+    if (!out) return NULL;
+
+    char *w = out;
+    const char *p = html;
+    for (;;) {
+        const char *marker = strstr(p, "href=\"");
+        if (!marker) {
+            strcpy(w, p);
+            break;
+        }
+
+        size_t prefix_len = (size_t)(marker - p);
+        memcpy(w, p, prefix_len);
+        w += prefix_len;
+
+        memcpy(w, "href=\"", 6);
+        w += 6;
+
+        const char *val_start = marker + 6;
+        const char *val_end = strchr(val_start, '"');
+        if (!val_end) {
+            strcpy(w, val_start);
+            w += strlen(val_start);
+            break;
+        }
+        size_t val_len = (size_t)(val_end - val_start);
+
+        memcpy(w, val_start, val_len);
+        w += val_len;
+
+        char valbuf[2048];
+        size_t copy_len = val_len < sizeof(valbuf) - 1 ? val_len : sizeof(valbuf) - 1;
+        memcpy(valbuf, val_start, copy_len);
+        valbuf[copy_len] = '\0';
+
+        int is_site_relative = val_len >= 1 && val_start[0] == '/' &&
+                               (val_len == 1 || val_start[1] != '/');
+        int already_tagged = strstr(valbuf, "lang=") != NULL;
+
+        if (is_site_relative && !already_tagged) {
+            // An href attribute is XML/HTML text content: a bare '&' is
+            // fine to most HTML parsers but not well-formed - and WML is
+            // strict XML, where it is a hard parse error ("element is not
+            // well formed"), confirmed live in a WAP emulator.
+            if (memchr(val_start, '?', val_len)) {
+                memcpy(w, "&amp;", 5);
+                w += 5;
+            } else {
+                *w++ = '?';
+            }
+            memcpy(w, "lang=", 5);
+            w += 5;
+            memcpy(w, lang, lang_len);
+            w += lang_len;
+        }
+
+        *w++ = '"';
+        p = val_end + 1;
+    }
+
+    return out;
+}
+
+// WML is strict XML: a literal, author-typed "<br>" - not run through
+// expand_newlines(), which already emits the self-closing form for WML - is
+// not well-formed and fails to parse in a real WAP client ("Syntax error 12
+// - the element is not well formed", confirmed live in a WAP emulator).
+static char *wml_close_br(const char *html) {
+    size_t count = 0;
+    for (const char *p = html; (p = strstr(p, "<br>")) != NULL; p += 4) count++;
+    if (count == 0) return strdup(html);
+
+    char *out = malloc(strlen(html) + count + 1); // "<br>" -> "<br/>" is +1 byte each
+    if (!out) return NULL;
+
+    char *w = out;
+    const char *p = html;
+    for (;;) {
+        const char *m = strstr(p, "<br>");
+        if (!m) { strcpy(w, p); break; }
+        size_t n = (size_t)(m - p);
+        memcpy(w, p, n);
+        w += n;
+        memcpy(w, "<br/>", 5);
+        w += 5;
+        p = m + 4;
+    }
+    return out;
+}
+
+// WML has no list element at all - <ul>/<ol>/<li> are simply not in its
+// vocabulary. The CMS's own "list" content block already renders WML-safe
+// output (see list-item_epoch-1.html: "- item<br/>", no tags), but an
+// author can also type a raw HTML list directly into a paragraph's rich
+// text, which does not go through that template at all - confirmed live,
+// one such list in an existing article ("Syntax error 12", a WAP emulator
+// rejecting <ul>/<li> outright). Converts to the same "- item<br/>"
+// convention the dedicated block already uses.
+static char *wml_strip_lists(const char *html) {
+    // <ul>/</ul>/<ol>/</ol> are dropped (shrinks); <li> (4 bytes) becomes
+    // "- " (2 bytes, shrinks); </li> (5 bytes) becomes "<br/>" (5 bytes,
+    // same) - so the output never grows past the input length.
+    char *out = malloc(strlen(html) + 1);
+    if (!out) return NULL;
+
+    char *w = out;
+    const char *p = html;
+    while (*p) {
+        if      (strncasecmp(p, "<ul>",   4) == 0) { p += 4; }
+        else if (strncasecmp(p, "</ul>",  5) == 0) { p += 5; }
+        else if (strncasecmp(p, "<ol>",   4) == 0) { p += 4; }
+        else if (strncasecmp(p, "</ol>",  5) == 0) { p += 5; }
+        else if (strncasecmp(p, "<li>",   4) == 0) { memcpy(w, "- ", 2); w += 2; p += 4; }
+        else if (strncasecmp(p, "</li>",  5) == 0) { memcpy(w, "<br/>", 5); w += 5; p += 5; }
+        else { *w++ = *p++; }
+    }
+    *w = '\0';
+    return out;
+}
+
+// Epoch 0/1/WML fixups in one place. The language-preserving link rewrite
+// applies to all three - none of them can carry a cookie through a redirect
+// (see request_lang.h). The Latin-1 transcode is narrower: only epoch 1
+// (Mosaic-era GUI browsers) and WML actually predate UTF-8; epoch 0's real
+// audience is a modern terminal browser in a UTF-8 locale; see
+// content_type_for_epoch() and qr_generator.c's ASCII-vs-half-block QR
+// choice for the same reasoning. WML alone also gets its <br> tags closed
+// and any raw HTML list converted, since both are hard WML validity errors.
+// Returns a fresh allocation, or NULL only when nothing needed changing
+// (the caller keeps using its original body).
+static char *retrofit_body_for_epoch(const char *body, int epoch) {
+    if (epoch > EPOCH_EARLY) return NULL;
+
+    char *step = inject_lang_into_links(body, request_lang());
+    const char *cur = step ? step : body;
+
+    if (epoch == EPOCH_WML) {
+        char *closed = wml_close_br(cur);
+        if (closed) { free(step); step = closed; cur = step; }
+
+        char *listless = wml_strip_lists(cur);
+        if (listless) { free(step); step = listless; cur = step; }
+    }
+
+    if (epoch != EPOCH_EARLY && epoch != EPOCH_WML)
+        return step;
+
+    char *latin1 = utf8_to_latin1(cur);
+    free(step);
+    return latin1;
 }
 
 char *build_epoch_response(const char *body, const char *extra_headers, int epoch) {
@@ -30,6 +258,10 @@ char *build_epoch_response(const char *body, const char *extra_headers, int epoc
 char *build_epoch_response_status(const char *body, const char *extra_headers,
                                    int epoch, const char *status_line) {
     const char *content_type = content_type_for_epoch(epoch);
+
+    char *rewritten = retrofit_body_for_epoch(body, epoch);
+    if (rewritten) body = rewritten;
+
     size_t body_len = strlen(body);
 
     int header_len = snprintf(NULL, 0,
@@ -41,10 +273,16 @@ char *build_epoch_response_status(const char *body, const char *extra_headers,
         "Connection: close\r\n"
         "\r\n",
         status_line, content_type, body_len, extra_headers);
-    if (header_len < 0) return NULL;
+    if (header_len < 0) {
+        free(rewritten);
+        return NULL;
+    }
 
     char *response = malloc((size_t)header_len + body_len + 1);
-    if (!response) return NULL;
+    if (!response) {
+        free(rewritten);
+        return NULL;
+    }
 
     snprintf(response, (size_t)header_len + 1,
         "HTTP/1.1 %s\r\n"
@@ -57,6 +295,7 @@ char *build_epoch_response_status(const char *body, const char *extra_headers,
         status_line, content_type, body_len, extra_headers);
 
     memcpy(response + header_len, body, body_len + 1);
+    free(rewritten);
 
     return response;
 }
@@ -80,6 +319,12 @@ static char *build_redirect_body(const char *location, int epoch) {
 char *build_redirect_response(const char *location, const char *extra_headers, int epoch) {
     char *body = build_redirect_body(location, epoch);
     if (!body) return NULL;
+
+    char *rewritten = retrofit_body_for_epoch(body, epoch);
+    if (rewritten) {
+        free(body);
+        body = rewritten;
+    }
 
     const char *content_type = content_type_for_epoch(epoch);
     size_t body_len = strlen(body);

@@ -237,13 +237,13 @@ document instead of a 5-table relational model).
   `/blocks/<block_id>/delete` endpoints and patch the DOM without a full reload.
   `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
   the next `saveContent()` (block `order` = DOM index at save time). `refreshBlockPreview()`
-  mirrors `entry_page.c`'s public renderers client-side (`tittle`->`<h2>`, `paragraph`->`<p>`,
+  mirrors `entry_page.c`'s public renderers client-side (`title`->`<h2>`, `paragraph`->`<p>`,
   `image`->`<figure><img><figcaption>`, `byline`->two `<span>`s), HTML-escaping field values for
   the preview only (the saved/rendered HTML itself follows the project's no-escaping
   convention, like every other admin form).
 - **Editor UX** (epoch 3): the editor uses a document-style layout with a fixed top bar (save-all, autosave toggle, publish toggle, language tabs), a block type toolbar, and a two-column layout (left: meta + header sidebars; right: content blocks). Blocks default to a document-like preview mode; clicking a block enters edit mode showing the full form. Paragraph blocks have a WYSIWYG rich-text toolbar. Title blocks have H1-H6 level selectors. Gallery blocks show a thumbnail preview area with drag-and-drop reordering and a "Select photos" button that opens the media picker modal. Blocks support drag-and-drop reordering.
 - **Gallery block**: supported in editor (thumbnail preview, drag-drop reorder) and public view (see "Gallery block" below). Selecting photos opens the `/dashboard/api/media/modal` endpoint, which returns the media admin UI inside a modal overlay.
-- **Future work**: the `image-single` block type - see `develop_docs/plans/cms-entry-model-plan.md`. The public renderer now has a template for all 14 block types on all five epochs; only the *editor* templates under `blocks/` remain epoch-3-only, which matches the editor being `EPOCH_MODERN`-only.
+- **Future work**: the `image-single` block type, and older-epoch templates for the nine epoch-3-only block types - see `develop_docs/plans/cms-entry-model-plan.md`.
 
 ### Content language resolution (`src/db/cms_languages.c`, `src/db/language_catalog.c`)
 

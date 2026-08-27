@@ -197,6 +197,15 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 
 ### `web_server/http_router.c`
 - Reads the raw HTTP request headers into a fixed 32 KiB buffer; responds `431` if exceeded.
+- **Legacy client tolerance** (added after real period-browser testing, not a spec requirement
+  for any modern client): the header-read loop recognizes a true HTTP/0.9 "simple request" - a
+  request line with no version token at all - as complete the moment that line arrives, rather
+  than waiting for a `\r\n\r\n` such a client never sends. A versioned request line followed by a
+  few headers (or none) and no blank-line terminator gets one `poll()`-bounded 400ms window to
+  prove more data is still coming before the loop gives up waiting for one - long enough not to
+  mistake a slow, well-formed multi-packet request for a truncated one. See
+  [rendering.md](rendering.md#legacy-http-compatibility) for
+  the real client behavior (Cello 1.x) this was fixed against.
 - **Full body reading**: after headers are parsed, reads the body to completion using `Content-Length` - allocates a buffer of the declared size (capped at `MAX_BODY_SIZE` = 10 MiB) and loops until all bytes are received. This supports both small form posts and large multipart file uploads.
 - Parses headers with `parse_http_request()`.
 - Extracts the real client IP: honors `X-Real-IP` / `X-Forwarded-For` **only when the peer IP matches the `trusted_proxies` config list**, falling back to the raw socket address for all other peers.
@@ -210,11 +219,11 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   - `/dashboard/media` → media admin page (session required). See [media-admin.md](media-admin.md).
   - `/dashboard/api/media/contents` → paginated media grid (HTML fragment, session required).
   - `/dashboard/api/media/modal` → media picker modal (HTML, session required).
-  - `/gallery/<id>` → public gallery page per epoch; epoch 3: thumbnail grid with lightbox; epochs 1-2: paginated viewer (main image + prev/next + thumbnail strip); epochs -1/0: text links.
+  - `/gallery/<id>` → public gallery page per epoch; epoch 3: thumbnail grid with lightbox; epochs 1-2: paginated viewer (main image + prev/next + thumbnail strip); epochs -1/0: a QR code encoding this same page's public URL, since neither a WAP phone nor a text-only browser can show the photos regardless of layout - see [rendering.md](rendering.md).
   - `/blog` → blog list page via `blog_list()` + `buildBlogListWebSiteAtUrl(epoch, title, content, "/blog", category_menu)`.
   - `/blog/category/<slug>` → blog list filtered by category via `blog_list_category()`; `<slug>` is matched against `slugify(category.name)` over `cms_get_categories()`, `404` if no category matches. Same wrapper, with the matching item marked selected in the category menu.
-  - `/blog/<link>` → CMS entry via `serve_cms_entry()`, passes `"/blog"` as active menu URL.
-  - `/page/<link>` → CMS entry via `serve_cms_entry()`, passes `"/page/<link>"` as active menu URL.
+  - `/blog/<link>` → CMS entry via `serve_cms_entry()`, passes `"/blog"` as active menu URL. Reads `?page=` (WML only - a real WAP 1.x deck has to fit in a few KB; see [rendering.md](rendering.md#pagination)).
+  - `/page/<link>` → CMS entry via `serve_cms_entry()`, passes `"/page/<link>"` as active menu URL. Reads `?page=` the same way.
   - `/logout` → destroys the session and redirects to `/`.
   - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache validation; a non-zero return code (`403`/`404`/`500`) is rendered via `send_error_response()`.
 - `POST /login` → epoch3 only; other epochs re-render the "not available" `login_epoch<N>.html` without touching the database.
@@ -234,7 +243,9 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   (e.g. a module returned `NULL`).
 
 ### `web_server/http_request_parser.c`
-- Parses `METHOD URL PROTOCOL` from the first line.
+- Parses `METHOD URL PROTOCOL` from the first line - or just `METHOD URL` (a true HTTP/0.9
+  request line, no version token; `req.protocol` is left empty), which a real Cello 1.x sends
+  for at least some fetches. See `http_router.c`'s legacy-client tolerance above.
 - Parses headers into key-value pairs (up to `MAX_HEADERS = 64`).
 - URL field sized at 2048 bytes to handle long query strings without truncation.
 
@@ -267,9 +278,14 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 
 ### `utils/qr_generator/`
 - Ported from the legacy CMS (`../the-retro-center-old`) so `youtube-embed` blocks work before
-  HTML5: retro epochs cannot embed a player, so they show a QR code the reader scans.
-- `generate_youtube_qr()` (GIF, epochs 1-2), `generate_youtube_qr_wbmp()` (WML) and
-  `generate_qr_halfblock_text()` / `generate_youtube_qr_text()` (Unicode half-blocks, epoch 0).
+  HTML5: retro epochs cannot embed a player, so they show a QR code the reader scans. The same
+  generic functions are reused by the standalone `/gallery/<id>` page for epochs -1/0, which
+  cannot show the photos it lists either - see [rendering.md](rendering.md).
+- `generate_youtube_qr()` (GIF, epochs 1-2), `generate_qr_wbmp(text, fs_path)` (any text → WBMP,
+  cached on disk; used for WML) and `generate_qr_halfblock_text(text)` (any text → Unicode
+  half-block `<pre>` art; epoch 0 only - its realistic reader is a terminal browser in a UTF-8
+  locale, unlike epoch 1/WML, which get transcoded to Latin-1 and cannot render a multi-byte
+  sequence as one glyph - see [rendering.md](rendering.md#character-encoding)).
   `extract_youtube_id()` accepts only `[A-Za-z0-9_-]`, since the id is interpolated into
   filesystem paths.
 - Encodes the matrix with **libqrencode** (declared in `qrencode_minimal.h`; the library ships

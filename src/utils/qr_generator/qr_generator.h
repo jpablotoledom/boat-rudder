@@ -19,10 +19,6 @@ void youtube_qr_web_path(const char *video_id, char *out, size_t out_size);
 // Build the YouTube short URL from a video ID.
 void youtube_short_url(const char *video_id, char *out, size_t out_size);
 
-// Generate a QR code as ASCII art (<pre> block) for a YouTube URL.
-// Returns heap-allocated string (caller must free), NULL on error.
-char *generate_youtube_qr_text(const char *youtube_url);
-
 // Generate a WBMP QR code for a YouTube URL (for WAP/WML browsers).
 // html_root: filesystem path to html/ directory.
 int generate_youtube_qr_wbmp(const char *youtube_url, const char *html_root);
@@ -36,7 +32,13 @@ void youtube_qr_wbmp_web_path(const char *video_id, char *out, size_t out_size);
 // Returns 0 on success.
 int generate_qr_wbmp(const char *text, const char *fs_path);
 
-// Generate a QR code as Unicode half-block <pre> art for any text.
+// Generate a QR code as Unicode half-block <pre> art for any text - two QR
+// rows packed into one terminal row, so it comes out roughly square in a
+// real terminal despite a monospace cell being taller than it is wide.
+// Only for epoch 0: its realistic reader is a terminal browser in a UTF-8
+// locale, unlike epoch 1/WML, which predate UTF-8 and get transcoded to
+// Latin-1 (see build_epoch_response.c) - a rendering built from bytes above
+// U+00FF would not survive that.
 // Returns heap-allocated string (caller must free), NULL on error.
 char *generate_qr_halfblock_text(const char *text);
 

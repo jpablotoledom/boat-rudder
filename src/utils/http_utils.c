@@ -22,6 +22,8 @@ const char *get_mime_type(const char *path) {
     if (strcmp(dot, ".jpg")  == 0 || strcmp(dot, ".jpeg") == 0) return "image/jpeg";
     if (strcmp(dot, ".png")  == 0) return "image/png";
     if (strcmp(dot, ".gif")  == 0) return "image/gif";
+    if (strcmp(dot, ".bmp")  == 0) return "image/bmp";
+    if (strcmp(dot, ".pcx")  == 0) return "image/vnd.zbrush.pcx";
     if (strcmp(dot, ".ico")  == 0) return "image/x-icon";
     if (strcmp(dot, ".svg")  == 0) return "image/svg+xml";
     if (strcmp(dot, ".webp") == 0) return "image/webp";

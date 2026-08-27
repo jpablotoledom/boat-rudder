@@ -20,7 +20,7 @@ if (!NEWS)   throw new Error('"News" category not found');
 // poured into a WML card, a bare <p> and a styled epoch-3 <p>, and raw markup
 // would be invalid in the first of those.
 const blocks = [
-  { type: 'tittle', extra_data: '1', text: {
+  { type: 'title', extra_data: '1', text: {
     en: 'I am building a retro-compatible CMS',
     es: 'Estoy construyendo un CMS retrocompatible' } },
 
@@ -32,7 +32,7 @@ const blocks = [
     en: 'My work has mostly been the web. The first professional site I built was in 2004, though I had been programming for a while before that - around 1999 I was writing software in a BASIC interpreter. But my biggest contributions have always been on the web side. I started when browsers barely managed text and a couple of images.',
     es: 'Mi trabajo ha sido, sobre todo, la web. El primer sitio profesional que hice fue en 2004, aunque ya venía programando desde antes: por ahí por 1999 escribía software en un intérprete de BASIC. Pero mis mayores contribuciones han estado siempre del lado de la web. Partí cuando los navegadores apenas mostraban texto y un par de imágenes.' } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'Capable machines, cut off from everything',
     es: 'Máquinas capaces, pero incomunicadas' } },
 
@@ -44,7 +44,7 @@ const blocks = [
     en: 'So I am taking my 25-plus years of experience and building a system to bring these devices out of isolation. Not emulation, not a museum replica: the same website, served in a shape a machine from 1985 can actually read.',
     es: 'Así que, tomando mi experiencia de más de 25 años, decidí construir un sistema que permita revivir y sacar del aislamiento a estos interesantes dispositivos. No emulación, ni una copia de museo: la misma web, servida de una forma que un equipo de 1985 pueda leer de verdad.' } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'First stage: a three-epoch MVP',
     es: 'La primera etapa: un MVP de tres épocas' } },
 
@@ -67,7 +67,7 @@ const blocks = [
 
   { type: 'separator', extra_data: '', text: { en: '', es: '' } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'Why a spreadsheet?',
     es: '¿Por qué una planilla de cálculo?' } },
 

@@ -20,7 +20,7 @@ if (!NEWS)   throw new Error('"News" category not found');
 // poured into a WML card, a bare <p> and a styled epoch-3 <p>, and raw markup
 // would be invalid in the first of those.
 const blocks = [
-  { type: 'tittle', extra_data: '1', text: {
+  { type: 'title', extra_data: '1', text: {
     en: 'Boat Rudder is here: one website, every browser',
     es: 'Llega Boat Rudder: un solo sitio, todos los navegadores' } },
 
@@ -34,7 +34,7 @@ const blocks = [
   { type: 'image', extra_data: 'Boat Rudder: WML, TEXT, HTML 3.2, HTML4+CSS, HTML5+CSS3|100|center', text: {
     en: IMAGE, es: IMAGE } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'Five versions of every page',
     es: 'Cinco versiones de cada página' } },
 
@@ -48,7 +48,7 @@ const blocks = [
 
   { type: 'separator', extra_data: '', text: { en: '', es: '' } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'Nothing simply disappears',
     es: 'Nada desaparece sin más' } },
 
@@ -56,7 +56,7 @@ const blocks = [
     en: 'The interesting part is what happens to the things an old browser cannot handle. A video does not vanish: it becomes a printed QR code that a phone can scan. A photo gallery becomes a list of links. A large picture becomes a lighter one that a 1994 machine can actually load, and following it opens the full-size file. The article keeps its shape everywhere; only the presentation changes.',
     es: 'Lo interesante es qué pasa con aquello que un navegador antiguo no puede manejar. Un video no se esfuma: se convierte en un código QR impreso que un teléfono puede escanear. Una galería de fotos se vuelve una lista de enlaces. Una imagen grande se convierte en una más liviana que una máquina de 1994 sí puede cargar, y al seguirla se abre el archivo completo. El artículo mantiene su forma en todas partes; solo cambia la presentación.' } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'Written once, read in two languages',
     es: 'Escrito una vez, leído en dos idiomas' } },
 
@@ -64,7 +64,7 @@ const blocks = [
     en: 'Every article is stored with its translations side by side, so offering a second language does not mean maintaining a second website. This very post is stored as a single document and reads natively in both English and Spanish. Adding a third language is a matter of filling in the blanks, not of copying anything.',
     es: 'Cada artículo se guarda con sus traducciones juntas, así que ofrecer un segundo idioma no significa mantener un segundo sitio. Esta misma nota está guardada como un solo documento y se lee de forma nativa en inglés y en español. Agregar un tercer idioma es cuestión de completar los espacios en blanco, no de copiar nada.' } },
 
-  { type: 'tittle', extra_data: '2', text: {
+  { type: 'title', extra_data: '2', text: {
     en: 'Who is it for?',
     es: '¿Para quién es?' } },
 

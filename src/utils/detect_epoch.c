@@ -11,10 +11,36 @@ int detect_epoch(const char *user_agent) {
         return EPOCH_EARLY;
     }
 
-    // WAP / WML devices.
-    if (contains(user_agent, "Wap") || contains(user_agent, "WAP") ||
-        contains(user_agent, "Nokia") || contains(user_agent, "UP.Browser") ||
-        contains(user_agent, "UP/")) {
+    // WAP / WML devices (WAP 1.x era, ~1999-2005). Tokens cover: the
+    // Openwave/Unwired Planet UP.Browser that shipped on phones from most
+    // manufacturers ("UP.Browser"/"UP/"); Nokia's own WAP browser
+    // ("Nokia..."); Obigo, the other major licensed WAP browser engine
+    // (Samsung, LG, Pantech and others); and the manufacturer-prefix
+    // conventions WAP-era firmware used in place of a real browser name
+    // (Ericsson catches both standalone Ericsson and the later
+    // "SonyEricsson" as a substring; "SIE-" Siemens, "SEC-" Samsung,
+    // "MOT-" Motorola, "LG-" LG - all hyphenated model-prefix styles
+    // specific to that generation of firmware, not used by any manufacturer's
+    // modern Android/Chrome build); plus Panasonic, SANYO, SHARP, Alcatel
+    // and PHILIPS, WAP-era handset brands (their firmware wrote the brand
+    // token in caps, unlike the others above).
+    //
+    // Several of these tokens (Nokia, LG-, Alcatel, Sharp especially) are
+    // real, still-shipping phone brands whose modern Android UAs could
+    // otherwise collide with the same substring - guarded by requiring the
+    // *absence* of "AppleWebKit", which every real modern mobile browser
+    // (Chrome, Safari, Samsung Internet, the stock Android browser) always
+    // includes and no genuine WAP 1.x browser ever did.
+    if (!contains(user_agent, "AppleWebKit") &&
+        (contains(user_agent, "Wap") || contains(user_agent, "WAP") ||
+         contains(user_agent, "Nokia") || contains(user_agent, "nokia") ||
+         contains(user_agent, "UP.Browser") ||
+         contains(user_agent, "UP/") || contains(user_agent, "Obigo") ||
+         contains(user_agent, "Ericsson") || contains(user_agent, "SIE-") ||
+         contains(user_agent, "SEC-") || contains(user_agent, "MOT-") ||
+         contains(user_agent, "LG-") || contains(user_agent, "Alcatel") ||
+         contains(user_agent, "Panasonic") || contains(user_agent, "SANYO") ||
+         contains(user_agent, "SHARP") || contains(user_agent, "PHILIPS"))) {
         return EPOCH_WML;
     }
 

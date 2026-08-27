@@ -95,8 +95,8 @@ static char *render_image_block(const CmsContentBlockEdit *block,
 
 char *entry_editor_render_block(const CmsContentBlockEdit *block,
                                  const CmsLanguageItem *langs, size_t lang_count, int epoch) {
-    if (strcmp(block->type, "tittle") == 0)
-        return render_extra_block(block, "dashboard/entries/editor/blocks/tittle_epoch%d.html",
+    if (strcmp(block->type, "title") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/title_epoch%d.html",
                                    langs, lang_count, epoch);
     if (strcmp(block->type, "paragraph") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/paragraph_epoch%d.html",

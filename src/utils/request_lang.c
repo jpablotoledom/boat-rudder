@@ -65,7 +65,12 @@ int request_lang_validate(const char *code, char *out, size_t out_size) {
     return found;
 }
 
-void request_lang_set(const char *cookie_header) {
+void request_lang_set(const char *cookie_header, const char *lang_query) {
+    if (lang_query && lang_query[0] &&
+        request_lang_validate(lang_query, current_lang, sizeof(current_lang))) {
+        return;
+    }
+
     char cookie_lang[LANG_CODE_BUF] = "";
 
     if (cookie_value(cookie_header, "lang", cookie_lang, sizeof(cookie_lang)) &&

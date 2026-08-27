@@ -83,8 +83,8 @@ epochs:
 
 | Epoch | Constant | Era / target browsers | `Content-Type` | Markup style |
 |---|---|---|---|---|
-| `-1` | `EPOCH_WML` | WAP 1.x phones (Nokia WAP, UP.Browser) | `text/vnd.wap.wml` | WML `<card>` deck, no HTML, text + `<a>` links only |
-| `0` | `EPOCH_PRESTANDARD` | Text browsers (Lynx, Cello, Line Mode Browser) | `text/html` | Bare `<html>`, no styling attributes, `<h1>/<h2>/<hr>/<a>` only |
+| `-1` | `EPOCH_WML` | WAP 1.x phones (Nokia, Openwave/UP.Browser, Obigo, and manufacturer-prefix firmware - SIE-, SEC-, MOT-, LG-, Ericsson, Panasonic, SANYO, SHARP, Alcatel, PHILIPS) | `text/vnd.wap.wml` | WML `<card>` deck, no HTML, text + `<a>` links only |
+| `0` | `EPOCH_PRESTANDARD` | Text browsers (Lynx, Cello, Line Mode Browser) | `text/html; charset=UTF-8` | Bare `<html>`, no styling attributes, `<h1>/<h2>/<hr>/<a>` only |
 | `1` | `EPOCH_EARLY` | Mosaic, Netscape 1-2, MSIE ≤ 4 | `text/html` | HTML 3.2, `<table>` layout, `<font>`, `bgcolor`, no CSS/JS |
 | `2` | `EPOCH_MIDDLE` | Netscape 4, MSIE 5-8, early Firefox/Chrome | `text/html; charset=UTF-8` | HTML 3.2 tables, presentational attributes, no external stylesheet |
 | `3` | `EPOCH_MODERN` | Current browsers | `text/html; charset=UTF-8` | HTML5 + CSS3 (`styles_epoch3.css`), responsive |
@@ -113,7 +113,7 @@ endif
 
 :Read "User-Agent" header;
 
-if (WAP / UP.Browser / Nokia WAP tokens?) then (yes)
+if (WAP tokens present AND "AppleWebKit" absent?) then (yes)
   #FFE0E0:epoch = -1 (EPOCH_WML);
   :Content-Type = text/vnd.wap.wml;
   :Template style: WML <card> deck,\nno HTML, text + <a> links only;
@@ -122,7 +122,7 @@ endif
 
 if (Lynx / Cello / Line Mode Browser?) then (yes)
   #FFF3E0:epoch = 0 (EPOCH_PRESTANDARD);
-  :Content-Type = text/html;
+  :Content-Type = text/html; charset=UTF-8;
   :Template style: bare <html>,\nno styling attributes,\n<h1>/<h2>/<hr>/<a> only;
   stop
 endif
@@ -149,6 +149,11 @@ stop
 ```
 
 > Source: [diagrams/epoch-decision.puml](diagrams/epoch-decision.puml)
+
+The WAP token list and the `AppleWebKit`-absence guard - several of those manufacturer prefixes
+(Nokia, LG, Motorola, Samsung, Sharp, Alcatel) still ship Android phones whose modern browser
+`User-Agent` could otherwise collide with the same substring - are detailed in
+[reference/rendering.md](reference/rendering.md#epochs).
 
 ### 2.3 Templates: one file per component, per epoch
 
@@ -517,7 +522,7 @@ ORCH -> BLOG : home_blog(epoch, lang)
 activate BLOG
 BLOG -> BLOG : load home-blog_epoch<N>,\nhome-blog-item_epoch<N>
 loop for each entry in cms_get_blog_entries(lang, HOME_BLOG_LIMIT)
-  BLOG -> BLOG : render_template(item_tpl,\nimage, link, title, summary, author, date)\n(epoch -1/0: title, date, summary)
+  BLOG -> BLOG : render_template(item_tpl,\nthumb, link, title, summary, author, categories, date)\n(epoch -1/0: no thumb - link, title, summary, author, categories, date)
   BLOG -> BLOG : str_append(items, item)
 end
 BLOG -> BLOG : render_template(content_tpl, items)
@@ -710,7 +715,7 @@ Features added after the initial home-page MVP:
 
 - **CMS entries**: `/blog/<link>` and `/page/<link>` served from a MongoDB `entries` collection with a per-language `header` (image, title, summary, date) plus an `author_id` reference into `users`, and an ordered `content[]` array of typed blocks.
 - **Blog listing** (`/blog`), **category-filtered listing** (`/blog/category/<slug>`) with a category bar under the navbar, and the home "Latest Blog Posts" section.
-- **Content block types** (14): `tittle` (H1-H6), `paragraph` (rich text), `image`, `byline`, `gallery`, `separator`, `link`, `list`, `table`, `code-text`, `youtube-embed`, `image-paragraph` and `social-networks` on every epoch; `generic` on epoch 3 only. Retro epochs degrade per type rather than dropping the block: `youtube-embed` becomes a scannable QR code, `image` links to the full-size file, and text-only clients get captions without images.
+- **Content block types** (14): `title` (H1-H6), `paragraph` (rich text), `image`, `byline`, `gallery`, `separator`, `link`, `list`, `table`, `code-text`, `youtube-embed`, `image-paragraph` and `social-networks` on every epoch; `generic` on epoch 3 only. Retro epochs degrade per type rather than dropping the block: `youtube-embed` becomes a scannable QR code, `image` links to the full-size file, and text-only clients get captions without images.
 - **Gallery**: epoch 3 CSS grid with lightbox (click to open, prev/next, ESC); epochs 1-2 paginated viewer; `/gallery/<id>` public route.
 - **Media admin** (`/dashboard/media`): directory management, drag-and-drop upload, `scripts/image-optimizer.sh` (5 variants per image via ImageMagick), paginated grid, media picker modal for the entry editor.
 - **Entry editor** (`/dashboard/entries/<id>/edit`): document-style editor UX with a fixed top bar, preview/edit toggle per block, rich-text for paragraphs, heading-level buttons for titles, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.

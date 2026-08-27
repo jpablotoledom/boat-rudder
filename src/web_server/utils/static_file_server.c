@@ -94,8 +94,15 @@ int serve_static_file(void *ctx,
         return 500;
     }
 
+    // Always send a full status line + headers, even for a client that sent
+    // a bare, version-less request: a client using request format this old
+    // (HTTP/0.9, 1991) has no way to know a response is an image without
+    // Content-Type, since HTTP/0.9 itself predates images/MIME on the web
+    // entirely - a real Cello 1.x, live-tested, shows the raw GIF bytes as
+    // garbled text ("GIF87a@...") instead of decoding them without this
+    // header, which a genuinely headers-less "simple response" (previously
+    // sent here) can never supply.
     const char *mime = get_mime_type(safe_path);
-
     char header[512];
     snprintf(header, sizeof(header),
         "HTTP/1.1 200 OK\r\n"
@@ -119,6 +126,6 @@ int serve_static_file(void *ctx,
     }
 
     close(fd);
-    LOG_DEBUG("200 OK: %s (%s, %ld bytes)", safe_path, mime, (long)st.st_size);
+    LOG_DEBUG("200 OK: %s (%ld bytes)", safe_path, (long)st.st_size);
     return 0;
 }

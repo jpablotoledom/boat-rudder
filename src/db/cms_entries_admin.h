@@ -10,7 +10,7 @@
 // equivalent).
 typedef struct {
     char  *id;          // content[]._id as 24-char hex
-    char  *type;        // "tittle" | "paragraph" | "image" | "byline"
+    char  *type;        // "title" | "paragraph" | "image" | "byline"
     int    order;
     char **text_values; // parallel to langs[] passed to cms_get_entry_for_edit() /
                          // cms_update_entry_content() - exact value of text.<lang>,

@@ -25,7 +25,12 @@ int parse_http_request(const char *raw_request, int raw_len, HttpRequest *req) {
     char *line = strtok_r(buffer, "\r\n", &saveptr);
     if (!line) { free(buffer); return -1; }
 
-    if (sscanf(line, "%15s %1023s %15s", req->method, req->url, req->protocol) != 3) {
+    // A real HTTP/0.9 "simple request" is just "GET /path" - no version
+    // token, and (per spec) no headers ever follow it either. req->protocol
+    // stays "" (the struct was zeroed above), which callers use to detect
+    // this case and skip anything that assumes a header block exists.
+    int fields = sscanf(line, "%15s %1023s %15s", req->method, req->url, req->protocol);
+    if (fields != 3 && fields != 2) {
         free(buffer);
         return -1;
     }

@@ -147,19 +147,22 @@ char *menu(const char *current_url, int epoch) {
     cms_menu_free(db_items, db_count);
 
     // Home banner stands in for the logo on the home page, so the menu only
-    // carries it elsewhere - the reader still needs a way back. WML has no
-    // banner at all, so it always shows one. Mirrors the previous site.
-    // Decided from the request path, not `current_url`: the latter is the menu
-    // *section* and is hardcoded to "/" by buildPageWebSite(), which every
-    // login/dashboard/language page goes through - they would all look like home.
-    const char *logo = "";
+    // carries it elsewhere - the reader still needs a way back. Mirrors the
+    // previous site. Decided from the request path, not `current_url`: the
+    // latter is the menu *section* and is hardcoded to "/" by
+    // buildPageWebSite(), which every login/dashboard/language page goes
+    // through - they would all look like home.
+    char *logo = strdup("");
     int at_home = strcmp(request_path(), "/") == 0;
-    if ((epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) && !at_home)
-        logo = "<a href=\"/\"><img src=\"/themes/dark/assets/menu/br-logo-s_epoch1.gif\""
-               " border=\"0\" hspace=\"4\" alt=\"Boat Rudder\" width=\"100%\"></a>";
-    else if (epoch == EPOCH_WML)
-        logo = "<a href=\"/\"><img src=\"/themes/dark/assets/menu/br-logo-s_epoch1.wbmp\""
-               " alt=\"Boat Rudder\"/></a>";
+    if ((epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE || epoch == EPOCH_WML) && !at_home) {
+        char *logo_path = generate_url_theme("menu/menu-logo_epoch%d.html", epoch);
+        char *logo_tpl  = logo_path ? read_file_to_string(logo_path) : NULL;
+        free(logo_path);
+        if (logo_tpl) {
+            free(logo);
+            logo = logo_tpl;
+        }
+    }
 
     char *lang_html = language_selector(epoch);
     // Epoch 3 draws its own title in the nav bar and takes no logo slot.
@@ -169,6 +172,7 @@ char *menu(const char *current_url, int epoch) {
             : render_template(menu_tpl, logo, items, lang_html);
     }
     free(lang_html);
+    free(logo);
 
 cleanup:
     free(menu_item_tpl);

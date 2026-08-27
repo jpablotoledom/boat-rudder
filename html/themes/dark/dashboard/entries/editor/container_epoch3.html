@@ -31,7 +31,7 @@
 
   <!-- Block type toolbar -->
   <div class="boat-rudder__entry-editor__block-toolbar">
-    <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('tittle')">&sect; Title</button>
+    <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('title')">&sect; Title</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('image')">&square; Image</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('gallery')">&#9632; Gallery</button>
@@ -191,7 +191,7 @@
   function initBlockEditors(block) {
     var type = block.dataset.type;
     if (type === 'paragraph') initParagraphEditors(block);
-    if (type === 'tittle') initBlockHeadingBtns(block);
+    if (type === 'title') initBlockHeadingBtns(block);
     if (type === 'gallery') initGalleryBlock(block);
     if (type === 'image') initImageBlock(block);
     if (type === 'link') initLinkBlock(block);
@@ -222,9 +222,9 @@
     var extraField = blockEl.querySelector('[name="extra_data"]');
     var extra = extraField ? extraField.value : '';
 
-    if (type === 'tittle') {
+    if (type === 'title') {
       var level = parseInt(extra) || 2;
-      preview.innerHTML = '<h' + level + ' class="boat-rudder__entry-editor__preview__tittle">' + escapeHtml(text) + '</h' + level + '>';
+      preview.innerHTML = '<h' + level + ' class="boat-rudder__entry-editor__preview__title">' + escapeHtml(text) + '</h' + level + '>';
     } else if (type === 'paragraph') {
       preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__paragraph">' + (text || '<span class="boat-rudder__entry-editor__preview__empty">Empty paragraph</span>') + '</div>';
     } else if (type === 'image') {

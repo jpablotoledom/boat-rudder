@@ -13,11 +13,19 @@
 // a thread never serves two requests at once.
 
 // Resolves the language for this request and stores it for request_lang().
-// `cookie_header` is the raw `Cookie:` header value (may be NULL): a `lang`
-// cookie naming a configured language wins, otherwise the site default
+// `lang_query` (may be NULL) is the raw `?lang=` query value, if any, and
+// wins over everything else when it names a configured language: it is how
+// epoch 0/1 switch language at all, since those templates link straight to
+// "<page>?lang=xx" instead of the cookie-setting /language/set redirect (see
+// language_page.c - HTTP/1.0-era clients, including real NCSA Mosaic builds,
+// take a redirect's Location literally as the whole next request and choke
+// on anything that isn't a full absolute URI, which a same-origin app has no
+// reliable way to always supply). Otherwise `cookie_header` (the raw
+// `Cookie:` header, may be NULL) is used: a `lang` cookie naming a
+// configured language wins, otherwise the site default
 // (cms_resolve_default_lang()) is used. Call once per request, before
 // rendering anything.
-void request_lang_set(const char *cookie_header);
+void request_lang_set(const char *cookie_header, const char *lang_query);
 
 // The language resolved by the last request_lang_set() on this thread, as an
 // ISO 639-1 code. Never NULL; returns the site default if the setter has not

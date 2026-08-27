@@ -319,57 +319,6 @@ int generate_youtube_qr(const char *youtube_url, const char *html_root) {
     return ret;
 }
 
-char *generate_youtube_qr_text(const char *youtube_url) {
-    char video_id[32] = {0};
-    if (extract_youtube_id(youtube_url, video_id, sizeof(video_id)) != 0)
-        return NULL;
-
-    char short_url[128];
-    youtube_short_url(video_id, short_url, sizeof(short_url));
-
-    QRcode *qr = QRcode_encodeString(short_url, 0, QR_ECLEVEL_L, QR_MODE_8, 1);
-    if (!qr) return NULL;
-
-    const int margin = 2;
-    int size = qr->width;
-    int grid = size + margin * 2;       /* total modules including margin */
-    int term_rows = (grid + 1) / 2;     /* 2 QR rows per terminal line */
-
-    /* worst case: 3 bytes per module (UTF-8 half-block) + newline + NUL */
-    char *buf = malloc((size_t)term_rows * (grid * 3 + 2) + 1);
-    if (!buf) { QRcode_free(qr); return NULL; }
-
-    char *p = buf;
-    for (int tr = 0; tr < term_rows; tr++) {
-        int qr_top = tr * 2 - margin;
-        int qr_bot = tr * 2 + 1 - margin;
-        for (int c = 0; c < grid; c++) {
-            int col = c - margin;
-            int top = (qr_top >= 0 && qr_top < size && col >= 0 && col < size)
-                      ? (qr->data[qr_top * size + col] & 0x01) : 0;
-            int bot = (qr_bot >= 0 && qr_bot < size && col >= 0 && col < size)
-                      ? (qr->data[qr_bot * size + col] & 0x01) : 0;
-            if (top && bot) {
-                /* U+2588 FULL BLOCK */
-                *p++ = (char)0xE2; *p++ = (char)0x96; *p++ = (char)0x88;
-            } else if (top) {
-                /* U+2580 UPPER HALF BLOCK */
-                *p++ = (char)0xE2; *p++ = (char)0x96; *p++ = (char)0x80;
-            } else if (bot) {
-                /* U+2584 LOWER HALF BLOCK */
-                *p++ = (char)0xE2; *p++ = (char)0x96; *p++ = (char)0x84;
-            } else {
-                *p++ = ' ';
-            }
-        }
-        *p++ = '\n';
-    }
-    *p = '\0';
-
-    QRcode_free(qr);
-    return buf;
-}
-
 /* WBMP type 0: two header bytes, then width/height as multi-byte integers
    (7 bits per byte, high bit = "more follows"), then a 1bpp bitmap padded to
    whole bytes per row, where 1 = white and 0 = black. */
@@ -460,8 +409,14 @@ char *generate_qr_halfblock_text(const char *text) {
     const int margin = 2;
     int size = qr->width;
     int grid = size + margin * 2;
-    int term_rows = (grid + 1) / 2;
+    int term_rows = (grid + 1) / 2; // 2 QR rows packed into 1 terminal row
 
+    // Epoch 0's realistic reader is a terminal browser (Lynx/w3m/ELinks) in
+    // a UTF-8 locale, and a terminal character cell is roughly twice as tall
+    // as it is wide - one QR module per text row would draw a code
+    // stretched to twice the height a phone camera expects. Packing 2 QR
+    // rows into 1 terminal row with the upper/lower/full Unicode block
+    // glyphs corrects for that and comes out looking square.
     char *buf = malloc((size_t)term_rows * (grid * 3 + 2) + 1);
     if (!buf) { QRcode_free(qr); return NULL; }
 

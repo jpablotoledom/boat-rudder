@@ -12,7 +12,7 @@ endif
 
 :Read "User-Agent" header;
 
-if (WAP / UP.Browser / Nokia WAP tokens?) then (yes)
+if (WAP tokens present AND "AppleWebKit" absent?) then (yes)
   #FFE0E0:epoch = -1 (EPOCH_WML);
   :Content-Type = text/vnd.wap.wml;
   :Template style: WML <card> deck,\nno HTML, text + <a> links only;
@@ -21,7 +21,7 @@ endif
 
 if (Lynx / Cello / Line Mode Browser?) then (yes)
   #FFF3E0:epoch = 0 (EPOCH_PRESTANDARD);
-  :Content-Type = text/html;
+  :Content-Type = text/html; charset=UTF-8;
   :Template style: bare <html>,\nno styling attributes,\n<h1>/<h2>/<hr>/<a> only;
   stop
 endif

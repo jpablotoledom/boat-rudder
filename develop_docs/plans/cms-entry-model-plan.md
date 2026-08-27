@@ -93,7 +93,7 @@ all the `translation` documents those referenced.
   "content": [
     {
       "_id": ObjectId,
-      "type": "tittle",
+      "type": "title",
       "order": 0,
       "text": { "en": "Section title", "es": "Título de sección" },
       "extra_data": "1"
@@ -126,7 +126,7 @@ Field-by-field mapping from the normalized model:
 |---|---|
 | `entries.name` (map) | `entries.name_id` -> `translation.{eng,esp}` |
 | `entries.header.*` | the entire `header` document (`entry_id` link is implicit - it's the parent doc) |
-| `entries.header.title` (map) | `header.tittle_id` -> `translation.{eng,esp}` |
+| `entries.header.title` (map) | `header.title_id` -> `translation.{eng,esp}` |
 | `entries.header.summary` (map) | `header.summary_id` -> `translation.{eng,esp}` |
 | `entries.header.author_id` (ObjectId -> `users._id`) | `header.author_id` -> `translation.{eng,esp}` (kept as a reference instead of flattening to a map - see Status) |
 | `entries.content[]` | the `content` collection (`entry_id` link is implicit) |
@@ -219,7 +219,7 @@ adding, or removing content blocks is just array manipulation within one documen
 - **Document size**: MongoDB's 16 MB document limit applies per `entries` document now.
   Not a practical concern for typical text + image-filename content, but a page with an
   enormous number of large `code-text` blocks could theoretically approach it (the
-  current `MAX_TITTLE_LENGTH`/`MAX_SUMMARY_LENGTH`/`MAX_CONTENT_LENGTH` of 50000 chars
+  current `MAX_title_LENGTH`/`MAX_SUMMARY_LENGTH`/`MAX_CONTENT_LENGTH` of 50000 chars
   each, times many blocks, is still far below 16 MB).
 - **Updating a single content block** requires an array-element update
   (`db.entries.updateOne({_id, "content._id": blockId}, {$set: {"content.$.text.en": ...}})`)
@@ -256,13 +256,12 @@ Everything described above is implemented and wired into the `/page/<link>`, `/b
 `/blog` and `/blog/category/<slug>` routes - see
 [rendering.md, "CMS entries"](../reference/rendering.md),
 `src/db/cms_entries.c`, and `src/modules/entry_page/entry_page.c`. Fourteen `content[].type`s
-are implemented; heading levels via `content[].extra_data` for `tittle`, category filtering of
+are implemented; heading levels via `content[].extra_data` for `title`, category filtering of
 the blog listing, and `media`/`media_directories` (§2.3) all landed as well.
 
-Still open: the `image-single` element type. Every other block type now has a template for all
-five epochs - retro clients degrade per type (a `youtube-embed` becomes a scannable QR code, an
-`image` becomes a link to the full-size file) rather than dropping the block. When `image-single`
-lands, rendering follows the same pattern as the implemented types: per-type "element" templates loaded via
+Still open: the `image-single` element type, and older-epoch (-1..2) templates for the nine
+block types that currently only have an epoch 3 variant. When these land, rendering follows the
+same pattern as the implemented types: per-type "element" templates loaded via
 `generate_url_theme` + `read_file_to_string` + `render_template` per `content[].type`/epoch, per
 Boat Rudder's
 [rendering.md, "Templates"](../reference/rendering.md).

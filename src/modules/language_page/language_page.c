@@ -65,6 +65,20 @@ char *language_page(int epoch, const char *return_url) {
     char return_enc[1024];
     url_encode(return_enc, safe_return, sizeof(return_enc));
 
+    // HTTP/1.0-era clients (real NCSA Mosaic among them) take a redirect's
+    // Location as gospel and choke on anything short of a full absolute URI -
+    // there is no reliable way to always supply one from a same-origin app,
+    // so epoch 0/1 skip the cookie-setting /language/set redirect entirely
+    // and link straight to "<return>?lang=xx" instead, a plain same-origin
+    // GET that never touches Location. The choice only sticks for that one
+    // click rather than the whole session (see request_lang_set()), which is
+    // the same trade-off the previous site made for these epochs.
+    int direct_link = epoch <= EPOCH_EARLY;
+    // Escaped: an href is XML/HTML text content, and a bare '&' is a hard
+    // parse error under WML's strict XML ("element is not well formed"),
+    // confirmed live in a WAP emulator.
+    const char *sep = strchr(safe_return, '?') ? "&amp;" : "?";
+
     const char *active = request_lang();
 
     char *items = strdup("");
@@ -80,8 +94,16 @@ char *language_page(int epoch, const char *return_url) {
 
         // Each language named in its own language, so it is recognisable to
         // the reader who is looking for it.
-        char *item = render_template(item_tpl, active_attr, langs[i].code, return_enc,
-                                      language_catalog_native(langs[i].code));
+        char *item;
+        if (direct_link) {
+            char href[600];
+            snprintf(href, sizeof(href), "%s%slang=%s", safe_return, sep, langs[i].code);
+            item = render_template(item_tpl, active_attr, href,
+                                    language_catalog_native(langs[i].code));
+        } else {
+            item = render_template(item_tpl, active_attr, langs[i].code, return_enc,
+                                    language_catalog_native(langs[i].code));
+        }
         items = item ? str_append(items, item) : NULL;
         free(item);
     }

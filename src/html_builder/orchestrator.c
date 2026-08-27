@@ -80,6 +80,15 @@ static char *build_blog_page_internal(const char *tpl_fmt, int epoch,
 
     char *combined_nav;
     if (category_menu_html) {
+        // WML has no block-level separation of its own between two chunks
+        // of markup concatenated back to back (no div/section, and margins
+        // are a CSS concept it predates) - without a blank-line spacer the
+        // language selector and the category list ran straight into each
+        // other with no visible gap at all in a real WAP emulator.
+        if (epoch == EPOCH_WML) {
+            char *spaced = str_append(html_menu, "<p><br/></p>");
+            html_menu = spaced ? spaced : html_menu;
+        }
         combined_nav = str_append(html_menu, category_menu_html);
         free(category_menu_html);
         if (!combined_nav) combined_nav = strdup("");

@@ -15,7 +15,7 @@ typedef struct {
     char  *type;        // one of the 14 block types - see §3
     int    order;
     char **text_values; // parallel to langs[] - exact text.<lang> ("" if absent)
-    char  *extra_data;  // untranslated; heading level for "tittle", gallery _id for "gallery", ...
+    char  *extra_data;  // untranslated; heading level for "title", gallery _id for "gallery", ...
 } CmsContentBlockEdit;
 
 typedef struct {
@@ -83,7 +83,7 @@ templates, which now cover every epoch:
 
 | Type | Template | Extra field |
 |---|---|---|
-| `tittle` | `blocks/tittle_epoch3.html` | heading level (1-6) |
+| `title` | `blocks/title_epoch3.html` | heading level (1-6) |
 | `paragraph` | `blocks/paragraph_epoch3.html` | style variant (`lead`, `note`, ...) |
 | `image` | `blocks/image_epoch3.html` | `"<caption>\|<width>\|<align>"` |
 | `byline` | `blocks/byline_epoch3.html` | date |
@@ -147,7 +147,7 @@ No external `.js` file - same convention as `layout/layout_epoch3.html`. An IIFE
 - `deactivateBlock(el)` - removes `.boat-rudder__entry-editor__block--editing`, calls `refreshBlockPreview(block)`.
 - `refreshBlockPreview(blockEl)` - generates preview HTML for all 14 block types, reading the
   current language's text field and `extra_data`:
-  - `tittle` → `<hN class="boat-rudder__entry-editor__preview__tittle">`, level from `extra_data`
+  - `title` → `<hN class="boat-rudder__entry-editor__preview__title">`, level from `extra_data`
   - `paragraph` → `<div class="boat-rudder__entry-editor__preview__paragraph">` with raw rich-text HTML
   - `image` → `<figure class="boat-rudder__entry-editor__preview__image"><img><figcaption>`
   - `byline` → `<div class="boat-rudder__entry-editor__preview__byline">`

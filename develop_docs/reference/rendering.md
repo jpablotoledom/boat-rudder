@@ -18,11 +18,34 @@ client the simplest markup its browser can handle, from WAP-era phones to modern
 
 | Epoch | Constant | Target | `Content-Type` |
 |---|---|---|---|
-| -1 | `EPOCH_WML` | WAP phones | `text/vnd.wap.wml` |
-| 0 | `EPOCH_PRESTANDARD` | Text browsers (e.g. Lynx) | `text/html` |
+| -1 | `EPOCH_WML` | WAP 1.x phones | `text/vnd.wap.wml` |
+| 0 | `EPOCH_PRESTANDARD` | Text browsers (e.g. Lynx, w3m, ELinks) | `text/html; charset=UTF-8` |
 | 1 | `EPOCH_EARLY` | Old browsers (table layouts, `<font>`) | `text/html` |
 | 2 | `EPOCH_MIDDLE` | Netscape 4 / MSIE 5 era - table layout, no external stylesheet | `text/html; charset=UTF-8` |
 | 3 | `EPOCH_MODERN` | Modern HTML5 + CSS3 | `text/html; charset=UTF-8` |
+
+Epoch 1 (and WML) get a bare `Content-Type: text/html` with **no** `charset` parameter, on
+purpose - live-tested against real NCSA Mosaic 2.1.1, which matches `Content-Type` against its
+configured MIME viewers *literally*, `charset` and all, and a header it doesn't recognize as a
+known type shows "Undefined Viewer for MIME Type" instead of the page. Epoch 0's real-world
+reader is a modern terminal emulator (Lynx/w3m/ELinks running today in a UTF-8 locale) rather
+than a genuinely pre-Unicode machine, so it keeps a normal UTF-8 declaration; epoch 1 and WML
+predate UTF-8 outright and are transcoded to Latin-1 instead - see "Character encoding
+(epoch 1, WML)" below.
+
+`detect_epoch()` (`src/utils/detect_epoch.c`) classifies `EPOCH_WML` from a substring list built
+from actual WAP 1.x-era browser/device identifiers: the Openwave/Unwired Planet UP.Browser
+(`UP.Browser`, `UP/`) that shipped across most manufacturers, Nokia's own WAP browser, Obigo (the
+other widely-licensed WAP browser engine), and the hyphenated manufacturer-prefix conventions
+that era's firmware used in place of a real browser name (`SIE-` Siemens, `SEC-` Samsung, `MOT-`
+Motorola, `LG-` LG, plus `Ericsson`/`Panasonic`/`SANYO`/`SHARP`/`Alcatel`/`PHILIPS`). Several of
+these brands (Nokia, LG, Motorola, Samsung, Sharp, Alcatel) still ship Android phones today whose
+modern Chrome/WebView `User-Agent` could otherwise collide with the same substring, so the whole
+check additionally requires the *absence* of `AppleWebKit` - present in every real modern mobile
+browser, never present in a genuine WAP 1.x one. Confirmed against a real device in the field: a
+Nokia 6233 running UC Browser 7.9 identifies itself in lower case (`nokia6233/...`), so the token
+list checks both cases rather than assuming the manufacturer-prefix casing convention documented
+elsewhere holds universally.
 
 Epoch 2 has **no external stylesheet**. Its pages carry a small inline `<style>` in the page
 shell - element selectors only (`a`, `body`, `td`, `p`, `h1`-`h3`), for the font family/size and
@@ -91,11 +114,12 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 - `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
   `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
 - `home-blog/` - `home-blog_epoch<N>.html` (1 `%s`: items) and `home-blog-item_epoch<N>.html`
-  (epoch -1/0: 4 `%s` - title, date, summary, categories; epoch 1/2/3: 7 `%s` - image, link,
-  title, summary, author, categories, date); `home-blog/empty_epoch<N>.html`, a static
-  "No blog entries found" message rendered instead of `items` when there are no blog entries.
-  Category tags reuse `elements/category/category_epoch<N>.html` items, concatenated without
-  the `entry-categories` wrapper. See "Home blog list" below.
+  (epoch -1/0: 6 `%s` - link, title, summary, author, categories, date; epoch 1/2/3: 7 `%s` -
+  thumbnail image, link, title, summary, author, categories, date - the one difference being the
+  thumbnail, which epoch 0/WML cannot show regardless of layout); `home-blog/empty_epoch<N>.html`,
+  a static "No blog entries found" message rendered instead of `items` when there are no blog
+  entries. Category tags reuse `elements/category/category_epoch<N>.html` items, concatenated
+  without the `entry-categories` wrapper. See "Home blog list" below.
 - `home-blog/` - `home-blog_epoch<N>.html` (2 `%s`: heading, items) and `home-blog/empty_epoch<N>.html`
   (static "No blog entries found"), the `/blog` page wrapper and empty state. Items reuse
   `home-blog/home-blog-item_epoch<N>.html` (same placeholders/category rendering as the home
@@ -127,24 +151,33 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 - `elements/<type>/` - one subdirectory per content-block type. The `category/` element is the
   shared category "tag": from epoch 3 it is an `<a href>` (2 `%s` - link, name) pointing at
   `/blog/category/<slug>`; epochs -1..2 keep the plain 1 `%s` label. `gallery/` has additional
-  variants: `gallery_epoch<N>.html` (the container, one `%s` for its rows), `gallery-row_epoch<N>.html`
-  (one `%s` for its items - shared with the standalone gallery page's thumbnail strip, so a row
-  is a row everywhere) and `gallery-item_epoch<N>.html` (one shape covering all five epochs; where
-  an epoch does not use one of the three arguments - epoch 3 opens the lightbox in place rather
-  than following a link - the markup for it is commented out rather than the argument being
-  dropped, so the positions never shift), plus `gallery-item-more_epoch3.html` /
-  `gallery-item-hidden_epoch3.html` for the "+N" overflow tile. The standalone page adds
-  `gallery-page_epoch<N>.html` (the shell - the "< Back" link is baked directly into it, see
-  below), `gallery-page-main_epoch{1,2}.html` (the current image plus prev/next),
+  variants for epochs 1-3: `gallery_epoch<N>.html` (the container, one `%s` for its rows),
+  `gallery-row_epoch<N>.html` (one `%s` for its items - shared with the standalone gallery page's
+  thumbnail strip, so a row is a row everywhere) and `gallery-item_epoch<N>.html` (one shape
+  covering all three; where an epoch does not use one of the three arguments - epoch 3 opens the
+  lightbox in place rather than following a link - the markup for it is commented out rather than
+  the argument being dropped, so the positions never shift), plus `gallery-item-more_epoch3.html`
+  / `gallery-item-hidden_epoch3.html` for the "+N" overflow tile. Epochs -1/0 skip that whole
+  grid: neither a genuine WAP 1.x phone nor a text-only browser can show any of the pictures
+  regardless of layout, so the block collapses to a single
+  `gallery-view-link_epoch<N>.html` - "`[View gallery]`" - link into the gallery's own page
+  instead of one broken thumbnail per photo. The standalone page adds `gallery-page_epoch<N>.html`
+  (the shell - the "< Back" link is baked directly into it, see below),
+  `gallery-page-main_epoch{1,2}.html` (the current image plus prev/next),
   `gallery-page-thumbstrip_epoch{1,2}.html` (one `%s` wrapping the thumbnail rows) and
-  `gallery-page-thumb_epoch{1,2}.html`; epochs -1/0 list plain `gallery-page-image-entry`
-  entries instead, and epoch 3 uses a `gallery-page-item_epoch3.html` grid. Epochs 1-2 additionally
-  cap the inline gallery at 3 images and append `gallery-view-all_epoch<N>.html` (a link to the
-  standalone page, when the block names a gallery) or `gallery-view-all-count_epoch<N>.html` (a
-  plain count, when it does not) after the table - the machine rendering the article is the one
-  paying for every image in the block, and an article's gallery can carry 20+ photos. Epoch 3
-  handles the same problem differently, folding the rest behind an in-page "+N" tile instead of
-  cutting them - see `gallery_columns()` and the cap logic in `render_gallery()`. The "< Back" link goes to the entry the gallery belongs to (`media_galleries.entry_id`), named
+  `gallery-page-thumb_epoch{1,2}.html`; epoch 3 uses a `gallery-page-item_epoch3.html` grid.
+  Epochs -1/0 render `gallery-page-qr_epoch<N>.html` instead - a QR code (WBMP image for WML,
+  Unicode half-block `<pre>` art for epoch 0 - see "Character encoding" below for why the two
+  need different renderings) encoding the gallery's own public URL, plus the URL again as a plain
+  text link - since the requesting browser cannot show the photos either way, the page hands the
+  reader a code to scan with the phone sitting next to the old machine, mirroring the previous
+  site. Epochs 1-2 additionally cap the inline gallery at 3 images and append
+  `gallery-view-all_epoch<N>.html` (a link to the standalone page, when the block names a
+  gallery) or `gallery-view-all-count_epoch<N>.html` (a plain count, when it does not) after the
+  table - the machine rendering the article is the one paying for every image in the block, and
+  an article's gallery can carry 20+ photos. Epoch 3 handles the same problem differently,
+  folding the rest behind an in-page "+N" tile instead of cutting them - see `gallery_columns()`
+  and the cap logic in `render_gallery()`. The "< Back" link goes to the entry the gallery belongs to (`media_galleries.entry_id`), named
   by its title in the request's language, so a reader who followed a link into the gallery can
   find their way back to what they were reading - not to wherever they happened to click in from.
   `cms_get_entry_backlink()` (`src/db/cms_media_galleries.c`) resolves it; when the entry cannot
@@ -152,13 +185,35 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   with the plain label "Back". It is baked directly into each `gallery-page_epoch<N>.html` as two
   positional arguments (`%1$s` the href, `%2$s` the label) ahead of the page's own content
   (`%3$s`) - fixed placement, not a template of its own, since the link itself never varies in
-  shape, only in where it points. `list/` has `list-container_epoch<N>.html` (2 `%s`: items, then the tag - `ul` or `ol` - which WML leaves unused because it has no list element) and `list-item_epoch<N>.html`; `table/` has `table_epoch<N>.html` / `table-row_epoch<N>.html` / `table-cell_epoch<N>.html` /
-  `table-header-cell_epoch<N>.html`. Epochs 1-2 colour it to match epoch 3's palette
-  (`#1e2d3d` header, `#93c5fd` header text, `#1a1a1a` cells) using the same trick as the
-  home-blog cards: the outer `<table>` carries the border colour as its `bgcolor` and
-  `cellspacing="1"`, so the 1px gap between cells shows it - Netscape 4 does not propagate a
-  table's `bgcolor` to its own cells, so each `<th>`/`<td>` sets its own. Epoch 0/-1 are left as
-  plain text/WML, where colour has no meaning. See "Content block types" below for the full list and the epochs each one covers.
+  shape, only in where it points. `list/` has `list-container_epoch<N>.html` (2 `%s`: items, then the tag - `ul` or `ol` - which WML leaves unused because it has no list element) and `list-item_epoch<N>.html`; `table/` has `table_epoch<N>.html` for epochs 0-3, plus `table-row_epoch<N>.html` /
+  `table-cell_epoch<N>.html` / `table-header-cell_epoch<N>.html` for epochs 2-3, whose real
+  `<table>` is coloured to match epoch 3's palette (`#1e2d3d` header, `#93c5fd` header text,
+  `#1a1a1a` cells) using the same trick as the home-blog cards: the outer `<table>` carries the
+  border colour as its `bgcolor` and `cellspacing="1"`, so the 1px gap between cells shows it -
+  Netscape 4 does not propagate a table's `bgcolor` to its own cells, so each `<th>`/`<td>` sets
+  its own.
+
+  Epochs 0-1 carry no real `<table>` at all - their browsers (Lynx/Cello-era text browsers,
+  NCSA Mosaic) cannot lay one out reliably. `table_epoch{0,1}.html` is just `<pre>%s</pre>`; the
+  grid inside it - `+----+----+`, `| cell | cell |` - is built in `render_table_ascii()`
+  (`src/modules/entry_page/entry_page.c`), which measures every cell once before rendering any
+  row, since a column's width cannot be known until all of its cells have been read. Widths are
+  counted in **display columns, not bytes** (`utf8_width()`): a multi-byte UTF-8 character such
+  as `×` or an accented Spanish letter would otherwise get padded as if it were two characters
+  wide, and every column after it would drift out of alignment.
+
+  WML has a real `<table>` in its DTD, but it is unusable on a phone screen for this data: its
+  `columns` attribute is a fixed count with no wrapping or width control at all, so a several-
+  column row renders as one very long line the reader has to scroll horizontally to read -
+  confirmed live in a WAP emulator, the same "documented but not actually usable" gap already
+  found with Cello and images (see "Character encoding" below). `render_table()`'s WML branch
+  (`entry_page.c`) instead transposes each data row into `"<label>: <value><br/>"` lines using
+  the header row's own cell text as labels - one `<p>` per record, a blank record separator
+  between them - which reads correctly regardless of screen width; a table with no header row
+  falls back to one bare `<value><br/>` per cell, unlabeled but still readable. No template files
+  back this path - the label/value pairing has no fixed shape to hang a template on, so the
+  markup is built directly in C for this one case. See "Content block types" below for the full
+  list and the epochs each one covers.
 - `dashboard/media/` - templates for the `/dashboard/media` admin page: `media_epoch3.html`, `media-directory-container_epoch3.html`, `media-directory_epoch3.html`, `item-photo_epoch3.html`, `media-modal_epoch3.html`.
 
 `%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
@@ -259,7 +314,7 @@ interprets those two fields differently:
 
 | Type | `text` | `extra_data` | Epochs |
 |---|---|---|---|
-| `tittle` | heading text | heading level `1`-`6` (anything else = `2`) | -1..3 |
+| `title` | heading text | heading level `1`-`6` (anything else = `2`) | -1..3 |
 | `paragraph` | rich text (stored as HTML) | style variant, e.g. `lead` / `note` | -1..3 |
 | `byline` | author | date | -1..3 |
 | `image` | image base URL | `"<caption>\|<width>\|<align>"` (see below) | -1..3 |
@@ -283,14 +338,47 @@ without that block. An unknown `content[].type` renders as `""` for the same rea
 or as plain text with literal newlines (what the CMS migration produced). HTML collapses a bare
 newline into a space, so `expand_newlines()` turns each one into a line break the target epoch
 understands - `<br/>` for WML, `<br>` elsewhere - before the text reaches the template.
-`code-text` needs the same treatment only on WML, since every other epoch wraps the code in
-`<pre>`.
+`code-text` needs the same treatment on WML and epochs 0-1 (`epoch <= EPOCH_EARLY`): `<pre>` is
+only a reliable way to keep line breaks on browsers modern enough to honor its whitespace rules,
+and NCSA Mosaic 1.x/Cello-era engines don't consistently - live-tested, a real build ran an
+entire code block onto one line, `<pre>` and all, exactly the way it would collapse whitespace in
+ordinary flow text. Converting `\n` to an explicit `<br>` makes each line break a browser command
+rather than whitespace it can choose to ignore. Epoch 2/3 keep the raw newline inside `<pre>`,
+which is reliable on anything that recent.
+
+A run of 2+ consecutive `<br>` marks a paragraph break rather than a mid-paragraph line break -
+whether it got there as literal HTML typed into the rich-text editor, or was just produced by
+`expand_newlines()` from a blank line in plain-text content. On epochs 0-1 that alone is not
+enough: an engine of that era (NCSA Mosaic among them) can collapse a run of otherwise-empty
+lines the same way it collapses runs of source whitespace, since nothing sits on the blank line
+to give it a height of its own - the paragraphs run together with no visible gap.
+`retro_safe_paragraph_text()` handles two things a rich-text paragraph can contain that these
+epochs cannot be trusted to render, however they got into the stored text - typed directly by an
+author, or produced by `expand_newlines()` from a blank line in plain-text content:
+
+- a bare `&nbsp;` (an author indenting a line, or forcing spaces to survive HTML's whitespace
+  collapsing) prints as the literal six characters `&nbsp;` instead of a space - confirmed on a
+  real article, 77 occurrences across seven paragraph blocks, each printed verbatim in NCSA
+  Mosaic;
+- a run of 2+ consecutive `<br>` - a paragraph break - does not reliably leave a visible gap: an
+  engine of that era can collapse a run of otherwise-empty lines, the same way it collapses runs
+  of source whitespace, since nothing sits on the blank line to give it a height of its own.
+
+Both are fixed the same way: replace the named reference with the *numeric* one, `&#160;` - a
+base SGML mechanism, not a DTD-declared entity set, and so older and more consistently
+implemented than any named form (`&nbsp;` entered the language via the HTML 2.0 DTD, RFC 1866,
+1995; epoch 1 reaches back to NCSA Mosaic 1.x and Cello, both 1993, predating it). Splicing one
+into the middle of a `<br>` run puts real content on that line so it cannot be collapsed away
+either. This is a no-op for every other epoch, whose browsers render `&nbsp;` and stacked `<br>`
+correctly. The same swap was made everywhere else `&nbsp;` appeared in an epoch-1 template (the
+standalone gallery page's prev/next spacing, its "View all" link) - those are static template
+text, not stored content, so they needed a one-time manual fix rather than this runtime pass.
 
 **`extra_data` is a value, never markup.** The legacy CMS stored whole attributes there
 (`style="font-size: 18px"`) and interpolated them unescaped, which let anyone with editor
 access inject HTML into a page. Renderers now validate the value and build the attribute
 themselves: `modifier_class()` accepts only `[a-z0-9-]` and emits `<base>--<value>`, and
-`image`/`tittle` check theirs against fixed sets. Anything unrecognized falls back to the
+`image`/`title` check theirs against fixed sets. Anything unrecognized falls back to the
 default and never reaches the page.
 
 `image` packs three fields as `"<caption>|<width>|<align>"` - the same pipe convention
@@ -328,6 +416,15 @@ any `<img>` written directly into a retro template.
 for epoch 3, `.gif` for epoch 2, `-s.gif` (small) for epoch 1, and no icon at all for
 epochs -1/0, whose templates keep it inside a comment. Note the theme segment is hardcoded,
 so this block type does not follow the active `theme` setting.
+
+Epoch 0 shows the raw URL as the link text rather than the display name (`the block's `%1$s`
+argument used twice, for `href` and the visible text) - since the requesting browser almost
+certainly cannot reach a modern HTTPS-only site like YouTube or Instagram anyway (no modern TLS
+support), showing a friendly label as if it were navigable would be misleading; the raw URL at
+least lets the reader note it down for a capable device. Each entry also self-wraps in its own
+single-item `<ul><li>`, since the block renders one entry at a time with no shared container to
+carry the list markup - several of these in a row still look like one list, just several small
+ones stacked with no visible seam.
 
 `entries.categories[]` (an `ObjectId[]` referencing `entry_categories._id`, per
 `plans/cms-entry-model-plan.md` §2.2) is resolved to category names and rendered as a small "tags"
@@ -378,6 +475,144 @@ threads may render the same page at once.
 **Not yet implemented**: the `image-single` block type (legacy entries using it were migrated
 to `image`), and older-epoch templates for `generic` - see
 `develop_docs/plans/cms-entry-model-plan.md` for the full target schema.
+
+### Legacy HTTP compatibility
+
+`http_router.c` and `http_request_parser.c`.
+
+Real period browsers do not always speak the HTTP `http_route()` was written to expect, and two
+gaps only surfaced against an actual client (`curl`/modern browsers never hit either):
+
+- **A true HTTP/0.9 "simple request"** - literally `GET /path`, no version token, and per spec
+  no headers or blank-line terminator ever follow it - looks identical to an ordinary request
+  still mid-transmission until the request line itself is checked. Waiting for a `\r\n\r\n` that
+  is never coming left a real Cello 1.x image fetch hanging until the socket timed out with no
+  response at all. The read loop in `http_route()` now recognizes a version-less request line
+  (`sscanf` yields 2 fields, not 3) and treats it as complete immediately;
+  `parse_http_request()` (`http_request_parser.c`) accepts the resulting 2-field line, leaving
+  `req.protocol` empty rather than failing outright.
+- **A versioned request line with a few headers (or none) and no blank line at all** - live-
+  tested, this is what a real Cello 1.x sends for at least some fetches. The same "wait forever"
+  problem, just one token later. Rather than block for the full socket timeout, the loop gives
+  the socket one `poll()`-bounded 400ms window to prove more data is actually still arriving
+  before concluding the header block is finished with whatever it already has - long enough that
+  a genuinely slow, well-formed multi-packet request is never mistaken for a truncated one, short
+  enough that a real "no blank line coming" client isn't stuck waiting on the 30s socket timeout.
+
+Both fixes only affect *how long the server waits to start responding* - the response itself was,
+for a while, also rewritten to omit headers entirely for a version-less request (a literal HTTP/0.9
+"simple response"). That turned out to be the wrong call: live-tested, a real Cello 1.x needs
+`Content-Type` to know a response is an image at all - without it, it showed the raw GIF bytes as
+garbled text instead of decoding them, since HTTP/0.9 (1991) predates images/MIME on the web
+entirely. `serve_static_file()` (`http_router.c`) now always sends a full status line and headers,
+regardless of which request style triggered it.
+
+### Character encoding
+
+Epoch 1 and WML.
+
+Every stored/authored string in the CMS is UTF-8, but UTF-8 wasn't defined until 1993 and didn't
+reach the web until HTML 4 (1997) - epoch 1 (NCSA Mosaic, Cello) and WML predate it entirely and
+assume ISO-8859-1, HTTP's own default charset (RFC 1945/2616). Handed raw UTF-8 bytes with no
+matching charset, they render each encoded character as two/three separate Latin-1 glyphs (e.g.
+"SÃguenos" for "Síguenos") - confirmed live in both a real NCSA Mosaic build and a WAP emulator.
+`utf8_to_latin1()` (`src/utils/build_epoch_response.c`) transcodes the response body for these two
+epochs only: every codepoint in the Latin-1 range (U+0000-U+00FF - ASCII plus the accented
+Western European letters the CMS content actually uses) survives as its single matching byte;
+anything further out degrades to `?` rather than corrupting the byte stream. WML's own XML
+prolog additionally declares `encoding="ISO-8859-1"` (`layout_epoch-1.html` and the other WML page
+shells) - without it, a compliant XML parser defaults to assuming UTF-8 and rejects the very
+Latin-1 bytes the transcode just produced as invalid.
+
+Epoch 0 is deliberately **not** included in this transcode, even though it shares the "text-only"
+label with epoch 1: its realistic reader today is a terminal browser (Lynx/w3m/ELinks) running in
+a UTF-8 locale, not a genuinely pre-Unicode machine, so it keeps plain UTF-8 - see the epoch table
+above. This is also why the `youtube-embed` QR code is drawn differently per epoch: epoch 0's
+Unicode half-block art (two QR modules packed into one terminal row, correcting for a monospace
+cell being taller than it is wide) assumes the UTF-8 terminal that epoch actually targets, while
+epoch 1/WML never see it - their QR is a GIF/WBMP image instead, not text at all - so there is no
+codepage conflict to design around for them.
+
+### Language selection and persistence
+
+`request_lang.c` and `language_page.c`.
+
+`request_lang_set(cookie_header, lang_query)` (`src/utils/request_lang.c`) resolves the content
+language once per request and stores it thread-locally for the rest of the render (`request_lang()`).
+A `?lang=xx` query value, when present and valid, wins over everything else; otherwise a `lang`
+cookie naming a configured language wins; otherwise the site default. Epoch 2/3 persist a language
+switch the ordinary way - `/language/set` sets the `lang` cookie and 302s back to `return` - which
+works because those browsers reliably resolve a relative `Location` and carry cookies forward.
+
+Epochs 0/1/WML cannot use that redirect at all: an HTTP/1.0-era client takes a redirect's
+`Location` literally as the whole next request, and a bare relative path (`Location: /`) is not
+legal under HTTP/1.0 (RFC 1945) - a real Cello 1.x, live-tested, turns it into the schemeless,
+hostless `http:///` and fails outright ("Failed DNS Lookup"). So for these three epochs,
+`language_page.c`'s item links skip `/language/set` entirely and go straight to
+`"<return>?lang=xx"` - a plain same-origin `GET` that never touches `Location` - and the choice
+only sticks for that one click rather than the whole session, the same trade-off the previous
+site made for these epochs.
+
+To make a language choice survive *navigating away* from that one page (not just the single
+click that set it), `inject_lang_into_links()` (`build_epoch_response.c`) rewrites every
+site-relative `href` in the finished response to carry `?lang=xx`/`&lang=xx` forward, for these
+same three epochs only - the one centralized place that fixes it for every module that ever
+builds a link (menu, categories, blog list, galleries, pagination...) rather than threading the
+query parameter through each of them individually. An href's `&` separator is written as `&amp;`
+here, not a bare `&` - required for WML, whose parser is strict XML and treats a bare `&` as a
+hard syntax error, unlike HTML's lenient parsers.
+
+### WML strict-XML fixups
+
+`build_epoch_response.c`.
+
+WML is XML, not HTML - a browser-tolerated shortcut in HTML fails outright as "the element is not
+well formed" in a real WAP client. Two author-content patterns needed fixing up for it, both
+handled once, in the same centralized place `inject_lang_into_links()` runs from
+(`retrofit_body_for_epoch()`):
+
+- **A literal, author-typed `<br>`** - one that never passed through `expand_newlines()`, which
+  already emits the self-closing form for WML - is not well-formed XML. `wml_close_br()`
+  normalizes every `<br>` in the response to `<br/>`.
+- **A raw HTML list typed directly into a paragraph's rich text** (`<ul><li>...`) - as opposed to
+  the CMS's own dedicated `list` content block, which already renders WML-safe text (see "Content
+  block types" above) - uses tags simply absent from WML's vocabulary; `<ul>`/`<ol>`/`<li>` are
+  not declared at all. `wml_strip_lists()` drops the `<ul>`/`<ol>` wrapper tags entirely and
+  converts `<li>`/`</li>` to the same `"- item<br/>"` convention the dedicated block already
+  uses.
+
+Both were found by validating real rendered pages against the actual WML 1.1 DTD (`xmllint
+--dtdvalid`, not just an XML well-formedness check, which misses DTD-level structural rules) - a
+plain well-formedness pass would not have caught either. A third DTD rule worth knowing for any
+future WML template: `<a>` may only contain `#PCDATA`, `br`, or `img` - never `<b>`/`<em>`/other
+emphasis tags nested inside it (the reverse nesting, `<b><a>...</a></b>`, is fine, since `<b>`'s
+own content model does allow an anchor).
+
+### Pagination
+
+WML only.
+
+A real WAP 1.x device has essentially no memory to spare: a Nokia 7110 (1999, the phone that
+popularized WAP) topped out around 1400 bytes per deck, *compiled* to WMLC - raw markup runs
+larger still. A single article - title, byline, several paragraphs, maybe a table or a gallery
+link - routinely reaches 15-16KB of raw WML, which even a generous modern WAP emulator will
+refuse outright ("Internet error 122: The requested resource is too large"), confirmed live.
+
+`entry_page()` (`src/modules/entry_page/entry_page.c`) takes `page` (1-based) and an optional
+`total_pages_out` alongside `entry`/`epoch`. Every epoch except WML ignores both and always
+renders the whole entry (`total_pages_out` set to 1). For WML, each content block is rendered
+individually first (`render_blocks()`) rather than concatenated as it goes, so pagination can
+group whole blocks onto a deck without ever splitting one down the middle - a new page starts
+once the running byte total would exceed `WML_PAGE_BUDGET` (2000 raw bytes, a rough but
+deliberately conservative target given the real device numbers above), except a page is never
+left empty: at least one block always lands on it even if that one block alone is over budget
+(an oversized table, say). Each deck but the last (or first) ends with a `[Prev] [Next] (n/total)`
+line built from `entry->type`/`entry->link` - `/blog/<link>?page=N` or `/page/<link>?page=N` -
+which `inject_lang_into_links()` (above) still carries the current language across
+transparently, since it operates on the finished page regardless of where its links came from.
+`http_router.c`'s `/blog/<link>` and `/page/<link>` routes read `?page=` from the query string
+and pass it straight through; an out-of-range value clamps into `[1, total_pages]` rather than
+producing an empty page.
 
 ### Home blog list (`/`)
 
@@ -486,11 +721,15 @@ copies of the same loop, which is how the dashboard ended up without the separat
 site had gained.
 
 The separator exists for every epoch, but only those that lay the bar out as running text carry
-a visible one: ` | ` for epochs -1 and 0, ` |&nbsp;` for epoch 2 (the hard space keeps a bar and
-the category it introduces on the same line). Epoch 1 lays the bar out as a row of `<td>` and
-epoch 3 as a flex container, so their files hold only whitespace. Do not bake the separator into
-the item template instead - that leaves one dangling after the last category, which is what
-epoch 0 used to do.
+a visible one: ` | ` for epochs -1, 0 and 1, ` |&nbsp;` for epoch 2 (the hard space keeps a bar
+and the category it introduces on the same line). Epoch 3 lays the bar out as a flex container,
+so its file holds only whitespace. Epoch 1 used to lay the bar out as a row of `<td>` (a
+`<table>` NCSA Mosaic-era browsers cannot reliably lay out - see "Legacy HTTP compatibility" and
+"Character encoding" above for the same lesson learned elsewhere), which is why its separator
+used to carry no visible text either; it has since been flattened to the same plain
+`<p align="center">` + ` | ` every other running-text epoch already used. Do not bake the
+separator into the item template instead - that leaves one dangling after the last category,
+which is what epoch 0 used to do.
 
 ### Menu (all pages)
 

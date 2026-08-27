@@ -102,7 +102,7 @@ end note
 
 note bottom of BROWSER
   4 supported content block types:
-  tittle, paragraph, image, byline
+  title, paragraph, image, byline
   (same types entry_page.c renders publicly).
 end note
 

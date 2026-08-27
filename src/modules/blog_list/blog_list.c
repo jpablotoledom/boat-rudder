@@ -21,9 +21,17 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
     if (!categories_html) return NULL;
 
     char *result;
-    if (epoch >= 1) {
+    if (epoch >= EPOCH_EARLY) {
         char *link_url = render_template("/blog/%s", item->link);
-        char *thumb = image_url_variant(item->header_image_url, "_small");
+        // Epoch 1 predates progressive JPEG, so it gets the GIF the optimizer
+        // writes - same variant and rewrite as image_for_epoch()/gallery_thumb().
+        char *thumb = (epoch == EPOCH_EARLY)
+            ? image_url_variant(item->header_image_url, "_micro")
+            : image_url_variant(item->header_image_url, "_small");
+        if (epoch == EPOCH_EARLY && thumb) {
+            char *dot = strrchr(thumb, '.');
+            if (dot) strcpy(dot, ".gif");
+        }
         result = (link_url && thumb)
             ? render_template(item_tpl, thumb, link_url, item->header_title,
                                item->header_summary,
@@ -33,8 +41,19 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
         free(thumb);
         free(link_url);
     } else {
-        result = render_template(item_tpl, item->header_title, item->header_date,
-                                  item->header_summary, categories_html);
+        // Text-only and WML, like render_image()'s epoch <= EPOCH_PRESTANDARD
+        // branch: no thumbnail, but still a real link to the article and a
+        // byline - a title with nothing to click and no author was just a
+        // template that had never been given the arguments to draw them,
+        // not a deliberate restriction for either epoch.
+        char *link_url = render_template("/blog/%s", item->link);
+        result = link_url
+            ? render_template(item_tpl, link_url, item->header_title,
+                               item->header_summary,
+                               item->header_hide_author ? "" : item->header_author,
+                               categories_html, item->header_date)
+            : NULL;
+        free(link_url);
     }
 
     free(categories_html);

@@ -4,6 +4,10 @@
 // Serve a static file or directory.
 // if_modified_since: value of the client's If-Modified-Since header (may be NULL).
 // Responds 304 Not Modified when the file has not changed since that date.
+// Always sends a full status line and headers (Content-Type included), even
+// to a client whose own request was a bare, version-less "simple request" -
+// see serve_static_file()'s comment on why that must not mean a headers-less
+// reply back.
 //
 // Returns 0 if a response was already written (200, 304, or a streaming
 // failure that closed the connection mid-transfer). Otherwise returns an

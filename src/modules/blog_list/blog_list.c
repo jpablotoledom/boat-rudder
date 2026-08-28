@@ -1,9 +1,11 @@
 #include "blog_list.h"
 #include "../../utils/category_tags.h"
 #include "../../db/cms_entries.h"
+#include "../../db/cms_themes.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/read_file.h"
+#include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +22,15 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
                                                   item->category_count, epoch);
     if (!categories_html) return NULL;
 
+    // Harmless to fetch even for epoch 3 (whose home-blog-item_epoch3.html
+    // has no color placeholders to consume them - printf-style varargs
+    // beyond a format string's %s count are simply ignored) - epoch 1/2's
+    // item template substitutes these straight into <font color>/
+    // bordercolor attributes, having no CSS custom properties to fall back
+    // on. See develop_docs/plans/theme-system-plan.md's epoch 1/2 analysis.
+    CmsThemeColors retro;
+    cms_get_theme_colors(request_theme(), &retro);
+
     char *result;
     if (epoch >= EPOCH_EARLY) {
         char *link_url = render_template("/blog/%s", item->link);
@@ -35,8 +46,11 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
         result = (link_url && thumb)
             ? render_template(item_tpl, thumb, link_url, item->header_title,
                                item->header_summary,
+                               retro.author,
                                item->header_hide_author ? "" : item->header_author,
-                               categories_html, item->header_date)
+                               categories_html,
+                               retro.date, item->header_date,
+                               retro.border)
             : NULL;
         free(thumb);
         free(link_url);

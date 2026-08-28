@@ -28,7 +28,7 @@ package "html_builder" {
 
 package "modules" {
     [menu] as MENU
-    [slider] as SLIDER
+    [mainbanner] as MAINBANNER
     [home_content] as HOME
     [blog_list] as BLOG
 }
@@ -51,18 +51,18 @@ ROUTER --> STATIC : [route != "/"]
 STATIC --> FS : open() / read()
 
 ORCH --> MENU
-ORCH --> SLIDER
+ORCH --> MAINBANNER
 ORCH --> HOME
 ORCH --> BLOG
-ORCH --> TPL : render_template(page-home,\nmenu, slider, home_content, home_blog)
+ORCH --> TPL : render_template(page-home,\nmenu, mainbanner, home_content, home_blog)
 
 MENU --> URLTHEME
-SLIDER --> URLTHEME
+MAINBANNER --> URLTHEME
 HOME --> URLTHEME
 BLOG --> URLTHEME
 
 MENU --> READFILE
-SLIDER --> READFILE
+MAINBANNER --> READFILE
 HOME --> READFILE
 BLOG --> READFILE
 

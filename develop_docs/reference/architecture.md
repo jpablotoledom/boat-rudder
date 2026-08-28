@@ -66,7 +66,7 @@ boat-rudder/
 │   │                                    # epoch's layout, footer, and (epoch 3) lightbox/home-modal
 │   ├── modules/
 │   │   ├── menu/menu.c/h                # Nav menu with active-item highlighting per epoch
-│   │   ├── slider/slider.c/h            # Hero/banner block per epoch
+│   │   ├── mainbanner/mainbanner.c/h            # Hero/banner block per epoch
 │   │   ├── home_content/home_content.c/h# Home page body content per epoch
 │   │   ├── blog_list/blog_list.c/h      # home section, /blog and category listing, one component
 │   │   ├── category_menu/category_menu.c/h # Category sub-menu bar under the navbar (blog pages)

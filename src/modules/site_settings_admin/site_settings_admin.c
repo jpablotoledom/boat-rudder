@@ -122,3 +122,50 @@ char *site_settings_footer_page(int epoch, char *const values[SITE_SETTINGS_EPOC
 char *site_settings_preview_page(int epoch) {
     return load_template("dashboard/settings/preview_epoch%d.html", epoch);
 }
+
+char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t count) {
+    char *page_tpl     = load_template("dashboard/settings/settings-themes_epoch%d.html", epoch);
+    char *panel_tpl    = load_template("dashboard/settings/settings-themes-panel_epoch%d.html", epoch);
+    char *activate_tpl = load_template("dashboard/settings/settings-themes-activate_epoch%d.html", epoch);
+
+    char *panels = NULL;
+    char *result = NULL;
+
+    if (!page_tpl || !panel_tpl || !activate_tpl) goto cleanup;
+
+    panels = strdup("");
+    for (size_t i = 0; panels && i < count; i++) {
+        char *activate = themes[i].active ? strdup("") : render_template(activate_tpl, themes[i].key);
+        if (!activate) {
+            free(panels);
+            panels = NULL;
+            break;
+        }
+
+        char *panel = render_template(panel_tpl, themes[i].key,
+                                       themes[i].active ? " (active)" : "", activate,
+                                       themes[i].key, themes[i].colors.background,
+                                       themes[i].colors.text, themes[i].colors.accent,
+                                       themes[i].colors.author, themes[i].colors.date,
+                                       themes[i].colors.category, themes[i].colors.border);
+        free(activate);
+        if (!panel) {
+            free(panels);
+            panels = NULL;
+            break;
+        }
+
+        panels = str_append(panels, panel);
+        free(panel);
+    }
+    if (!panels) goto cleanup;
+
+    result = render_template(page_tpl, panels);
+
+cleanup:
+    free(page_tpl);
+    free(panel_tpl);
+    free(activate_tpl);
+    free(panels);
+    return result;
+}

@@ -67,7 +67,7 @@ templates are shaped the way they are.
 The **fragment** - `page/page-home_epoch<N>.html` for home, `page/page_epoch<N>.html` for a
 content page, and the `page-entry` / `page-blog` variants - is the only part whose *shape* varies
 between page types, so it is the only part that goes through `render_template()`. Its `%s` count
-is fixed by the file, which is exactly why home (menu, slider, home-content, home-blog: four
+is fixed by the file, which is exactly why home (menu, mainbanner, home-content, home-blog: four
 placeholders) and a content page (menu, content: two) cannot be the same file.
 
 Everything around it is identical for every page of an epoch, so it lives once per epoch under
@@ -104,13 +104,13 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 (`<N>` ∈ {-1, 0, 1, 2, 3}), under `html/themes/<theme>/<component>/`:
 
 - `page/` - one fragment per page type, all of them filling the layout's `{{CONTENT}}`:
-  `page-home_epoch<N>.html` (4 `%s`: menu, slider, home content, home blog - home is the only
+  `page-home_epoch<N>.html` (4 `%s`: menu, mainbanner, home content, home blog - home is the only
   page with four regions), `page_epoch<N>.html` (2 `%s`: nav, content), and the wider
   `page-entry_epoch{2,3}.html` and `page-blog_epoch{2,3}.html` variants, which the epochs below
   2 fall back out of into `page_epoch<N>.html`. Each carries `{{FOOTER}}`, and on epoch 3
   `{{LIGHTBOX}}` or `{{HOME-MODAL}}`.
 - `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, name, separator), `menu-item-selected_epoch<N>.html` (same 3 `%s`, adds `--selected` CSS modifier for the active nav item), `menu-item-separator_epoch<N>.html` (static). See "Menu" above.
-- `slider/` - hero/banner block, static per epoch (no placeholders).
+- `mainbanner/` - hero/banner block, static per epoch (no placeholders).
 - `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
   `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
 - `home-blog/` - `home-blog_epoch<N>.html` (1 `%s`: items) and `home-blog-item_epoch<N>.html`
@@ -218,7 +218,7 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
 
 `%s` placeholders are resolved with `printf`-family formatting, so any literal `%` in a template
 that is itself used as a format string must be written as `%%`. Templates that are only ever
-substituted *into* another template's `%s` (e.g. `slider`, `menu-item-separator`) are inserted
+substituted *into* another template's `%s` (e.g. `mainbanner`, `menu-item-separator`) are inserted
 as-is and must use a single `%`.
 
 ### Build pipeline
@@ -232,11 +232,11 @@ http_router.c  (route == "/")
   │     ├─ page/page-home_epoch<N>.html    ── loaded by buildHomeWebSite()
   │     ├─ menu("/", epoch)                ── modules/menu
   │     │     cms_get_menu_items(lang, &items, &count) ── src/db/cms_menu.c
-  │     ├─ slider(epoch)                   ── modules/slider
+  │     ├─ mainbanner(epoch)                   ── modules/mainbanner
   │     ├─ home_content(epoch, lang)       ── modules/home_content
   │     ├─ home_blog(epoch, lang)          ── modules/blog_list
   │     │     cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &items, &count) ── src/db/cms_entries.c
-  │     └─ render_template(container, menu, slider, home_content, home_blog)
+  │     └─ render_template(container, menu, mainbanner, home_content, home_blog)
   │
   └─ build_epoch_response(body, extra_headers, epoch) ── utils/build_epoch_response.c
         sets Content-Type per epoch, reuses SECURITY_HEADERS

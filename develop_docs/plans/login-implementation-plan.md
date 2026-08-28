@@ -20,7 +20,7 @@
   shows **"Welcome to dashboard"**.
 - Introduce **centralized, epoch-aware HTTP error/response templates** (`3xx`/`4xx`/`5xx`),
   following the same per-epoch template convention already used for `container`, `menu`,
-  `slider`, etc.
+  `mainbanner`, etc.
 - Everything below follows the conventions documented in
   [architecture.md](../reference/architecture.md) and [boat-rudder.md](../boat-rudder.md): malloc'd-string
   modules, `generate_url_theme()` + `read_file_to_string()` + `render_template()`, one
@@ -50,7 +50,7 @@ New architectural pieces:
    session management. Named `db/` rather than `api/` to avoid implying a REST API surface
    that doesn't exist here.
 2. **A generic "page" template shell** (`page_epoch<N>.html`) - `container_epoch<N>.html` is
-   hard-wired to the home page (4 slots: menu/slider/home_content/home_blog, plus the
+   hard-wired to the home page (4 slots: menu/mainbanner/home_content/home_blog, plus the
    home-blog lightbox modal). Login, dashboard and error pages need a simpler 2-slot shell
    (menu + content). This is a new template family, not a change to `container`.
 3. **Three new modules**: `src/modules/login/`, `src/modules/dashboard/`, `src/modules/error/`,
@@ -193,7 +193,7 @@ reads `ssl_enabled` from `config_loader` to decide.
 ### 4.1 Why a new shell is needed
 
 `container_epoch<N>.html` (see [architecture.md §2.3](../reference/architecture.md)) is the home page's
-shell: it has exactly **4** `%s` slots (menu, slider, home_content, home_blog), a hardcoded
+shell: it has exactly **4** `%s` slots (menu, mainbanner, home_content, home_blog), a hardcoded
 footer, and - on epoch 3 - the home-blog lightbox `<div id="homeBlogModal">` + `<script>`.
 Reusing it for `/login`, `/dashboard` and error pages would force those pages to fill 4
 unrelated slots and ship dead modal markup/JS that references home-blog-only DOM elements.
@@ -201,7 +201,7 @@ unrelated slots and ship dead modal markup/JS that references home-blog-only DOM
 Instead, add a **second, smaller shell template family**, `page_epoch<N>.html`, with **2**
 `%s` slots: menu + content. It keeps the same `<head>` (stylesheet links, `{{PAGE_TITLE}}`,
 favicon) and footer branding as `container_epoch<N>.html` for visual consistency, but omits
-the slider/home-content/home-blog/modal pieces entirely.
+the mainbanner/home-content/home-blog/modal pieces entirely.
 
 ### 4.2 `page_epoch<N>.html` design (per epoch, mirroring `container_epoch<N>.html`)
 
@@ -333,7 +333,7 @@ template's placeholder count fixed regardless of success/failure, consistent wit
 
 The `-1/0/1/2` variants have **zero** placeholders (they're static "not available" messages),
 so `login(epoch)` for those epochs just reads and returns the file content directly - no
-`render_template()` call needed (matching `slider_epoch<N>.html`'s "static per epoch, no
+`render_template()` call needed (matching `mainbanner_epoch<N>.html`'s "static per epoch, no
 placeholders" pattern).
 
 Reusable form-element partials (`html/themes/dark/elements/form/...`,
@@ -353,7 +353,7 @@ extracting shared partials becomes worthwhile and can be revisited then.
 char *login(int epoch, const char *error_message);
 ```
 
-Same structure as `home_content()`/`slider()`: `generate_url_theme()` ->
+Same structure as `home_content()`/`mainbanner()`: `generate_url_theme()` ->
 `read_file_to_string()` -> (epoch 3 only) `render_template()` -> return.
 
 ### 5.5 Handler Flow in `http_router.c`
@@ -481,7 +481,7 @@ variant is a static fragment in that epoch's idiom, e.g. epoch3:
 ### 7.3 Module: `src/modules/dashboard/dashboard.c/h`
 
 ```c
-// Static per-epoch fragment, no placeholders - same shape as slider().
+// Static per-epoch fragment, no placeholders - same shape as mainbanner().
 char *dashboard(int epoch);
 ```
 

@@ -1,7 +1,7 @@
 /* RESET */
 body {
-  background-color: #000000;
-  color: #ffffff;
+  background-color: var(--br-color-background, #000000);
+  color: var(--br-color-text, #ffffff);
   margin: 0;
   width: 100%;
   font-family: Arial, Helvetica, sans-serif;
@@ -14,7 +14,7 @@ a {
 a:link,
 a:visited,
 a:active {
-  color: #56e9fd;
+  color: var(--br-color-accent, #56e9fd);
 }
 
 h1 {
@@ -161,7 +161,7 @@ h2 {
   transition: 0.3s;
 }
 
-/* MAINBANNER / SLIDER */
+/* MAINBANNER */
 .boat-rudder__mainbanner {
   text-align: center;
   position: fixed;
@@ -410,7 +410,7 @@ h2 {
 .boat-rudder__home-blog__item {
   background-color: #0000006b;
   padding: 20px;
-  border: 1px solid #349b00;
+  border: 1px solid var(--br-color-border, #349b00);
   margin: 30px 0;
   display: flex;
 }
@@ -441,11 +441,11 @@ h2 {
 }
 
 .boat-rudder__home-blog__item__byline-owner {
-  color: #f2e200;
+  color: var(--br-color-author, #f2e200);
 }
 
 .boat-rudder__home-blog__item__byline-date {
-  color: #f9964f;
+  color: var(--br-color-date, #f9964f);
 }
 
 .boat-rudder__home-blog__item__byline-categories {
@@ -589,7 +589,7 @@ h2 {
 }
 
 .boat-rudder__entry-category {
-  background-color: #349b00;
+  background-color: var(--br-color-category, #349b00);
   color: #ffffff;
   padding: 4px 10px;
   border-radius: 12px;

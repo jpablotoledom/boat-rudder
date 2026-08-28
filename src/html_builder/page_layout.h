@@ -7,7 +7,7 @@
 // matters. The *fragment* - container/page/page-entry/page-blog - is the only
 // piece that varies in shape between page types, so it is the only piece that
 // goes through render_template(): its `%s` count is fixed by the file, which
-// is why the home shell (menu, slider, home-content, home-blog) and a content
+// is why the home shell (menu, mainbanner, home-content, home-blog) and a content
 // page (menu, content) cannot be the same file.
 //
 // Everything around it is identical for every page of an epoch - doctype,

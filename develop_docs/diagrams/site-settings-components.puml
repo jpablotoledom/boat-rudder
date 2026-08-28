@@ -36,8 +36,8 @@ package "modules/container" {
     [container\ncontainer()] as CONTAINER
 }
 
-package "modules/slider" {
-    [slider\nslider()] as SLIDER
+package "modules/mainbanner" {
+    [mainbanner\nmainbanner()] as MAINBANNER
 }
 
 package "modules/menu" {
@@ -55,7 +55,7 @@ package "utils" {
     [template_utils\n(render_template)] as TPL
 }
 
-database "html/themes/<theme>/\ncontainer, slider,\ndashboard/settings/*" as FS
+database "html/themes/<theme>/\ncontainer, mainbanner,\ndashboard/settings/*" as FS
 database "MongoDB\n(site_settings, singleton)" as DB
 
 Admin --> ROUTER : GET/POST /dashboard/settings
@@ -68,11 +68,11 @@ SETADMIN --> TPL : render_template(settings_epoch3.html)
 Visitor --> ROUTER : GET / , GET /page/<link>, ...
 ROUTER --> ORCH : buildHomeWebSite() / buildPageWebSite()
 ORCH --> CONTAINER : container(epoch, page_title)
-ORCH --> SLIDER : slider(epoch)
+ORCH --> MAINBANNER : mainbanner(epoch)
 ORCH --> MENU : menu(current_url, epoch)
 
 CONTAINER --> CMSSET : cms_get_site_settings()\n[site_name, favicon_url,\nlogo_url, colors]
-SLIDER --> CMSSET : cms_get_site_settings()\n[banner_image_url]
+MAINBANNER --> CMSSET : cms_get_site_settings()\n[banner_image_url]
 CONTAINER --> URLTHEME
 CONTAINER --> READFILE
 CONTAINER --> TPL : render_template(container_epoch%d.html\n+ inline :root{...} style block)
@@ -102,10 +102,10 @@ note right of CONTAINER
   consumed by styles_epoch3.css.
 end note
 
-note right of SLIDER
+note right of MAINBANNER
   Epoch3 only: banner_image_url replaces the
-  hardcoded slider_epoch3.jpg <img src>.
-  Epoch -1/0/1/2 sliders are unaffected
+  hardcoded mainbanner_epoch3.jpg <img src>.
+  Epoch -1/0/1/2 banners are unaffected
   (text-only or fixed decorative tables).
 end note
 

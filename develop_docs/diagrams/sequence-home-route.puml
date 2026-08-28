@@ -19,7 +19,7 @@ participant "http_router" as ROUTER
 participant "detect_epoch" as EPOCH
 participant "orchestrator\n(buildHomeWebSite)" as ORCH
 participant "menu" as MENU
-participant "slider" as SLIDER
+participant "mainbanner" as MAINBANNER
 participant "home_content" as HOME
 participant "home_blog" as BLOG
 participant "build_epoch_response" as RESP
@@ -44,9 +44,9 @@ MENU -> MENU : render_template(menu_tpl, items)
 deactivate MENU
 MENU --> ORCH : html_menu
 
-ORCH -> SLIDER : slider(epoch)
-SLIDER -> SLIDER : generate_url_theme + read_file\n(static block, no placeholders)
-SLIDER --> ORCH : html_slider
+ORCH -> MAINBANNER : mainbanner(epoch)
+MAINBANNER -> MAINBANNER : generate_url_theme + read_file\n(static block, no placeholders)
+MAINBANNER --> ORCH : html_mainbanner
 
 ORCH -> HOME : home_content(epoch, lang)
 activate HOME
@@ -75,7 +75,7 @@ alt any component == NULL
   ORCH --> ROUTER : NULL
   ROUTER -> Client : 500 Internal Server Error
 else all components OK
-  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content, html_home_blog)
+  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_mainbanner, html_home_content, html_home_blog)
   ORCH -> ORCH : free all intermediate buffers
   ORCH --> ROUTER : body (full HTML / WML document)
   deactivate ORCH

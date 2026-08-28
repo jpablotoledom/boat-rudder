@@ -1,7 +1,10 @@
 #include "category_tags.h"
+#include "detect_epoch.h"
 #include "generate_url_theme.h"
 #include "read_file.h"
+#include "request_theme.h"
 #include "template_utils.h"
+#include "../db/cms_themes.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,10 +27,25 @@ char *category_tags_render(char **links, char **names, size_t count, int epoch) 
 
     char *sep_tpl = load_part("elements/category/category-separator_epoch%d.html", epoch);
 
+    // Epoch 1/2 have no CSS custom properties (see
+    // develop_docs/plans/theme-system-plan.md's epoch 1/2 analysis), so the
+    // category tag color - today hardcoded in category_epoch{1,2}.html -
+    // becomes a %s substituted straight into the <font color>/style
+    // attribute instead. Epoch 3 already carries its own color via the
+    // boat-rudder__entry-category CSS class; -1/0 have no color model.
+    int needs_color = (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE);
+    CmsThemeColors retro;
+    if (needs_color) cms_get_theme_colors(request_theme(), &retro);
+
     char *result = strdup("");
     for (size_t i = 0; result && i < count; i++) {
-        char *tag = linked ? render_template(item_tpl, links[i], names[i])
-                           : render_template(item_tpl, names[i]);
+        char *tag;
+        if (needs_color)
+            tag = linked ? render_template(item_tpl, links[i], retro.category, names[i])
+                         : render_template(item_tpl, retro.category, names[i]);
+        else
+            tag = linked ? render_template(item_tpl, links[i], names[i])
+                         : render_template(item_tpl, names[i]);
         if (sep_tpl && i > 0) result = str_append(result, sep_tpl);
         if (result && tag) result = str_append(result, tag);
         free(tag);

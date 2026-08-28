@@ -2,6 +2,9 @@
 #define SITE_SETTINGS_ADMIN_H
 
 #include "../../db/cms_site_settings.h"
+#include "../../db/cms_themes.h"
+#include <stdbool.h>
+#include <stddef.h>
 
 // /dashboard/settings - the site name form, plus links to the banner/footer
 // editors. `error_message` is shown above the form if non-NULL/non-empty.
@@ -25,5 +28,21 @@ char *site_settings_footer_page(int epoch, char *const values[SITE_SETTINGS_EPOC
 // as-is. Returns a malloc'd string, or NULL on a missing template /
 // allocation failure.
 char *site_settings_preview_page(int epoch);
+
+// One theme discovered under html/themes/ (readdir(), not a DB catalog -
+// see theme-system-plan.md §5), paired with its one shared set of colors -
+// applied to epoch 1/2/3 alike, per cms_themes.h; there is no per-epoch
+// split here.
+typedef struct {
+    char key[64];
+    bool active;
+    CmsThemeColors colors;
+} ThemeEntry;
+
+// /dashboard/settings/themes - one panel per discovered theme: a "Set
+// active" action (omitted for the active theme) and a single color form
+// that applies to every epoch that has a color model. Returns a malloc'd
+// string, or NULL on a missing template / allocation failure.
+char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t count);
 
 #endif // SITE_SETTINGS_ADMIN_H

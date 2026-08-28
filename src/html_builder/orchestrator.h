@@ -2,7 +2,7 @@
 #define ORCHESTRATOR_H
 
 // Builds the full Home page (HTML or WML, depending on `epoch`) by
-// assembling the container, menu, slider and home_content modules.
+// assembling the container, menu, mainbanner and home_content modules.
 //
 // Returns a malloc'd string, or NULL if any component could not be built
 // (e.g. a template file is missing) - the caller should respond with a

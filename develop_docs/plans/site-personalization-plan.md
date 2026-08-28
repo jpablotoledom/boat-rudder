@@ -1,11 +1,25 @@
 # Site Personalization (name, banner, footer) - Implementation Plan
 
-> **Status**: proposed, not yet implemented. This document supersedes/extends
+> **Status**: implemented. `site_name`, `banner_html`/`footer_html` (§3-§7), the theme-asset
+> upload endpoints (§6), `/dashboard/settings/preview` and the navbar's signed-in-user link all
+> shipped as described below (some minor deltas from later, smaller follow-up requests - e.g. the
+> user link ended up in the navbar's left corner + the mobile menu, not exactly where §7
+> originally imagined - not worth rewriting the plan for). This document supersedes/extends
 > [site-settings-plan.md](site-settings-plan.md) (roadmap item, [boat-rudder.md §9](../boat-rudder.md)):
 > it keeps that plan's `site_name` design as-is and adds the two pieces requested next -
 > a raw-HTML **home banner** editor and a raw-HTML **footer** editor, one field per epoch,
 > plus image uploads for the assets they reference. `site-settings-plan.md`'s favicon/logo/colors
 > scope is unchanged and not repeated here.
+>
+> **Relationship to the theme system:** [theme-system-plan.md](theme-system-plan.md) splits
+> `html/themes/<theme>/` into a shared `html/templates/` tree plus a slimmer, brand-only
+> `html/themes/<theme>/` tree. `site_settings.banner_html`/`footer_html` stay exactly as
+> designed here - they are site *content* (what an admin typed/uploaded), not theme *design*, so
+> they are unaffected by that split. The only touch point: `cms_get_site_banner()`/
+> `cms_get_site_footer()`'s on-disk fallback (`mainbanner/mainbanner_epoch<N>.html`,
+> `layout/footer_epoch<N>.html`) resolves through the same theme-aware path lookup as everything
+> else, which continues to work unchanged because `mainbanner/` and `layout/` stay theme-owned in
+> that plan's split.
 
 Diagrams: reuse [diagrams/site-settings-components.puml](../diagrams/site-settings-components.puml)
 as a base; extend it once implementation starts.
@@ -17,7 +31,7 @@ A single **"Personalización" / "Site settings"** section under `/dashboard`, ad
 
 1. **Site name** - as already specced in [site-settings-plan.md §3](site-settings-plan.md) (a
    plain text field, propagated via `%s` into ~16 templates). No changes proposed here.
-2. **Home banner** - today `html/themes/dark/slider/slider_epoch{-1,0,1,2,3}.html`, five static
+2. **Home banner** - today `html/themes/dark/mainbanner/mainbanner_epoch{-1,0,1,2,3}.html`, five static
    files. Goal: move their content into MongoDB, editable as raw markup from a `<textarea>` per
    epoch, with a fallback to the on-disk file when the DB value is empty - so a fresh clone
    renders identically to today until an admin opens the editor.
@@ -36,7 +50,7 @@ author-authored, not visitor input). See §7 for why that precedent extends clea
 
 ## 2. Current state
 
-| Epoch | Banner (`slider_epoch<N>.html`) | Footer (`footer_epoch<N>.html`) |
+| Epoch | Banner (`mainbanner_epoch<N>.html`) | Footer (`footer_epoch<N>.html`) |
 |---|---|---|
 | -1 (WML) | `<p>` + one `<img>` (`.wbmp`) | empty |
 | 0 | empty | `<hr><p>Boat Rudder</p>` |
@@ -46,8 +60,8 @@ author-authored, not visitor input). See §7 for why that precedent extends clea
 
 Both are read from disk on every request:
 
-- **Banner**: `slider()` (`src/modules/slider/slider.c`) does
-  `generate_url_theme("slider/slider_epoch%d.html", epoch)` + `read_file_to_string()`, no
+- **Banner**: `mainbanner()` (`src/modules/mainbanner/mainbanner.c`) does
+  `generate_url_theme("mainbanner/mainbanner_epoch%d.html", epoch)` + `read_file_to_string()`, no
   placeholders. The result is spliced into `container_epoch<N>.html` as a `%s` **argument**
   (not a format string), so any literal `%` inside it already passes through `vsnprintf`
   unchanged - important for §5.
@@ -81,7 +95,7 @@ Same collection, two new sub-documents. Field names spell out the epoch to avoid
   // ... favicon_url / logo_url / colors from site-settings-plan.md, unchanged ...
 
   "banner_html": {
-    "epoch_neg1": "",   // "" = fall back to slider/slider_epoch-1.html on disk
+    "epoch_neg1": "",   // "" = fall back to mainbanner/mainbanner_epoch-1.html on disk
     "epoch0":     "",
     "epoch1":     "",
     "epoch2":     "",
@@ -145,7 +159,7 @@ int cms_update_site_footer(int epoch, const char *html);
 int cms_update_site_settings(const CmsSiteSettings *settings);
 ```
 
-Two narrower helpers avoid loading the whole singleton on the hot path (`slider()` runs on
+Two narrower helpers avoid loading the whole singleton on the hot path (`mainbanner()` runs on
 every `GET /`):
 
 ```c
@@ -157,13 +171,13 @@ char *cms_get_site_banner(int epoch);
 char *cms_get_site_footer(int epoch);
 ```
 
-`cms_get_site_banner`/`cms_get_site_footer` are what `slider()` and `page_layout_wrap()` actually
+`cms_get_site_banner`/`cms_get_site_footer` are what `mainbanner()` and `page_layout_wrap()` actually
 call; `cms_get_site_settings()` (whole-document read) stays scoped to the `/dashboard/settings*`
 admin pages, which need every field at once for the forms.
 
 ## 5. Rendering changes
 
-- **`slider()`** (`src/modules/slider/slider.c`): replace the direct
+- **`mainbanner()`** (`src/modules/mainbanner/mainbanner.c`): replace the direct
   `generate_url_theme()` + `read_file_to_string()` call with
   `cms_get_site_banner(epoch)`. No template placeholder changes - the container still receives
   the result as one opaque `%s` argument, so this is a one-function change with no cascading
@@ -173,7 +187,7 @@ admin pages, which need every field at once for the forms.
   `page_layout_wrap()` is the single shared tail for every page type, this one change covers the
   home page, `/page/<link>`, `/blog/<link>`, `/blog`, `/dashboard`, `/login` and every error
   page - matching how `{{FOOTER}}` already works today.
-- Both changes are **drop-in**: signatures of `slider()` and `page_layout_wrap()` don't change,
+- Both changes are **drop-in**: signatures of `mainbanner()` and `page_layout_wrap()` don't change,
   so no caller elsewhere in the codebase needs touching.
 
 ### 5.1 Why raw admin HTML is safe to interpolate here
@@ -189,7 +203,7 @@ Two independent reasons this doesn't reopen the format-string concern in
   replacement, not `printf`-family - `%` has no special meaning there at all.
 
 So no new escaping logic is needed in the rendering path. The one thing to verify during
-migration (§8, step 2) is `slider_epoch1.html`'s existing `100%%` - confirm whether that's a
+migration (§8, step 2) is `mainbanner_epoch1.html`'s existing `100%%` - confirm whether that's a
 pre-existing double-escaping quirk that should become a single `%` once the content moves off a
 file that's read verbatim and into a DB value substituted as a `%s` argument (it should - a
 `%%` literal would render as a literal `%%` in the browser once it's no longer passed through
@@ -279,11 +293,11 @@ group already trusted with Users/Menu/Categories.
    `banner_html`/`footer_html`, `cms_get_site_banner()`/`cms_get_site_footer()` with
    file-fallback, `cms_update_site_banner()`/`cms_update_site_footer()`. Unit-verifiable in
    isolation (no template/route dependencies yet).
-2. **Rendering consumers**: `slider()` and `page_layout_wrap()`'s footer splice switch to the new
+2. **Rendering consumers**: `mainbanner()` and `page_layout_wrap()`'s footer splice switch to the new
    DB-backed getters. Verify every epoch (`force_epoch` in `configs/settings.conf` to check each
    without needing five real browsers) renders **identically to today** with an empty
    `site_settings` document - this is the regression gate before anything else proceeds. Resolve
-   the `slider_epoch1.html` `%%` question from §5.1 here.
+   the `mainbanner_epoch1.html` `%%` question from §5.1 here.
 3. **Theme-asset upload endpoints** (§6): list/upload/delete, admin-gated, reusing
    `parse_multipart()` and the media module's filename sanitizer.
 4. **Admin templates + module** (§7): banner and footer forms, wired into whichever module ends

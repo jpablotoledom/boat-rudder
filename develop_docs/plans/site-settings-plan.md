@@ -1,7 +1,14 @@
 # Site Settings (banner, colors, logo, favicon, site name) - Feasibility & Plan
 
-> **Status**: approved, not yet implemented. This is a documentation-only deliverable - no DB
-> schema, C code or templates described here exist yet.
+> **Status**: partially implemented and partially superseded - see the per-section notes below.
+> `site_name`, `banner_html`/`footer_html` (raw markup per epoch, not the URL-string design this
+> document originally sketched) and a `/dashboard/settings/preview` tool shipped via
+> [site-personalization-plan.md](site-personalization-plan.md); read that document for what
+> actually exists today. **Colors** (§3, §7) are superseded by
+> [theme-system-plan.md](theme-system-plan.md): they move from `site_settings.colors` to a new
+> per-theme `themes` collection, because a color palette is a property of the *theme*, not of the
+> site's identity - the distinction that plan draws in detail. Favicon and logo remain
+> unimplemented and unclaimed by any other plan as of this writing.
 >
 > This increment is how Boat Rudder stops shipping site-specific text in its source. Everything a
 > visitor reads that identifies the site - name, banner, favicon, logo, brand colors and the
@@ -34,11 +41,11 @@ colors" doesn't mean the same thing in every epoch:
 
 | Element | epoch -1 (WML) | epoch 0 | epoch 1 | epoch 2 | epoch 3 |
 |---|---|---|---|---|---|
-| **Banner** | none - `<p align="center"><b>BOAT RUDDER</b></p>`, text only | none - `<h1>BOAT RUDDER</h1>` + tagline, text only | decorative `<table>` with 3 fixed images (`background.gif` x2, `floor.jpg`) **and** the "BOAT RUDDER" text in a `<font>` - not a single swappable image | same decorative table as epoch1, plus an `<h1>` title | **single `<img>`**: `<div class="boat-rudder__mainbanner"><img src="/themes/dark/assets/mainbanner/slider_epoch3.jpg"></div>` |
+| **Banner** | none - `<p align="center"><b>BOAT RUDDER</b></p>`, text only | none - `<h1>BOAT RUDDER</h1>` + tagline, text only | decorative `<table>` with 3 fixed images (`background.gif` x2, `floor.jpg`) **and** the "BOAT RUDDER" text in a `<font>` - not a single swappable image | same decorative table as epoch1, plus an `<h1>` title | **single `<img>`**: `<div class="boat-rudder__mainbanner"><img src="/themes/dark/assets/mainbanner/mainbanner_epoch3.jpg"></div>` |
 | **Favicon** | n/a (WML has no `<link>`) | n/a (no favicon ref in template) | n/a (no favicon ref in template) | `<link rel="icon" href="/favicon.ico">` in `page_epoch2.html`-style templates | `<link rel="icon" href="/favicon.ico">` in `container_epoch3.html` / `page_epoch3.html` |
 | **Logo (`<img>`)** | none | none | none | none | none - site identity is text-only everywhere today |
 | **Colors** | n/a - WML has no color model | n/a - plain HTML, no `bgcolor`/CSS | inline HTML attributes: `<body bgcolor="#000080" text="#FFFFFF" link="#56E9FD" vlink="#9999FF">` | hardcoded hex in `styles_epoch2.css` (~21 colors), no `:root`/custom properties | hardcoded hex in `styles_epoch3.css` (~76 colors, eclectic neon palette), no `:root`/custom properties |
-| **Site name** | literal `BOAT RUDDER` in `container_epoch-1.html`, `home-content_epoch-1.html`, `page_epoch-1.html`, `slider_epoch-1.html` | same, 4 files | same, 4 files (`<font><b>BOAT RUDDER</b></font>`) | same, 4 files (`<h1>BOAT RUDDER</h1>` etc.) | same, 4 files + `menu/menu_epoch3.html` |
+| **Site name** | literal `BOAT RUDDER` in `container_epoch-1.html`, `home-content_epoch-1.html`, `page_epoch-1.html`, `mainbanner_epoch-1.html` | same, 4 files | same, 4 files (`<font><b>BOAT RUDDER</b></font>`) | same, 4 files (`<h1>BOAT RUDDER</h1>` etc.) | same, 4 files + `menu/menu_epoch3.html` |
 
 Each image setting (banner/logo/favicon) is stored as a **URL/path string**, the same convention
 already used for `entries.header.image_url`. Since this plan was first written the media library
@@ -60,7 +67,7 @@ sidebar does - "pick an image" rather than "paste a URL" - while still storing a
   touching those templates, epoch2's equivalents). Epoch -1/0/1 have no favicon
   concept - out of scope, nothing to change.
 - **Banner image**: `site_settings.banner_image_url` replaces the hardcoded
-  `slider_epoch3.jpg` `<img src>` in `slider_epoch3.html` only. Epoch -1/0/1/2 are left
+  `mainbanner_epoch3.jpg` `<img src>` in `mainbanner_epoch3.html` only. Epoch -1/0/1/2 are left
   as-is (see §2 - there's no single image to swap there without a much larger
   re-template of the decorative table).
 - **Logo**: `site_settings.logo_url`, optional. If set, `container_epoch3.html` (and
@@ -106,7 +113,7 @@ are intentionally minimal/historical (WML and pre-standard HTML have no concept 
 {
   "_id": ObjectId,
   "site_name": "Boat Rudder",
-  "banner_image_url": "/themes/dark/assets/mainbanner/slider_epoch3.jpg",
+  "banner_image_url": "/themes/dark/assets/mainbanner/mainbanner_epoch3.jpg",
   "favicon_url": "/favicon.ico",
   "logo_url": "",            // "" = no logo, text-only (current behavior)
   "colors": {
@@ -122,7 +129,7 @@ This is a new pattern for boat-rudder (existing collections - `languages`, `menu
 config with a hardcoded fallback if missing/unreachable" is `menu()`'s
 `FALLBACK_ITEMS` (`src/modules/menu/menu.c`): if `site_settings` is empty or MongoDB is
 down, `cms_get_site_settings()` returns the **current hardcoded literals** (today's
-`site_name="Boat Rudder"`, `banner_image_url="/themes/dark/assets/mainbanner/slider_epoch3.jpg"`,
+`site_name="Boat Rudder"`, `banner_image_url="/themes/dark/assets/mainbanner/mainbanner_epoch3.jpg"`,
 `favicon_url="/favicon.ico"`, `logo_url=""`, and the 3 colors read off the literals
 already in `styles_epoch3.css`) - so an empty/unreachable DB never breaks the site,
 it just looks exactly like it does today.
@@ -193,9 +200,9 @@ Per [the diagram](../diagrams/site-settings-components.puml):
   </style>` fragment consumed by `styles_epoch3.css` rules that opt in to
   `var(--br-color-accent, <current-hardcoded-value>)` (the fallback value keeps every
   rule working even before any rule is migrated to use the variable).
-- **`slider()`** (`src/modules/slider/slider.c`): calls `cms_get_site_settings()`,
-  passes `banner_image_url` as a new `%s` into `slider_epoch3.html`'s `<img src="%s">`.
-  Epoch -1/0/1/2 templates are untouched (no new placeholder, `slider()` doesn't need
+- **`mainbanner()`** (`src/modules/mainbanner/mainbanner.c`): calls `cms_get_site_settings()`,
+  passes `banner_image_url` as a new `%s` into `mainbanner_epoch3.html`'s `<img src="%s">`.
+  Epoch -1/0/1/2 templates are untouched (no new placeholder, `mainbanner()` doesn't need
   the DB call for those epochs).
 - **`menu()`** (`src/modules/menu/menu.c`): epoch3's `menu_epoch3.html` has a
   hardcoded "BOAT RUDDER" site-name link - gains a `site_name` `%s` placeholder.
@@ -207,9 +214,9 @@ Per [the diagram](../diagrams/site-settings-components.puml):
   (one read per request, reused by every branch). This is the largest single group of visible
   literals and the main reason this increment exists.
 - The other ~12 occurrences of the literal "Boat Rudder"/"BOAT RUDDER" (epoch -1/0/1/2
-  `container`/`home-content`/`page`/`slider` templates) each gain one `%s` placeholder
+  `container`/`home-content`/`page`/`mainbanner` templates) each gain one `%s` placeholder
   and one new `render_template()` argument (`site_name`) in their respective module
-  (`container()`, `home_content()`, `slider()`, and `page` is rendered via
+  (`container()`, `home_content()`, `mainbanner()`, and `page` is rendered via
   `buildPageWebSite()` so `container()`'s value can be reused/passed through).
 
 Every render-path consumer calls `cms_get_site_settings()` per request - same
@@ -248,7 +255,7 @@ the entry editor's (per [entry-editor.md](../reference/entry-editor.md)): DB lay
 (`cms_site_settings.h/.c`) -> admin module + templates
 (`settings_admin/`, `dashboard/settings/settings_epoch3.html`) -> routes
 (`/dashboard/settings` GET/POST) -> `/dashboard` link -> consumer changes
-(`container`, `slider`, `menu`, plus the ~12 site-name-only templates) -> CMake
+(`container`, `mainbanner`, `menu`, plus the ~12 site-name-only templates) -> CMake
 wiring -> `architecture.md` updates -> end-to-end verification (admin saves new
 values, confirm they appear on `/`, `/page/<link>`, favicon, and that an
 empty/missing `site_settings` document reproduces today's exact output).

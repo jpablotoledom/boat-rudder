@@ -46,10 +46,11 @@ int cms_update_site_footer(int epoch, const char *html);
 
 // Render-path getters: return a malloc'd string, never NULL - the DB value
 // for `epoch` if non-empty, otherwise the current on-disk theme file's
-// contents (slider/slider_epoch<N>.html / layout/footer_epoch<N>.html), so a
-// fresh install or an unedited epoch renders exactly as it does today. Used
-// by slider() and page_layout_wrap() instead of cms_get_site_settings(),
-// which loads every field and is scoped to the /dashboard/settings forms.
+// contents (mainbanner/mainbanner_epoch<N>.html / layout/footer_epoch<N>.html),
+// so a fresh install or an unedited epoch renders exactly as it does today.
+// Used by mainbanner() and page_layout_wrap() instead of
+// cms_get_site_settings(), which loads every field and is scoped to the
+// /dashboard/settings forms.
 char *cms_get_site_banner(int epoch);
 char *cms_get_site_footer(int epoch);
 
@@ -57,5 +58,18 @@ char *cms_get_site_footer(int epoch);
 // unset/unreachable. Cheaper than cms_get_site_settings() for render-path
 // callers that only need the name.
 char *cms_get_site_name(void);
+
+// Returns a malloc'd theme key: site_settings.active_theme if set and a
+// directory exists at html/themes/<key>/, otherwise
+// configs/settings.conf's `theme` value. Never NULL/empty - "which theme
+// renders this request" must never fail. This is what request_theme.c
+// calls once per request; render-path code should go through
+// request_theme() instead of calling this directly.
+char *cms_get_active_theme_key(void);
+
+// db.site_settings.updateOne({}, {$set: {active_theme: key}}, {upsert:
+// true}). Returns 0 on success, -1 if html/themes/<key>/ does not exist,
+// on a DB error, or if mongodb is not ready.
+int cms_set_active_theme(const char *key);
 
 #endif // CMS_SITE_SETTINGS_H

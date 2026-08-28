@@ -1,12 +1,15 @@
 #include "cms_site_settings.h"
 #include "mongodb_manager.h"
+#include "../utils/config_loader.h"
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
 #include "../utils/log.h"
 #include <bson/bson.h>
 #include <mongoc/mongoc.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define SITE_SETTINGS_COLLECTION "site_settings"
 #define SITE_NAME_DEFAULT "Boat Rudder"
@@ -185,7 +188,7 @@ char *cms_get_site_banner(int epoch) {
 
     if (db_value && db_value[0]) return db_value;
     free(db_value);
-    return load_theme_file("slider/slider_epoch%d.html", epoch);
+    return load_theme_file("mainbanner/mainbanner_epoch%d.html", epoch);
 }
 
 char *cms_get_site_footer(int epoch) {
@@ -228,4 +231,52 @@ char *cms_get_site_name(void) {
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
     return result ? result : strdup(SITE_NAME_DEFAULT);
+}
+
+// Not via generate_url_theme() - that function calls request_theme(), which
+// calls cms_get_active_theme_key() (this file) to resolve the value being
+// validated here; going through generate_url_theme() would just be a more
+// roundabout way of building the same "./html/themes/<key>" path.
+static int theme_directory_exists(const char *key) {
+    if (!key || !key[0]) return 0;
+
+    char path[256];
+    int n = snprintf(path, sizeof(path), "./html/themes/%s", key);
+    if (n < 0 || (size_t)n >= sizeof(path)) return 0;
+
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+char *cms_get_active_theme_key(void) {
+    char *db_value = NULL;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(SITE_SETTINGS_COLLECTION);
+    if (collection) {
+        bson_t *query = bson_new();
+        mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+        const bson_t *doc;
+        if (mongoc_cursor_next(cursor, &doc)) {
+            bson_iter_t iter;
+            if (bson_iter_init_find(&iter, doc, "active_theme") && BSON_ITER_HOLDS_UTF8(&iter))
+                db_value = strdup(bson_iter_utf8(&iter, NULL));
+        }
+
+        bson_destroy(query);
+        mongoc_cursor_destroy(cursor);
+        mongoc_collection_destroy(collection);
+    }
+
+    if (db_value && theme_directory_exists(db_value)) return db_value;
+    free(db_value);
+    return strdup(theme); // configs/settings.conf fallback - see request_theme.h
+}
+
+int cms_set_active_theme(const char *key) {
+    if (!theme_directory_exists(key)) return -1;
+
+    bson_t *set_doc = bson_new();
+    bson_append_utf8(set_doc, "active_theme", -1, key, -1);
+    return upsert_set(set_doc);
 }

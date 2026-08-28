@@ -13,6 +13,7 @@
 #include "../db/cms_languages.h"
 #include "../db/cms_menu.h"
 #include "../db/cms_site_settings.h"
+#include "../db/cms_themes.h"
 #include "../db/cms_users_admin.h"
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
@@ -39,6 +40,7 @@
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
 #include "../utils/request_lang.h"
+#include "../utils/request_theme.h"
 #include "../utils/request_user.h"
 #include "../utils/config_loader.h"
 #include "../utils/qr_generator/qr_generator.h"
@@ -318,7 +320,7 @@ static int match_id_route(const char *decoded_url, const char *prefix,
 // Theme-asset endpoints (/dashboard/api/theme-assets/*) back the banner and
 // footer editors' image upload/browse widget: they write straight into
 // html/themes/<theme>/assets/<component>/epoch<N>/, the same directories the
-// theme's own slider/footer markup already references - not the content
+// theme's own mainbanner/footer markup already references - not the content
 // media library (html/content/posts/..., per-author, gallery-oriented).
 //
 // `component` is restricted to the two directories this feature actually
@@ -338,7 +340,7 @@ static int theme_assets_dir(const char *component, const char *epoch_str,
     if (!epoch_ok) return 0;
 
     int n = snprintf(dir_out, dir_size, "./html/themes/%s/assets/%s/epoch%s",
-                      theme, component, epoch_str);
+                      request_theme(), component, epoch_str);
     return n > 0 && (size_t)n < dir_size;
 }
 
@@ -410,6 +412,46 @@ static char *theme_assets_list_json(const char *component, const char *epoch_str
     if (!json) return strdup("{\"files\":[]}");
     json = str_append(json, "]}");
     return json ? json : strdup("{\"files\":[]}");
+}
+
+// Discovers available themes for /dashboard/settings/themes by reading
+// html/themes/ directly - no DB catalog/registration step, per
+// theme-system-plan.md §5 ("drop a directory in, it shows up"). *out is a
+// malloc'd array of *out_count malloc'd key strings (caller frees each and
+// the array); an unreadable directory yields *out = NULL, *out_count = 0.
+static void list_theme_keys(char ***out, size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+
+    DIR *d = opendir("./html/themes");
+    if (!d) return;
+
+    size_t cap = 8;
+    char **keys = malloc(cap * sizeof(char *));
+    if (!keys) { closedir(d); return; }
+
+    size_t count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+
+        char path[300];
+        snprintf(path, sizeof(path), "./html/themes/%s", entry->d_name);
+        struct stat st;
+        if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+
+        if (count >= cap) {
+            cap *= 2;
+            char **grown = realloc(keys, cap * sizeof(char *));
+            if (!grown) break;
+            keys = grown;
+        }
+        keys[count++] = strdup(entry->d_name);
+    }
+    closedir(d);
+
+    *out = keys;
+    *out_count = count;
 }
 
 // Matches "/dashboard/api/entries/<entry_id>/blocks/<block_id>/delete". On
@@ -818,6 +860,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                           get_query_param(params, param_count, "lang"));
         request_path_set(decoded_url);
         request_user_set(get_header_value(&req, "Cookie"));
+        request_theme_set();
         char content_lang[16];
         strncpy(content_lang, request_lang(), sizeof(content_lang) - 1);
         content_lang[sizeof(content_lang) - 1] = '\0';
@@ -1121,6 +1164,41 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/settings/themes") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        char **keys = NULL;
+                        size_t key_count = 0;
+                        list_theme_keys(&keys, &key_count);
+
+                        char *active = cms_get_active_theme_key();
+
+                        ThemeEntry *entries = calloc(key_count, sizeof(ThemeEntry));
+                        for (size_t i = 0; i < key_count; i++) {
+                            strncpy(entries[i].key, keys[i], sizeof(entries[i].key) - 1);
+                            entries[i].active = strcmp(keys[i], active) == 0;
+                            cms_get_theme_colors(keys[i], &entries[i].colors);
+                        }
+
+                        char *content  = site_settings_themes_page(epoch, entries, key_count);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+
+                        free(entries);
+                        free(active);
+                        for (size_t i = 0; i < key_count; i++) free(keys[i]);
+                        free(keys);
                     }
                 }
 
@@ -2267,6 +2345,54 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
                     }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/settings/themes", "/activate", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    cms_set_active_theme(id);
+                    char *response = build_redirect_response("/dashboard/settings/themes", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/settings/themes", "/colors", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    CmsThemeColors colors = {0};
+                    parse_urlencoded_field(req.body, req.body_length, "background",
+                                            colors.background, sizeof(colors.background));
+                    parse_urlencoded_field(req.body, req.body_length, "text",
+                                            colors.text, sizeof(colors.text));
+                    parse_urlencoded_field(req.body, req.body_length, "accent",
+                                            colors.accent, sizeof(colors.accent));
+                    parse_urlencoded_field(req.body, req.body_length, "author",
+                                            colors.author, sizeof(colors.author));
+                    parse_urlencoded_field(req.body, req.body_length, "date",
+                                            colors.date, sizeof(colors.date));
+                    parse_urlencoded_field(req.body, req.body_length, "category",
+                                            colors.category, sizeof(colors.category));
+                    parse_urlencoded_field(req.body, req.body_length, "border",
+                                            colors.border, sizeof(colors.border));
+
+                    cms_update_theme_colors(id, &colors);
+                    char *response = build_redirect_response("/dashboard/settings/themes", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
                 }
             }
 

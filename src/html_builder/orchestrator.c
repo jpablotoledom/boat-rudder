@@ -4,7 +4,7 @@
 #include "../modules/blog_list/blog_list.h"
 #include "../modules/home_content/home_content.h"
 #include "../modules/menu/menu.h"
-#include "../modules/slider/slider.h"
+#include "../modules/mainbanner/mainbanner.h"
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
 #include "../utils/template_utils.h"
@@ -23,20 +23,20 @@ char *buildHomeWebSite(int epoch, const char *lang) {
     free(path);
 
     char *html_menu         = menu("/", epoch);  // home is always "/"
-    char *html_slider       = slider(epoch);
+    char *html_mainbanner   = mainbanner(epoch);
     char *html_home_content = home_content(epoch, lang);
     char *html_home_blog    = home_blog(epoch, lang);
 
     char *result = NULL;
-    if (raw && html_menu && html_slider && html_home_content && html_home_blog) {
-        char *fragment = render_template(raw, html_menu, html_slider,
+    if (raw && html_menu && html_mainbanner && html_home_content && html_home_blog) {
+        char *fragment = render_template(raw, html_menu, html_mainbanner,
                                           html_home_content, html_home_blog);
         result = page_layout_wrap(fragment, "Boat Rudder - Home", epoch, BODY_BACKDROP);
     }
 
     free(raw);
     free(html_menu);
-    free(html_slider);
+    free(html_mainbanner);
     free(html_home_content);
     free(html_home_blog);
 

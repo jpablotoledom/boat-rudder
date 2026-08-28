@@ -58,12 +58,13 @@ set(SOURCES
     src/utils/json_utils.c
     src/utils/qr_generator/qr_generator.c
     src/utils/request_lang.c
+    src/utils/request_theme.c
     src/utils/request_user.c
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
     src/modules/menu/menu.c
-    src/modules/slider/slider.c
+    src/modules/mainbanner/mainbanner.c
     src/modules/home_content/home_content.c
     src/modules/blog_list/blog_list.c
     src/modules/category_menu/category_menu.c
@@ -98,6 +99,7 @@ set(SOURCES
     src/db/cms_media.c
     src/db/cms_media_galleries.c
     src/db/cms_site_settings.c
+    src/db/cms_themes.c
     src/db/language_catalog.c
     src/db/session_manager.c
 )

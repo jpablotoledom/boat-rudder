@@ -183,7 +183,7 @@ GET/HEAD "/"  (http_router.c)
   │
   ├─ body = buildHomeWebSite(epoch, lang)         ── html_builder/orchestrator.c
   │     ├─ generate_url_theme("page/page-home_epoch%d.html", epoch)
-  │     │     read_file_to_string() → tpl (4x %s: menu, slider, home_content, home_blog; {{FOOTER}})
+  │     │     read_file_to_string() → tpl (4x %s: menu, mainbanner, home_content, home_blog; {{FOOTER}})
   │     │
   │     ├─ menu("/", epoch)
   │     │     cms_get_menu_items(lang, &items, &count)  ── db.menu.find({enabled:true})
@@ -195,8 +195,8 @@ GET/HEAD "/"  (http_router.c)
   │     │       (the item whose link == current_url uses the -selected template)
   │     │     → str_append into items, then render_template(menu_tpl, items)
   │     │
-  │     ├─ slider(epoch)
-  │     │     generate_url_theme("slider/slider_epoch%d.html", epoch) → read_file_to_string()
+  │     ├─ mainbanner(epoch)
+  │     │     generate_url_theme("mainbanner/mainbanner_epoch%d.html", epoch) → read_file_to_string()
   │     │
   │     ├─ home_content(epoch, lang)
   │     │     for each entry in the static UPDATES[] array: render_template(item_tpl, title, date, text)
@@ -215,8 +215,8 @@ GET/HEAD "/"  (http_router.c)
   │     │
   │     ├─ NULL check: any of the 5 pieces missing → goto cleanup, free non-NULL pieces
   │     │
-  │     └─ render_template(container_tpl, menu_html, slider_html, home_content_html, home_blog_html)
-  │           free(container_tpl/menu_html/slider_html/home_content_html/home_blog_html)
+  │     └─ render_template(container_tpl, menu_html, mainbanner_html, home_content_html, home_blog_html)
+  │           free(container_tpl/menu_html/mainbanner_html/home_content_html/home_blog_html)
   │
   ├─ body == NULL? → send 500 Internal Server Error
   │

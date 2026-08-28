@@ -155,26 +155,41 @@ The WAP token list and the `AppleWebKit`-absence guard - several of those manufa
 `User-Agent` could otherwise collide with the same substring - are detailed in
 [reference/rendering.md](reference/rendering.md#epochs).
 
-### 2.3 Templates: one file per component, per epoch
+### 2.3 Templates: `html/templates/` (shared) + `html/themes/<theme>/` (brand), one file per
+component, per epoch
 
-Every visual building block of the home page lives under
-`html/themes/<theme>/<component>/` as a set of files named
-`<component>_epoch<N>.html` (`N` ∈ `{-1, 0, 1, 2, 3}`):
+Every visual building block lives as a set of files named `<component>_epoch<N>.html`
+(`N` ∈ `{-1, 0, 1, 2, 3}`), split across two trees per
+[plans/theme-system-plan.md](plans/theme-system-plan.md):
+
+- **`html/templates/`** - the retro-compatibility engine's own rendering rules: content blocks
+  (`elements/<block-type>/`), CMS entry metadata (`entry/`), the generic page/entry/blog-listing
+  shells (`page/page_epoch<N>.html`, `page-entry_epoch<N>.html`, `page-blog_epoch<N>.html`),
+  `error/`, `login/`, `language/`, `redirect/` and the entire `/dashboard` admin tool
+  (`dashboard/`). Identical for every theme - a theme never needs to override any of this to
+  work.
+- **`html/themes/<theme>/`** - this theme's visual identity: `menu/`, `mainbanner/` (the home
+  banner), `layout/` (doctype/head/CSS link/footer splice point), `category-menu/`,
+  `home-content/`, `home-blog/`, `page/page-home_epoch<N>.html` (the home page's composition),
+  `styles_epoch3.css` and brand imagery under `assets/`.
 
 ```
+html/templates/
+├── page/            page_epoch<N>.html, page-entry_epoch{2,3}.html, page-blog_epoch{2,3}.html
+├── elements/<block-type>/          (one dir per content block type)
+├── entry/, error/, login/, language/, redirect/
+└── dashboard/                       (admin pages, epoch 3 only)
+
 html/themes/dark/
 ├── styles_epoch3.css
-├── page/                            (one fragment per page type)
-│   ├── page-home_epoch{-1,0,1,2,3}.html    (home: 4 regions)
-│   ├── page_epoch{-1,0,1,2,3}.html         (generic: nav + content)
-│   ├── page-entry_epoch{2,3}.html          (a db.entries document)
-│   └── page-blog_epoch{2,3}.html           (the blog listing)
+├── page/
+│   └── page-home_epoch{-1,0,1,2,3}.html    (home: 4 regions)
 ├── menu/
 │   ├── menu_epoch{-1,0,1,2,3}.html
 │   ├── menu-item_epoch{-1,0,1,2,3}.html
 │   └── menu-item-separator_epoch{-1,0,1,2,3}.html
-├── slider/
-│   └── slider_epoch{-1,0,1,2,3}.html
+├── mainbanner/
+│   └── mainbanner_epoch{-1,0,1,2,3}.html
 ├── home-content/
 │   ├── home-content_epoch{-1,0,1,2,3}.html
 │   └── home-content-item_epoch{-1,0,1,2,3}.html
@@ -188,17 +203,21 @@ html/themes/dark/
 │   └── home-modal_epoch3.html
 ├── category-menu/
 │   └── category-menu{,-item,-item-selected,-separator}_epoch{-1,0,1,2,3}.html
-├── elements/<block-type>/          (one dir per content block type)
-└── dashboard/                       (admin pages, epoch 3 only)
+└── assets/                          (brand imagery: banner, footer, menu logo, ...)
 ```
 
-The tree above shows the home page's components; the full set also covers the page shell
-(`page/`), the blog listing (`home-blog/`), CMS entries (`entry/`), content blocks
-(`elements/`), errors (`error/`) and the dashboard. See
-[reference/rendering.md](reference/rendering.md) for the complete inventory.
+`generate_url_theme()` resolves every template lookup against the active theme first, falling
+back to `html/templates/` when the theme has no override of its own - so a theme is free to
+override anything, but only needs to carry what actually makes it "this theme" (roughly the
+tree shown above). See [reference/rendering.md](reference/rendering.md) for the complete
+inventory of components.
 
-Adding a new theme means adding a new `html/themes/<name>/` tree with the same file layout and
-pointing `theme=<name>` in `configs/settings.conf`.
+Adding a new theme means adding a new `html/themes/<name>/` tree with (at least) `menu/`,
+`mainbanner/`, `layout/`, `category-menu/`, `home-content/`, `home-blog/`, `page/page-home_epoch<N>`
+and `styles_epoch3.css`, then either setting `theme=<name>` in `configs/settings.conf` (the
+fallback default) or picking it as the active theme from `/dashboard/settings/themes` - which
+also carries a small DB-backed color palette per theme (`themes` collection), layered onto
+`styles_epoch3.css` as CSS custom properties.
 
 ### 2.4 Two kinds of placeholders
 
@@ -211,7 +230,7 @@ pointing `theme=<name>` in `configs/settings.conf`.
 
 Because templates double as `printf` format strings, a literal `%` must be written as `%%` -
 **but only in templates that are themselves used as a format string**. Templates that are only
-ever inserted *as an argument* into another template's `%s` (e.g. `slider_epoch<N>.html`,
+ever inserted *as an argument* into another template's `%s` (e.g. `mainbanner_epoch<N>.html`,
 `menu-item-separator_epoch<N>.html`) must use a single `%`, since `vsnprintf` does not
 re-interpret `%s` argument contents.
 
@@ -222,7 +241,7 @@ title Boat Rudder - Template Composition (per epoch N)
 object "page/page-home_epoch<N>.html" as CONTAINER {
   {{FOOTER}} -> literal replace
   %s (1) -> menu
-  %s (2) -> slider
+  %s (2) -> mainbanner
   %s (3) -> home_content
   %s (4) -> home_blog
 }
@@ -241,7 +260,7 @@ object "menu-item-separator_epoch<N>.html" as SEP {
   static, no placeholders
 }
 
-object "slider_epoch<N>.html" as SLIDER {
+object "mainbanner_epoch<N>.html" as MAINBANNER {
   static per epoch,
   no placeholders
 }
@@ -276,7 +295,7 @@ object "home-blog-item_epoch<N>.html" as BLOGITEM {
 }
 
 CONTAINER *-- MENU
-CONTAINER *-- SLIDER
+CONTAINER *-- MAINBANNER
 CONTAINER *-- HOMECONTENT
 CONTAINER *-- HOMEBLOG
 MENU *-- "0..N" MENUITEM
@@ -297,7 +316,7 @@ note bottom of MENUITEM
   home-content, home-content-item).
 
   Templates inserted as %s ARGUMENTS
-  (slider, menu-item-separator) must use
+  (mainbanner, menu-item-separator) must use
   a single "%".
 end note
 @enduml
@@ -313,7 +332,7 @@ fragment for a given epoch:
 | Module | Signature | Responsibility |
 |---|---|---|
 | `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from the `menu` collection (`cms_get_menu_items()`), joining items with the epoch's separator and marking the item matching `current_url`; falls back to a single built-in `{"/", "Home"}` item if the query returns nothing |
-| `modules/slider` | `char *slider(int epoch)` | Hero/banner (mainbanner) block, static per epoch |
+| `modules/mainbanner` | `char *mainbanner(int epoch)` | Home banner (a banner, not a slider/carousel), personalizable per epoch from `/dashboard/settings/banner` - see [plans/site-personalization-plan.md](plans/site-personalization-plan.md) |
 | `modules/home_content` | `char *home_content(int epoch, const char *lang)` | Welcome text + an "updates" list from the static `UPDATES[]` array - the last hard-coded content source left (see §9) |
 | `modules/blog_list` | `home_blog()`, `blog_list()`, `blog_list_category()` | One component in three appearances. All render `home-blog/home-blog_epoch<N>.html` (2 `%s`: heading, items) with one `home-blog-item_epoch<N>.html` per entry, from the `entries` collection (`type: "blog"`, newest first). They differ only in the heading, the limit (`HOME_BLOG_LIMIT` / `BLOG_LIST_LIMIT`) and whether the query filters by category |
 
@@ -323,11 +342,11 @@ fragment for a given epoch:
 char *buildHomeWebSite(int epoch, const char *lang);
 ```
 
-1. Calls `container`, `menu`, `slider`, `home_content`, `home_blog` for the given epoch.
+1. Calls `container`, `menu`, `mainbanner`, `home_content`, `home_blog` for the given epoch.
 2. If any of the five returns `NULL`, frees whatever succeeded and returns `NULL` (the router
    answers `500`).
 3. Otherwise calls
-   `render_template(html_container, html_menu, html_slider, html_home_content, html_home_blog)`
+   `render_template(html_container, html_menu, html_mainbanner, html_home_content, html_home_blog)`
    to inject the four components into the container's `%s` slots.
 4. Frees every intermediate buffer and returns the final page body.
 
@@ -349,7 +368,7 @@ package "html_builder" {
 
 package "modules" {
     [menu] as MENU
-    [slider] as SLIDER
+    [mainbanner] as MAINBANNER
     [home_content] as HOME
     [blog_list] as BLOG
 }
@@ -372,18 +391,18 @@ ROUTER --> STATIC : [route != "/"]
 STATIC --> FS : open() / read()
 
 ORCH --> MENU
-ORCH --> SLIDER
+ORCH --> MAINBANNER
 ORCH --> HOME
 ORCH --> BLOG
-ORCH --> TPL : render_template(page-home,\nmenu, slider, home_content, home_blog)
+ORCH --> TPL : render_template(page-home,\nmenu, mainbanner, home_content, home_blog)
 
 MENU --> URLTHEME
-SLIDER --> URLTHEME
+MAINBANNER --> URLTHEME
 HOME --> URLTHEME
 BLOG --> URLTHEME
 
 MENU --> READFILE
-SLIDER --> READFILE
+MAINBANNER --> READFILE
 HOME --> READFILE
 BLOG --> READFILE
 
@@ -478,7 +497,7 @@ participant "http_router" as ROUTER
 participant "detect_epoch" as EPOCH
 participant "orchestrator\n(buildHomeWebSite)" as ORCH
 participant "menu" as MENU
-participant "slider" as SLIDER
+participant "mainbanner" as MAINBANNER
 participant "home_content" as HOME
 participant "home_blog" as BLOG
 participant "build_epoch_response" as RESP
@@ -503,9 +522,9 @@ MENU -> MENU : render_template(menu_tpl, items)
 deactivate MENU
 MENU --> ORCH : html_menu
 
-ORCH -> SLIDER : slider(epoch)
-SLIDER -> SLIDER : generate_url_theme + read_file\n(static block, no placeholders)
-SLIDER --> ORCH : html_slider
+ORCH -> MAINBANNER : mainbanner(epoch)
+MAINBANNER -> MAINBANNER : generate_url_theme + read_file\n(static block, no placeholders)
+MAINBANNER --> ORCH : html_mainbanner
 
 ORCH -> HOME : home_content(epoch, lang)
 activate HOME
@@ -534,7 +553,7 @@ alt any component == NULL
   ORCH --> ROUTER : NULL
   ROUTER -> Client : 500 Internal Server Error
 else all components OK
-  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_slider, html_home_content, html_home_blog)
+  ORCH -> ORCH : render_template(html_container,\nhtml_menu, html_mainbanner, html_home_content, html_home_blog)
   ORCH -> ORCH : free all intermediate buffers
   ORCH --> ROUTER : body (full HTML / WML document)
   deactivate ORCH
@@ -562,7 +581,7 @@ In short:
    in `{-1, 0, 1, 2, 3}`, that value is used directly; otherwise `detect_epoch(User-Agent)`
    classifies the request into one of those epochs.
 3. `buildHomeWebSite(epoch, lang)` assembles the page from its `page-home` fragment + `menu` +
-   `slider` + `home_content` + `home_blog`, all resolved via `generate_url_theme()` against
+   `mainbanner` + `home_content` + `home_blog`, all resolved via `generate_url_theme()` against
    `./html/themes/<theme>/...`, then wraps the result in the epoch's `layout` (doctype, head,
    body, footer) via `page_layout_wrap()`.
 4. `build_epoch_response(body, "", epoch)` wraps the body with the correct `Content-Type` and
@@ -724,14 +743,18 @@ Features added after the initial home-page MVP:
 - **Active menu item**: `--selected` CSS modifier on the nav item matching the current URL, and on the active category in the category bar.
 - **Language admin**: `languages` collection drives content language; `/dashboard/languages` to add/remove/set default.
 - **Multipart body reading**: router reads full POST body based on `Content-Length` (supports file uploads up to 10 MiB).
+- **Site personalization** (`site_settings` collection): site name, raw-HTML banner/footer per epoch with image uploads, `/dashboard/settings/preview` and a signed-in-user navbar link - see [plans/site-personalization-plan.md](plans/site-personalization-plan.md).
+- **Theme system**: `html/templates/` (shared, epoch-generic) vs `html/themes/<theme>/` (brand-specific) split, with `generate_url_theme()` falling back from theme to shared template, plus a `themes` collection holding a small DB-editable color palette per theme and `/dashboard/settings/themes` to pick the active theme and tweak its colors - see [plans/theme-system-plan.md](plans/theme-system-plan.md).
 
 ## 9. Roadmap (not yet implemented)
 
-- **Site settings from MongoDB** (`site_settings` collection + `/dashboard/settings`): site name,
-  banner, favicon, logo, brand colors and every page `<title>`, so nothing a visitor reads about
-  the site's identity stays hardcoded in the source - see
-  [plans/site-settings-plan.md](plans/site-settings-plan.md). This is the next planned increment.
-- Theme (`light`) switching and per-visitor language selection via query string / cookie.
+- **Site settings from MongoDB** (`site_settings` collection + `/dashboard/settings`): site name
+  and raw-HTML banner/footer per epoch shipped, see
+  [plans/site-personalization-plan.md](plans/site-personalization-plan.md); favicon, logo and
+  every page `<title>` remain unimplemented, see
+  [plans/site-settings-plan.md](plans/site-settings-plan.md).
+- Per-visitor language selection via query string / cookie (today's `lang` config is a
+  server-wide fallback only, per §8).
 - A real content source for `home_content` (replacing the static `UPDATES[]` array).
 - The `image-single` block type (legacy entries using it were migrated to `image`).
 - Pagination for `/blog` and `/blog/category/<slug>` (both are capped at `BLOG_LIST_LIMIT`, currently 50).

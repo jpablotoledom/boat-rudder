@@ -1,0 +1,17 @@
+  <section class="boat-rudder__dashboard__settings-panel">
+    <h2>%s%s</h2>
+    %s
+    <p>Applies to every epoch with a color model (1, 2 and 3) - epoch 3 gets these as CSS
+       variables, epoch 1/2 (no CSS custom properties there) get them substituted straight into
+       HTML attributes. Epoch -1/0 have no color model, nothing to apply here.</p>
+    <form method="POST" action="/dashboard/settings/themes/%s/colors">
+      <label>Background <input type="color" name="background" value="%s"></label>
+      <label>Text <input type="color" name="text" value="%s"></label>
+      <label>Accent (links) <input type="color" name="accent" value="%s"></label>
+      <label>Author <input type="color" name="author" value="%s"></label>
+      <label>Date <input type="color" name="date" value="%s"></label>
+      <label>Category tags <input type="color" name="category" value="%s"></label>
+      <label>Item border <input type="color" name="border" value="%s"></label>
+      <button class="boat-rudder__dashboard__button" type="submit">Save colors</button>
+    </form>
+  </section>

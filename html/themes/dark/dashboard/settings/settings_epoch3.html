@@ -1,0 +1,16 @@
+<section class="boat-rudder__dashboard">
+  <h1>Site settings</h1>
+%s
+  <form method="POST" action="/dashboard/settings">
+    <label for="site_name">Site name</label>
+    <input class="boat-rudder__dashboard__input" type="text" id="site_name" name="site_name"
+           value="%s" maxlength="120" required>
+    <button class="boat-rudder__dashboard__button" type="submit">Save</button>
+  </form>
+  <ul>
+    <li><a href="/dashboard/settings/banner">Home banner</a></li>
+    <li><a href="/dashboard/settings/footer">Footer</a></li>
+    <li><a href="/dashboard/settings/preview">Preview</a></li>
+  </ul>
+  <p><a href="/dashboard">Back to dashboard</a></p>
+</section>

@@ -126,6 +126,14 @@ h2 {
   color: #56e9fd;
 }
 
+/* The mobile dropdown's copy of the user link (menu-user-mobile_epoch3.html)
+   - hidden at desktop widths, where boat-rudder__navbar__user-corner already
+   covers it; shown below the 800px breakpoint instead, where the corner
+   link is hidden (see that breakpoint below). */
+.boat-rudder__navbar__menu_item--user {
+  display: none;
+}
+
 .navbar__toggle {
   display: none;
   flex-direction: column;
@@ -1507,6 +1515,24 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   z-index: 1000;
 }
 
+/* Pinned to the left edge, mirroring .boat-rudder__navbar__options on the
+   right - empty (no active session) and out of normal flow, so it never
+   shifts the centred title/menu. */
+.boat-rudder__navbar__user-corner {
+  position: fixed;
+  left: 15px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  height: 74px;
+  z-index: 1000;
+}
+.boat-rudder__navbar__user {
+  color: inherit; text-decoration: none; padding: 4px 10px;
+  border: 1px solid transparent; border-radius: 3px; white-space: nowrap;
+}
+.boat-rudder__navbar__user:hover { border-color: currentColor; }
+
 .boat-rudder__navbar__lang { position: relative; display: inline-block; }
 .boat-rudder__navbar__lang__btn {
   background: none; border: 1px solid transparent; color: inherit;
@@ -1585,6 +1611,17 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
     padding: 12px;
     border-right: none;
     border-top: 1px solid #333333;
+  }
+
+  /* Below 800px the horizontal corner link has nowhere to sit without
+     colliding with the hamburger/centred title, so it moves inside the
+     dropdown menu instead - same link, same data, just relocated. */
+  .boat-rudder__navbar__user-corner {
+    display: none;
+  }
+
+  .boat-rudder__navbar__menu_item--user {
+    display: block;
   }
 
   .boat-rudder__gallery-container {

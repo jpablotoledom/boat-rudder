@@ -58,6 +58,7 @@ set(SOURCES
     src/utils/json_utils.c
     src/utils/qr_generator/qr_generator.c
     src/utils/request_lang.c
+    src/utils/request_user.c
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
@@ -79,6 +80,7 @@ set(SOURCES
     src/modules/entry_editor/entry_editor.c
     src/modules/entry_editor/entry_editor_blocks.c
     src/modules/media_admin/media_admin.c
+    src/modules/site_settings_admin/site_settings_admin.c
 
     # Web server utilities (multipart)
     src/web_server/utils/multipart_parser.c
@@ -95,6 +97,7 @@ set(SOURCES
     src/db/cms_users_admin.c
     src/db/cms_media.c
     src/db/cms_media_galleries.c
+    src/db/cms_site_settings.c
     src/db/language_catalog.c
     src/db/session_manager.c
 )

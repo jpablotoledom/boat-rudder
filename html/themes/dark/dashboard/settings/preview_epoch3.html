@@ -1,0 +1,132 @@
+<section class="boat-rudder__dashboard boat-rudder__dashboard--preview">
+  <h1>Site preview</h1>
+  <p>Renders "/" as each epoch would see it. Epoch -1 (WAP/WML) is omitted - it is
+     not HTML, so a modern browser's iframe cannot render it.</p>
+
+  <div class="boat-rudder__preview__bar">
+    <label>
+      Epoch
+      <select id="previewEpoch" class="boat-rudder__dashboard__input">
+        <option value="0">0 - Pre-standard (text browsers)</option>
+        <option value="1">1 - Early (tables, no CSS)</option>
+        <option value="2">2 - Middle (HTML 3.2 tables)</option>
+        <option value="3" selected>3 - Modern</option>
+      </select>
+    </label>
+    <label>
+      Screen size
+      <select id="previewSize" class="boat-rudder__dashboard__input">
+        <option value="375x667">Mobile (375x667)</option>
+        <option value="414x896">Mobile large (414x896)</option>
+        <option value="640x480">VGA (640x480)</option>
+        <option value="768x1024">Tablet (768x1024)</option>
+        <option value="800x600">SVGA (800x600)</option>
+        <option value="1024x768">XGA (1024x768)</option>
+        <option value="1280x1024">SXGA (1280x1024)</option>
+        <option value="1366x768">Laptop (1366x768)</option>
+        <option value="1920x1080">Desktop (1920x1080)</option>
+        <option value="full" selected>Full width</option>
+      </select>
+    </label>
+    <button type="button" class="boat-rudder__dashboard__button" id="previewReload">Reload</button>
+  </div>
+
+  <div class="boat-rudder__preview__stage" id="previewStage">
+    <iframe id="previewFrame" class="boat-rudder__preview__frame" title="Site preview"></iframe>
+  </div>
+
+  <p><a href="/dashboard/settings">Back to site settings</a></p>
+</section>
+
+<style>
+  .boat-rudder__preview__bar {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  .boat-rudder__preview__bar label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85em;
+  }
+  .boat-rudder__preview__stage {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #111;
+    padding: 16px;
+    overflow: auto;
+    max-height: 80vh;
+  }
+  .boat-rudder__preview__frame {
+    display: block;
+    border: 0;
+    background: #fff;
+    width: 100%;
+    height: 80vh;
+  }
+</style>
+
+<script>
+(function () {
+  var epochSel = document.getElementById('previewEpoch');
+  var sizeSel = document.getElementById('previewSize');
+  var frame = document.getElementById('previewFrame');
+  var reloadBtn = document.getElementById('previewReload');
+
+  function applySize() {
+    var v = sizeSel.value;
+    if (v === 'full') {
+      frame.style.width = '100%';
+      frame.style.height = '80vh';
+      return;
+    }
+    var parts = v.split('x');
+    frame.style.width = parts[0] + 'px';
+    frame.style.height = parts[1] + 'px';
+  }
+
+  function reload() {
+    frame.src = '/?preview_epoch=' + encodeURIComponent(epochSel.value) + '&_=' + Date.now();
+  }
+
+  // Every link the iframe's own pages render is a plain <a href="..."> with
+  // no idea it is being previewed, so clicking one loses preview_epoch and
+  // the request falls back to the real (modern) User-Agent - epoch 3. Same-
+  // origin means the iframe's DOM is reachable after each navigation, so
+  // every same-site link gets the current epoch appended before the visitor
+  // can click it.
+  function keepEpochOnNavigation() {
+    var doc;
+    try {
+      doc = frame.contentDocument;
+    } catch (e) {
+      return; // cross-origin (shouldn't happen here) - nothing we can do
+    }
+    if (!doc) return;
+
+    var epoch = epochSel.value;
+    var anchors = doc.querySelectorAll('a[href]');
+    for (var i = 0; i < anchors.length; i++) {
+      var a = anchors[i];
+      var href = a.getAttribute('href');
+      if (!href || href.charAt(0) === '#') continue;
+      if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) continue; // absolute/other-scheme/protocol-relative
+      if (href.indexOf('preview_epoch=') !== -1) continue;
+
+      var sep = href.indexOf('?') === -1 ? '?' : '&';
+      a.setAttribute('href', href + sep + 'preview_epoch=' + epoch);
+    }
+  }
+
+  frame.addEventListener('load', keepEpochOnNavigation);
+
+  epochSel.addEventListener('change', reload);
+  sizeSel.addEventListener('change', applySize);
+  reloadBtn.addEventListener('click', reload);
+
+  applySize();
+  reload();
+})();
+</script>

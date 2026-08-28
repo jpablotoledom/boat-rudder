@@ -1,0 +1,14 @@
+  <section class="boat-rudder__dashboard__settings-panel" data-component="%s" data-epoch="%s">
+    <h2>%s</h2>
+    <form method="POST" action="/dashboard/settings/%s/%s">
+      <textarea class="boat-rudder__dashboard__textarea" name="html" rows="10" spellcheck="false">%s</textarea>
+      <button class="boat-rudder__dashboard__button" type="submit">Save</button>
+    </form>
+    <div class="boat-rudder__dashboard__asset-manager">
+      <label class="boat-rudder__dashboard__button">
+        Upload image
+        <input type="file" class="boat-rudder__dashboard__asset-upload" accept="image/*" hidden>
+      </label>
+      <ul class="boat-rudder__dashboard__asset-list"></ul>
+    </div>
+  </section>

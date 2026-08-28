@@ -1,13 +1,9 @@
 #include "slider.h"
-#include "../../utils/generate_url_theme.h"
-#include "../../utils/read_file.h"
-#include <stdlib.h>
+#include "../../db/cms_site_settings.h"
 
 char *slider(int epoch) {
-    char *path = generate_url_theme("slider/slider_epoch%d.html", epoch);
-    if (!path) return NULL;
-
-    char *result = read_file_to_string(path);
-    free(path);
-    return result;
+    // cms_get_site_banner() falls back to the on-disk
+    // slider/slider_epoch<N>.html itself when the DB has no override, so a
+    // fresh install renders exactly as before this became DB-backed.
+    return cms_get_site_banner(epoch);
 }

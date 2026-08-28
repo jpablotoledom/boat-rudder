@@ -1,0 +1,86 @@
+<section class="boat-rudder__dashboard">
+  <h1>%s</h1>
+  <p>Raw markup, one field per epoch. Leave a field empty to fall back to the theme's
+     default for that epoch. Upload an image below a field, then paste its path into
+     the markup yourself (e.g. inside an <code>&lt;img src="..."&gt;</code>).</p>
+%s
+  <p><a href="/dashboard/settings">Back to site settings</a></p>
+</section>
+
+<script>
+(function () {
+  function qs(sel, root) { return (root || document).querySelector(sel); }
+  function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+  function assetPath(component, epoch, name) {
+    return '/themes/dark/assets/' + component + '/epoch' + epoch + '/' + name;
+  }
+
+  function loadAssets(panel) {
+    const component = panel.dataset.component;
+    const epoch = panel.dataset.epoch;
+    const list = qs('.boat-rudder__dashboard__asset-list', panel);
+    list.innerHTML = '<li>Loading...</li>';
+
+    fetch('/dashboard/api/theme-assets/list?component=' + encodeURIComponent(component) +
+          '&epoch=' + encodeURIComponent(epoch))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        list.innerHTML = '';
+        const files = data.files || [];
+        if (files.length === 0) {
+          list.innerHTML = '<li>No files uploaded yet.</li>';
+          return;
+        }
+        files.forEach(function (name) {
+          const path = assetPath(component, epoch, name);
+
+          const li = document.createElement('li');
+
+          const code = document.createElement('code');
+          code.textContent = path;
+          code.title = 'Click to copy';
+          code.style.cursor = 'pointer';
+          code.addEventListener('click', function () {
+            if (navigator.clipboard) navigator.clipboard.writeText(path);
+          });
+
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.textContent = 'Delete';
+          del.className = 'boat-rudder__dashboard__button';
+          del.addEventListener('click', function () {
+            if (!confirm('Delete ' + name + '?')) return;
+            fetch('/dashboard/api/theme-assets/delete?component=' + encodeURIComponent(component) +
+                  '&epoch=' + encodeURIComponent(epoch) + '&file=' + encodeURIComponent(name),
+                  { method: 'POST' }).then(function () { loadAssets(panel); });
+          });
+
+          li.appendChild(code);
+          li.appendChild(del);
+          list.appendChild(li);
+        });
+      })
+      .catch(function () { list.innerHTML = '<li>Could not load files.</li>'; });
+  }
+
+  qsa('.boat-rudder__dashboard__settings-panel').forEach(function (panel) {
+    loadAssets(panel);
+
+    const input = qs('.boat-rudder__dashboard__asset-upload', panel);
+    input.addEventListener('change', function () {
+      const file = input.files[0];
+      if (!file) return;
+
+      const component = panel.dataset.component;
+      const epoch = panel.dataset.epoch;
+      const fd = new FormData();
+      fd.append('file', file);
+
+      fetch('/dashboard/api/theme-assets/upload?component=' + encodeURIComponent(component) +
+            '&epoch=' + encodeURIComponent(epoch), { method: 'POST', body: fd })
+        .then(function () { input.value = ''; loadAssets(panel); });
+    });
+  });
+})();
+</script>

@@ -2,12 +2,14 @@
 #include "../../db/cms_languages.h"
 #include "../../db/language_catalog.h"
 #include "../../db/cms_menu.h"
+#include "../../db/cms_site_settings.h"
 #include "../../db/mongodb_manager.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/http_utils.h"
 #include "../../utils/read_file.h"
 #include "../../utils/request_lang.h"
+#include "../../utils/request_user.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
 #include <string.h>
@@ -89,6 +91,44 @@ static char *language_selector(int epoch) {
     return result ? result : strdup("");
 }
 
+// Epoch 3 only: a link to /dashboard carrying the signed-in user's display
+// name. request_user_name() (per-thread, resolved once per request in
+// http_router.c) is "" whenever there is no active session, which is what
+// keeps this link out of the navbar entirely for every visitor who isn't
+// logged in.
+//
+// Rendered twice, from two different one-`%s` templates sharing the same
+// name: menu-user_epoch3.html sits in the fixed top-left corner (desktop)
+// and menu-user-mobile_epoch3.html rides inside the hamburger dropdown as
+// one more boat-rudder__navbar__menu_item (mobile) - styles_epoch3.css
+// swaps which one is visible at the 800px breakpoint, since a signed-in
+// admin still needs a way to reach /dashboard once the corner link is
+// hidden. See user_menu_item()/user_menu_item_mobile() below.
+//
+// Returns a malloc'd string ("" when logged out, older epochs, or the
+// template is missing), never NULL unless allocation fails.
+static char *user_link(int epoch, const char *subpath_fmt) {
+    const char *name = request_user_name();
+    if (epoch < EPOCH_MODERN || !name[0]) return strdup("");
+
+    char *path = generate_url_theme(subpath_fmt, epoch);
+    char *tpl  = path ? read_file_to_string(path) : NULL;
+    free(path);
+    if (!tpl) return strdup("");
+
+    char *result = render_template(tpl, name);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
+static char *user_menu_item(int epoch) {
+    return user_link(epoch, "menu/menu-user_epoch%d.html");
+}
+
+static char *user_menu_item_mobile(int epoch) {
+    return user_link(epoch, "menu/menu-user-mobile_epoch%d.html");
+}
+
 char *menu(const char *current_url, int epoch) {
     char *menu_item_path    = generate_url_theme("menu/menu-item_epoch%d.html", epoch);
     char *selected_item_path = generate_url_theme("menu/menu-item-selected_epoch%d.html", epoch);
@@ -165,11 +205,25 @@ char *menu(const char *current_url, int epoch) {
     }
 
     char *lang_html = language_selector(epoch);
-    // Epoch 3 draws its own title in the nav bar and takes no logo slot.
+    // Epoch 3 draws its own title in the nav bar and takes no logo slot;
+    // that title is the personalizable site name instead of the logo.
     if (lang_html) {
-        result = (epoch >= EPOCH_MODERN)
-            ? render_template(menu_tpl, items, lang_html)
-            : render_template(menu_tpl, logo, items, lang_html);
+        if (epoch >= EPOCH_MODERN) {
+            char *site_name = cms_get_site_name();
+            char *user_html = user_menu_item(epoch);
+            char *user_html_mobile = user_menu_item_mobile(epoch);
+
+            if (user_html_mobile) items = str_append(items, user_html_mobile);
+            else { free(items); items = NULL; }
+            free(user_html_mobile);
+
+            result = (site_name && user_html && items)
+                ? render_template(menu_tpl, user_html, site_name, items, lang_html) : NULL;
+            free(site_name);
+            free(user_html);
+        } else {
+            result = render_template(menu_tpl, logo, items, lang_html);
+        }
     }
     free(lang_html);
     free(logo);

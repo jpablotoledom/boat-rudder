@@ -1,4 +1,5 @@
 #include "page_layout.h"
+#include "../db/cms_site_settings.h"
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
 #include "../utils/template_utils.h"
@@ -25,11 +26,25 @@ static char *splice_part(char *html, const char *marker, const char *part, int e
     return result;
 }
 
+// Like splice_part(), but for the footer specifically: its content is
+// personalizable from /dashboard/settings/footer, so it comes from
+// cms_get_site_footer() (DB override, falling back to the on-disk
+// layout/footer_epoch<N>.html itself) instead of a direct file read.
+static char *splice_footer(char *html, int epoch) {
+    if (!html || !strstr(html, "{{FOOTER}}")) return html;
+
+    char *body = cms_get_site_footer(epoch);
+    char *result = str_replace_first(html, "{{FOOTER}}", body ? body : "");
+    free(body);
+    free(html);
+    return result;
+}
+
 char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
                        const char *body_background) {
     if (!fragment_html) return NULL;
 
-    fragment_html = splice_part(fragment_html, "{{FOOTER}}",     "footer",     epoch);
+    fragment_html = splice_footer(fragment_html, epoch);
     fragment_html = splice_part(fragment_html, "{{LIGHTBOX}}",   "lightbox",   epoch);
     fragment_html = splice_part(fragment_html, "{{HOME-MODAL}}", "home-modal", epoch);
     if (!fragment_html) return NULL;

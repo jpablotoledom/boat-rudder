@@ -12,6 +12,7 @@
 #include "../db/cms_entries_admin.h"
 #include "../db/cms_languages.h"
 #include "../db/cms_menu.h"
+#include "../db/cms_site_settings.h"
 #include "../db/cms_users_admin.h"
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
@@ -29,6 +30,7 @@
 #include "../modules/login/login.h"
 #include "../modules/media_admin/media_admin.h"
 #include "../modules/menu_admin/menu_admin.h"
+#include "../modules/site_settings_admin/site_settings_admin.h"
 #include "../modules/users_admin/users_admin.h"
 #include "../db/cms_media.h"
 #include "../db/cms_media_galleries.h"
@@ -37,6 +39,7 @@
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
 #include "../utils/request_lang.h"
+#include "../utils/request_user.h"
 #include "../utils/config_loader.h"
 #include "../utils/qr_generator/qr_generator.h"
 #include "../utils/detect_epoch.h"
@@ -54,6 +57,7 @@
 #include <strings.h>
 #include <poll.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -103,9 +107,28 @@ static void send_simple(void *ctx, const char *status, const char *body) {
 }
 
 // Computes the browser "epoch" for `req`: the configured `force_epoch`
-// override, if set, otherwise detect_epoch(User-Agent).
+// override, if set; otherwise a "preview_epoch" query-string override, if
+// present and valid; otherwise detect_epoch(User-Agent).
+//
+// preview_epoch backs /dashboard/settings/preview's iframe: every dynamic
+// route needs to honor it (not just "/"), because the admin clicks through
+// the real site inside that iframe - keepEpochOnNavigation() in
+// preview_epoch3.html appends it to every same-origin link it finds after
+// each navigation, so the chosen epoch survives clicking around instead of
+// reverting to whatever User-Agent the browser actually sends. Reading it
+// straight off req->url (rather than requiring every call site to have
+// already parsed the query string into params[]) is what lets one change
+// here cover every route.
 static int resolve_epoch(HttpRequest *req) {
     if (force_epoch >= EPOCH_WML && force_epoch <= EPOCH_MODERN) return force_epoch;
+
+    static const char preview_key[] = "preview_epoch=";
+    const char *p = strstr(req->url, preview_key);
+    if (p && (p == req->url || p[-1] == '?' || p[-1] == '&')) {
+        int preview_epoch = atoi(p + sizeof(preview_key) - 1);
+        if (preview_epoch >= EPOCH_WML && preview_epoch <= EPOCH_MODERN) return preview_epoch;
+    }
+
     return detect_epoch(get_header_value(req, "User-Agent"));
 }
 
@@ -290,6 +313,103 @@ static int match_id_route(const char *decoded_url, const char *prefix,
     memcpy(id_out, seg_start, seg_len);
     id_out[seg_len] = '\0';
     return 1;
+}
+
+// Theme-asset endpoints (/dashboard/api/theme-assets/*) back the banner and
+// footer editors' image upload/browse widget: they write straight into
+// html/themes/<theme>/assets/<component>/epoch<N>/, the same directories the
+// theme's own slider/footer markup already references - not the content
+// media library (html/content/posts/..., per-author, gallery-oriented).
+//
+// `component` is restricted to the two directories this feature actually
+// uses; `epoch_str` must be one of "-1".."3". Fills dir_out (>= 256 bytes)
+// with "./html/themes/<theme>/assets/<component>/epoch<epoch_str>" and
+// returns 1, or returns 0 (dir_out untouched) if either is invalid.
+static int theme_assets_dir(const char *component, const char *epoch_str,
+                             char *dir_out, size_t dir_size) {
+    if (!component || !epoch_str) return 0;
+    if (strcmp(component, "mainbanner") != 0 && strcmp(component, "footer") != 0) return 0;
+
+    static const char *valid_epochs[] = {"-1", "0", "1", "2", "3"};
+    int epoch_ok = 0;
+    for (size_t i = 0; i < sizeof(valid_epochs) / sizeof(valid_epochs[0]); i++) {
+        if (strcmp(epoch_str, valid_epochs[i]) == 0) { epoch_ok = 1; break; }
+    }
+    if (!epoch_ok) return 0;
+
+    int n = snprintf(dir_out, dir_size, "./html/themes/%s/assets/%s/epoch%s",
+                      theme, component, epoch_str);
+    return n > 0 && (size_t)n < dir_size;
+}
+
+// mkdir() one path component at a time - unlike media uploads (whose parent
+// directory is always created up front by the "new directory" route), a
+// theme-asset directory may not exist yet (there is no epoch0/ under
+// assets/mainbanner/ today, and assets/footer/ doesn't exist at all).
+static void mkdir_recursive(const char *dir) {
+    char tmp[512];
+    strncpy(tmp, dir, sizeof(tmp) - 1);
+    tmp[sizeof(tmp) - 1] = '\0';
+
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0775);
+            *p = '/';
+        }
+    }
+    mkdir(tmp, 0775);
+}
+
+// Sanitizes an uploaded/targeted filename in place: strips anything but
+// alphanumerics/-/./_ (spaces become '-'), same whitelist already used by
+// the media library's upload handler. Also rejects a name that is empty,
+// starts with '.' (hidden file / "." / ".."), or still contains "..".
+static int sanitize_asset_filename(const char *in, char *out, size_t out_size) {
+    size_t j = 0;
+    for (size_t k = 0; in[k] && j < out_size - 1; k++) {
+        char c = in[k];
+        if (c == ' ') out[j++] = '-';
+        else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                 (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_')
+            out[j++] = c;
+    }
+    out[j] = '\0';
+    return j > 0 && out[0] != '.' && !strstr(out, "..");
+}
+
+// Builds {"files":["name1","name2",...]} for the banner/footer editor's
+// asset browser. Returns a malloc'd string, always valid JSON (an invalid
+// component/epoch or an unreadable directory yields an empty list, not an
+// error - this endpoint only helps the admin find a path to paste, nothing
+// depends on it being exhaustive).
+static char *theme_assets_list_json(const char *component, const char *epoch_str) {
+    char dir[256];
+    if (!theme_assets_dir(component, epoch_str, dir, sizeof(dir)))
+        return strdup("{\"files\":[]}");
+
+    DIR *d = opendir(dir);
+    if (!d) return strdup("{\"files\":[]}");
+
+    char *json = strdup("{\"files\":[");
+    int first = 1;
+    struct dirent *entry;
+    while (json && (entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+
+        char *escaped = json_escape_alloc(entry->d_name);
+        if (!escaped) continue;
+
+        char *piece = render_template(first ? "\"%s\"" : ",\"%s\"", escaped);
+        free(escaped);
+        if (piece) { json = str_append(json, piece); first = 0; }
+        free(piece);
+    }
+    closedir(d);
+
+    if (!json) return strdup("{\"files\":[]}");
+    json = str_append(json, "]}");
+    return json ? json : strdup("{\"files\":[]}");
 }
 
 // Matches "/dashboard/api/entries/<entry_id>/blocks/<block_id>/delete". On
@@ -697,6 +817,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         request_lang_set(get_header_value(&req, "Cookie"),
                           get_query_param(params, param_count, "lang"));
         request_path_set(decoded_url);
+        request_user_set(get_header_value(&req, "Cookie"));
         char content_lang[16];
         strncpy(content_lang, request_lang(), sizeof(content_lang) - 1);
         content_lang[sizeof(content_lang) - 1] = '\0';
@@ -924,6 +1045,100 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                         cms_menu_name_values_free(values, lang_count);
                         cms_languages_free(langs, lang_count);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/settings") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        char *name     = cms_get_site_name();
+                        char *content  = site_settings_general_page(epoch, name, NULL);
+                        free(name);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/settings/banner") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        CmsSiteSettings settings;
+                        cms_get_site_settings(&settings);
+                        char *content  = site_settings_banner_page(epoch, settings.banner_html);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                        cms_site_settings_free(&settings);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/settings/footer") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        CmsSiteSettings settings;
+                        cms_get_site_settings(&settings);
+                        char *content  = site_settings_footer_page(epoch, settings.footer_html);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                        cms_site_settings_free(&settings);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/settings/preview") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        char *content  = site_settings_preview_page(epoch);
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/api/theme-assets/list") == 0) {
+                int epoch = resolve_epoch(&req);
+                if (epoch != EPOCH_MODERN) {
+                    send_simple(ctx, "403 Forbidden", "Forbidden");
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        const char *component = get_query_param(params, param_count, "component");
+                        const char *epoch_str = get_query_param(params, param_count, "epoch");
+                        char *json = theme_assets_list_json(component, epoch_str);
+                        char *response = build_json_response(json ? json : "{\"files\":[]}");
+                        free(json);
+                        connection_write(ctx, response, strlen(response));
+                        free(response);
+                        connection_close(ctx);
                     }
                 }
 
@@ -2029,6 +2244,70 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 }
             }
 
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char name[128];
+                    parse_urlencoded_field(req.body, req.body_length, "site_name", name, sizeof(name));
+
+                    if (name[0] && cms_update_site_name(name) == 0) {
+                        char *response = build_redirect_response("/dashboard/settings", "", epoch);
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else {
+                        char *content  = site_settings_general_page(epoch, name,
+                            name[0] ? "No se pudo guardar el nombre del sitio." : "El nombre del sitio no puede estar vacio.");
+                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/settings/banner", "", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char html[8192];
+                    parse_urlencoded_field(req.body, req.body_length, "html", html, sizeof(html));
+
+                    cms_update_site_banner(atoi(id), html);
+                    char *response = build_redirect_response("/dashboard/settings/banner", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/settings/footer", "", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char html[8192];
+                    parse_urlencoded_field(req.body, req.body_length, "html", html, sizeof(html));
+
+                    cms_update_site_footer(atoi(id), html);
+                    char *response = build_redirect_response("/dashboard/settings/footer", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/languages/add") == 0) {
             int epoch = resolve_epoch(&req);
 
@@ -2436,6 +2715,89 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             free_multipart(mp);
                             connection_close(ctx);
                         }
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/theme-assets/upload") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    const char *component = get_query_param(params, param_count, "component");
+                    const char *epoch_str = get_query_param(params, param_count, "epoch");
+
+                    char dir[256];
+                    if (!theme_assets_dir(component, epoch_str, dir, sizeof(dir))) {
+                        send_simple(ctx, "400 Bad Request", "Invalid component or epoch");
+                    } else {
+                        const char *ct = get_header_value(&req, "Content-Type");
+                        MultipartResult *mp = parse_multipart(req.body, req.body_length, ct);
+
+                        const MultipartPart *file_part = mp ? multipart_find(mp, "file") : NULL;
+                        char sanitized[256];
+                        if (!file_part || file_part->filename[0] == '\0' ||
+                            !sanitize_asset_filename(file_part->filename, sanitized, sizeof(sanitized))) {
+                            send_simple(ctx, "400 Bad Request", "Missing or invalid file");
+                        } else {
+                            mkdir_recursive(dir);
+
+                            char filepath[512];
+                            snprintf(filepath, sizeof(filepath), "%s/%s", dir, sanitized);
+
+                            FILE *f = fopen(filepath, "wb");
+                            int write_ok = 0;
+                            if (f) {
+                                write_ok = fwrite(file_part->data, 1, file_part->data_len, f) == file_part->data_len;
+                                fclose(f);
+                            }
+
+                            if (!write_ok) {
+                                send_simple(ctx, "500 Internal Server Error", "Could not write file");
+                            } else {
+                                LOG_INFO("Theme asset saved: %s (%zu bytes)", filepath, file_part->data_len);
+                                char *escaped = json_escape_alloc(sanitized);
+                                char *json = render_template("{\"ok\":true,\"filename\":\"%s\"}", escaped ? escaped : sanitized);
+                                free(escaped);
+                                char *response = build_json_response(json ? json : "{\"ok\":true}");
+                                free(json);
+                                connection_write(ctx, response, strlen(response));
+                                free(response);
+                            }
+                        }
+
+                        free_multipart(mp);
+                        connection_close(ctx);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/theme-assets/delete") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    const char *component = get_query_param(params, param_count, "component");
+                    const char *epoch_str = get_query_param(params, param_count, "epoch");
+                    const char *file = get_query_param(params, param_count, "file");
+
+                    char dir[256];
+                    char sanitized[256];
+                    if (!theme_assets_dir(component, epoch_str, dir, sizeof(dir)) ||
+                        !sanitize_asset_filename(file, sanitized, sizeof(sanitized)) ||
+                        strcmp(file, sanitized) != 0) {
+                        send_simple(ctx, "400 Bad Request", "Invalid component, epoch or file");
+                    } else {
+                        char filepath[512];
+                        snprintf(filepath, sizeof(filepath), "%s/%s", dir, sanitized);
+                        unlink(filepath);
+                        send_simple(ctx, "200 OK", "Deleted");
                     }
                 }
             }

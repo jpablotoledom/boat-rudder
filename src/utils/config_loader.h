@@ -40,4 +40,24 @@ extern char mongodb_db[64];
 // Session cookie lifetime, in seconds.
 extern int session_ttl_seconds;
 
+// Anti-DDoS tunables (see server_listener.c): a global cap on concurrent
+// connections, plus a per-IP rate window/threshold with a temporary ban
+// (2x the window) once exceeded. ddos_max_ips sizes the per-IP tracking
+// table (malloc'd once at server_start() from this value); once full,
+// distinct new IPs go untracked until the cleanup thread frees stale
+// entries (ddos_cleanup_interval_secs / ddos_ip_stale_secs).
+extern int ddos_max_connections;
+extern int ddos_rate_window_secs;
+extern int ddos_rate_limit;
+extern int ddos_max_ips;
+extern int ddos_cleanup_interval_secs;
+extern int ddos_ip_stale_secs;
+
+// Per-connection socket read/write timeout, in seconds (SO_RCVTIMEO/
+// SO_SNDTIMEO in connection_thread.c) - the slow-loris defense: a client
+// that stalls mid-request/response longer than this gets its connection
+// closed. Applies per read/write call, not to total transfer time, so a
+// slow-but-steady large upload isn't affected by a low value here.
+extern int connection_io_timeout_secs;
+
 #endif // CONFIG_LOADER_H

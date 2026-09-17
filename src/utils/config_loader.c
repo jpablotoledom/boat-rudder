@@ -21,6 +21,14 @@ char mongodb_uri[256]     = "mongodb://localhost:27017";
 char mongodb_db[64]       = "boat_rudder";
 int  session_ttl_seconds  = 86400;
 
+int  ddos_max_connections       = 200;
+int  ddos_rate_window_secs      = 5;
+int  ddos_rate_limit            = 500;
+int  ddos_max_ips               = 1024;
+int  ddos_cleanup_interval_secs = 60;
+int  ddos_ip_stale_secs         = 300;
+int  connection_io_timeout_secs = 5;
+
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -76,6 +84,20 @@ int load_config(const char *filename) {
             mongodb_db[sizeof(mongodb_db) - 1] = '\0';
         } else if (strcmp(key, "session_ttl_seconds") == 0) {
             session_ttl_seconds = atoi(value);
+        } else if (strcmp(key, "ddos_max_connections") == 0) {
+            ddos_max_connections = atoi(value);
+        } else if (strcmp(key, "ddos_rate_window_secs") == 0) {
+            ddos_rate_window_secs = atoi(value);
+        } else if (strcmp(key, "ddos_rate_limit") == 0) {
+            ddos_rate_limit = atoi(value);
+        } else if (strcmp(key, "ddos_max_ips") == 0) {
+            ddos_max_ips = atoi(value);
+        } else if (strcmp(key, "ddos_cleanup_interval_secs") == 0) {
+            ddos_cleanup_interval_secs = atoi(value);
+        } else if (strcmp(key, "ddos_ip_stale_secs") == 0) {
+            ddos_ip_stale_secs = atoi(value);
+        } else if (strcmp(key, "connection_io_timeout_secs") == 0) {
+            connection_io_timeout_secs = atoi(value);
         }
     }
 

@@ -41,4 +41,9 @@ char *build_json_response_status(const char *json_body, const char *status_line)
 // Same as build_json_response_status(), with status line "200 OK".
 char *build_json_response(const char *json_body);
 
+// Same shape as build_json_response_status(), but Content-Type: text/css;
+// charset=UTF-8 - serves a theme's (possibly DB-overridden) epoch 3
+// stylesheet, see cms_get_theme_css() in cms_themes.h.
+char *build_css_response(const char *css_body, const char *status_line);
+
 #endif // BUILD_EPOCH_RESPONSE_H

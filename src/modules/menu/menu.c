@@ -294,28 +294,80 @@ char *menu(const char *current_url, int epoch) {
     // latter is the menu *section* and is hardcoded to "/" by
     // buildPageWebSite(), which every login/dashboard/language page goes
     // through - they would all look like home.
-    // cms_get_theme_logo() falls back to the active theme's own on-disk
-    // menu-logo_epoch<N>.html when the DB has no override (same convention
-    // as mainbanner()'s cms_get_theme_banner()), so a fresh install renders
-    // exactly as before this became DB-backed.
+    // cms_get_theme_logo_config() carries the structured per-epoch config
+    // (site_settings_logo_page()); LOGO_MODE_UNSET (nothing saved through
+    // that panel yet) falls back to cms_get_theme_logo()'s raw-markup field,
+    // which itself falls back to the theme's own on-disk
+    // menu-logo_epoch<N>.html (same convention as mainbanner()'s
+    // cms_get_theme_banner()) - so a theme untouched by either panel, or
+    // only ever edited through the old one, renders exactly as before.
     char *logo = strdup("");
     int at_home = strcmp(request_path(), "/") == 0;
-    if ((epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE || epoch == EPOCH_WML) && !at_home) {
-        char *logo_html = cms_get_theme_logo(request_theme(), epoch);
-        if (logo_html && logo_html[0]) {
+    if ((epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE || epoch == EPOCH_WML ||
+         epoch == EPOCH_PRESTANDARD) && !at_home) {
+        CmsLogoConfig cfg;
+        cms_get_theme_logo_config(request_theme(), epoch, &cfg);
+
+        if (cfg.mode == LOGO_MODE_IMAGE && cfg.navbar_image[0]) {
+            char *site_name = cms_get_site_name();
+            char encoded_alt[512];
+            html_encode(encoded_alt, site_name ? site_name : "", sizeof(encoded_alt));
+            free(site_name);
+            char *img = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
+                                         request_theme(), epoch, cfg.navbar_image, encoded_alt);
+            if (img) { free(logo); logo = img; }
+        } else if (cfg.mode == LOGO_MODE_TEXT) {
+            char *site_name = cms_get_site_name();
+            const char *text = cfg.text[0] ? cfg.text : (site_name ? site_name : "");
+            char encoded[1600];
+            html_encode(encoded, text, sizeof(encoded));
             free(logo);
-            logo = logo_html;
+            logo = strdup(encoded);
+            free(site_name);
         } else {
-            free(logo_html);
+            char *logo_html = cms_get_theme_logo(request_theme(), epoch);
+            if (logo_html && logo_html[0]) {
+                free(logo);
+                logo = logo_html;
+            } else {
+                free(logo_html);
+            }
         }
     }
 
     char *lang_html = language_selector(epoch);
-    // Epoch 3 draws its own title in the nav bar and takes no logo slot;
-    // that title is the personalizable site name instead of the logo.
+    // Epoch 3 draws its own title in the nav bar; by default that's the
+    // personalizable site name, but the logo panel
+    // (site_settings_logo_page()) lets an admin switch it to either custom
+    // text (in a chosen font - see page_layout.c's build_logo_font_css())
+    // or an uploaded image, same LOGO_MODE_TEXT/LOGO_MODE_IMAGE choice as
+    // every other epoch above. LOGO_MODE_UNSET falls back to the pre-config
+    // raw-markup override (cms_get_theme_logo()), then to site_name - same
+    // chain as before this struct existed.
     if (lang_html) {
         if (epoch >= EPOCH_MODERN) {
+            CmsLogoConfig cfg3;
+            cms_get_theme_logo_config(request_theme(), epoch, &cfg3);
+
             char *site_name = cms_get_site_name();
+            char *custom_logo = NULL;
+            char *title_html = NULL;
+
+            if (cfg3.mode == LOGO_MODE_IMAGE && cfg3.navbar_image[0]) {
+                char encoded_alt[512];
+                html_encode(encoded_alt, site_name ? site_name : "", sizeof(encoded_alt));
+                title_html = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
+                                              request_theme(), epoch, cfg3.navbar_image, encoded_alt);
+            } else if (cfg3.mode == LOGO_MODE_TEXT) {
+                const char *text = cfg3.text[0] ? cfg3.text : (site_name ? site_name : "");
+                char encoded[1600];
+                html_encode(encoded, text, sizeof(encoded));
+                title_html = strdup(encoded);
+            } else {
+                custom_logo = cms_get_theme_logo(request_theme(), epoch);
+                title_html = (custom_logo && custom_logo[0]) ? strdup(custom_logo) : strdup(site_name ? site_name : "");
+            }
+
             char *user_html = user_menu_item(epoch);
             char *user_html_mobile = user_menu_item_mobile(epoch);
 
@@ -325,10 +377,12 @@ char *menu(const char *current_url, int epoch) {
 
             char *theme_html = theme_selector(epoch);
 
-            result = (site_name && user_html && items && theme_html)
-                ? render_template(menu_tpl, user_html, site_name, items, theme_html, lang_html)
+            result = (title_html && user_html && items && theme_html)
+                ? render_template(menu_tpl, user_html, title_html, items, theme_html, lang_html)
                 : NULL;
             free(site_name);
+            free(custom_logo);
+            free(title_html);
             free(user_html);
             free(theme_html);
         } else {

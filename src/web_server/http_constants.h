@@ -17,6 +17,11 @@
 #define MAX_PARAMS        16
 #define MAX_PARAM_LENGTH  256
 
+// Maximum decoded length of a theme asset's raw-markup field (banner/footer/
+// menu-logo editors in /dashboard/settings/themes/<key>/<asset>), comfortably
+// above the ~50,000 characters these editors need to hold.
+#define THEME_ASSET_HTML_MAX  131072
+
 // Compile-time sanity checks (C11+).
 _Static_assert(RAW_REQUEST_SIZE >= 4096,
     "RAW_REQUEST_SIZE must be at least 4 KiB to hold minimal HTTP headers");

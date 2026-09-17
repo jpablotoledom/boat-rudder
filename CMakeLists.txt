@@ -70,6 +70,8 @@ set(SOURCES
     src/utils/build_epoch_response.c
     src/utils/json_utils.c
     src/utils/qr_generator/qr_generator.c
+    src/utils/wbmp_writer.c
+    src/utils/image_convert/image_convert.c
     src/utils/request_lang.c
     src/utils/request_theme.c
     src/utils/theme_catalog.c
@@ -147,6 +149,7 @@ target_link_libraries(boat-rudder
     PkgConfig::MONGOC
     PkgConfig::SODIUM
     ${QRENCODE_LIBRARY}
+    m
 )
 
 # Link libmaxminddb when available (see the pkg_check_modules(MAXMINDDB ...)

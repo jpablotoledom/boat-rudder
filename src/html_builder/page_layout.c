@@ -1,7 +1,10 @@
 #include "page_layout.h"
 #include "../db/cms_fonts.h"
+#include "../db/cms_site_settings.h"
 #include "../db/cms_themes.h"
+#include "../utils/detect_epoch.h"
 #include "../utils/generate_url_theme.h"
+#include "../utils/http_utils.h"
 #include "../utils/read_file.h"
 #include "../utils/request_theme.h"
 #include "../utils/template_utils.h"
@@ -33,25 +36,112 @@ static char *splice_part(char *html, const char *marker, const char *part, int e
 // so it comes from cms_get_theme_footer() (DB override for the active
 // theme, falling back to that same theme's on-disk
 // layout/footer_epoch<N>.html) instead of a direct file read.
+//
+// Epoch 3's footer (dark and light themes) carries a "{{SITE_NAME}}" token
+// where it shows the site's own name - str_replace_first(), not
+// render_template(), because this body is raw admin-editable markup that
+// can contain arbitrary '%' (CSS percentages, etc.) and must never be run
+// through printf-style substitution. Older epochs have no such token in
+// their on-disk footer, so this is a no-op for them.
 static char *splice_footer(char *html, int epoch) {
     if (!html || !strstr(html, "{{FOOTER}}")) return html;
 
     char *body = cms_get_theme_footer(request_theme(), epoch);
-    char *result = str_replace_first(html, "{{FOOTER}}", body ? body : "");
+    if (!body) body = strdup("");
+
+    if (epoch == EPOCH_MODERN && strstr(body, "{{SITE_NAME}}")) {
+        char *site_name = cms_get_site_name();
+
+        // The epoch-3 logo panel's own text (LOGO_MODE_TEXT) stands in for
+        // the site name here too, same as the navbar (menu.c) - so the
+        // footer title matches whatever the admin configured as "Logo en
+        // fuente" (text + font, see the --br-font-navbar-logo var this
+        // shares with the navbar via .boat-rudder__footer-title's own
+        // font-family rule), not just the site's own name.
+        CmsLogoConfig logo_cfg;
+        cms_get_theme_logo_config(request_theme(), epoch, &logo_cfg);
+        const char *title = (logo_cfg.mode == LOGO_MODE_TEXT && logo_cfg.text[0])
+            ? logo_cfg.text : (site_name ? site_name : "");
+
+        char *replaced = str_replace_first(body, "{{SITE_NAME}}", title);
+        free(site_name);
+        free(body);
+        body = replaced ? replaced : strdup("");
+    }
+
+    char *result = str_replace_first(html, "{{FOOTER}}", body);
     free(body);
     free(html);
     return result;
 }
 
+// The footer logo image, "{{FOOTER_LOGO}}" in a theme's own on-disk
+// layout/footer_epoch<N>.html (dark/light, epoch -1/1/2/3) - a no-op
+// wherever the marker is absent, same convention as splice_part(). Reads
+// straight from cms_get_theme_logo_config() (not cms_get_theme_footer(),
+// which is unrelated raw footer markup): LOGO_MODE_IMAGE with a
+// footer_image set renders that <img>; anything else (LOGO_MODE_TEXT,
+// LOGO_MODE_UNSET, or IMAGE with no footer_image saved) renders nothing -
+// there is no raw-markup/on-disk fallback for this field, since it did not
+// exist before CmsLogoConfig.
+static char *splice_footer_logo(char *html, int epoch) {
+    if (!html || !strstr(html, "{{FOOTER_LOGO}}")) return html;
+
+    CmsLogoConfig cfg;
+    cms_get_theme_logo_config(request_theme(), epoch, &cfg);
+
+    char *img = NULL;
+    if (cfg.mode == LOGO_MODE_IMAGE && cfg.footer_image[0]) {
+        char *site_name = cms_get_site_name();
+        char encoded_alt[512];
+        html_encode(encoded_alt, site_name ? site_name : "", sizeof(encoded_alt));
+        free(site_name);
+        img = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
+                               request_theme(), epoch, cfg.footer_image, encoded_alt);
+    }
+    if (!img) {
+        // Nothing saved via the new panel (or the admin picked epoch 3's
+        // text mode instead) - fall back to the theme's own on-disk
+        // default, same convention as splice_part()/cms_get_theme_logo():
+        // an untouched theme keeps the footer logo it always had.
+        char *path = generate_url_theme("layout/footer-logo_epoch%d.html", epoch);
+        img = path ? read_file_to_string(path) : NULL;
+        free(path);
+        if (!img) img = strdup("");
+    }
+
+    char *result = str_replace_first(html, "{{FOOTER_LOGO}}", img);
+    free(img);
+    free(html);
+    return result;
+}
+
 // Builds the @font-face + --br-font-navbar-logo override for the active
-// theme's chosen logo font (site_settings_fonts_page()/cms_get_fonts()),
-// or "" if the theme has picked none (styles_epoch3.css's own hardcoded
-// Milonga @font-face, and var(--br-font-navbar-logo, Milonga)'s own
-// fallback, cover that case with no override needed here at all).
+// theme's chosen logo font, or "" if none applies (styles_epoch3.css's own
+// hardcoded Milonga @font-face, and var(--br-font-navbar-logo, Milonga)'s
+// own fallback, cover that case with no override needed here at all).
+// `font_name` is either the Themes/Colors default-font picker's plain
+// uploaded-font name (cms_get_theme_logo_font()), or - when the epoch-3
+// logo panel itself is in LOGO_MODE_TEXT (see splice_theme_colors() below) -
+// that panel's own CmsLogoConfig.font, "system:<name>" or "uploaded:<name>":
+// a "system:" font is a plain CSS font-family the visitor's own OS/browser
+// is expected to already have, so it skips @font-face entirely and only
+// sets the CSS var; "uploaded:" (and the bare, prefix-less form the
+// Colors picker still stores) resolve to an uploaded file the same way as
+// before.
 static char *build_logo_font_css(const char *font_name) {
     if (!font_name || !font_name[0]) return strdup("");
 
-    char *filename = cms_get_font_filename_by_name(font_name);
+    if (strncmp(font_name, "system:", 7) == 0) {
+        const char *system_name = font_name + 7;
+        if (!system_name[0]) return strdup("");
+        return render_template(":root{--br-font-navbar-logo:'%s';}", system_name);
+    }
+
+    const char *lookup_name = (strncmp(font_name, "uploaded:", 9) == 0) ? font_name + 9 : font_name;
+    if (!lookup_name[0]) return strdup("");
+
+    char *filename = cms_get_font_filename_by_name(lookup_name);
     if (!filename || !filename[0]) {
         free(filename);
         return strdup("");
@@ -60,7 +150,7 @@ static char *build_logo_font_css(const char *font_name) {
     char *css = render_template(
         "@font-face{font-family:'%s';src:url('/assets/fonts/%s') format('%s');}"
         ":root{--br-font-navbar-logo:'%s';}",
-        font_name, filename, cms_font_format_for_filename(filename), font_name);
+        lookup_name, filename, cms_font_format_for_filename(filename), lookup_name);
     free(filename);
     return css ? css : strdup("");
 }
@@ -80,7 +170,15 @@ static char *splice_theme_colors(char *html) {
     CmsThemeColors colors;
     cms_get_theme_colors(request_theme(), &colors);
 
-    char *logo_font = cms_get_theme_logo_font(request_theme());
+    // The epoch-3 logo panel's own font choice (site_settings_logo_page(),
+    // LOGO_MODE_TEXT only) overrides the Themes/Colors default-font picker
+    // for this theme whenever it's set - see build_logo_font_css()'s doc
+    // comment and CmsLogoConfig's in cms_themes.h.
+    CmsLogoConfig logo_cfg;
+    cms_get_theme_logo_config(request_theme(), EPOCH_MODERN, &logo_cfg);
+    char *logo_font = (logo_cfg.mode == LOGO_MODE_TEXT && logo_cfg.font[0])
+        ? strdup(logo_cfg.font)
+        : cms_get_theme_logo_font(request_theme());
     char *font_css = build_logo_font_css(logo_font);
     free(logo_font);
 
@@ -168,6 +266,7 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
     if (!fragment_html) return NULL;
 
     fragment_html = splice_footer(fragment_html, epoch);
+    fragment_html = splice_footer_logo(fragment_html, epoch);
     fragment_html = splice_part(fragment_html, "{{LIGHTBOX}}",   "lightbox",   epoch);
     fragment_html = splice_part(fragment_html, "{{HOME-MODAL}}", "home-modal", epoch);
     if (!fragment_html) return NULL;

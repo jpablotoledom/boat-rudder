@@ -307,10 +307,6 @@ void cms_get_theme_footer_values(const char *key, char *out_values[EPOCH_COUNT])
     get_stored_values(key, "footer_html", out_values);
 }
 
-void cms_get_theme_logo_values(const char *key, char *out_values[EPOCH_COUNT]) {
-    get_stored_values(key, "logo_html", out_values);
-}
-
 // Shared by cms_update_theme_banner()/cms_update_theme_footer(): $set
 // themes.<key>.<top_field>.<epoch field> = html.
 static int update_theme_epoch_field(const char *key, const char *top_field, int epoch,
@@ -397,6 +393,157 @@ int cms_update_theme_logo_font(const char *key, const char *font_name) {
     bson_error_t error;
     bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
     if (!ok) LOG_ERROR("cms_update_theme_logo_font: update failed: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+int cms_get_theme_logo_config(const char *key, int epoch, CmsLogoConfig *out) {
+    memset(out, 0, sizeof(*out));
+    out->mode = LOGO_MODE_UNSET;
+
+    const char *field = epoch_field_name(epoch);
+    if (!field) return 0;
+    if (!key || !key[0]) return 1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return 1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter, sub_iter;
+        if (bson_iter_init_find(&iter, doc, "logo") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
+            uint32_t len;
+            const uint8_t *data;
+            bson_iter_document(&iter, &len, &data);
+
+            bson_t logo_doc;
+            bson_init_static(&logo_doc, data, len);
+
+            if (bson_iter_init_find(&sub_iter, &logo_doc, field) && BSON_ITER_HOLDS_DOCUMENT(&sub_iter)) {
+                uint32_t elen;
+                const uint8_t *edata;
+                bson_iter_document(&sub_iter, &elen, &edata);
+
+                bson_t econf;
+                bson_init_static(&econf, edata, elen);
+
+                bson_iter_t mi;
+                if (bson_iter_init_find(&mi, &econf, "mode") && BSON_ITER_HOLDS_INT32(&mi))
+                    out->mode = (CmsLogoMode)bson_iter_int32(&mi);
+
+                copy_field(&econf, "text", out->text, sizeof(out->text));
+                copy_field(&econf, "font", out->font, sizeof(out->font));
+                copy_field(&econf, "navbar_image", out->navbar_image, sizeof(out->navbar_image));
+                copy_field(&econf, "footer_image", out->footer_image, sizeof(out->footer_image));
+            }
+        }
+    }
+
+    bson_error_t error;
+    if (mongoc_cursor_error(cursor, &error))
+        LOG_ERROR("cms_get_theme_logo_config: cursor error: %s", error.message);
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return 1;
+}
+
+int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig *cfg) {
+    const char *field = epoch_field_name(epoch);
+    if (!key || !key[0] || !field) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    char dotted[80];
+    snprintf(dotted, sizeof(dotted), "logo.%s", field);
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = bson_new();
+    bson_t set_doc, logo_entry;
+    bson_append_document_begin(update, "$set", -1, &set_doc);
+    bson_append_utf8(&set_doc, "key", -1, key, -1);
+    bson_append_document_begin(&set_doc, dotted, -1, &logo_entry);
+    bson_append_int32(&logo_entry, "mode", -1, (int32_t)cfg->mode);
+    bson_append_utf8(&logo_entry, "text", -1, cfg->text, -1);
+    bson_append_utf8(&logo_entry, "font", -1, cfg->font, -1);
+    bson_append_utf8(&logo_entry, "navbar_image", -1, cfg->navbar_image, -1);
+    bson_append_utf8(&logo_entry, "footer_image", -1, cfg->footer_image, -1);
+    bson_append_document_end(&set_doc, &logo_entry);
+    bson_append_document_end(update, &set_doc);
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_logo_config: update failed: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+char *cms_get_theme_css_value(const char *key) {
+    if (!key || !key[0]) return strdup("");
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return strdup("");
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    char *result = NULL;
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        if (bson_iter_init_find(&iter, doc, "css_epoch3") && BSON_ITER_HOLDS_UTF8(&iter))
+            result = strdup(bson_iter_utf8(&iter, NULL));
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return result ? result : strdup("");
+}
+
+char *cms_get_theme_css(const char *key) {
+    char *db_value = cms_get_theme_css_value(key);
+    if (db_value[0]) return db_value;
+    free(db_value);
+
+    char path[256];
+    snprintf(path, sizeof(path), "./html/themes/%s/styles_epoch3.css", key ? key : "");
+    char *body = read_file_to_string(path);
+    return body ? body : strdup("");
+}
+
+int cms_update_theme_css(const char *key, const char *css) {
+    if (!key || !key[0]) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = BCON_NEW(
+        "$set", "{",
+            "key", BCON_UTF8(key),
+            "css_epoch3", BCON_UTF8(css ? css : ""),
+        "}"
+    );
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_css: update failed: %s", error.message);
 
     bson_destroy(query);
     bson_destroy(update);

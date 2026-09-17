@@ -1,6 +1,7 @@
 #include "connection_thread.h"
 #include "connection.h"
 #include "http_router.h"
+#include "../utils/config_loader.h"
 #include "../utils/log.h"
 #include <stdlib.h>
 #include <unistd.h>
@@ -43,7 +44,10 @@ void *connection_thread(void *arg) {
     setsockopt(conn->client_socket, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
 #endif
 
-    struct timeval timeout = {30, 0};
+    // Slow-loris defense: applies per read/write call, not to total transfer
+    // time, so a slow-but-steady large upload isn't cut off by a low value
+    // here - only a client that stalls mid-read/write longer than this is.
+    struct timeval timeout = {connection_io_timeout_secs, 0};
     setsockopt(conn->client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(conn->client_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 

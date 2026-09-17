@@ -50,6 +50,7 @@
 #include "../utils/request_user.h"
 #include "../utils/config_loader.h"
 #include "../utils/qr_generator/qr_generator.h"
+#include "../utils/image_convert/image_convert.h"
 #include "../utils/detect_epoch.h"
 #include "../utils/json_utils.h"
 #include "../utils/log.h"
@@ -323,6 +324,28 @@ static int match_id_route(const char *decoded_url, const char *prefix,
     return 1;
 }
 
+// Matches "/themes/<key>/styles_epoch3.css" exactly, extracting <key> - the
+// dynamic route that serves a theme's (possibly DB-overridden, see
+// cms_get_theme_css()) epoch 3 stylesheet, ahead of the generic static-file
+// fallback at the bottom of the GET dispatch chain.
+static int match_theme_css_url(const char *decoded_url, char *key_out, size_t key_size) {
+    static const char *prefix = "/themes/";
+    static const char *suffix = "/styles_epoch3.css";
+    size_t prefix_len = strlen(prefix), suffix_len = strlen(suffix);
+    size_t url_len = strlen(decoded_url);
+
+    if (url_len <= prefix_len + suffix_len) return 0;
+    if (strncmp(decoded_url, prefix, prefix_len) != 0) return 0;
+    if (strcmp(decoded_url + url_len - suffix_len, suffix) != 0) return 0;
+
+    size_t key_len = url_len - prefix_len - suffix_len;
+    if (key_len == 0 || key_len >= key_size) return 0;
+
+    memcpy(key_out, decoded_url + prefix_len, key_len);
+    key_out[key_len] = '\0';
+    return 1;
+}
+
 // Theme-asset endpoints (/dashboard/api/theme-assets/*) back the banner,
 // footer and logo editors' image upload/browse widget: they write straight
 // into html/themes/<theme>/assets/<component>/epoch<N>/, the same
@@ -393,6 +416,30 @@ static int sanitize_asset_filename(const char *in, char *out, size_t out_size) {
     }
     out[j] = '\0';
     return j > 0 && out[0] != '.' && !strstr(out, "..");
+}
+
+static int has_extension_ci(const char *filename, const char *ext) {
+    size_t flen = strlen(filename), elen = strlen(ext);
+    return flen > elen && strcasecmp(filename + flen - elen, ext) == 0;
+}
+
+// Extension allowlist for the theme-assets upload endpoint (banner/footer/
+// logo image widgets) - the endpoint had none before the logo feature
+// needed one, since epoch -1's uploads must be an image stb_image.h can
+// decode (see image_convert_to_wbmp() below), not an arbitrary file.
+static int theme_asset_image_extension_ok(const char *filename) {
+    return has_extension_ci(filename, ".png") || has_extension_ci(filename, ".jpg") ||
+           has_extension_ci(filename, ".jpeg") || has_extension_ci(filename, ".gif");
+}
+
+// Epoch -1 (WAP/WML) devices need WBMP specifically; PNG/JPEG (not .gif -
+// stb_image.h isn't asked to decode GIF here, see image_convert.c's
+// STBI_ONLY_PNG/STBI_ONLY_JPEG) is auto-converted to it server-side (see the
+// upload handler below), so a direct .wbmp upload isn't offered as a
+// bypass - the point of the feature is nobody has to hand-produce one.
+static int epoch_neg1_upload_extension_ok(const char *filename) {
+    return has_extension_ci(filename, ".png") || has_extension_ci(filename, ".jpg") ||
+           has_extension_ci(filename, ".jpeg");
 }
 
 // Builds {"files":["name1","name2",...]} for the banner/footer editor's
@@ -527,16 +574,18 @@ static int parse_urlencoded_field(const char *body, int body_length, const char 
         const char *field_end = amp ? amp : end;
 
         if ((size_t)(eq - p) == key_len && strncmp(p, key, key_len) == 0) {
-            char raw[8192];
             size_t val_len = (size_t)(field_end - (eq + 1));
-            if (val_len >= sizeof(raw)) val_len = sizeof(raw) - 1;
+            char *raw = malloc(val_len + 1);
+            if (!raw) return 0;
             memcpy(raw, eq + 1, val_len);
             raw[val_len] = '\0';
 
-            char decoded[8192];
-            url_decode(decoded, raw);
-            strncpy(out, decoded, out_size - 1);
+            // Decoding only ever shrinks or preserves length (%XX -> 1 byte,
+            // + -> 1 byte), so decoding in place into `raw` is safe.
+            url_decode(raw, raw);
+            strncpy(out, raw, out_size - 1);
             out[out_size - 1] = '\0';
+            free(raw);
             return 1;
         }
 
@@ -579,15 +628,16 @@ static size_t parse_urlencoded_multi(const char *body, int body_length, const ch
         const char *field_end = amp ? amp : end;
 
         if ((size_t)(eq - p) == key_len && strncmp(p, key, key_len) == 0) {
-            char raw[8192];
             size_t val_len = (size_t)(field_end - (eq + 1));
-            if (val_len >= sizeof(raw)) val_len = sizeof(raw) - 1;
+            char *raw = malloc(val_len + 1);
+            if (!raw) break;
             memcpy(raw, eq + 1, val_len);
             raw[val_len] = '\0';
 
-            char decoded[8192];
-            url_decode(decoded, raw);
-            out_values[count++] = strdup(decoded);
+            // Decoding only ever shrinks or preserves length, so decoding in
+            // place into `raw` is safe.
+            url_decode(raw, raw);
+            out_values[count++] = raw;
         }
 
         p = amp ? amp + 1 : end;
@@ -1203,14 +1253,37 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         if (!theme_key_is_valid(id)) {
                             send_error_response(ctx, 404, "404 Not Found", epoch);
                         } else {
-                            char *values[EPOCH_COUNT];
-                            cms_get_theme_logo_values(id, values);
-                            char *content  = site_settings_logo_page(epoch, id, values);
+                            CmsLogoConfig configs[EPOCH_COUNT];
+                            for (int e = -1; e <= 3; e++)
+                                cms_get_theme_logo_config(id, e, &configs[epoch_to_index(e)]);
+                            char *content  = site_settings_logo_page(epoch, id, configs);
                             char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
-                            for (int i = 0; i < EPOCH_COUNT; i++) free(values[i]);
+                        }
+                    }
+                }
+
+            } else if (match_id_route(decoded_url, "/dashboard/settings/themes", "/css", id, sizeof(id))) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        if (!theme_key_is_valid(id)) {
+                            send_error_response(ctx, 404, "404 Not Found", epoch);
+                        } else {
+                            char *value     = cms_get_theme_css(id);
+                            char *content   = site_settings_css_page(epoch, id, value);
+                            free(value);
+                            char *body      = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *response  = body ? build_epoch_response(body, "", epoch) : NULL;
+                            free(body);
+                            send_or_error(ctx, response, req.method, epoch);
                         }
                     }
                 }
@@ -1899,6 +1972,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 int epoch = resolve_epoch(&req);
                 int page = atoi(get_query_param(params, param_count, "page"));
                 serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL, page);
+
+            } else if (match_theme_css_url(decoded_url, id, sizeof(id))) {
+                if (!theme_key_is_valid(id)) {
+                    send_error_response(ctx, 404, "404 Not Found", resolve_epoch(&req));
+                } else {
+                    char *css = cms_get_theme_css(id);
+                    char *response = build_css_response(css ? css : "", "200 OK");
+                    free(css);
+                    if (response) {
+                        connection_write(ctx, response, strlen(response));
+                        free(response);
+                    }
+                    connection_close(ctx);
+                }
 
             } else {
                 const char *ims = get_header_value(&req, "If-Modified-Since");
@@ -2592,7 +2679,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (!theme_key_is_valid(id)) {
                         send_error_response(ctx, 404, "404 Not Found", epoch);
                     } else {
-                        char html[8192];
+                        char html[THEME_ASSET_HTML_MAX];
                         parse_urlencoded_field(req.body, req.body_length, "html", html, sizeof(html));
 
                         cms_update_theme_banner(id, atoi(theme_epoch_str), html);
@@ -2618,7 +2705,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (!theme_key_is_valid(id)) {
                         send_error_response(ctx, 404, "404 Not Found", epoch);
                     } else {
-                        char html[8192];
+                        char html[THEME_ASSET_HTML_MAX];
                         parse_urlencoded_field(req.body, req.body_length, "html", html, sizeof(html));
 
                         cms_update_theme_footer(id, atoi(theme_epoch_str), html);
@@ -2644,12 +2731,80 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (!theme_key_is_valid(id)) {
                         send_error_response(ctx, 404, "404 Not Found", epoch);
                     } else {
-                        char html[8192];
-                        parse_urlencoded_field(req.body, req.body_length, "html", html, sizeof(html));
+                        int logo_epoch = atoi(theme_epoch_str);
 
-                        cms_update_theme_logo(id, atoi(theme_epoch_str), html);
+                        CmsLogoConfig cfg = {0};
+                        char mode_str[16] = "";
+                        parse_urlencoded_field(req.body, req.body_length, "mode", mode_str, sizeof(mode_str));
+                        parse_urlencoded_field(req.body, req.body_length, "text", cfg.text, sizeof(cfg.text));
+                        parse_urlencoded_field(req.body, req.body_length, "font", cfg.font, sizeof(cfg.font));
+                        parse_urlencoded_field(req.body, req.body_length, "navbar-image", cfg.navbar_image, sizeof(cfg.navbar_image));
+                        parse_urlencoded_field(req.body, req.body_length, "footer-image", cfg.footer_image, sizeof(cfg.footer_image));
+
+                        // The mode is enforced server-side per epoch, not
+                        // trusted from the submitted radio: epoch 0 is
+                        // always text, epoch -1/1/2 are always image, only
+                        // epoch 3 actually offers the admin a choice.
+                        if (logo_epoch == 0) {
+                            cfg.mode = LOGO_MODE_TEXT;
+                        } else if (logo_epoch == -1 || logo_epoch == 1 || logo_epoch == 2) {
+                            cfg.mode = LOGO_MODE_IMAGE;
+                        } else if (strcmp(mode_str, "text") == 0) {
+                            cfg.mode = LOGO_MODE_TEXT;
+                        } else {
+                            cfg.mode = LOGO_MODE_IMAGE;
+                        }
+
+                        cms_update_theme_logo_config(id, logo_epoch, &cfg);
                         char redirect_to[128];
                         snprintf(redirect_to, sizeof(redirect_to), "/dashboard/settings/themes/%s/logo", id);
+                        char *response = build_redirect_response(redirect_to, "", epoch);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/settings/themes", "/css/restore", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    if (!theme_key_is_valid(id)) {
+                        send_error_response(ctx, 404, "404 Not Found", epoch);
+                    } else {
+                        cms_update_theme_css(id, "");
+                        char redirect_to[128];
+                        snprintf(redirect_to, sizeof(redirect_to), "/dashboard/settings/themes/%s/css", id);
+                        char *response = build_redirect_response(redirect_to, "", epoch);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   match_id_route(decoded_url, "/dashboard/settings/themes", "/css", id, sizeof(id))) {
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    if (!theme_key_is_valid(id)) {
+                        send_error_response(ctx, 404, "404 Not Found", epoch);
+                    } else {
+                        char css[THEME_ASSET_HTML_MAX];
+                        parse_urlencoded_field(req.body, req.body_length, "css", css, sizeof(css));
+
+                        cms_update_theme_css(id, css);
+                        char redirect_to[128];
+                        snprintf(redirect_to, sizeof(redirect_to), "/dashboard/settings/themes/%s/css", id);
                         char *response = build_redirect_response(redirect_to, "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     }
@@ -3186,8 +3341,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                         const MultipartPart *file_part = mp ? multipart_find(mp, "file") : NULL;
                         char sanitized[256];
+                        int is_epoch_neg1 = epoch_str && strcmp(epoch_str, "-1") == 0;
+                        int ext_ok = file_part && file_part->filename[0] &&
+                            (is_epoch_neg1 ? epoch_neg1_upload_extension_ok(file_part->filename)
+                                           : theme_asset_image_extension_ok(file_part->filename));
                         if (!file_part || file_part->filename[0] == '\0' ||
-                            !sanitize_asset_filename(file_part->filename, sanitized, sizeof(sanitized))) {
+                            !sanitize_asset_filename(file_part->filename, sanitized, sizeof(sanitized)) ||
+                            !ext_ok) {
                             send_simple(ctx, "400 Bad Request", "Missing or invalid file");
                         } else {
                             mkdir_recursive(dir);
@@ -3202,10 +3362,31 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 fclose(f);
                             }
 
+                            // Epoch -1 (WAP/WML) devices need WBMP - convert
+                            // the just-written PNG/JPEG in place and report
+                            // the .wbmp filename instead, so the logo form
+                            // never has to know a conversion happened.
+                            if (write_ok && is_epoch_neg1 && strcmp(component, "menu") == 0) {
+                                char wbmp_name[256];
+                                snprintf(wbmp_name, sizeof(wbmp_name), "%.*s.wbmp",
+                                         (int)(sizeof(wbmp_name) - 6), sanitized);
+                                char wbmp_path[512];
+                                snprintf(wbmp_path, sizeof(wbmp_path), "%s/%s", dir, wbmp_name);
+
+                                if (image_convert_to_wbmp(filepath, wbmp_path, 200) == 0) {
+                                    remove(filepath);
+                                    strncpy(sanitized, wbmp_name, sizeof(sanitized) - 1);
+                                    sanitized[sizeof(sanitized) - 1] = '\0';
+                                } else {
+                                    remove(filepath);
+                                    write_ok = 0;
+                                }
+                            }
+
                             if (!write_ok) {
                                 send_simple(ctx, "500 Internal Server Error", "Could not write file");
                             } else {
-                                LOG_INFO("Theme asset saved: %s (%zu bytes)", filepath, file_part->data_len);
+                                LOG_INFO("Theme asset saved: %s/%s", dir, sanitized);
                                 char *escaped = json_escape_alloc(sanitized);
                                 char *json = render_template("{\"ok\":true,\"filename\":\"%s\"}", escaped ? escaped : sanitized);
                                 free(escaped);

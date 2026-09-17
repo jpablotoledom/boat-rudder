@@ -101,6 +101,11 @@ char *cms_get_theme_footer(const char *key, int epoch);
 // own font picker instead - see cms_get_theme_logo_font()). Callers outside
 // that range still work (an empty on-disk fallback), there's just nothing
 // to show.
+//
+// This raw-markup field predates the structured per-epoch logo config below
+// (cms_get_theme_logo_config()) - kept as-is, unused by new callers, purely
+// as that function's backward-compat fallback for a theme that saved a logo
+// before the structured config existed.
 char *cms_get_theme_logo(const char *key, int epoch);
 
 // The *stored* value only ("" if unset - not file-resolved), one per
@@ -110,7 +115,6 @@ char *cms_get_theme_logo(const char *key, int epoch);
 // filled with a malloc'd string the caller must free.
 void cms_get_theme_banner_values(const char *key, char *out_values[EPOCH_COUNT]);
 void cms_get_theme_footer_values(const char *key, char *out_values[EPOCH_COUNT]);
-void cms_get_theme_logo_values(const char *key, char *out_values[EPOCH_COUNT]);
 
 // db.themes.updateOne({key}, {$set: {"banner_html.<field for epoch>": html}},
 // {upsert: true}). Returns 0 on success, -1 if epoch is outside -1..3, on
@@ -132,6 +136,77 @@ char *cms_get_theme_logo_font(const char *key);
 // An empty `font_name` clears the override back to the hardcoded default.
 // Returns 0 on success, -1 on a DB error or if mongodb is not ready.
 int cms_update_theme_logo_font(const char *key, const char *font_name);
+
+// Structured per-epoch logo configuration - the "Logo" panel under
+// /dashboard/settings/themes/<key>/logo, one CmsLogoConfig per epoch
+// (-1..3), replacing the old single raw-markup logo_html field above for
+// any epoch that has been saved through the new panel:
+//   epoch -1 (WAP/WML): LOGO_MODE_IMAGE only - navbar_image/footer_image
+//     are WBMP filenames (see image_convert_to_wbmp(), called at upload
+//     time by the theme-assets upload route before this struct is ever
+//     saved - by the time it lands here the file is already WBMP).
+//   epoch 0 (text browsers): LOGO_MODE_TEXT only - `text` is shown as
+//     plain text where the nav bar has no room for an image at all.
+//   epoch 1/2: LOGO_MODE_IMAGE only - navbar_image/footer_image are
+//     filenames under html/themes/<key>/assets/menu/epoch<N>/.
+//   epoch 3: either mode, admin's choice (a radio button in the panel).
+//     LOGO_MODE_TEXT: `text` (falls back to the site name if empty) shown
+//     in the font named by `font` - "system:<name>" for a hardcoded
+//     web-safe font (see site_settings_admin.c's SYSTEM_FONTS) or
+//     "uploaded:<name>" for one from /dashboard/settings/fonts
+//     (cms_get_fonts()); this *overrides*, for this theme, the separate
+//     default font picker on the Themes/Colors panel
+//     (cms_get_theme_logo_font()) whenever mode is TEXT - that picker only
+//     still applies when this one is unset/IMAGE. LOGO_MODE_IMAGE: same
+//     navbar_image/footer_image fields as epoch 1/2.
+typedef enum {
+    LOGO_MODE_UNSET = 0, // nothing saved via the new panel - caller falls
+                         // back to cms_get_theme_logo()'s raw-markup field
+    LOGO_MODE_TEXT,
+    LOGO_MODE_IMAGE,
+} CmsLogoMode;
+
+typedef struct {
+    CmsLogoMode mode;
+    char text[256];          // epoch 0, or epoch 3 in LOGO_MODE_TEXT
+    char font[128];          // epoch 3 in LOGO_MODE_TEXT only: "system:<name>" / "uploaded:<name>"
+    char navbar_image[256];  // filename under assets/menu/epoch<N>/ (LOGO_MODE_IMAGE)
+    char footer_image[256];  // filename under assets/menu/epoch<N>/ (LOGO_MODE_IMAGE)
+} CmsLogoConfig;
+
+// db.themes.findOne({key}).logo.<epoch field>. Fills `out` with the stored
+// structured config for `epoch`, or `out->mode = LOGO_MODE_UNSET` (every
+// other field "") if nothing has been saved there yet - callers should then
+// fall back to cms_get_theme_logo(key, epoch)'s raw-markup value (which
+// itself falls back further, to the theme's on-disk menu-logo_epoch<N>.html
+// - see that function's own doc comment), so a theme that predates this
+// struct, or one edited through the old panel, keeps rendering exactly as
+// before. Returns 1 if epoch is in -1..3, 0 (out untouched) otherwise.
+int cms_get_theme_logo_config(const char *key, int epoch, CmsLogoConfig *out);
+
+// db.themes.updateOne({key}, {$set: {"logo.<field for epoch>": {...}}},
+// {upsert: true}). Returns 0 on success, -1 if epoch is outside -1..3, on a
+// DB error, or if mongodb is not ready.
+int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig *cfg);
+
+// The theme's epoch 3 stylesheet (styles_epoch3.css) - "" (DB unset) falls
+// back to that theme's own on-disk html/themes/<key>/styles_epoch3.css, the
+// file every theme ships with. Lets an admin fully rewrite a theme's CSS
+// from /dashboard/settings/themes/<key>/css while the shipped file stays
+// the one-click "Restore original" target (see cms_update_theme_css()).
+// Returns a malloc'd string, never NULL unless allocation fails.
+char *cms_get_theme_css(const char *key);
+
+// The *stored* override only ("" if unset - not file-resolved), for the
+// editor form: tells "nothing saved" apart from "saved text matching the
+// file".
+char *cms_get_theme_css_value(const char *key);
+
+// db.themes.updateOne({key}, {$set: {css_epoch3: css}}, {upsert: true}). An
+// empty `css` clears the override back to the on-disk original - this is
+// what the editor's "Restore original" button submits. Returns 0 on
+// success, -1 on a DB error or if mongodb is not ready.
+int cms_update_theme_css(const char *key, const char *css);
 
 // Splits a stored "#rrggbb" or "#rrggbbaa" background value into its opaque
 // 7-char hex ("#rrggbb", for an <input type="color"> value - that control

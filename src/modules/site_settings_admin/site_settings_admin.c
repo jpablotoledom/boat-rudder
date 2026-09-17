@@ -66,25 +66,17 @@ static const char *EPOCH_LABELS[EPOCH_COUNT] = {
 static const int ALL_ASSET_EPOCHS[] = { -1, 0, 1, 2, 3 };
 #define ALL_ASSET_EPOCHS_COUNT (sizeof(ALL_ASSET_EPOCHS) / sizeof(ALL_ASSET_EPOCHS[0]))
 
-// Epoch -1/1/2 only, for site_settings_logo_page(): those are the only
-// epochs that render an <img> logo at all (see menu.c's menu()) - epoch 0
-// has no logo, epoch 3's is text with its own font picker (see
-// site_settings_fonts_page()/settings-themes-panel_epoch3.html), not a raw
-// per-epoch markup field.
-static const int LOGO_ASSET_EPOCHS[] = { -1, 1, 2 };
-#define LOGO_ASSET_EPOCHS_COUNT (sizeof(LOGO_ASSET_EPOCHS) / sizeof(LOGO_ASSET_EPOCHS[0]))
-
-// Shared by site_settings_banner_page()/site_settings_footer_page()/
-// site_settings_logo_page(): `key` is the theme being edited (not
-// necessarily the admin's own active theme - see
-// theme-scoped-personalization-plan.md §4); `settings_segment` is the
+// Shared by site_settings_banner_page()/site_settings_footer_page(): `key`
+// is the theme being edited (not necessarily the admin's own active theme -
+// see theme-scoped-personalization-plan.md §4); `settings_segment` is the
 // /dashboard/settings/themes/<key>/<segment>/<epoch> route
-// ("banner"/"footer"/"logo"); `asset_component` is the theme-assets
-// directory name under html/themes/<key>/assets/ ("mainbanner"/"footer"/
-// "menu") - banner/footer differ from their own segment name because the
-// on-disk directory predates this feature and keeps its name; `epochs`/
-// `epoch_count` is which epochs get a panel at all (not every field makes
-// sense at every epoch - see LOGO_ASSET_EPOCHS above).
+// ("banner"/"footer"); `asset_component` is the theme-assets directory name
+// under html/themes/<key>/assets/ ("mainbanner"/"footer") - differs from its
+// own segment name because the on-disk directory predates this feature and
+// keeps its name; `epochs`/`epoch_count` is which epochs get a panel at all.
+// The logo editor no longer uses this - see site_settings_logo_page(), which
+// needs a different panel shape per epoch (text/image/radio) that this
+// one-textarea-plus-upload shape can't express.
 static char *asset_page(int epoch, const char *title, const char *key, const char *settings_segment,
                          const char *asset_component, char *const values[EPOCH_COUNT],
                          const int *epochs, size_t epoch_count) {
@@ -143,13 +135,183 @@ char *site_settings_footer_page(int epoch, const char *key, char *const values[E
                        ALL_ASSET_EPOCHS, ALL_ASSET_EPOCHS_COUNT);
 }
 
-char *site_settings_logo_page(int epoch, const char *key, char *const values[EPOCH_COUNT]) {
-    return asset_page(epoch, "Logo", key, "logo", "menu", values,
-                       LOGO_ASSET_EPOCHS, LOGO_ASSET_EPOCHS_COUNT);
+// <option> list for the epoch-3 "Logo en fuente" font picker
+// (settings-logo-panel_radio_epoch3.html): a hardcoded classic web-safe
+// font set ("system:<name>"), followed by every font uploaded via
+// /dashboard/settings/fonts ("uploaded:<name>") - the prefix is how the
+// stored CmsLogoConfig.font value (and the <select>'s own submitted value)
+// tells the two kinds apart, since both are plain font-family names on
+// their own. Kept separate from build_font_options() (the unrelated
+// Themes/Colors default-font picker - uploaded fonts only, no prefix),
+// since mixing their option sets would be confusing if the two ever
+// diverge; see cms_themes.h's CmsLogoConfig doc comment for how this
+// picker's choice overrides that one when an epoch-3 logo is in
+// LOGO_MODE_TEXT.
+static const char *SYSTEM_FONTS[] = {
+    "Arial", "Times New Roman", "Courier New", "Georgia",
+    "Verdana", "Comic Sans MS", "Impact", "Trebuchet MS",
+};
+#define SYSTEM_FONTS_COUNT (sizeof(SYSTEM_FONTS) / sizeof(SYSTEM_FONTS[0]))
+
+static char *build_logo_font_options(const char *selected) {
+    char *options = strdup("");
+
+    for (size_t i = 0; options && i < SYSTEM_FONTS_COUNT; i++) {
+        char value[128];
+        snprintf(value, sizeof(value), "system:%s", SYSTEM_FONTS[i]);
+        const char *is_selected = (selected && strcmp(selected, value) == 0) ? " selected" : "";
+        char *option = render_template("            <option value=\"%s\"%s>%s</option>\n",
+                                        value, is_selected, SYSTEM_FONTS[i]);
+        options = option ? str_append(options, option) : NULL;
+        free(option);
+    }
+
+    CmsFont *fonts = NULL;
+    size_t count = 0;
+    cms_get_fonts(&fonts, &count);
+
+    for (size_t i = 0; options && i < count; i++) {
+        char value[320];
+        snprintf(value, sizeof(value), "uploaded:%s", fonts[i].name);
+        char *encoded_value = html_encode_alloc(value);
+        char *encoded_name  = html_encode_alloc(fonts[i].name);
+        if (!encoded_value || !encoded_name) {
+            free(encoded_value);
+            free(encoded_name);
+            free(options);
+            options = NULL;
+            break;
+        }
+
+        const char *is_selected = (selected && strcmp(selected, value) == 0) ? " selected" : "";
+        char *option = render_template("            <option value=\"%s\"%s>%s</option>\n",
+                                        encoded_value, is_selected, encoded_name);
+        free(encoded_value);
+        free(encoded_name);
+        options = option ? str_append(options, option) : NULL;
+        free(option);
+    }
+
+    cms_fonts_free(fonts, count);
+    return options ? options : strdup("");
+}
+
+// One epoch's panel for site_settings_logo_page(), picking the template
+// variant that matches what that epoch offers - see CmsLogoConfig's doc
+// comment in cms_themes.h for exactly which: epoch 0 -> text only,
+// epoch -1/1/2 -> image only (navbar + footer), epoch 3 -> both, admin's
+// choice via radio. `page_epoch` (always EPOCH_MODERN - the dashboard
+// itself is always rendered modern, see http_router.c's require_admin_session
+// gate) picks which on-disk template set to load; `logo_epoch` is the epoch
+// this specific panel configures.
+static char *logo_panel(int page_epoch, int logo_epoch, const char *key, const CmsLogoConfig *cfg) {
+    int i = epoch_to_index(logo_epoch);
+    char epoch_str[4];
+    snprintf(epoch_str, sizeof(epoch_str), "%d", logo_epoch);
+
+    char *encoded_text   = html_encode_alloc(cfg->text);
+    char *encoded_navbar = html_encode_alloc(cfg->navbar_image);
+    char *encoded_footer = html_encode_alloc(cfg->footer_image);
+
+    char *result = NULL;
+    if (!encoded_text || !encoded_navbar || !encoded_footer) goto cleanup;
+
+    if (logo_epoch == 0) {
+        char *tpl = load_template("dashboard/settings/settings-logo-panel_text-only_epoch%d.html", page_epoch);
+        if (tpl) {
+            result = render_template(tpl, "menu", epoch_str, key, EPOCH_LABELS[i],
+                                      key, "logo", epoch_str,
+                                      epoch_str, epoch_str, encoded_text);
+        }
+        free(tpl);
+    } else if (logo_epoch == 3) {
+        char *tpl = load_template("dashboard/settings/settings-logo-panel_radio_epoch%d.html", page_epoch);
+        if (tpl) {
+            int is_image = cfg->mode == LOGO_MODE_IMAGE;
+            char *font_options = build_logo_font_options(cfg->font);
+            if (font_options) {
+                result = render_template(tpl, "menu", epoch_str, key, EPOCH_LABELS[i],
+                                          key, "logo", epoch_str,
+                                          is_image ? "" : "checked",
+                                          is_image ? "checked" : "",
+                                          is_image ? "hidden disabled" : "",
+                                          epoch_str, epoch_str, encoded_text,
+                                          epoch_str, epoch_str, font_options,
+                                          is_image ? "" : "hidden disabled",
+                                          encoded_navbar, encoded_navbar,
+                                          encoded_footer, encoded_footer);
+                free(font_options);
+            }
+        }
+        free(tpl);
+    } else {
+        char *tpl = load_template("dashboard/settings/settings-logo-panel_image-only_epoch%d.html", page_epoch);
+        if (tpl) {
+            result = render_template(tpl, "menu", epoch_str, key, EPOCH_LABELS[i],
+                                      key, "logo", epoch_str,
+                                      encoded_navbar, encoded_navbar,
+                                      encoded_footer, encoded_footer);
+        }
+        free(tpl);
+    }
+
+cleanup:
+    free(encoded_text);
+    free(encoded_navbar);
+    free(encoded_footer);
+    return result;
+}
+
+char *site_settings_logo_page(int epoch, const char *key, const CmsLogoConfig configs[EPOCH_COUNT]) {
+    char *page_tpl = load_template("dashboard/settings/settings-logo_epoch%d.html", epoch);
+    if (!page_tpl) return NULL;
+
+    static const int LOGO_EPOCHS[] = { -1, 0, 1, 2, 3 };
+    char *panels = strdup("");
+    for (size_t ei = 0; panels && ei < sizeof(LOGO_EPOCHS) / sizeof(LOGO_EPOCHS[0]); ei++) {
+        int e = LOGO_EPOCHS[ei];
+        char *panel = logo_panel(epoch, e, key, &configs[epoch_to_index(e)]);
+        if (!panel) {
+            free(panels);
+            panels = NULL;
+            break;
+        }
+        panels = str_append(panels, panel);
+        free(panel);
+    }
+
+    char *result = panels ? render_template(page_tpl, key, panels) : NULL;
+    free(page_tpl);
+    free(panels);
+    return result;
 }
 
 char *site_settings_preview_page(int epoch) {
     return load_template("dashboard/settings/preview_epoch%d.html", epoch);
+}
+
+char *site_settings_css_page(int epoch, const char *key, const char *value) {
+    char *page_tpl = load_template("dashboard/settings/settings-css_epoch%d.html", epoch);
+    if (!page_tpl) return NULL;
+
+    char *stored = cms_get_theme_css_value(key);
+    const char *status = stored[0]
+        ? "Customized - showing your saved override below. \"Restore original\" discards it."
+        : "Showing the theme's original stylesheet - nothing customized yet.";
+    int is_customized = stored[0] != '\0';
+    free(stored);
+
+    char *encoded_css = html_encode_alloc(value ? value : "");
+    if (!encoded_css) {
+        free(page_tpl);
+        return NULL;
+    }
+
+    char *result = render_template(page_tpl, key, status, key, encoded_css,
+                                    key, is_customized ? "" : " hidden");
+    free(encoded_css);
+    free(page_tpl);
+    return result;
 }
 
 // Splits a stored background value into the two form fields it renders as:
@@ -239,7 +401,7 @@ char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t coun
                                        c->blog_list_item_author, c->blog_list_item_categories,
                                        c->blog_list_item_date,
                                        c->footer_logo, footer_bg.rgb, footer_bg.alpha,
-                                       themes[i].key, themes[i].key, themes[i].key);
+                                       themes[i].key, themes[i].key, themes[i].key, themes[i].key);
         free(font_options);
         free(activate);
         if (!panel) {

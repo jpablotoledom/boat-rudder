@@ -1,0 +1,46 @@
+  <section class="boat-rudder__dashboard__settings-panel" data-component="%s" data-epoch="%s" data-theme="%s">
+    <h2>%s</h2>
+    <form method="POST" action="/dashboard/settings/themes/%s/%s/%s" class="boat-rudder__dashboard__form">
+      <div class="boat-rudder__dashboard__form-row">
+        <label><input type="radio" name="mode" value="text" %s> Logo en fuente</label>
+        <label><input type="radio" name="mode" value="image" %s> Subir Imagen</label>
+      </div>
+
+      <fieldset class="boat-rudder__dashboard__logo-mode" data-mode="text" %s>
+        <legend>Logo en fuente</legend>
+        <div class="boat-rudder__dashboard__form-row">
+          <label for="logo-text-%s">Texto</label>
+          <input class="boat-rudder__dashboard__input" type="text" id="logo-text-%s" name="text" value="%s">
+        </div>
+        <div class="boat-rudder__dashboard__form-row">
+          <label for="logo-font-%s">Fuente</label>
+          <select class="boat-rudder__dashboard__input" id="logo-font-%s" name="font">
+            <option value="">Default (Milonga)</option>
+%s
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset class="boat-rudder__dashboard__logo-mode" data-mode="image" %s>
+        <legend>Subir Imagen</legend>
+        <div class="boat-rudder__dashboard__form-row">
+          <label class="boat-rudder__dashboard__button">
+            Upload navbar logo
+            <input type="file" class="boat-rudder__dashboard__asset-upload" data-target="navbar-image" accept="image/*" hidden>
+          </label>
+          <input type="hidden" name="navbar-image" value="%s">
+          <span data-current-for="navbar-image">%s</span>
+        </div>
+        <div class="boat-rudder__dashboard__form-row">
+          <label class="boat-rudder__dashboard__button">
+            Upload footer logo
+            <input type="file" class="boat-rudder__dashboard__asset-upload" data-target="footer-image" accept="image/*" hidden>
+          </label>
+          <input type="hidden" name="footer-image" value="%s">
+          <span data-current-for="footer-image">%s</span>
+        </div>
+      </fieldset>
+
+      <button class="boat-rudder__dashboard__button" type="submit">Save</button>
+    </form>
+  </section>

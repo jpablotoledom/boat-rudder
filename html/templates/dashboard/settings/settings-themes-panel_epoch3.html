@@ -25,7 +25,8 @@
         <label>Menu, hover <input type="color" name="navbar-menu-hover" value="%s"></label>
         <label>Menu, active <input type="color" name="navbar-menu-active" value="%s"></label>
         <label>Logo <input type="color" name="navbar-logo" value="%s"></label>
-        <label>Logo font (epoch 3 text logo only)
+        <label>Logo font (default site name; the Logo editor's own font picker
+          overrides this when an epoch 3 logo is set to "Logo en fuente")
           <select name="logo-font">
             <option value="">Default (Milonga)</option>
 %s
@@ -76,6 +77,7 @@
     <ul>
       <li><a href="/dashboard/settings/themes/%s/banner">Edit banner</a></li>
       <li><a href="/dashboard/settings/themes/%s/footer">Edit footer</a></li>
-      <li><a href="/dashboard/settings/themes/%s/logo">Edit logo</a> (epoch -1/1/2 image)</li>
+      <li><a href="/dashboard/settings/themes/%s/logo">Edit logo</a> (every epoch, -1 to 3)</li>
+      <li><a href="/dashboard/settings/themes/%s/css">Edit CSS</a> (epoch 3 stylesheet, restorable)</li>
     </ul>
   </section>

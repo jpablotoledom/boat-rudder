@@ -1,0 +1,15 @@
+<section class="boat-rudder__dashboard">
+  <h1>CSS (epoch 3)</h1>
+  <p class="boat-rudder__dashboard__theme-badge">Theme: <strong>%s</strong></p>
+  <p>%s</p>
+  <form method="POST" action="/dashboard/settings/themes/%s/css" class="boat-rudder__dashboard__form">
+    <textarea class="boat-rudder__dashboard__textarea" name="css" rows="30" spellcheck="false">%s</textarea>
+    <button class="boat-rudder__dashboard__button" type="submit">Save</button>
+  </form>
+  <form method="POST" action="/dashboard/settings/themes/%s/css/restore"
+        class="boat-rudder__dashboard__form"%s
+        onsubmit="return confirm('Restore the original stylesheet? Your customizations will be lost.');">
+    <button class="boat-rudder__dashboard__button" type="submit">Restore original</button>
+  </form>
+  <p><a href="/dashboard/settings/themes">Back to themes</a></p>
+</section>

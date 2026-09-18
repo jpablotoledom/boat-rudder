@@ -80,6 +80,7 @@ h2 {
 
 .boat-rudder__navbar__title a {
   color: var(--br-color-navbar-logo, #680072);
+  text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
 }
 
 .boat-rudder__navbar__title_onslidelogo {
@@ -109,9 +110,12 @@ h2 {
   margin-left: 0;
 }
 
+.boat-rudder__navbar__separator {
+  border-right: 1px solid #1a1a1a;
+}
+
 .boat-rudder__navbar__menu_item {
   padding: 12px;
-  border-right: 1px solid #1a1a1a;
 }
 
 .boat-rudder__navbar__menu_item a {
@@ -487,7 +491,7 @@ h2 {
 .boat-rudder__home-blog {
   width: 100%;
   display: flex;
-  background-image: url('/themes/light/assets/home-content/matrix-grid_epoch3.gif');
+  background-image: url('/themes/light/assets/blog-list/matrix-grid_epoch3.gif');
   background-repeat: repeat-y;
   background-size: contain;
   display: flex;
@@ -605,7 +609,7 @@ h2 {
   color: var(--br-color-footer-logo, #ffffff);
   padding: 10px;
   width: 100%;
-  font-family: Milonga;
+  font-family: var(--br-font-navbar-logo, Milonga), Georgia, serif;
   font-size: 25px;
 }
 
@@ -1466,7 +1470,7 @@ a.boat-rudder__social-network {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #56e9fd;
+  color: #0057c6;
   text-decoration: none;
   cursor: pointer;
   margin-bottom: 6px;

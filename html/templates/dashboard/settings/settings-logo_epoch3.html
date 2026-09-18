@@ -1,0 +1,59 @@
+<section class="boat-rudder__dashboard">
+  <h1>Logo</h1>
+  <p class="boat-rudder__dashboard__theme-badge">Theme: <strong>%s</strong></p>
+  <p>One panel per epoch. Epoch 3 lets you choose between a font-based text logo
+     and uploaded images; epoch -1/1/2 always take an uploaded image (epoch -1's
+     is auto-converted to WBMP); epoch 0 is plain text only.</p>
+%s
+  <p><a href="/dashboard/settings/themes">Back to themes</a></p>
+</section>
+
+<script>
+(function () {
+  function qs(sel, root) { return (root || document).querySelector(sel); }
+  function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+  qsa('.boat-rudder__dashboard__settings-panel').forEach(function (panel) {
+    const theme = panel.dataset.theme;
+    const component = panel.dataset.component;
+    const epoch = panel.dataset.epoch;
+
+    // Radio toggle (epoch 3 only - other panels have no [name="mode"]
+    // radios at all, so this loop is simply empty for them).
+    qsa('input[name="mode"]', panel).forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        qsa('.boat-rudder__dashboard__logo-mode', panel).forEach(function (fs) {
+          fs.hidden = fs.dataset.mode !== radio.value;
+          fs.disabled = fs.hidden;
+        });
+      });
+    });
+
+    // Image upload fields: on success, write the returned filename into the
+    // matching hidden input (via [data-target]) instead of a raw-markup
+    // textarea, and show it next to the button.
+    qsa('.boat-rudder__dashboard__asset-upload', panel).forEach(function (input) {
+      input.addEventListener('change', function () {
+        const file = input.files[0];
+        if (!file) return;
+
+        const target = qs('input[name="' + input.dataset.target + '"]', panel);
+        const display = qs('[data-current-for="' + input.dataset.target + '"]', panel);
+        const fd = new FormData();
+        fd.append('file', file);
+
+        fetch('/dashboard/api/theme-assets/upload?theme=' + encodeURIComponent(theme) +
+              '&component=' + encodeURIComponent(component) +
+              '&epoch=' + encodeURIComponent(epoch), { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            input.value = '';
+            if (!data.ok) return;
+            if (target) target.value = data.filename;
+            if (display) display.textContent = data.filename;
+          });
+      });
+    });
+  });
+})();
+</script>

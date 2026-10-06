@@ -619,7 +619,8 @@ The CMS sits on top of a generic, dependency-light static file server:
   - `GET`/`HEAD /dashboard` → the admin home (entries listing, plus the Categories / Languages /
     Menu / Users links for an Administrador) if a valid session cookie is present, otherwise
     `302 /login`.
-  - `GET`/`HEAD /logout` → destroys the session (if any) and `302 /` with a cleared cookie.
+  - `POST /logout` (CSRF-checked) → destroys the session (if any) and `302 /` with a cleared
+    cookie; `GET /logout` → `405`.
   - `GET`/`HEAD /blog`, `/blog/category/<slug>`, `/blog/categories`, `/blog/<link>`,
     `/page/<link>`, `/gallery/<id>` → the database-backed CMS pages (drafts visible only with a
     session); `/menu`, `/language`, `/theme` and their `/set` redirects; `/qr/<code>`,
@@ -917,7 +918,7 @@ The full request table:
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the session cookie is valid → `302 /dashboard`. Otherwise `login(epoch, NULL)` via `buildPageWebSite()`. `EPOCH_MODERN`: real form. Other epochs: "not available". |
 | `/login` | `POST` | `EPOCH_MODERN` only (other epochs re-render "not available", no DB access). `503` if MongoDB isn't ready. Otherwise `auth_login_user()` → success: new session + `Set-Cookie` + `302 /dashboard`; failure: `200` with the form + "Invalid email or password." |
 | `/dashboard` | `GET` | `503` if MongoDB isn't ready. Otherwise `validate_session_cookie()`: valid → `dashboard(epoch)` via `buildPageWebSite()`; invalid/missing/expired → `302 /login`. |
-| `/logout` | `GET` | Destroys the session (if any) and responds `302 /` with a cleared `session` cookie (`Max-Age=0`). |
+| `/logout` | `POST` | CSRF-checked when a session cookie is present (`403` otherwise); destroys the session (if any) and responds `302 /` with a cleared `session` cookie (`Max-Age=0`). `GET` → `405`. Sent by the **Log out** button in the dashboard's option list. |
 
 ### 5.4 Centralized epoch-aware error pages
 
@@ -1011,7 +1012,7 @@ Features added after the initial home-page MVP (dated history in [../CHANGELOG.m
 - WAP gateway: connection-oriented WSP (9201), testing connectionless WSP on real phones, a
   per-device page size.
 - The security gaps listed in [reference/security.md](reference/security.md#known-gaps)
-  (running the service as an unprivileged user, login CSRF / `GET /logout`, login throttling,
+  (running the service as an unprivileged user, login CSRF, login throttling,
   repository hygiene).
 
 ---

@@ -341,6 +341,26 @@ h3 {
   margin: 0;
 }
 
+/* "Log out" in the dashboard's option list (nav-admin/nav-author_epoch3.html):
+   a POST form, so the button is styled to read like the links around it. */
+.boat-rudder__dashboard__logout {
+  display: inline;
+  margin: 0;
+}
+
+.boat-rudder__dashboard__logout__btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  color: var(--br-color-link-normal, #ffffff);
+}
+
+.boat-rudder__dashboard__logout__btn:hover {
+  color: var(--br-color-link-hover, #98ffdd);
+}
+
 .boat-rudder__dashboard__button {
   padding: 10px;
   cursor: pointer;

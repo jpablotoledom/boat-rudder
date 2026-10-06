@@ -1946,19 +1946,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 }
 
             } else if (strcmp(decoded_url, "/logout") == 0) {
-                int epoch = resolve_epoch(&req);
-
-                char token[SESSION_TOKEN_BUF_SIZE];
-                const char *cookie = get_header_value(&req, "Cookie");
-                if (mongodb_manager_is_ready() && extract_session_token(cookie, token, sizeof(token))) {
-                    destroy_session(token);
-                }
-
-                char clear_cookie[128];
-                build_session_clear_cookie_header(clear_cookie, sizeof(clear_cookie));
-
-                char *response = build_redirect_response("/", clear_cookie, epoch);
-                send_or_error(ctx, response, req.method, epoch);
+                // POST only (see the POST "/logout" handler below): a GET a
+                // third-party page could trigger with an <img> must not sign
+                // the visitor out.
+                send_error_response(ctx, 405, "405 Method Not Allowed", resolve_epoch(&req));
 
             } else if (strcmp(decoded_url, "/language/set") == 0) {
                 // Stores the choice and bounces back. A plain GET on purpose:
@@ -2607,6 +2598,35 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);
                 }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/logout") == 0) {
+            // Posted by the dashboard's "Log out" button (nav-admin/nav-author_epoch3.html),
+            // whose csrf_token field csrf.js adds on submit. Not routed through
+            // require_dashboard_session(): an expired session, or MongoDB
+            // being down, must still clear the cookie - but whenever a session
+            // cookie is present the CSRF token has to match it, so a
+            // cross-site form can't sign the visitor out.
+            int epoch = resolve_epoch(&req);
+
+            char token[SESSION_TOKEN_BUF_SIZE];
+            const char *cookie = get_header_value(&req, "Cookie");
+            int has_token = extract_session_token(cookie, token, sizeof(token));
+
+            char supplied[CSRF_TOKEN_BUF_SIZE + 1];
+            if (has_token) request_csrf_token_value(&req, supplied, sizeof(supplied));
+
+            if (has_token && !verify_csrf_token(cookie, supplied)) {
+                LOG_WARN("CSRF check failed: %s %s", req.method, req.url);
+                send_simple(ctx, "403 Forbidden", "Invalid or missing CSRF token. Reload the page and try again.");
+            } else {
+                if (has_token && mongodb_manager_is_ready()) destroy_session(token);
+
+                char clear_cookie[128];
+                build_session_clear_cookie_header(clear_cookie, sizeof(clear_cookie));
+
+                char *response = build_redirect_response("/", clear_cookie, epoch);
+                send_or_error(ctx, response, req.method, epoch);
             }
 
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/categories/new") == 0) {

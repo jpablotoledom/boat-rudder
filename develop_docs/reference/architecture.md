@@ -337,7 +337,7 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   - `/qr/<code>`, `/youtube-qr/<id>`, `/image-qr/<code>` → short-link redirect and epoch-0 QR pages ([qr-and-short-links.md](qr-and-short-links.md)).
   - `/themes/<key>/styles_epoch3.css` → the theme's epoch 3 CSS, possibly DB-overridden ([themes.md](themes.md#6-editable-epoch-3-stylesheet)).
   - `/dashboard/settings*`, `/dashboard/analytics`, `/dashboard/api/theme-assets/list` → see [themes.md](themes.md), [fonts.md](fonts.md), [analytics.md](analytics.md).
-  - `/logout` → destroys the session and redirects to `/`.
+  - `/logout` → `405`; logout is `POST /logout` (CSRF-checked), which destroys the session and redirects to `/`.
   - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache validation; a non-zero return code (`403`/`404`/`500`) is rendered via `send_error_response()`.
 - `POST /login` → epoch3 only; other epochs re-render the "not available" `login_epoch<N>.html` without touching the database.
 - `POST /dashboard/api/media/directory` → create media directory.

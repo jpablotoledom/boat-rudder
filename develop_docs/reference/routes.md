@@ -68,7 +68,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/image-qr/<code>` | `back` | inline, same generators | **Always epoch 0's page**: a text QR of `<public_url or Host>/qr/<code>` + back link |
 | `/themes/<key>/styles_epoch3.css` | - | `match_theme_css_url()` → `cms_get_theme_css()` | The theme's epoch 3 stylesheet, from the DB override or the on-disk file; `text/css`. Guard: **Theme** |
 | `/login` | - | `login()` | Login form (epoch 3) or "not available" page (other epochs). `302 /dashboard` if already signed in |
-| `/logout` | - | inline, `destroy_session()` | `302 /` clearing the `session` cookie |
+| `/logout` | - | - | `405`: logout is `POST` only (see [Authentication](#authentication)) |
 | *anything else* | - | `serve_static_file()` | File from the root directory with `Last-Modified`/`304`; `403`/`404`/`500` rendered per epoch |
 
 Query parameters understood on **every** route (read before routing, see
@@ -90,6 +90,7 @@ Query parameters understood on **every** route (read before routing, see
 | Method | Path | Guard | Handler | Response |
 |---|---|---|---|---|
 | `POST` | `/login` | epoch 3 for the credential check | `auth_login_user()`, `create_session()` | `302 /dashboard` + `Set-Cookie: session=…` on success; form with "Invalid email or password." on failure; non-epoch-3 browsers get the "not available" page without touching the DB; `503` if MongoDB is down |
+| `POST` | `/logout` | CSRF token when a session cookie is present (`403` otherwise) | inline, `destroy_session()` | `302 /` clearing the `session` cookie, with or without a live session |
 
 Fields: `user`, `password` (urlencoded). See [dashboard.md](dashboard.md#login-dashboard-and-logout).
 

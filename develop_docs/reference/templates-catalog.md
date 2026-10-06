@@ -126,7 +126,7 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 
 | Directory | Templates | Module |
 |---|---|---|
-| `.` | `dashboard` (all epochs; −1…2 are a bare welcome with no admin tools), `nav-admin` | `dashboard.c` |
+| `.` | `dashboard` (all epochs; −1…2 are a bare welcome with no admin tools), `nav-admin`, `nav-author` (option list under "Welcome back", both ending in the **Log out** form) | `dashboard.c` |
 | `entries/` | `list-row`, `list-empty` | `entries_admin.c` |
 | `entries/editor/` | `container`, `meta`, `header`, `header-lang-tab`, `lang-tab-button`, `category-option`, `blocks` | `entry_editor.c` ([entry-editor.md](entry-editor.md)) |
 | `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` | `entry_editor_blocks.c` |

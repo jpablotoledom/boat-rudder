@@ -193,7 +193,7 @@ http_route(read_func, ctx, root_directory)
   │     GET/HEAD "/menu", "/language", "/language/set", "/theme", "/theme/set"
   │     GET/HEAD "/qr/<code>", "/youtube-qr/<id>", "/image-qr/<code>"
   │     GET/HEAD "/themes/<key>/styles_epoch3.css" → DB-overridable theme CSS
-  │     GET/HEAD/POST "/login", GET "/logout", GET "/dashboard" ──────►  see §5b
+  │     GET/HEAD/POST "/login", POST "/logout", GET "/dashboard" ──────►  see §5b
   │     GET/POST "/dashboard/..."          → admin area (E3 + session/role guards)
   │     GET/HEAD other                     → serve_static_file()  ───────►  see §5
   │     OPTIONS → 204;  other method → 405
@@ -386,11 +386,16 @@ GET/HEAD "/dashboard"  (http_router.c)
                 "302 Found\r\nLocation: /login"
 
 
-GET/HEAD "/logout"  (http_router.c)
+GET/HEAD "/logout"  → 405 (logout is POST only)
+
+POST "/logout"  (http_router.c)
   │
   ├─ epoch = resolve_epoch(req)
   ├─ cookie = header("Cookie")
-  ├─ mongodb_manager_is_ready() && extract_session_token(cookie, token)?
+  ├─ has_token = extract_session_token(cookie, token)
+  ├─ has_token && !verify_csrf_token(cookie, csrf_token field | X-CSRF-Token)?
+  │     → 403 "Invalid or missing CSRF token"          ── stop
+  ├─ has_token && mongodb_manager_is_ready()?
   │     → destroy_session(token)                       ── delete from sessions
   ├─ build_session_clear_cookie_header(...)
   │     "Set-Cookie: session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax[; Secure]"

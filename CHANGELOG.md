@@ -13,6 +13,10 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 
 ### 2026-10-06 - Dashboard security fixes
 
+**Added**
+- **Log out** button in the dashboard's option list under "Welcome back", for both roles (an
+  `author` gets a list of its own, `dashboard/nav-author_epoch3.html`); it posts to `/logout`.
+
 **Security**
 - Media directory rename/delete no longer build paths from client-supplied names: the path comes
   from the `media_directories` record and its owner, new names must match `[A-Za-z0-9_-]{3,60}`
@@ -25,6 +29,8 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 - CSRF tokens on every dashboard `POST` (session-bound, checked in
   `require_dashboard_session()`, attached client-side by `/assets/js/csrf.js`).
 - Expired sessions are purged: TTL and unique indexes on `sessions`, created at startup.
+- Logout is `POST /logout` with the session's CSRF token (`GET /logout` now answers `405`), so a
+  third-party page can no longer sign a visitor out.
 
 **Fixed**
 - Deleting/moving a media item now also handles the optimizer's original-name symlink

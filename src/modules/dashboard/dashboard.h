@@ -6,7 +6,8 @@
 // `role` ("admin"/"author"): an Administrador sees the existing
 // Categories/Languages/Menu/Users links (dashboard/nav-admin_epoch3.html) and
 // every entry (entries_admin_rows(epoch, lang, NULL, NULL)); an Autor sees no
-// extra nav links and only their own "blog" entries
+// nav links but "Log out" (dashboard/nav-author_epoch3.html, which the admin
+// list also ends with) and only their own "blog" entries
 // (entries_admin_rows(epoch, lang, "blog", user_id)). `lang` is the resolved
 // content language (cms_resolve_default_lang()). Other epochs' templates are
 // static and `lang`/`user_id`/`role` are ignored.

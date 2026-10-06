@@ -19,14 +19,11 @@ char *dashboard(int epoch, const char *lang, const char *user_id, const char *ro
 
     int is_admin = strcmp(role, "admin") == 0;
 
-    char *nav;
-    if (is_admin) {
-        char *nav_path = generate_url_theme("dashboard/nav-admin_epoch%d.html", epoch);
-        nav = nav_path ? read_file_to_string(nav_path) : NULL;
-        free(nav_path);
-    } else {
-        nav = strdup("");
-    }
+    // Both lists end with the "Log out" button; an Autor's has nothing else.
+    char *nav_path = generate_url_theme(is_admin ? "dashboard/nav-admin_epoch%d.html"
+                                                 : "dashboard/nav-author_epoch%d.html", epoch);
+    char *nav = nav_path ? read_file_to_string(nav_path) : NULL;
+    free(nav_path);
 
     char *rows = is_admin
         ? entries_admin_rows(epoch, lang, NULL, NULL)

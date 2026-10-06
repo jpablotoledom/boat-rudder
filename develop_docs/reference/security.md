@@ -92,7 +92,7 @@ listeners serve the same site.
 | No user enumeration | `auth_login_user()` returns the same `NULL` for unknown email, wrong password and DB error |
 | Session token | 32 bytes from libsodium's CSPRNG, hex-encoded, stored server-side in `sessions` with `expires_at` |
 | Cookie | `session=<token>; HttpOnly; Path=/; SameSite=Lax; Max-Age=<ttl>` plus `; Secure` when `ssl_enabled=1` |
-| Logout | `GET /logout` deletes the session document and clears the cookie |
+| Logout | `POST /logout` (CSRF-checked whenever a session cookie is present; `GET` → `405`) deletes the session document and clears the cookie |
 | Expiry | Checked on every lookup (`validate_session()`). At startup `session_manager_ensure_indexes()` creates a TTL index `{expires_at: 1}, {expireAfterSeconds: 0}` (MongoDB then purges expired sessions about once a minute), a unique index on `token`, and deletes the backlog of already-expired sessions |
 | CSRF | Every non-`GET`/`HEAD`/`OPTIONS` request through `require_dashboard_session()` (i.e. every dashboard write) must carry the session's CSRF token, else `403`. See [CSRF protection](#csrf-protection) |
 | Modern browsers only | `/login` POST and every `/dashboard*` route require epoch 3 (server-side, not just hidden links) |
@@ -134,8 +134,10 @@ record is removed only after `rmdir()` succeeds (or the directory never existed 
 - **Check**: `require_dashboard_session()` reads the header, else the `csrf_token` field of an
   urlencoded or multipart body, and compares in constant time (`verify_csrf_token()`).
   Failures are logged (`CSRF check failed`) and answered `403`.
-- `SameSite=Lax` on the cookie stays as a second layer. `/login` (no session yet) and
-  `GET /logout` are not covered - see gaps.
+- `POST /logout` runs the same check inline (it doesn't go through
+  `require_dashboard_session()`, so an expired session can still clear its cookie).
+- `SameSite=Lax` on the cookie stays as a second layer. `/login` (no session yet) is not
+  covered - see gaps.
 
 ### Drafts
 
@@ -173,7 +175,7 @@ accepted forever.
 | Gap | Impact | Possible fix |
 |---|---|---|
 | **Service runs as `root`** (`scripts/boat-rudder.service`) | Any future file-write or command-injection bug gets full control of the host | Dedicated user owning `html/content` and `html/assets`, `AmbientCapabilities=CAP_NET_BIND_SERVICE` for ports 80/443, systemd sandboxing (`ProtectSystem=strict`, `ReadWritePaths=`); check what the WAP gateway's sockets need first |
-| Login CSRF and `GET /logout` | A third-party page can sign a visitor out, or (only from a browser that ignores `SameSite`) into an attacker's account | Origin check or a pre-session token on `/login`; make logout a `POST` |
+| Login CSRF | A third-party page can (only from a browser that ignores `SameSite`) sign a visitor into an attacker's account | Origin check or a pre-session token on `/login` |
 | No login throttling | Online password guessing is limited only by the connection rate limit | Per-account/IP failure counter |
 | Analytics writes are synchronous | Each counted page view costs two MongoDB round-trips on the request thread | Batch or async writes |
 | Repository hygiene | `db_backup*/` track `users.bson` (password hashes) and `sessions.bson` (tokens); `data/GeoLite2-Country.mmdb` is tracked despite its license | Remove from version control and rotate affected credentials |
@@ -187,6 +189,7 @@ accepted forever.
 | No ownership checks in the media library | `media_can_manage()` on every media write |
 | No CSRF tokens (relied on `SameSite=Lax` only) | Session-bound token checked in `require_dashboard_session()` - [CSRF protection](#csrf-protection) |
 | Expired sessions never purged | TTL index + startup purge (`session_manager_ensure_indexes()`) |
+| `GET /logout` let a third-party page sign a visitor out | `POST /logout` with the session's CSRF token; `GET` → `405` |
 | Optimizer `popen()` quoting could be broken by a `'` in a path component | All components are charset-restricted (usernames were already mapped by `cms_get_username_by_id()`; directory names are now validated on rename too) |
 
 ---

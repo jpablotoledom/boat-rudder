@@ -1,5 +1,6 @@
 #include "orchestrator.h"
 #include "page_layout.h"
+#include "../db/cms_site_settings.h"
 #include "../db/cms_themes.h"
 #include "../utils/detect_epoch.h"
 #include "../modules/blog_list/blog_list.h"
@@ -33,7 +34,20 @@ char *buildHomeWebSite(int epoch, const char *lang) {
     if (raw && html_menu && html_mainbanner && html_home_content && html_home_blog) {
         char *fragment = render_template(raw, html_menu, html_mainbanner,
                                           html_home_content, html_home_blog);
-        result = page_layout_wrap(fragment, "Boat Rudder - Home", epoch, BODY_BACKDROP);
+        // The site's own name (site_settings.site_name), not the hardcoded
+        // "Boat Rudder" - that's the software, not any particular site built
+        // with it (see the project README). cms_get_site_name() already
+        // falls back to "Boat Rudder" itself when unset, so this still
+        // reads that on a fresh install.
+        char *site_name = cms_get_site_name();
+        char *title = render_template("%s - Home", site_name ? site_name : "Boat Rudder");
+        free(site_name);
+        if (title) {
+            result = page_layout_wrap(fragment, title, epoch, BODY_BACKDROP);
+        } else {
+            free(fragment);
+        }
+        free(title);
     }
 
     free(raw);

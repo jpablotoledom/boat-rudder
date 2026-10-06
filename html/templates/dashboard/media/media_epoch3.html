@@ -26,13 +26,24 @@
       <input name="media-file-input" id="media-file-input" type="file" multiple class="boat-rudder__media__file-input">
       <input name="media-directory-selected" id="media-directory-selected" type="hidden" value="">
       <input name="media-content-start" id="media-content-start" type="hidden" value="0">
-      <input name="media-content-end" id="media-content-end" type="hidden" value="30">
+      <input name="media-content-end" id="media-content-end" type="hidden" value="36">
     </div>
 
     <div id="upload-feedback" class="boat-rudder__media__upload-feedback"></div>
 
     <div class="boat-rudder__media__grid-toolbar">
       <button class="boat-rudder__media__select-btn" onclick="getSelectedMediaIds()">Use selected</button>
+      <button class="boat-rudder__media__select-btn" onclick="openMoveMediaPicker()">Move to...</button>
+      <button class="boat-rudder__media__select-btn boat-rudder__media__select-btn--danger" onclick="deleteSelectedMedia()">Delete selected</button>
+    </div>
+
+    <div id="media-move-picker" class="boat-rudder__media__move-picker" style="display:none">
+      <div class="boat-rudder__media__move-picker-title">Move to directory</div>
+      <ul id="media-move-picker-list" class="boat-rudder__media__move-picker-list"></ul>
+      <div class="boat-rudder__media__move-picker-actions">
+        <button class="boat-rudder__media__dir-btn" onclick="applyMoveMedia()">Apply</button>
+        <button class="boat-rudder__media__dir-btn" onclick="closeMoveMediaPicker()">Cancel</button>
+      </div>
     </div>
 
     <div id="media_content__charger" class="boat-rudder__media__grid-scroll">
@@ -53,51 +64,95 @@
   window.contentEditorGalleryEnd = false;
   window.contentEditorGalleryLoading = false;
 
-  // Selection tracking
-  var lastCheckedIndex = null;
-  var selectionCounter = 0;
+  // Photos per page. Keep in step with the server's MEDIA_PAGE_SIZE
+  // (cms_media.h), which the modal's first page already uses.
+  var MEDIA_PAGE = 36;
 
-  document.body.addEventListener('click', function (e) {
-    var item = e.target.closest('.boat-rudder__media__photo');
-    if (!item) return;
-    e.preventDefault();
-    var checkbox = item.querySelector('input[type="checkbox"]');
-    var items = Array.from(document.querySelectorAll('.boat-rudder__media__photo'));
-    var index = items.indexOf(item);
-    if (e.target.tagName.toLowerCase() === 'input') return;
+  // Selection tracking - this whole script re-runs every time the media
+  // modal is (re)opened (loadMediaModal() re-fetches and re-injects it), but
+  // document/document.body outlive that and never get torn down with the
+  // modal's DOM. Binding straight to them on every run would stack one more
+  // click/keydown listener per open, so the same click fires N times and
+  // toggles a checkbox back off on every other attempt. Bind once, ever.
+  if (!window.__boatRudderMediaSelectionBound) {
+    window.__boatRudderMediaSelectionBound = true;
 
-    if (e.shiftKey && lastCheckedIndex !== null) {
-      var start = lastCheckedIndex, end = index;
-      var step = start <= end ? 1 : -1;
-      var shouldCheck = !checkbox.checked;
-      for (var i = start; step === 1 ? i <= end : i >= end; i += step) {
-        var cb = items[i].querySelector('input[type="checkbox"]');
-        cb.checked = shouldCheck;
-        items[i].classList.toggle('selected', cb.checked);
-        if (cb.checked) { selectionCounter++; items[i].dataset.selectedAt = selectionCounter; }
-        else { delete items[i].dataset.selectedAt; }
+    var lastCheckedIndex = null;
+    var selectionCounter = 0;
+
+    // Clicking a photo views it in the lightbox (arrows step through every
+    // photo in the directory); only its checkbox selects it.
+    document.body.addEventListener('click', function (e) {
+      var item = e.target.closest('.boat-rudder__media__photo');
+      if (!item) return;
+      var checkbox = item.querySelector('input[type="checkbox"]');
+      var items = Array.from(document.querySelectorAll('.boat-rudder__media__photo'));
+      var index = items.indexOf(item);
+
+      if (e.target !== checkbox) {
+        e.preventDefault();
+        if (window.openLightboxUrls) {
+          // Stored names are bare; the viewer wants the generated _full variant.
+          var urls = items.map(function (it) {
+            return it.querySelector('input[name="media-item-url"]').value
+                     .replace(/(\.[A-Za-z0-9]+)$/, '_full$1');
+          });
+          window.openLightboxUrls(urls, index);
+        }
+        return;
+      }
+
+      // The image block and the entry's cover image hold one photo each, so
+      // picking for them is single-choice: checking one unchecks the rest,
+      // and Shift doesn't extend a range.
+      var single = window.contentEditorGalleryType === 'image-block' ||
+                   window.contentEditorGalleryType === 'header';
+      if (single && checkbox.checked) {
+        items.forEach(function (it) {
+          if (it === item) return;
+          it.querySelector('input[type="checkbox"]').checked = false;
+          it.classList.remove('selected');
+          delete it.dataset.selectedAt;
+        });
+      }
+
+      // The checkbox has already toggled itself; mirror its new state.
+      if (e.shiftKey && lastCheckedIndex !== null && !single) {
+        var start = lastCheckedIndex, end = index;
+        var step = start <= end ? 1 : -1;
+        var shouldCheck = checkbox.checked;
+        for (var i = start; step === 1 ? i <= end : i >= end; i += step) {
+          var cb = items[i].querySelector('input[type="checkbox"]');
+          cb.checked = shouldCheck;
+          items[i].classList.toggle('selected', cb.checked);
+          if (cb.checked) { selectionCounter++; items[i].dataset.selectedAt = selectionCounter; }
+          else { delete items[i].dataset.selectedAt; }
+        }
+      } else {
+        item.classList.toggle('selected', checkbox.checked);
+        if (checkbox.checked) { selectionCounter++; item.dataset.selectedAt = selectionCounter; }
+        else { delete item.dataset.selectedAt; }
       }
       lastCheckedIndex = index;
-    } else {
-      checkbox.checked = !checkbox.checked;
-      item.classList.toggle('selected', checkbox.checked);
-      if (checkbox.checked) { selectionCounter++; item.dataset.selectedAt = selectionCounter; }
-      else { delete item.dataset.selectedAt; }
-      lastCheckedIndex = index;
-    }
-  });
+    });
 
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.boat-rudder__media__photo').forEach(function (item) {
-        item.querySelector('input[type="checkbox"]').checked = false;
-        item.classList.remove('selected');
-        delete item.dataset.selectedAt;
-      });
-      lastCheckedIndex = null;
-      selectionCounter = 0;
-    }
-  });
+    // Capture phase on window runs before the lightbox's own Escape handler
+    // (on document), so an Escape that closes the photo viewer can still tell
+    // it was open and leave the selection alone.
+    window.addEventListener('keydown', function (e) {
+      var viewer = document.getElementById('imageModal');
+      if (viewer && viewer.classList.contains('active')) return;
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.boat-rudder__media__photo').forEach(function (item) {
+          item.querySelector('input[type="checkbox"]').checked = false;
+          item.classList.remove('selected');
+          delete item.dataset.selectedAt;
+        });
+        lastCheckedIndex = null;
+        selectionCounter = 0;
+      }
+    }, true);
+  }
 
   // Directory operations
   window.newDirectoryBtnHandler = function () {
@@ -131,7 +186,7 @@
     window.contentEditorGalleryEnd = false;
     var baseDir = document.getElementById('media-directory-selected');
     document.getElementById('media-content-start').value = '0';
-    document.getElementById('media-content-end').value = '30';
+    document.getElementById('media-content-end').value = String(MEDIA_PAGE);
     if (baseDir) baseDir.value = directoryId;
 
     document.querySelectorAll('.boat-rudder__media__dir-item.selected')
@@ -145,7 +200,7 @@
     if (btnDelete) btnDelete.disabled = false;
 
     document.getElementById('media-content-dynamically').innerHTML = '';
-    getMediaContents(directoryId, 0, 30);
+    getMediaContents(directoryId, 0, MEDIA_PAGE);
   };
 
   window.renameDirectoryBtnHandler = function () {
@@ -231,8 +286,8 @@
       if (nearBottom && !window.contentEditorGalleryLoading && !window.contentEditorGalleryEnd) {
         window.contentEditorGalleryLoading = true;
         var dirId = document.getElementById('media-directory-selected').value;
-        var start = Number(document.getElementById('media-content-start').value) + 30;
-        var end = Number(document.getElementById('media-content-end').value) + 30;
+        var start = Number(document.getElementById('media-content-start').value) + MEDIA_PAGE;
+        var end = Number(document.getElementById('media-content-end').value) + MEDIA_PAGE;
         getMediaContents(dirId, start, end)
           .then(function (response) {
             if (response && response.trim() !== '') {
@@ -265,19 +320,41 @@
     var feedbackEl = document.getElementById('upload-feedback');
     if (!fileInput || !fileInput.files.length) return;
 
+    // No directory picked yet: the server drops these into this author's
+    // "default" directory and hands back its id, which we then reveal in
+    // the sidebar and select - the same directory every such upload lands
+    // in until the user moves the files or picks a directory first.
+    var hadNoDir = !baseDir || !baseDir.value;
+    var assignedDirId = null;
+
     var validTypes = ['image/jpeg', 'image/png', 'image/gif'];
     var queue = Array.from(fileInput.files);
     var idx = 0;
 
-    function uploadNext() {
-      if (idx >= queue.length) {
-        fileInput.value = '';
-        setTimeout(function () { if (feedbackEl) feedbackEl.innerHTML = ''; }, 3000);
-        // Reload current directory
-        var dirId = baseDir ? baseDir.value : '';
-        if (dirId) selectDirectory(dirId);
-        return;
+    function finishUpload() {
+      fileInput.value = '';
+      setTimeout(function () { if (feedbackEl) feedbackEl.innerHTML = ''; }, 3000);
+
+      var targetDirId = (hadNoDir && assignedDirId) ? assignedDirId : (baseDir && baseDir.value);
+      if (!targetDirId) return;
+      if (baseDir) baseDir.value = targetDirId;
+
+      if (hadNoDir && assignedDirId && !document.getElementById('media-directory-row_' + assignedDirId)) {
+        fetch('/dashboard/api/media/directory/item?id=' + encodeURIComponent(assignedDirId))
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            var list = document.getElementById('media-directory-contents-list');
+            if (list) list.insertAdjacentHTML('beforeend', html);
+            selectDirectory(targetDirId);
+          })
+          .catch(function () { selectDirectory(targetDirId); });
+      } else {
+        selectDirectory(targetDirId);
       }
+    }
+
+    function uploadNext() {
+      if (idx >= queue.length) { finishUpload(); return; }
       var file = queue[idx++];
       if (validTypes.indexOf(file.type) === -1) {
         addUploadFeedback(feedbackEl, file.name, 'error');
@@ -299,6 +376,12 @@
         if (xhr.status >= 200 && xhr.status < 300) {
           progressBar.style.width = '100%%';
           progressItem.classList.add('done');
+          if (hadNoDir && !assignedDirId) {
+            try {
+              var data = JSON.parse(xhr.responseText);
+              if (data.dir_id) assignedDirId = data.dir_id;
+            } catch (e) { /* ignore malformed response */ }
+          }
         } else {
           progressItem.classList.add('error');
         }
@@ -312,6 +395,96 @@
     }
     uploadNext();
   }
+
+  // "Move to..." / "Delete selected"
+  window.openMoveMediaPicker = function () {
+    var selected = document.querySelectorAll('.boat-rudder__media__photo.selected input[name="media-item-id"]');
+    if (!selected.length) return;
+
+    var picker = document.getElementById('media-move-picker');
+    var list = document.getElementById('media-move-picker-list');
+    if (!picker || !list) return;
+
+    var currentDirId = (document.getElementById('media-directory-selected') || {}).value || '';
+
+    list.innerHTML = '';
+    document.querySelectorAll('.boat-rudder__media__dir-item').forEach(function (item) {
+      var idInput = item.querySelector('input[name="media-directory-id"]');
+      var label = item.querySelector('[name="media-directory-label"]');
+      if (!idInput || !label) return;
+      var dirId = idInput.value;
+      if (dirId === currentDirId) return;
+
+      var li = document.createElement('li');
+      li.className = 'boat-rudder__media__move-picker-item';
+      li.innerHTML = '<label><input type="radio" name="move-dest-dir" value="' + dirId + '"> ' +
+        label.textContent.trim() + '</label>';
+      list.appendChild(li);
+    });
+
+    if (!list.children.length) {
+      list.innerHTML = '<li class="boat-rudder__media__move-picker-empty">No other directories available.</li>';
+    }
+
+    picker.style.display = 'block';
+  };
+
+  window.closeMoveMediaPicker = function () {
+    var picker = document.getElementById('media-move-picker');
+    if (picker) picker.style.display = 'none';
+  };
+
+  window.applyMoveMedia = function () {
+    var checked = document.querySelector('input[name="move-dest-dir"]:checked');
+    if (!checked) return;
+    var destDirId = checked.value;
+
+    var selected = Array.from(
+      document.querySelectorAll('.boat-rudder__media__photo.selected input[name="media-item-id"]')
+    );
+    if (!selected.length) { closeMoveMediaPicker(); return; }
+
+    var ids = selected.map(function (input) { return input.value; }).join(',');
+
+    fetch('/dashboard/api/media/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'ids=' + encodeURIComponent(ids) + '&dest_dir=' + encodeURIComponent(destDirId)
+    })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+      .then(function () {
+        selected.forEach(function (input) {
+          var photo = input.closest('.boat-rudder__media__photo');
+          if (photo) photo.remove();
+        });
+      })
+      .catch(function (err) { console.error('Error moving media:', err); alert('Error moving images.'); })
+      .then(closeMoveMediaPicker);
+  };
+
+  window.deleteSelectedMedia = function () {
+    var selected = Array.from(
+      document.querySelectorAll('.boat-rudder__media__photo.selected input[name="media-item-id"]')
+    );
+    if (!selected.length) return;
+    if (!confirm('Delete ' + selected.length + ' selected image(s)? This cannot be undone.')) return;
+
+    var ids = selected.map(function (input) { return input.value; }).join(',');
+
+    fetch('/dashboard/api/media/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'ids=' + encodeURIComponent(ids)
+    })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+      .then(function () {
+        selected.forEach(function (input) {
+          var photo = input.closest('.boat-rudder__media__photo');
+          if (photo) photo.remove();
+        });
+      })
+      .catch(function (err) { console.error('Error deleting media:', err); alert('Error deleting images.'); });
+  };
 
   // "Use selected" button
   window.getSelectedMediaIds = function () {

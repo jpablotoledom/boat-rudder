@@ -28,6 +28,11 @@ int  ddos_max_ips               = 1024;
 int  ddos_cleanup_interval_secs = 60;
 int  ddos_ip_stale_secs         = 300;
 int  connection_io_timeout_secs = 5;
+bool wap_gateway_enabled    = false;
+char wap_gateway_ips[256]   = {0};
+int  wap_gateway_rover_port = 49300;
+int  wap_gateway_wsp_port   = 9200;
+int  wap_gateway_rate_limit = 60;
 
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -98,6 +103,17 @@ int load_config(const char *filename) {
             ddos_ip_stale_secs = atoi(value);
         } else if (strcmp(key, "connection_io_timeout_secs") == 0) {
             connection_io_timeout_secs = atoi(value);
+        } else if (strcmp(key, "wap_gateway_enabled") == 0) {
+            wap_gateway_enabled = atoi(value) != 0;
+        } else if (strcmp(key, "wap_gateway_ips") == 0) {
+            strncpy(wap_gateway_ips, value, sizeof(wap_gateway_ips) - 1);
+            wap_gateway_ips[sizeof(wap_gateway_ips) - 1] = '\0';
+        } else if (strcmp(key, "wap_gateway_rover_port") == 0) {
+            wap_gateway_rover_port = atoi(value);
+        } else if (strcmp(key, "wap_gateway_wsp_port") == 0) {
+            wap_gateway_wsp_port = atoi(value);
+        } else if (strcmp(key, "wap_gateway_rate_limit") == 0) {
+            wap_gateway_rate_limit = atoi(value);
         }
     }
 

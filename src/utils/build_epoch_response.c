@@ -2,6 +2,9 @@
 #include "detect_epoch.h"
 #include "generate_url_theme.h"
 #include "read_file.h"
+#include "request_charset.h"
+#include "request_wml.h"
+#include "../wap_gateway/wbxml.h"
 #include "request_lang.h"
 #include "request_theme.h"
 #include "template_utils.h"
@@ -28,13 +31,19 @@ static const char *content_type_for_epoch(int epoch) {
             // what the body now actually is (see utf8_to_latin1()), so
             // leaving the header bare still lands on the right charset.
             return "text/html";
-        default:
+        case EPOCH_PRESTANDARD:
             // Epoch 0's realistic reader is a terminal browser (Lynx/w3m/
             // ELinks) running today in a UTF-8 locale, not a genuinely
             // pre-Unicode machine like epoch 1's Mosaic - and that's the
             // same audience the QR blocks' Unicode half-blocks are drawn
             // for (see qr_generator.c), so this stays UTF-8 rather than
-            // getting the epoch 1/WML Latin-1 treatment.
+            // getting the epoch 1/WML Latin-1 treatment. Cello is the one
+            // real exception classified here (see detect_epoch.c) - same
+            // bare-header reasoning as EPOCH_EARLY above applies to it,
+            // since the body is already transcoded for it too (see
+            // retrofit_body_for_epoch()).
+            return request_needs_legacy_charset() ? "text/html" : "text/html; charset=UTF-8";
+        default:
             return "text/html; charset=UTF-8";
     }
 }
@@ -48,8 +57,9 @@ static const char *content_type_for_epoch(int epoch) {
 // to Latin-1 instead of just relabeling the header. Only the Latin-1 range
 // (U+0000-U+00FF - ASCII plus the accented Western European letters the CMS
 // content actually uses) survives; anything further out (a stray emoji,
-// CJK, ...) has no Latin-1 byte to become, so it degrades to '?' rather than
-// corrupting the byte stream.
+// CJK, ...) has no Latin-1 byte to become, so it degrades to
+// LATIN1_FALLBACK rather than corrupting the byte stream.
+#define LATIN1_FALLBACK '#'
 static char *utf8_to_latin1(const char *utf8) {
     size_t len = strlen(utf8);
     char *out = malloc(len + 1);
@@ -62,17 +72,17 @@ static char *utf8_to_latin1(const char *utf8) {
             *w++ = (char)*p++;
         } else if ((*p & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
             unsigned int cp = ((unsigned int)(p[0] & 0x1F) << 6) | (p[1] & 0x3F);
-            *w++ = (cp <= 0xFF) ? (char)cp : '?';
+            *w++ = (cp <= 0xFF) ? (char)cp : LATIN1_FALLBACK;
             p += 2;
         } else if ((*p & 0xF0) == 0xE0 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80) {
-            *w++ = '?'; // U+0800-U+FFFF - always past the Latin-1 range
+            *w++ = LATIN1_FALLBACK; // U+0800-U+FFFF - always past the Latin-1 range
             p += 3;
         } else if ((*p & 0xF8) == 0xF0 && (p[1] & 0xC0) == 0x80 &&
                    (p[2] & 0xC0) == 0x80 && (p[3] & 0xC0) == 0x80) {
-            *w++ = '?'; // U+10000 and up
+            *w++ = LATIN1_FALLBACK; // U+10000 and up
             p += 4;
         } else {
-            *w++ = '?'; // not valid UTF-8 - skip the one bad byte and resync
+            *w++ = LATIN1_FALLBACK; // not valid UTF-8 - skip the one bad byte and resync
             p += 1;
         }
     }
@@ -136,8 +146,14 @@ static char *inject_query_param_into_links(const char *html, const char *param, 
         }
         size_t val_len = (size_t)(val_end - val_start);
 
-        memcpy(w, val_start, val_len);
-        w += val_len;
+        // The param belongs to the query, before any "#fragment": appended
+        // after it, it would ride along inside the fragment - never reaching
+        // the server, and breaking the jump to the anchor besides.
+        const char *hash = memchr(val_start, '#', val_len);
+        size_t base_len = hash ? (size_t)(hash - val_start) : val_len;
+
+        memcpy(w, val_start, base_len);
+        w += base_len;
 
         char valbuf[2048];
         size_t copy_len = val_len < sizeof(valbuf) - 1 ? val_len : sizeof(valbuf) - 1;
@@ -153,7 +169,7 @@ static char *inject_query_param_into_links(const char *html, const char *param, 
             // fine to most HTML parsers but not well-formed - and WML is
             // strict XML, where it is a hard parse error ("element is not
             // well formed"), confirmed live in a WAP emulator.
-            if (memchr(val_start, '?', val_len)) {
+            if (memchr(val_start, '?', base_len)) {
                 memcpy(w, "&amp;", 5);
                 w += 5;
             } else {
@@ -164,6 +180,11 @@ static char *inject_query_param_into_links(const char *html, const char *param, 
             *w++ = '=';
             memcpy(w, value, value_len);
             w += value_len;
+        }
+
+        if (hash) {
+            memcpy(w, hash, val_len - base_len);
+            w += val_len - base_len;
         }
 
         *w++ = '"';
@@ -238,10 +259,12 @@ static char *wml_strip_lists(const char *html) {
 // simply because neither offers a theme control at all (see menu.c's
 // theme_selector()). The Latin-1 transcode is narrower still: only epoch 1
 // (Mosaic-era GUI browsers) and WML actually predate UTF-8; epoch 0's real
-// audience is a modern terminal browser in a UTF-8 locale; see
-// content_type_for_epoch() and qr_generator.c's ASCII-vs-half-block QR
-// choice for the same reasoning. WML alone also gets its <br> tags closed
-// and any raw HTML list converted, since both are hard WML validity errors.
+// audience is a modern terminal browser in a UTF-8 locale, with one
+// exception - Cello, a real pre-Unicode browser classified into epoch 0 on
+// its own feature set (see detect_epoch.c); see content_type_for_epoch()
+// and qr_generator.c's ASCII-vs-half-block QR choice for the same
+// reasoning. WML alone also gets its <br> tags closed and any raw HTML
+// list converted, since both are hard WML validity errors.
 // Returns a fresh allocation, or NULL only when nothing needed changing
 // (the caller keeps using its original body).
 static char *retrofit_body_for_epoch(const char *body, int epoch) {
@@ -253,6 +276,30 @@ static char *retrofit_body_for_epoch(const char *body, int epoch) {
     if (epoch <= EPOCH_EARLY) {
         char *tagged = inject_query_param_into_links(cur, "lang", request_lang());
         if (tagged) { free(step); step = tagged; cur = step; }
+    }
+
+    // One page size for every WML client: the deck is split into pages of
+    // at most WAP_PAGE_BYTES compiled bytes, exactly as the WAP gateway
+    // packs its packets (see wbxml.h) - except when the gateway itself is
+    // asking (?wml_pages=all), since it paginates on its own. After the lang
+    // tagging, so pages measure the same links the gateway receives; the
+    // Prev/Next links it adds get tagged in a second pass.
+    if (epoch == EPOCH_WML && !request_wml_unpaged()) {
+        // Measured on the Latin-1 text the deck is finally sent in - what the
+        // gateway compiles too - so a character Latin-1 lacks (folded to a
+        // single fallback byte) counts the same on both paths.
+        char *paged = NULL;
+        const char *target = request_wml_target();
+        char *l1 = utf8_to_latin1(cur);
+        if (l1 && wml_paginate(l1, strlen(l1), 1, target, wbxml_page_param(target), WAP_PAGE_BYTES,
+                               "ISO-8859-1", &paged) == 0 && paged) {
+            char *tagged = inject_query_param_into_links(paged, "lang", request_lang());
+            if (tagged) { free(paged); paged = tagged; }
+            free(step);
+            step = paged;
+            cur = step;
+        }
+        free(l1);
     }
 
     if (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) {
@@ -268,7 +315,9 @@ static char *retrofit_body_for_epoch(const char *body, int epoch) {
         if (listless) { free(step); step = listless; cur = step; }
     }
 
-    if (epoch != EPOCH_EARLY && epoch != EPOCH_WML)
+    int needs_latin1 = epoch == EPOCH_EARLY || epoch == EPOCH_WML ||
+                       (epoch == EPOCH_PRESTANDARD && request_needs_legacy_charset());
+    if (!needs_latin1)
         return step;
 
     char *latin1 = utf8_to_latin1(cur);

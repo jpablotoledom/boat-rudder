@@ -40,16 +40,20 @@ static char *render_static_items(int epoch) {
     // a real attribute rather than a CSS class nothing defines - was
     // hardcoded to white, unreadable on light-background themes; now takes
     // the theme's own home-content-text color (the "Home content" setting).
-    int needs_color = (epoch == EPOCH_EARLY);
-    CmsThemeColors colors;
+    // Epoch 2 colors each item's date the same way, with the theme's byline
+    // date color (the "Blog list" Date setting) as a 4th argument; epoch 3
+    // reads that setting through its CSS custom property instead.
+    int needs_color = (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE);
+    CmsThemeColors colors = {0};
     if (needs_color) cms_get_theme_colors(request_theme(), &colors);
 
     char *items = strdup("");
     for (size_t i = 0; items && i < UPDATE_COUNT; i++) {
-        char *item = needs_color
+        char *item = (epoch == EPOCH_EARLY)
             ? render_template(item_tpl, colors.home_content_text,
                                UPDATES[i].title, UPDATES[i].date, UPDATES[i].text)
-            : render_template(item_tpl, UPDATES[i].title, UPDATES[i].date, UPDATES[i].text);
+            : render_template(item_tpl, UPDATES[i].title, UPDATES[i].date, UPDATES[i].text,
+                               colors.blog_list_item_date);
         items = item ? str_append(items, item) : NULL;
         free(item);
     }
@@ -67,7 +71,7 @@ char *home_content(int epoch, const char *lang) {
     char *items = NULL;
 
     CmsEntry entry;
-    if (cms_get_entry_by_link("/", lang, &entry)) {
+    if (cms_get_entry_by_link("/", lang, 0, &entry)) {
         items = entry_page_render_content(&entry, epoch);
         cms_entry_free(&entry);
     }

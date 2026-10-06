@@ -2,7 +2,9 @@
 #include "../../db/cms_themes.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
+#include "../../utils/http_utils.h"
 #include "../../utils/read_file.h"
+#include "../../utils/request_lang.h"
 #include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
@@ -11,6 +13,23 @@
 char *category_menu_render(const CmsCategoryItem *categories, size_t count,
                             const char *current_slug, int epoch) {
     if (count == 0) return strdup("");
+
+    // WML: same reasoning as menu.c's compact "[Menu]" - the full row of
+    // category links filled most of /blog's first ~860-byte screen, so
+    // pages carry a single "[Categories]" link instead, to /blog/categories,
+    // which renders this menu in full (below) and a way back.
+    if (epoch == EPOCH_WML && strcmp(request_path(), "/blog/categories") != 0) {
+        char *path = generate_url_theme("category-menu/category-menu-compact_epoch%d.html", epoch);
+        char *tpl  = path ? read_file_to_string(path) : NULL;
+        free(path);
+        if (tpl) {
+            char ret[1024];
+            url_encode(ret, request_path(), sizeof(ret));
+            char *compact = render_template(tpl, ret);
+            free(tpl);
+            return compact;
+        }
+    }
 
     char *path = generate_url_theme("category-menu/category-menu_epoch%d.html", epoch);
     char *container_tpl = path ? read_file_to_string(path) : NULL;

@@ -60,4 +60,15 @@ extern int ddos_ip_stale_secs;
 // slow-but-steady large upload isn't affected by a low value here.
 extern int connection_io_timeout_secs;
 
+// WAP 1.x gateway (src/wap_gateway/wap_gateway.h): off unless enabled.
+// wap_gateway_ips is a comma-separated list of local addresses to answer on;
+// empty means every local address. A port of 0 disables that framing.
+extern bool wap_gateway_enabled;
+extern char wap_gateway_ips[256];
+extern int  wap_gateway_rover_port;
+extern int  wap_gateway_wsp_port;
+// Max requests per minute answered per source IP (0 = unlimited) - see
+// wap_gateway.c's rate_allow().
+extern int  wap_gateway_rate_limit;
+
 #endif // CONFIG_LOADER_H

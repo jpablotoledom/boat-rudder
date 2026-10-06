@@ -18,8 +18,8 @@ static char *load_template(const char *subpath_fmt, int epoch) {
 }
 
 static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int epoch) {
-    char *categories_html = category_tags_render(item->category_links, item->category_names,
-                                                  item->category_count, epoch);
+    char *categories_html = category_tags_render_list(item->category_links, item->category_names,
+                                                       item->category_count, epoch);
     if (!categories_html) return NULL;
 
     char *result;
@@ -27,10 +27,18 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
         char *link_url = render_template("/blog/%s", item->link);
         // Epoch 1 predates progressive JPEG, so it gets the GIF the optimizer
         // writes - same variant and rewrite as image_for_epoch()/gallery_thumb().
-        char *thumb = (epoch == EPOCH_EARLY)
+        // Epoch 2 gets the same lighter `_micro` GIF now instead of `_small`
+        // (a JPEG, and the biggest file of the two by far) - real epoch-2
+        // browsers (Netscape 4 and up, over what was often a slow link) pay
+        // for up to HOME_BLOG_LIMIT of these on the home page alone, and a
+        // small blog-list thumbnail doesn't need `_small`'s extra detail to
+        // read as a thumbnail. Epoch 3 shows the thumbnail as a CSS
+        // background that stretches to the card's full width on narrow
+        // screens, so it alone still gets `_half`.
+        char *thumb = (epoch < EPOCH_MODERN)
             ? image_url_variant(item->header_image_url, "_micro")
-            : image_url_variant(item->header_image_url, "_small");
-        if (epoch == EPOCH_EARLY && thumb) {
+            : image_url_variant(item->header_image_url, "_half");
+        if (epoch < EPOCH_MODERN && thumb) {
             char *dot = strrchr(thumb, '.');
             if (dot) strcpy(dot, ".gif");
         }
@@ -58,6 +66,18 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
             CmsThemeColors retro;
             cms_get_theme_colors(request_theme(), &retro);
 
+            // blog_list_item_background may carry an alpha byte for epoch
+            // 3's CSS background-color; a plain HTML bgcolor attribute has
+            // no notion of one (see cms_themes.h's own doc comment on that
+            // field, and the table block's identical fix), so this strips
+            // it down to the opaque "#rrggbb" before using it as one -
+            // replacing the item card's own background GIF, which Netscape
+            // 4 redraws slowly and which repeated once per item (up to
+            // HOME_BLOG_LIMIT of them) on the home page compounded that.
+            char item_bg[8];
+            int unused_alpha;
+            cms_split_hex_alpha(retro.blog_list_item_background, item_bg, &unused_alpha);
+
             result = (link_url && thumb)
                 ? render_template(item_tpl, thumb, link_url, item->header_title,
                                    item->header_summary,
@@ -65,7 +85,7 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
                                    item->header_hide_author ? "" : item->header_author,
                                    categories_html,
                                    retro.blog_list_item_date, item->header_date,
-                                   retro.blog_list_item_border)
+                                   retro.blog_list_item_border, item_bg)
                 : NULL;
         }
         free(thumb);

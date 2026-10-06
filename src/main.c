@@ -5,6 +5,7 @@
 #include "modules/analytics/geoip.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
+#include "wap_gateway/wap_gateway.h"
 #include "web_server/server_listener.h"
 #include <errno.h>
 #include <limits.h>
@@ -120,9 +121,14 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    // After the HTTP listener is up: the gateway fetches every page from it.
+    if (wap_gateway_start() != 0)
+        LOG_WARN("WAP gateway could not start - continuing without it");
+
     while (atomic_load(&running)) sleep(1);
 
     LOG_INFO("Shutting down...");
+    wap_gateway_stop();
     server_stop();
     geoip_cleanup();
     mongodb_manager_cleanup();

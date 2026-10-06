@@ -23,6 +23,26 @@ char *str_replace_first(const char *src, const char *needle, const char *replace
     return result;
 }
 
+// Like str_replace_first(), but every occurrence, not just the first - for
+// a token (e.g. a {{COLOR_x}} marker) that a template may use more than
+// once. Safe to call even when `needle` occurs exactly once (or zero
+// times): behaves exactly like str_replace_first() in that case, so
+// callers that once assumed "one occurrence" can switch over without
+// having to check first.
+char *str_replace_all(const char *src, const char *needle, const char *replacement) {
+    char *result = strdup(src);
+    if (!result) return NULL;
+
+    while (strstr(result, needle)) {
+        char *next = str_replace_first(result, needle, replacement);
+        free(result);
+        if (!next) return NULL;
+        result = next;
+    }
+
+    return result;
+}
+
 char *render_template(const char *tpl, ...) {
     va_list args1, args2;
     va_start(args1, tpl);
@@ -59,10 +79,6 @@ char *str_append(char *dst, const char *src) {
 
     memcpy(result + dst_len, src, src_len + 1);
     return result;
-}
-
-char *build_title_tag(const char *page_title) {
-    return render_template("<title>%s</title>", page_title);
 }
 
 char *slugify(const char *name) {

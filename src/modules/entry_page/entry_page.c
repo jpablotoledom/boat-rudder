@@ -1,11 +1,18 @@
 #include "entry_page.h"
 #include "../../db/cms_themes.h"
+#include "../../db/mongodb_manager.h"
+#include "../../db/short_links.h"
 #include "../../utils/category_tags.h"
+#include "../../utils/code_highlight.h"
 #include "../../utils/image_size.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
+#include "../../utils/http_utils.h"
 #include "../../utils/qr_generator/qr_generator.h"
 #include "../../utils/read_file.h"
+#include "../../utils/request_charset.h"
+#include "../../utils/request_code_lines.h"
+#include "../../utils/request_lang.h"
 #include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
 #include <stdio.h>
@@ -63,7 +70,13 @@ static const char *heading_level(const char *extra_data) {
 }
 
 static char *render_title(const CmsContentBlock *block, int epoch) {
-    char *tpl = load_template("elements/title/title_epoch%d.html", epoch);
+    // An epoch can style its H2 apart from the other levels with its own
+    // title-h2 template (same arguments as title_epoch<N>.html) - epochs 1-2
+    // underline it, having no stylesheet to do what epoch 3's CSS does.
+    char *tpl = NULL;
+    if (epoch != EPOCH_WML && strcmp(heading_level(block->extra_data), "2") == 0)
+        tpl = load_template("elements/title/title-h2_epoch%d.html", epoch);
+    if (!tpl) tpl = load_template("elements/title/title_epoch%d.html", epoch);
     if (!tpl) return NULL;
 
     // WML has no headings; its template renders bold text and takes the text alone.
@@ -206,7 +219,7 @@ static char *render_paragraph(const CmsContentBlock *block, int epoch) {
         CmsThemeColors colors;
         const char *color;
         if (block->extra_data && strcmp(block->extra_data, "note") == 0) {
-            color = "#deb887";
+            color = "#00aa03";
         } else {
             cms_get_theme_colors(request_theme(), &colors);
             color = colors.home_content_text;
@@ -225,7 +238,14 @@ static char *render_paragraph(const CmsContentBlock *block, int epoch) {
 static char *render_byline(const CmsContentBlock *block, int epoch) {
     char *tpl = load_template("elements/byline/byline_epoch%d.html", epoch);
     if (!tpl) return NULL;
-    char *result = render_template(tpl, block->text, block->extra_data);
+    // Epochs 1-2 color the author/date with the theme's own byline colors
+    // (the "Blog list" Author/Date settings), as plain <font color> -
+    // arguments 3 and 4, which the other epochs' templates don't take
+    // (epoch 3 reads the same settings through its CSS custom properties).
+    CmsThemeColors colors = {0};
+    if (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) cms_get_theme_colors(request_theme(), &colors);
+    char *result = render_template(tpl, block->text, block->extra_data,
+                                   colors.blog_list_item_author, colors.blog_list_item_date);
     free(tpl);
     return result;
 }
@@ -237,7 +257,14 @@ static char *render_byline(const CmsContentBlock *block, int epoch) {
 static char *image_for_epoch(const char *url, int epoch) {
     if (!url || !url[0]) return strdup("");
 
-    const char *suffix = (epoch >= EPOCH_MODERN) ? "_full" : "_medium";
+    // Epoch 1 (Mosaic, Netscape 1-3, IE<=4) gets `_micro` (max 180px)
+    // instead of epoch 2's `_medium` (max 600px) - real epoch-1 browsers
+    // predate broadband as much as they predate CSS, so the same
+    // "lighter file for an older client" reasoning that already gives them
+    // gallery/blog-list thumbnails at `_micro` applies here too.
+    const char *suffix = (epoch >= EPOCH_MODERN) ? "_full"
+                        : (epoch == EPOCH_EARLY)  ? "_micro"
+                                                   : "_medium";
     char *variant = image_url_variant(url, suffix);
 
     // image-optimizer.sh writes _medium and _micro as GIF (only _full/_half/
@@ -258,11 +285,12 @@ static char *image_for_epoch(const char *url, int epoch) {
 typedef struct {
     char caption[512];
     const char *width; // "100" | "50" | "30"
-    const char *align; // "left" | "center" | "right"
+    const char *align; // "left" | "center" | "right" | "float-left" | "float-right"
+    const char *float_side; // "left" | "right" for the float-* aligns, NULL otherwise
 } ImageOptions;
 
 static ImageOptions parse_image_options(const char *extra_data) {
-    ImageOptions o = { .caption = "", .width = "100", .align = "center" };
+    ImageOptions o = { .caption = "", .width = "100", .align = "center", .float_side = NULL };
     if (!extra_data || !extra_data[0]) return o;
 
     const char *first = strchr(extra_data, '|');
@@ -281,25 +309,72 @@ static ImageOptions parse_image_options(const char *extra_data) {
     for (int i = 0; widths[i]; i++)
         if (strcmp(rest, widths[i]) == 0) o.width = widths[i];
 
-    static const char *aligns[] = { "left", "center", "right", NULL };
+    // float-left/float-right take the image out of the flow so the following
+    // text wraps around it - what used to be a separate "image-paragraph"
+    // block before it was folded into this one.
+    static const char *aligns[] = { "left", "center", "right", "float-left", "float-right", NULL };
     for (int i = 0; second && aligns[i]; i++)
         if (strcmp(second, aligns[i]) == 0) o.align = aligns[i];
+    if (strncmp(o.align, "float-", 6) == 0) o.float_side = o.align + 6;
 
     return o;
 }
 
-static char *render_image(const CmsContentBlock *block, int epoch) {
-    char *tpl = load_template("elements/image/image_epoch%d.html", epoch);
-    if (!tpl) return NULL;
+// A "[View <label> QR]" link to a dedicated /<route_prefix>/<route_id> QR
+// page, for an epoch-0/WML reader who can't see the image/video itself -
+// shared by render_image() and render_youtube_embed(). Only the way back
+// rides along (?back=): the QR page looks the entry's title up from that
+// path itself, rather than carry it here URL-encoded - every byte of this
+// href counts against a WAP page's single packet. Never NULL.
+static char *build_view_qr_link(const char *route_prefix, const char *route_id,
+                                 const char *label) {
+    char back_enc[1024];
+    url_encode(back_enc, request_path(), sizeof(back_enc));
 
+    char qr_url[1200];
+    snprintf(qr_url, sizeof(qr_url), "/%s/%s?back=%s", route_prefix, route_id, back_enc);
+
+    char *link = render_template("<p><a href=\"%s\">[View %s QR]</a></p>", qr_url, label);
+    return link ? link : strdup("");
+}
+
+static char *render_image(const CmsContentBlock *block, int epoch) {
     ImageOptions o = parse_image_options(block->extra_data);
+
+    // Epochs 1-2 float with HTML attributes (align on the image/table), not
+    // CSS, so a floated image is different markup there and gets its own
+    // template; epoch 3 floats the same <figure> with a class.
+    int retro_float = o.float_side && (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE);
+    char *tpl = load_template(retro_float ? "elements/image/image-float_epoch%d.html"
+                                          : "elements/image/image_epoch%d.html", epoch);
+    if (!tpl) return NULL;
 
     char *result;
     if (epoch <= EPOCH_PRESTANDARD) {
-        // Text-only and WML render the caption alone, with no image at all.
-        result = render_template(tpl, o.caption);
+        // Text-only and WML can't show the photo itself, but a QR the reader
+        // scans with a phone gets them to it anyway - same reasoning as the
+        // gallery and youtube-embed blocks (see render_gallery()/
+        // render_youtube_embed()'s own comments). Routed through the
+        // generic /qr/<code> shortener (see short_links.h) rather than a
+        // dedicated per-image DB record: an image block has no id of its
+        // own to key one on, but its full-size URL is already a stable,
+        // unique target to shorten directly.
+        char *full = image_url_variant(block->text, "_full");
+        char *code = (full && mongodb_manager_is_ready()) ? short_link_get_or_create(full) : NULL;
+        free(full);
+
+        char *qr_link = code ? build_view_qr_link("image-qr", code, "image") : strdup("");
+        free(code);
+
+        char *caption_html = o.caption[0]
+            ? render_template("<p>[Image: %s]</p>", o.caption)
+            : strdup("");
+
+        result = (caption_html && qr_link) ? render_template(tpl, caption_html, qr_link) : NULL;
+        free(caption_html);
+        free(qr_link);
         free(tpl);
-        return result;
+        return result ? result : strdup("");
     }
 
     char *src = image_for_epoch(block->text, epoch);
@@ -328,21 +403,25 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
         // The width has to be in pixels. Percentages on <img width> came with
         // HTML 4.0, and a browser of this era meeting one draws the image zero
         // pixels wide - it loads, it just cannot be seen. So the author's
-        // 100/50/30 is resolved against the real width of the file being
-        // served. If that width cannot be read the attribute is dropped and
-        // the image comes out at its natural size, which beats not at all.
+        // 100/50/30 is resolved against the content column (as epoch 3's CSS
+        // does), never upscaling past the served file's real width. Not
+        // against the file itself: epoch 1 is served `_micro` (180px at
+        // most), and 30% of that left a 54px thumbnail. If the width cannot
+        // be read the attribute is dropped and the image comes out at its
+        // natural size, which beats not at all.
         char width_attr[32] = "";
         int intrinsic = image_intrinsic_width(src);
         int percent = atoi(o.width);
         if (intrinsic > 0 && percent > 0) {
-            int px = intrinsic * percent / 100;
-            if (px > RETRO_MAX_IMAGE_WIDTH) px = RETRO_MAX_IMAGE_WIDTH;
+            int px = RETRO_MAX_IMAGE_WIDTH * percent / 100;
+            if (px > intrinsic) px = intrinsic;
             if (px < 1) px = 1;
             // Only the width is emitted, never the height, so the browser
             // scales the other axis and the picture keeps its proportions.
             snprintf(width_attr, sizeof(width_attr), "width=\"%d\"", px);
         }
-        result = render_template(tpl, o.align, full, src, width_attr, o.caption, o.caption);
+        result = render_template(tpl, o.float_side ? o.float_side : o.align,
+                                 full, src, width_attr, o.caption, o.caption);
     } else {
         char mods[128];
         snprintf(mods, sizeof(mods), " boat-rudder__entry-image--w%s boat-rudder__entry-image--%s",
@@ -354,23 +433,6 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
     free(src);
     free(full);
     free(tpl);
-    return result;
-}
-
-// Renders entry->category_names as a "tags" block. Returns "" (no block) if
-// the entry has no categories.
-static char *render_categories(const CmsEntry *entry, int epoch) {
-    if (entry->category_count == 0) return strdup("");
-
-    char *wrap_tpl = load_template("entry/entry-categories_epoch%d.html", epoch);
-    if (!wrap_tpl) return strdup("");
-
-    char *items = category_tags_render(entry->category_links, entry->category_names,
-                                        entry->category_count, epoch);
-    char *result = items ? render_template(wrap_tpl, items) : NULL;
-
-    free(items);
-    free(wrap_tpl);
     return result;
 }
 
@@ -390,7 +452,9 @@ static char *gallery_thumb(const char *url, int epoch) {
         if (t) { char *dot = strrchr(t, '.'); if (dot) strcpy(dot, ".gif"); }
         return t;
     }
-    return image_url_variant(url, "_small");
+    // Epoch 3 lays the grid out on high-density screens where `_small` looks
+    // blurry, so it gets `_half`; the lightbox still opens `_full`.
+    return image_url_variant(url, epoch >= EPOCH_MODERN ? "_half" : "_small");
 }
 
 static char *render_gallery(const CmsContentBlock *block, int epoch) {
@@ -417,10 +481,8 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
     char *wrap_tpl   = load_template("elements/gallery/gallery_epoch%d.html", epoch);
     char *row_tpl    = load_template("elements/gallery/gallery-row_epoch%d.html", epoch);
     char *item_tpl   = load_template("elements/gallery/gallery-item_epoch%d.html", epoch);
-    char *more_tpl   = load_template("elements/gallery/gallery-item-more_epoch%d.html", epoch);
-    char *hidden_tpl = load_template("elements/gallery/gallery-item-hidden_epoch%d.html", epoch);
     if (!wrap_tpl || !row_tpl || !item_tpl) {
-        free(wrap_tpl); free(row_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
+        free(wrap_tpl); free(row_tpl); free(item_tpl);
         return strdup("");
     }
 
@@ -440,15 +502,16 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
     }
     free(copy);
 
-    // Epoch 3 shows the first few and folds the rest behind a "+N" tile.
+    // Epoch 3 renders every item and the lightbox script folds the gallery
+    // behind a "+N" tile (5 visible, 4 under 500px), so the cap below only
+    // applies to epochs 1-2.
     // Epochs 1-2 cap harder and cut the rest entirely, with a "View all"
     // link/note after the gallery instead of a tile: a machine of that era is
     // the one actually paying for every image in the block, not just the
     // reader's patience, and an article can carry a gallery of 20+ photos.
-    int cap = (epoch >= EPOCH_MODERN) ? 5
+    int cap = (epoch >= EPOCH_MODERN) ? 0
             : (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) ? 3 : 0;
     int max_visible = (cap > 0 && count > cap) ? cap : count;
-    int remaining   = count - max_visible;
 
     int per_row = gallery_columns(epoch);
     char *rows_html = strdup("");
@@ -470,14 +533,7 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
         char *href = gallery_id ? render_template("/gallery/%s?img=%d", gallery_id, i)
                                 : (full ? strdup(full) : strdup(""));
 
-        const char *tpl = item_tpl;
-        char *item;
-        if (epoch >= EPOCH_MODERN && remaining > 0 && i == max_visible - 1 && more_tpl)
-            item = render_template(more_tpl, thumb ? thumb : "", full ? full : "", remaining + 1);
-        else if (epoch >= EPOCH_MODERN && i >= max_visible && hidden_tpl)
-            item = render_template(hidden_tpl, thumb ? thumb : "", full ? full : "");
-        else
-            item = render_template(tpl, href ? href : "", thumb ? thumb : "", full ? full : "");
+        char *item = render_template(item_tpl, href ? href : "", thumb ? thumb : "", full ? full : "");
 
         free(thumb); free(full); free(href);
         if (item) { row_html = str_append(row_html, item); free(item); }
@@ -518,7 +574,7 @@ static char *render_gallery(const CmsContentBlock *block, int epoch) {
         if (view_all) { result = str_append(result, view_all); free(view_all); }
     }
 
-    free(wrap_tpl); free(row_tpl); free(item_tpl); free(more_tpl); free(hidden_tpl);
+    free(wrap_tpl); free(row_tpl); free(item_tpl);
     return result ? result : strdup("");
 }
 
@@ -650,15 +706,16 @@ static char *render_youtube_embed(const CmsContentBlock *block, int epoch) {
             result = render_template(tpl, wbmp_path, short_url, label);
         }
     } else if (epoch == EPOCH_PRESTANDARD) {
-        // Text-only browsers get the QR drawn with Unicode half-blocks -
-        // epoch 0 stays UTF-8 (see content_type_for_epoch()), unlike epoch
-        // 1/WML, so this renders correctly for its realistic reader: a
-        // terminal browser in a UTF-8 locale.
-        char *qr_text = generate_qr_halfblock_text(short_url);
-        if (qr_text) {
-            result = render_template(tpl, qr_text, short_url, label);
-            free(qr_text);
-        }
+        // An inline QR grid this wide runs many text rows long, and a
+        // paginated text browser (Lynx et al.) splits a page wherever the
+        // screen happens to end - cutting the code in half across two
+        // screens with no way to see it whole. Routing it through its own
+        // page instead (see the /youtube-qr/<id> route, mirroring the
+        // gallery's /gallery/<id> QR-only page) guarantees the QR always
+        // renders complete on the one screen the reader lands on.
+        char *qr_link = build_view_qr_link("youtube-qr", video_id, "video");
+        result = render_template(tpl, qr_link);
+        free(qr_link);
     } else {
         char qr_path[256];
         if (generate_youtube_qr(block->extra_data, HTML_ROOT_DIR) == 0) {
@@ -670,6 +727,10 @@ static char *render_youtube_embed(const CmsContentBlock *block, int epoch) {
     free(tpl);
     return result ? result : strdup("");
 }
+
+// Numbers each epoch-2 code block on the page, so its line-number toggle can
+// reload straight back to it (#code-N). Reset per entry by render_blocks().
+static __thread int code_block_seq = 0;
 
 static char *render_code_text(const CmsContentBlock *block, int epoch) {
     if (!block->text || !block->text[0]) return strdup("");
@@ -685,10 +746,60 @@ static char *render_code_text(const CmsContentBlock *block, int epoch) {
     // the line breaks a browser command rather than whitespace it can choose
     // to ignore, so it degrades the same way on every epoch that keeps <pre>
     // in its template.
-    char *text = (epoch <= EPOCH_EARLY) ? expand_newlines(block->text, epoch)
-                                        : strdup(block->text);
-    char *result = text ? render_template(tpl,
-        block->extra_data ? block->extra_data : "", text) : NULL;
+    //
+    // Epochs 1-3 get the code syntax-highlighted server-side instead (see
+    // code_highlight.h), already HTML-escaped: epoch 3 as CSS-classed spans
+    // colored by the theme's --br-color-code-* properties, epochs 1-2 as
+    // <font color> tags taking the same theme "Code colors" directly, since
+    // Netscape 1-4/IE 2-5 can't be trusted with class-based CSS (NCSA Mosaic
+    // ignores <font color> and simply shows it plain). Epoch 1 still breaks
+    // its lines with <br>, for the reason above. Epoch 0 goes through the
+    // same tokenizer with no color at all - plain escaped text in a <pre>
+    // (which its QR codes have already shown its readers honor), just for the
+    // line numbers and the indentation a <p> would collapse.
+    const char *lang = block->extra_data ? block->extra_data : "";
+    CmsThemeColors colors = {0};
+    char toggle_url[1100] = "";
+    char block_id[16] = "";
+    const char *toggle_label = "";
+    char *text;
+    if (epoch >= EPOCH_MODERN) {
+        text = code_highlight_html(block->text, lang);
+    } else if (epoch >= EPOCH_PRESTANDARD) {
+        int hide_lines = request_code_lines_hidden();
+        int plain = (epoch == EPOCH_PRESTANDARD);
+        if (!plain) cms_get_theme_colors(request_theme(), &colors);
+        CodeHighlightPalette pal = {
+            .keyword = colors.code_keyword, .string = colors.code_string,
+            .comment = colors.code_comment, .number = colors.code_number,
+            .variable = colors.code_variable, .tag = colors.code_tag,
+            .line_number = colors.code_line_number,
+            .numbers = !hide_lines,
+            .no_color = plain,
+            .br_newlines = (epoch == EPOCH_EARLY),
+        };
+        text = code_highlight_html_fonts(block->text, lang, &pal);
+
+        // The toggle reloads the same page with/without ?code_lines=off,
+        // back to this block's anchor: JavaScript 1.0 can navigate but not
+        // rewrite the page in place, so the server redraws it instead.
+        snprintf(block_id, sizeof(block_id), "%d", ++code_block_seq);
+        char path_enc[1024];
+        url_encode(path_enc, request_path(), sizeof(path_enc));
+        snprintf(toggle_url, sizeof(toggle_url), "%s%s#code-%s",
+                 path_enc, hide_lines ? "" : "?code_lines=off", block_id);
+        toggle_label = hide_lines ? "Show line numbers" : "Hide line numbers";
+    } else {
+        text = expand_newlines(block->text, epoch);
+    }
+    // Arguments 3-8 (display name, line-number toggle URL/label, block
+    // anchor, box background/text colors - last, since only epochs 1-2 use
+    // them) are for the epoch 0-3 templates; WML takes the first two and
+    // ignores the rest.
+    char *result = text ? render_template(tpl, lang, text,
+                                          code_highlight_display_name(lang),
+                                          toggle_url, toggle_label, block_id,
+                                          colors.code_background, colors.code_text) : NULL;
     free(text);
     free(tpl);
     return result ? result : strdup("");
@@ -698,43 +809,6 @@ static char *render_generic(const CmsContentBlock *block, int epoch) {
     char *tpl = load_template("elements/generic/generic_epoch%d.html", epoch);
     if (!tpl) return NULL;
     char *result = render_template(tpl, block->text ? block->text : "");
-    free(tpl);
-    return result ? result : strdup("");
-}
-
-// Unlike `image`/`gallery`, an image-paragraph block stores its path with the
-// `_full` size suffix already baked in, not the bare path the renderer usually
-// appends one to. Epochs 1-2 need the much lighter `_micro` instead, so the
-// existing suffix has to be swapped out, not stacked under another one.
-static char *image_paragraph_src(const char *stored_path, int epoch) {
-    if (epoch != EPOCH_EARLY && epoch != EPOCH_MIDDLE) return strdup(stored_path);
-
-    char *base = strdup(stored_path);
-    if (!base) return NULL;
-    char *marker = strstr(base, "_full.");
-    if (marker) memmove(marker, marker + 5, strlen(marker + 5) + 1);
-
-    char *variant = image_url_variant(base, "_micro");
-    free(base);
-    // _micro is always GIF (image-optimizer.sh), regardless of source format.
-    if (variant) {
-        char *dot = strrchr(variant, '.');
-        if (dot) strcpy(dot, ".gif");
-    }
-    return variant;
-}
-
-static char *render_image_paragraph(const CmsContentBlock *block, int epoch) {
-    if (!block->text || !block->text[0]) return strdup("");
-    char *tpl = load_template("elements/image-paragraph/image-paragraph_epoch%d.html", epoch);
-    if (!tpl) return NULL;
-    char align_attr[32] = "";
-    const char *a = block->extra_data;
-    if (a && (strcmp(a, "left") == 0 || strcmp(a, "right") == 0))
-        snprintf(align_attr, sizeof(align_attr), "align=\"%s\"", a);
-    char *src = image_paragraph_src(block->text, epoch);
-    char *result = src ? render_template(tpl, src, align_attr) : NULL;
-    free(src);
     free(tpl);
     return result ? result : strdup("");
 }
@@ -753,6 +827,69 @@ static int utf8_width(const char *s) {
     for (const unsigned char *p = (const unsigned char *)s; *p; p++)
         if ((*p & 0xC0) != 0x80) width++;
     return width;
+}
+
+// Splits `text` into UTF-8-safe chunks of at most `width` codepoints,
+// breaking at a space where one is available so a word doesn't split mid-
+// way unless the word itself is wider than the whole column (pathological
+// input - retro-era table content in practice never approaches an 80-column
+// budget on its own). Returns a malloc'd array of `*out_count` malloc'd
+// lines (always at least 1, even for ""); caller frees each line, then the
+// array.
+static char **wrap_cell_text(const char *text, int width, int *out_count) {
+    if (width < 1) width = 1;
+
+    char **lines = NULL;
+    int count = 0, cap = 0;
+    char line[2048] = "";
+    int line_width = 0;
+
+    char *copy = strdup(text ? text : "");
+    char *sp = NULL;
+    for (char *word = strtok_r(copy, " ", &sp); word; word = strtok_r(NULL, " ", &sp)) {
+        const char *wp = word;
+        int wlen = utf8_width(wp);
+        while (wlen > width) {
+            if (line_width > 0) {
+                if (count >= cap) { cap = cap ? cap * 2 : 4; lines = realloc(lines, (size_t)cap * sizeof(char *)); }
+                lines[count++] = strdup(line);
+                line[0] = '\0'; line_width = 0;
+            }
+            int taken_cps = 0, bytes = 0;
+            while (wp[bytes] && taken_cps < width) {
+                bytes++;
+                while (((unsigned char)wp[bytes] & 0xC0) == 0x80) bytes++; // continuation byte
+                taken_cps++;
+            }
+            char chunk[2048];
+            int n = bytes < (int)sizeof(chunk) - 1 ? bytes : (int)sizeof(chunk) - 1;
+            memcpy(chunk, wp, (size_t)n);
+            chunk[n] = '\0';
+            if (count >= cap) { cap = cap ? cap * 2 : 4; lines = realloc(lines, (size_t)cap * sizeof(char *)); }
+            lines[count++] = strdup(chunk);
+            wp += bytes;
+            wlen -= taken_cps;
+        }
+
+        int wp_width = utf8_width(wp);
+        int needed = line_width > 0 ? line_width + 1 + wp_width : wp_width;
+        if (needed > width && line_width > 0) {
+            if (count >= cap) { cap = cap ? cap * 2 : 4; lines = realloc(lines, (size_t)cap * sizeof(char *)); }
+            lines[count++] = strdup(line);
+            line[0] = '\0'; line_width = 0;
+        }
+        if (line_width > 0) { strcat(line, " "); line_width++; }
+        strncat(line, wp, sizeof(line) - strlen(line) - 1);
+        line_width += wp_width;
+    }
+    free(copy);
+
+    if (line_width > 0 || count == 0) {
+        if (count >= cap) { cap = cap ? cap * 2 : 4; lines = realloc(lines, (size_t)cap * sizeof(char *)); }
+        lines[count++] = strdup(line);
+    }
+    *out_count = count;
+    return lines;
 }
 
 static char *render_table_ascii(const CmsContentBlock *block, int epoch, int has_header) {
@@ -816,6 +953,30 @@ static char *render_table_ascii(const CmsContentBlock *block, int epoch, int has
             if (len > widths[c]) widths[c] = len;
         }
 
+    // A terminal-width table only draws right if it actually fits: epoch
+    // 0's realistic reader is an 80-column text terminal (Lynx/w3m/Cello
+    // alike), and a table wider than that wraps mid-row wherever the
+    // terminal happens to break the line, destroying the border/column
+    // alignment this whole renderer exists to guarantee. Table width = 1
+    // (leading border) + max_cols*3 (each column's own padding+border) +
+    // the sum of its column widths - if that would overflow 80, shrink
+    // every column proportionally (never below min_col_width) and let
+    // wrap_cell_text() carry whatever no longer fits onto extra lines
+    // within the same row, instead.
+    const int max_table_width = 80;
+    const int min_col_width = 6;
+    int overhead = 1 + max_cols * 3;
+    int available = max_table_width - overhead;
+    int sum_natural = 0;
+    for (int c = 0; c < max_cols; c++) sum_natural += widths[c];
+
+    if (available > 0 && sum_natural > available) {
+        for (int c = 0; c < max_cols; c++) {
+            int scaled = (int)((long)available * widths[c] / sum_natural);
+            widths[c] = scaled < min_col_width ? min_col_width : scaled;
+        }
+    }
+
     // "+----+----+" - reused as-is for the outer border and, when the block
     // has a header, as the rule under it.
     char *border = strdup("+");
@@ -833,26 +994,46 @@ static char *render_table_ascii(const CmsContentBlock *block, int epoch, int has
     char *art = border ? str_append(strdup(border), "\n") : NULL;
 
     for (int r = 0; r < row_count && art; r++) {
-        char *line = strdup("|");
-        for (int c = 0; c < max_cols && line; c++) {
+        // Word-wrap every cell in this row to its (possibly shrunk) column
+        // width, then print as many physical lines as the tallest cell
+        // needed - shorter cells just print blank on the extra lines.
+        char ***cell_lines = calloc((size_t)max_cols, sizeof(char **));
+        int *cell_line_counts = calloc((size_t)max_cols, sizeof(int));
+        int row_lines = 1;
+        for (int c = 0; c < max_cols; c++) {
             const char *text = c < col_counts[r] ? rows[r][c] : "";
-            // Manual padding: printf's `%-*s` counts bytes, and a multi-byte
-            // UTF-8 character would then get fewer trailing spaces than its
-            // neighbours in the same column need to line up.
-            int pad = widths[c] - utf8_width(text);
-            if (pad < 0) pad = 0;
-            char cell[600];
-            int n = snprintf(cell, sizeof(cell), " %s", text);
-            if (n < 0) n = 0;
-            if (n >= (int)sizeof(cell)) n = (int)sizeof(cell) - 1;
-            for (int i = 0; i < pad && n < (int)sizeof(cell) - 2; i++) cell[n++] = ' ';
-            cell[n++] = ' ';
-            cell[n++] = '|';
-            cell[n] = '\0';
-            line = str_append(line, cell);
+            cell_lines[c] = wrap_cell_text(text, widths[c], &cell_line_counts[c]);
+            if (cell_line_counts[c] > row_lines) row_lines = cell_line_counts[c];
         }
-        if (line) { art = str_append(art, line); art = str_append(art, "\n"); }
-        free(line);
+
+        for (int ln = 0; ln < row_lines && art; ln++) {
+            char *line = strdup("|");
+            for (int c = 0; c < max_cols && line; c++) {
+                const char *text = ln < cell_line_counts[c] ? cell_lines[c][ln] : "";
+                // Manual padding: printf's `%-*s` counts bytes, and a multi-byte
+                // UTF-8 character would then get fewer trailing spaces than its
+                // neighbours in the same column need to line up.
+                int pad = widths[c] - utf8_width(text);
+                if (pad < 0) pad = 0;
+                char cell[600];
+                int n = snprintf(cell, sizeof(cell), " %s", text);
+                if (n < 0) n = 0;
+                if (n >= (int)sizeof(cell)) n = (int)sizeof(cell) - 1;
+                for (int i = 0; i < pad && n < (int)sizeof(cell) - 2; i++) cell[n++] = ' ';
+                cell[n++] = ' ';
+                cell[n++] = '|';
+                cell[n] = '\0';
+                line = str_append(line, cell);
+            }
+            if (line) { art = str_append(art, line); art = str_append(art, "\n"); }
+            free(line);
+        }
+
+        for (int c = 0; c < max_cols; c++) {
+            for (int i = 0; i < cell_line_counts[c]; i++) free(cell_lines[c][i]);
+            free(cell_lines[c]);
+        }
+        free(cell_lines); free(cell_line_counts);
 
         if (has_header && r == 0 && art) {
             art = str_append(art, border);
@@ -956,10 +1137,25 @@ static char *render_table(const CmsContentBlock *block, int epoch) {
         return strdup("");
     }
 
+    // Epoch 2 has no external stylesheet to lean on, so table_epoch2.html /
+    // table-(header-)cell_epoch2.html take the theme's own table-header/
+    // table-border/table-row-a/table-row-b colors (cms_themes.h) as %N$s
+    // substitutions, the same admin-configurable ones epoch 3 reads as CSS
+    // vars (styles_epoch3.css) - dedicated to this block, not borrowed from
+    // an unrelated section's tokens (see cms_themes.h's own doc comment on
+    // why that broke). Epoch 3's own templates carry no such placeholders
+    // (real CSS classes instead), so this only matters for EPOCH_MIDDLE.
+    // Content rows alternate table-row-a/table-row-b by their own position
+    // among content rows (the header, if any, isn't part of that count) -
+    // the same striping epoch 3 gets from :nth-child(odd)/(even).
+    CmsThemeColors colors;
+    if (epoch == EPOCH_MIDDLE) cms_get_theme_colors(request_theme(), &colors);
+
     char *rows_html = strdup("");
     char *copy = strdup(block->text);
     char *row_sp = NULL;
     int row_idx = 0;
+    int content_row_idx = 0;
 
     for (char *row_tok = strtok_r(copy, "\n", &row_sp);
          row_tok && rows_html;
@@ -969,12 +1165,18 @@ static char *render_table(const CmsContentBlock *block, int epoch) {
         while (end >= row_tok && (*end == '\r' || *end == '\n')) *end-- = '\0';
         if (!*row_tok) continue;
 
-        char *cell_tpl_cur = (has_header && row_idx == 0) ? header_tpl : cell_tpl;
+        int is_header_row = has_header && row_idx == 0;
+        char *cell_tpl_cur = is_header_row ? header_tpl : cell_tpl;
+        const char *row_bg = is_header_row ? colors.table_header
+                           : (content_row_idx % 2 == 0) ? colors.table_row_a
+                                                         : colors.table_row_b;
         char *cells = strdup("");
         char *row_copy = strdup(row_tok);
         char *cell_sp  = NULL;
         for (char *ct = strtok_r(row_copy, "|", &cell_sp); ct && cells; ct = strtok_r(NULL, "|", &cell_sp)) {
-            char *cell = render_template(cell_tpl_cur, ct);
+            char *cell = (epoch == EPOCH_MIDDLE)
+                ? render_template(cell_tpl_cur, row_bg, colors.home_content_text, ct)
+                : render_template(cell_tpl_cur, ct);
             cells = cell ? str_append(cells, cell) : NULL;
             free(cell);
         }
@@ -982,10 +1184,14 @@ static char *render_table(const CmsContentBlock *block, int epoch) {
         char *row = cells ? render_template(row_tpl, cells) : NULL;
         rows_html = row ? str_append(rows_html, row) : NULL;
         free(cells); free(row);
+        if (!is_header_row) content_row_idx++;
     }
     free(copy);
 
-    char *result = rows_html ? render_template(table_tpl, rows_html) : NULL;
+    char *result = !rows_html ? NULL
+                 : (epoch == EPOCH_MIDDLE)
+                       ? render_template(table_tpl, colors.table_border, rows_html)
+                       : render_template(table_tpl, rows_html);
     free(rows_html);
     free(table_tpl); free(row_tpl); free(cell_tpl); free(header_tpl);
     return result ? result : strdup("");
@@ -1037,21 +1243,29 @@ static char *render_block(const CmsContentBlock *block, int epoch) {
     if (strcmp(block->type, "youtube-embed") == 0)   return render_youtube_embed(block, epoch);
     if (strcmp(block->type, "code-text") == 0)       return render_code_text(block, epoch);
     if (strcmp(block->type, "generic") == 0)         return render_generic(block, epoch);
-    if (strcmp(block->type, "image-paragraph") == 0) return render_image_paragraph(block, epoch);
     if (strcmp(block->type, "table") == 0)           return render_table(block, epoch);
     if (strcmp(block->type, "social-networks") == 0) return render_social_networks(block, epoch);
     return strdup("");
 }
 
-// Renders every block individually rather than concatenating as it goes, so
-// WML pagination (see entry_page()) can group whole blocks onto a page
-// without ever cutting one in half. *count_out is only meaningful when this
+char *entry_page_render_block(const char *type, const char *text,
+                              const char *extra_data, int epoch) {
+    CmsContentBlock block = {
+        .type = (char *)type,
+        .text = (char *)text,
+        .extra_data = (char *)extra_data,
+    };
+    return render_block(&block, epoch);
+}
+
+// Renders every block individually. *count_out is only meaningful when this
 // returns non-NULL. Frees anything already rendered and returns NULL on the
 // first failure, matching entry_page_render_content()'s existing contract.
 static char **render_blocks(const CmsEntry *entry, int epoch, size_t *count_out) {
     char **blocks = calloc(entry->content_count ? entry->content_count : 1, sizeof(char *));
     if (!blocks) return NULL;
 
+    code_block_seq = 0;
     for (size_t i = 0; i < entry->content_count; i++) {
         blocks[i] = render_block(&entry->content[i], epoch);
         if (!blocks[i]) {
@@ -1083,29 +1297,51 @@ char *entry_page_render_content(const CmsEntry *entry, int epoch) {
     return result;
 }
 
-// A real WAP 1.x deck has to fit in a few KB of device memory (a Nokia 7110
-// topped out around 1400 *compiled* bytes), and compilation only shrinks
-// raw markup so much - 2000 raw bytes/page is a rough but reasonable target,
-// live-tested against a real emulator's own ~16KB ceiling with plenty of
-// margin to spare rather than tuned to just barely fit it.
-#define WML_PAGE_BUDGET 2000
-
-char *entry_page(const CmsEntry *entry, int epoch, int page, int *total_pages_out) {
-    char *categories_html = render_categories(entry, epoch);
+char *entry_page(const CmsEntry *entry, int epoch) {
+    // A "tags" block, one per epoch's own category_epoch%d.html/
+    // category-separator_epoch%d.html; "" (no block) if the entry has no
+    // categories - category_tags_render() handles that itself.
+    char *categories_html = category_tags_render(entry->category_links, entry->category_names,
+                                                   entry->category_count, epoch);
     if (!categories_html) return NULL;
 
     char *meta_html;
-    const char *author = entry->header_author ? entry->header_author : "";
-    // With hide_author set (or no author at all) the byline is dropped entirely
-    // rather than emitted empty, so the entry starts at its content. Every
-    // epoch has an entry-meta template; the older ones just say it plainly.
-    if (!entry->header_hide_author && author[0]) {
-        char *meta_tpl = load_template("entry/entry-meta_epoch%d.html", epoch);
-        meta_html = meta_tpl ? render_template(meta_tpl, author, categories_html) : categories_html;
-        free(meta_tpl);
-        if (meta_tpl) free(categories_html);
-    } else {
+    const char *author = (!entry->header_hide_author && entry->header_author) ? entry->header_author : "";
+    // A publish date is a blog-post concept - a "page" (About, Contact, ...)
+    // isn't dated content, so it never shows one even if header_date has a
+    // stored value (e.g. left over from when the entry was first created).
+    const char *date = (strcmp(entry->type, "blog") == 0) ? entry->header_date : "";
+    // With no author, no categories and no date there is nothing to show,
+    // so the byline row is dropped entirely rather than emitted empty - the
+    // entry then starts at its content, same as before this row could also
+    // carry categories/date on their own.
+    if (!author[0] && !categories_html[0] && !date[0]) {
         meta_html = categories_html;
+    } else {
+        // Every epoch's entry-meta template takes the same three slots -
+        // author, categories, date - laid out so the categories land in the
+        // true middle regardless of how long the author name or date string
+        // are: a three-column table on epoch 1/2 (no CSS to rely on), an
+        // equal-thirds flex row on epoch 3, and a plain sequence on -1/0
+        // where neither tables nor CSS are worth leaning on.
+        char *meta_tpl = load_template("entry/entry-meta_epoch%d.html", epoch);
+        if (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE) {
+            // No CSS custom properties here (same reasoning as
+            // category_tags_render()'s own needs_color path), so the
+            // theme's configured author/date colors go straight into
+            // <font color> attributes instead of a hardcoded one - the
+            // category tags already color themselves this way per tag.
+            CmsThemeColors retro;
+            cms_get_theme_colors(request_theme(), &retro);
+            meta_html = meta_tpl
+                ? render_template(meta_tpl, retro.blog_list_item_author, author, categories_html,
+                                   retro.blog_list_item_date, date)
+                : NULL;
+        } else {
+            meta_html = meta_tpl ? render_template(meta_tpl, author, categories_html, date) : NULL;
+        }
+        free(meta_tpl);
+        free(categories_html);
     }
 
     if (!meta_html) return NULL;
@@ -1120,80 +1356,12 @@ char *entry_page(const CmsEntry *entry, int epoch, int page, int *total_pages_ou
         if (spaced) meta_html = spaced;
     }
 
-    if (epoch != EPOCH_WML) {
-        if (total_pages_out) *total_pages_out = 1;
-        char *content_html = entry_page_render_content(entry, epoch);
-        if (!content_html) {
-            free(meta_html);
-            return NULL;
-        }
-        char *result = str_append(meta_html, content_html);
-        free(content_html);
-        return result;
-    }
-
-    // --- WML: group whole blocks into decks under WML_PAGE_BUDGET ---
-    size_t count = 0;
-    char **blocks = render_blocks(entry, epoch, &count);
-    if (!blocks) {
+    char *content_html = entry_page_render_content(entry, epoch);
+    if (!content_html) {
         free(meta_html);
         return NULL;
     }
-
-    // page_starts[k] = index into blocks[] where page k+1 begins. Page 1
-    // always exists even if content_count == 0 (just the meta/title).
-    size_t *page_starts = malloc((count + 1) * sizeof(size_t));
-    int total_pages = 0;
-    if (!page_starts) {
-        free_blocks(blocks, count);
-        free(meta_html);
-        return NULL;
-    }
-
-    page_starts[total_pages++] = 0;
-    size_t running = strlen(meta_html);
-    for (size_t i = 0; i < count; i++) {
-        int at_page_start = (i == page_starts[total_pages - 1]);
-        if (!at_page_start && running + strlen(blocks[i]) > WML_PAGE_BUDGET) {
-            page_starts[total_pages++] = i;
-            running = 0;
-        }
-        running += strlen(blocks[i]);
-    }
-
-    if (total_pages_out) *total_pages_out = total_pages;
-    int cur = page < 1 ? 1 : (page > total_pages ? total_pages : page);
-
-    size_t start = page_starts[cur - 1];
-    size_t end   = (cur < total_pages) ? page_starts[cur] : count;
-
-    char *result = strdup(cur == 1 ? meta_html : "");
-    for (size_t i = start; i < end && result; i++) {
-        result = str_append(result, blocks[i]);
-    }
-
-    // [Prev]/[Next], entry->type/link building the same "/blog/<link>" or
-    // "/page/<link>" URL the route itself answers to.
-    if (result && total_pages > 1) {
-        char nav[600] = "<p>";
-        char piece[300];
-        if (cur > 1) {
-            snprintf(piece, sizeof(piece), "[<a href=\"/%s/%s?page=%d\">Prev</a>] ",
-                      entry->type, entry->link, cur - 1);
-            strncat(nav, piece, sizeof(nav) - strlen(nav) - 1);
-        }
-        if (cur < total_pages) {
-            snprintf(piece, sizeof(piece), "[<a href=\"/%s/%s?page=%d\">Next</a>] ",
-                      entry->type, entry->link, cur + 1);
-            strncat(nav, piece, sizeof(nav) - strlen(nav) - 1);
-        }
-        snprintf(piece, sizeof(piece), "(%d/%d)</p>", cur, total_pages);
-        strncat(nav, piece, sizeof(nav) - strlen(nav) - 1);
-        result = str_append(result, nav);
-    }
-
-    free(page_starts);
-    free_blocks(blocks, count);
-    free(meta_html);
+    char *result = str_append(meta_html, content_html);
+    free(content_html);
     return result;
 }

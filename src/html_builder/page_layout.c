@@ -80,10 +80,16 @@ static char *splice_footer(char *html, int epoch) {
 // wherever the marker is absent, same convention as splice_part(). Reads
 // straight from cms_get_theme_logo_config() (not cms_get_theme_footer(),
 // which is unrelated raw footer markup): LOGO_MODE_IMAGE with a
-// footer_image set renders that <img>; anything else (LOGO_MODE_TEXT,
-// LOGO_MODE_UNSET, or IMAGE with no footer_image saved) renders nothing -
-// there is no raw-markup/on-disk fallback for this field, since it did not
-// exist before CmsLogoConfig.
+// footer_image set renders that <img>. Text is epoch 0's only mode (see
+// CmsLogoConfig's own doc comment), rendered here as the panel's own text
+// or the site's name - even when nothing has ever been saved for it
+// (cfg.mode staying LOGO_MODE_UNSET), since epoch 0 has no on-disk logo
+// file to fall back to (this replaced its hardcoded "Boat Rudder" text).
+// Epoch 3's text mode is deliberately not rendered here: its footer shows
+// that text in its own {{SITE_NAME}} title beside this logo (see
+// splice_footer()), so it would appear twice. LOGO_MODE_UNSET or IMAGE
+// with no footer_image saved, on every other epoch, falls through to the
+// on-disk default below.
 static char *splice_footer_logo(char *html, int epoch) {
     if (!html || !strstr(html, "{{FOOTER_LOGO}}")) return html;
 
@@ -98,6 +104,13 @@ static char *splice_footer_logo(char *html, int epoch) {
         free(site_name);
         img = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
                                request_theme(), epoch, cfg.footer_image, encoded_alt);
+    } else if (epoch == EPOCH_PRESTANDARD) {
+        char *site_name = cms_get_site_name();
+        const char *text = cfg.text[0] ? cfg.text : (site_name ? site_name : "");
+        char encoded[1600];
+        html_encode(encoded, text, sizeof(encoded));
+        free(site_name);
+        img = strdup(encoded);
     }
     if (!img) {
         // Nothing saved via the new panel (or the admin picked epoch 3's
@@ -190,8 +203,18 @@ static char *splice_theme_colors(char *html) {
         "--br-color-home-content-background:%s;--br-color-home-content-text:%s;"
         "--br-color-blog-list-item-background:%s;--br-color-blog-list-item-border:%s;"
         "--br-color-blog-list-item-author:%s;--br-color-blog-list-item-categories:%s;"
+        "--br-color-blog-list-item-categories-hover:%s;"
         "--br-color-blog-list-item-date:%s;"
         "--br-color-footer-logo:%s;--br-color-footer-logo-background:%s;"
+        "--br-color-link-normal:%s;--br-color-link-hover:%s;"
+        "--br-color-link-visited:%s;--br-color-link-active:%s;"
+        "--br-color-table-header:%s;--br-color-table-border:%s;"
+        "--br-color-table-row-a:%s;--br-color-table-row-b:%s;"
+        "--br-color-code-background:%s;--br-color-code-text:%s;"
+        "--br-color-code-keyword:%s;--br-color-code-string:%s;"
+        "--br-color-code-comment:%s;--br-color-code-number:%s;"
+        "--br-color-code-variable:%s;--br-color-code-tag:%s;"
+        "--br-color-code-line-number:%s;"
         "}%s</style>",
         colors.navbar_background, colors.navbar_menu_normal,
         colors.navbar_menu_hover, colors.navbar_menu_active,
@@ -199,8 +222,16 @@ static char *splice_theme_colors(char *html) {
         colors.home_content_background, colors.home_content_text,
         colors.blog_list_item_background, colors.blog_list_item_border,
         colors.blog_list_item_author, colors.blog_list_item_categories,
+        colors.blog_list_item_categories_hover,
         colors.blog_list_item_date,
         colors.footer_logo, colors.footer_logo_background,
+        colors.link_normal, colors.link_hover, colors.link_visited, colors.link_active,
+        colors.table_header, colors.table_border, colors.table_row_a, colors.table_row_b,
+        colors.code_background, colors.code_text,
+        colors.code_keyword, colors.code_string,
+        colors.code_comment, colors.code_number,
+        colors.code_variable, colors.code_tag,
+        colors.code_line_number,
         font_css ? font_css : "");
     free(font_css);
 
@@ -210,30 +241,56 @@ static char *splice_theme_colors(char *html) {
     return result;
 }
 
-// Replaces {{COLOR_BACKGROUND}}/{{COLOR_TEXT}}/{{COLOR_ACCENT}} (epoch 1/2's
-// layout only - epoch 3 has its own {{THEME_COLORS}} CSS block above, and
-// epoch -1/0 have no color model, so those layouts simply lack these
-// markers and this is a no-op) with plain hex values from the *same*
-// cms_get_theme_colors() epoch 3 reads - one shared palette, not a
-// separate one per epoch (see cms_themes.h), with exactly one exception:
-// {{COLOR_BACKGROUND}} on epoch 1 takes body_background_epoch1 instead of
-// body_background, since a freely-picked color can render dithered rather
-// than solid on the indexed-color displays epoch 1's real browsers predate
-// (see cms_themes.h's own doc comment on that field). Epoch 1/2 have no CSS
-// custom properties (epoch 1: no CSS at all; epoch 2's inline <style>
-// predates CSS3 variables), so colors go straight into HTML attributes
-// (bgcolor/text/link/vlink) as substituted text, not injected CSS. There
-// is no epoch 1/2 concept of "hover"/"active" menu states, so
-// {{COLOR_ACCENT}} (link/vlink - appears twice per layout, hence two
-// passes below) uses navbar-menu-normal, the closest of the 13 tokens to
-// a generic link color; {{COLOR_TEXT}} uses home-content-text (body text
-// has no dedicated token of its own in the Figma palette - home-content-
-// text is the closest match, being the main visible text color on these
-// epochs' pages).
+// Replaces {{COLOR_BACKGROUND}}/{{COLOR_TEXT}}/{{COLOR_LINK}}/{{COLOR_VLINK}}/
+// {{COLOR_ALINK}}/{{COLOR_LINK_HOVER}}/{{COLOR_MENU_NORMAL}}/
+// {{COLOR_MENU_ACTIVE}}/{{COLOR_MENU_HOVER}}/{{COLOR_CATEGORIES_HOVER}}
+// (epoch 1/2's layout only -
+// epoch 3 has its own {{THEME_COLORS}} CSS block above, and epoch -1/0 have
+// no color model, so those layouts simply lack these markers and this is a
+// no-op) with plain hex values from the *same* cms_get_theme_colors() epoch
+// 3 reads - one shared palette, not a separate one per epoch (see
+// cms_themes.h), with exactly one exception: {{COLOR_BACKGROUND}} on epoch 1
+// takes body_background_epoch1 instead of body_background, since a
+// freely-picked color can render dithered rather than solid on the
+// indexed-color displays epoch 1's real browsers predate (see
+// cms_themes.h's own doc comment on that field). Epoch 1 has no CSS at all,
+// so none of the {{COLOR_LINK_HOVER}}/{{COLOR_MENU_*}} tokens ever appear in
+// its layout - link/vlink/alink go straight into <body> attributes there
+// (those predate CSS entirely, HTML 2.0/Netscape 1.1, so real epoch-1
+// browsers still honor them), and the menu's own colors go straight into a
+// <font color> attribute per item instead (see menu.c). Epoch 2's range
+// (Netscape 4 through IE10/Firefox 3/Chrome 9) does have CSS1, so its
+// layout carries real `a:hover`/`#boat-rudder-navbar-menu-item(-selected)`/
+// `.boat-rudder__menu__item:hover` rules instead of an inline attribute -
+// see menu.c's own comment for the several rounds of real-browser testing
+// (IE5/Windows 3.11 vs. 95) that shaped exactly which selector forms those
+// are (and which plausible-looking ones turned out not to work).
+// {{COLOR_LINK}}/
+// {{COLOR_VLINK}}/{{COLOR_ALINK}}/{{COLOR_LINK_HOVER}} take link-normal/
+// link-visited/link-active/link-hover - the generic (non-menu) link colors,
+// kept independent of the nav bar's own menu-normal/hover/active so an
+// admin can style one without moving the other; {{COLOR_MENU_NORMAL}}/
+// {{COLOR_MENU_ACTIVE}}/{{COLOR_MENU_HOVER}} take navbar-menu-normal/
+// active/hover themselves, coloring the menu, not generic content links.
+// {{COLOR_TEXT}} uses home-content-text (body text has no dedicated token
+// of its own in the Figma palette - home-content-text is the closest
+// match, being the main visible text color on these epochs' pages).
+// {{COLOR_CATEGORIES}}/{{COLOR_CATEGORIES_HOVER}} take blog-list-item-
+// categories/-hover, for #boat-rudder-entry-category(:hover) in epoch 2's
+// layout (see category_epoch2.html and category_tags.c's own comment) - an
+// id, not the boat-rudder__entry-category class epoch 3 uses, and no inline
+// color attribute at all: real-browser testing (IE5/Windows 3.11) showed an
+// inline `style="color:..."` there can never be overridden on :hover, not
+// even with `!important`, same as the navbar's own menu items (see menu.c).
+// Epoch 1 predates CSS entirely, so neither token is used there.
 static char *splice_retro_colors(char *html, int epoch) {
     if (!html) return NULL;
     if (!strstr(html, "{{COLOR_BACKGROUND}}") && !strstr(html, "{{COLOR_TEXT}}") &&
-        !strstr(html, "{{COLOR_ACCENT}}"))
+        !strstr(html, "{{COLOR_LINK}}") && !strstr(html, "{{COLOR_VLINK}}") &&
+        !strstr(html, "{{COLOR_ALINK}}") && !strstr(html, "{{COLOR_LINK_HOVER}}") &&
+        !strstr(html, "{{COLOR_MENU_NORMAL}}") && !strstr(html, "{{COLOR_MENU_ACTIVE}}") &&
+        !strstr(html, "{{COLOR_MENU_HOVER}}") && !strstr(html, "{{COLOR_CATEGORIES}}") &&
+        !strstr(html, "{{COLOR_CATEGORIES_HOVER}}"))
         return html;
 
     CmsThemeColors colors;
@@ -242,23 +299,73 @@ static char *splice_retro_colors(char *html, int epoch) {
     const char *background = (epoch == EPOCH_EARLY) ? colors.body_background_epoch1
                                                       : colors.body_background;
 
-    char *step = str_replace_first(html, "{{COLOR_BACKGROUND}}", background);
+    char *step = str_replace_all(html, "{{COLOR_BACKGROUND}}", background);
     free(html);
     if (!step) return NULL;
 
-    char *next = str_replace_first(step, "{{COLOR_TEXT}}", colors.home_content_text);
+    char *next = str_replace_all(step, "{{COLOR_TEXT}}", colors.home_content_text);
     free(step);
     if (!next) return NULL;
     step = next;
 
-    next = str_replace_first(step, "{{COLOR_ACCENT}}", colors.navbar_menu_normal);
+    next = str_replace_all(step, "{{COLOR_LINK}}", colors.link_normal);
     free(step);
     if (!next) return NULL;
     step = next;
 
-    next = str_replace_first(step, "{{COLOR_ACCENT}}", colors.navbar_menu_normal);
+    next = str_replace_all(step, "{{COLOR_VLINK}}", colors.link_visited);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_ALINK}}", colors.link_active);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_LINK_HOVER}}", colors.link_hover);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_MENU_NORMAL}}", colors.navbar_menu_normal);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_MENU_ACTIVE}}", colors.navbar_menu_active);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_MENU_HOVER}}", colors.navbar_menu_hover);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_CATEGORIES}}", colors.blog_list_item_categories);
+    free(step);
+    if (!next) return NULL;
+    step = next;
+
+    next = str_replace_all(step, "{{COLOR_CATEGORIES_HOVER}}", colors.blog_list_item_categories_hover);
     free(step);
     return next;
+}
+
+// Every remaining "{{SITE_NAME}}" in the page - a WML card's title, an
+// image's alt text - becomes the configured site name (site_settings),
+// HTML-escaped. After splice_footer(), which fills epoch 3's footer title
+// with its logo text instead.
+static char *splice_site_name(char *html) {
+    if (!html || !strstr(html, "{{SITE_NAME}}")) return html;
+    char *site_name = cms_get_site_name();
+    char encoded[512];
+    html_encode(encoded, site_name ? site_name : "", sizeof(encoded));
+    free(site_name);
+    char *result = str_replace_all(html, "{{SITE_NAME}}", encoded);
+    free(html);
+    return result;
 }
 
 char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
@@ -269,6 +376,7 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
     fragment_html = splice_footer_logo(fragment_html, epoch);
     fragment_html = splice_part(fragment_html, "{{LIGHTBOX}}",   "lightbox",   epoch);
     fragment_html = splice_part(fragment_html, "{{HOME-MODAL}}", "home-modal", epoch);
+    fragment_html = splice_site_name(fragment_html);
     if (!fragment_html) return NULL;
 
     char *path   = generate_url_theme("layout/layout_epoch%d.html", epoch);
@@ -279,9 +387,22 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
         return NULL;
     }
 
-    char *title_tag = build_title_tag(page_title);
-    char *titled    = title_tag ? str_replace_first(layout, "{{PAGE_TITLE}}", title_tag) : NULL;
-    free(title_tag);
+    // A title may name the site as "{{SITE_NAME}} - Blog" (http_router.c's
+    // routes do) rather than hardcode it - resolved here, for every epoch.
+    char *resolved_title = NULL;
+    if (page_title && strstr(page_title, "{{SITE_NAME}}")) {
+        char *site_name = cms_get_site_name();
+        resolved_title = str_replace_all(page_title, "{{SITE_NAME}}", site_name ? site_name : "");
+        free(site_name);
+        if (resolved_title) page_title = resolved_title;
+    }
+
+    // {{PAGE_TITLE}} is the title as text, escaped - each layout puts it in
+    // its own element: <title> for HTML, the <card>'s title attribute for WML.
+    char encoded_title[512];
+    html_encode(encoded_title, page_title ? page_title : "", sizeof(encoded_title));
+    free(resolved_title);
+    char *titled = str_replace_first(layout, "{{PAGE_TITLE}}", encoded_title);
     free(layout);
     if (!titled) {
         free(fragment_html);

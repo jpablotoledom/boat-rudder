@@ -80,6 +80,30 @@
     navbarMenu.classList.toggle('menu--open');
   });
 
+  // Below 600px the options bar (theme + language) has no room next to the
+  // hamburger and title, so both selectors move inside the hamburger dropdown
+  // and go back to the bar on wider screens. The same nodes are moved, so
+  // their ids and the drop-down handlers below keep working.
+  const optionsBar = document.getElementById('optionsMenu');
+  const optionsMq = window.matchMedia('(max-width: 599px)');
+  let menuOptions = null;
+  const placeOptions = () => {
+    if (!optionsBar) return;
+    if (optionsMq.matches) {
+      if (!menuOptions) {
+        menuOptions = document.createElement('div');
+        menuOptions.className = 'boat-rudder__navbar__menu_options';
+      }
+      while (optionsBar.firstElementChild) menuOptions.appendChild(optionsBar.firstElementChild);
+      if (menuOptions.children.length) navbarMenu.appendChild(menuOptions);
+    } else if (menuOptions) {
+      while (menuOptions.firstElementChild) optionsBar.appendChild(menuOptions.firstElementChild);
+      menuOptions.remove();
+    }
+  };
+  placeOptions();
+  optionsMq.addEventListener('change', placeOptions);
+
   // Language drop-down. Every entry is a plain link to /language/set, so this
   // only toggles visibility - with JS off the same links live on /language.
   const langBtn = document.getElementById('navbarLangBtn');

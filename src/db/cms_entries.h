@@ -32,6 +32,7 @@ typedef struct {
 typedef struct {
     char *link;
     char *type; // "page" | "blog" | ...
+    bool  enabled; // false = a draft (only ever returned with include_drafts)
 
     char *header_image_url;
     char *header_title;
@@ -50,14 +51,16 @@ typedef struct {
     size_t content_count; // sorted by content[].order
 } CmsEntry;
 
-// Looks up db.entries.findOne({link, enabled: true}) and fills *out with the
-// document's header and content blocks, with all map<lang,string> fields
-// resolved to `lang` (Boat Rudder's configs/settings.conf "Eng"/"Esp"
-// convention, mapped internally to ISO 639-1 "en"/"es", falling back to
-// "en"). Returns 1 and fills *out on success, 0 if not found, mongodb is not
-// ready, or on a DB error. *out is zero-initialized on failure and must be
-// passed to cms_entry_free() in either case.
-int cms_get_entry_by_link(const char *link, const char *lang, CmsEntry *out);
+// Looks up db.entries.findOne({link, enabled: true}) - or just {link} when
+// include_drafts is set (a signed-in dashboard user previewing a draft) - and
+// fills *out with the document's header and content blocks, with all
+// map<lang,string> fields resolved to `lang` (Boat Rudder's
+// configs/settings.conf "Eng"/"Esp" convention, mapped internally to ISO
+// 639-1 "en"/"es", falling back to "en"). Returns 1 and fills *out on
+// success, 0 if not found, mongodb is not ready, or on a DB error. *out is
+// zero-initialized on failure and must be passed to cms_entry_free() in
+// either case.
+int cms_get_entry_by_link(const char *link, const char *lang, int include_drafts, CmsEntry *out);
 
 // Frees every malloc'd field of *entry and zeroes it.
 void cms_entry_free(CmsEntry *entry);

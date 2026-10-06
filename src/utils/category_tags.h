@@ -16,4 +16,9 @@
 // caller must free() it.
 char *category_tags_render(char **links, char **names, size_t count, int epoch);
 
+// Same, for the blog cards on home and /blog: uses the epoch's
+// category-list template when it has one (name only, no link) and falls back
+// to category_tags_render() otherwise.
+char *category_tags_render_list(char **links, char **names, size_t count, int epoch);
+
 #endif // CATEGORY_TAGS_H

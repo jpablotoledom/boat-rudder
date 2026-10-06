@@ -60,6 +60,7 @@ set(SOURCES
     src/utils/config_loader.c
     src/utils/image_size.c
     src/utils/category_tags.c
+    src/utils/code_highlight.c
     src/html_builder/page_layout.c
     src/utils/log.c
     src/utils/http_utils.c
@@ -72,6 +73,11 @@ set(SOURCES
     src/utils/qr_generator/qr_generator.c
     src/utils/wbmp_writer.c
     src/utils/image_convert/image_convert.c
+    src/utils/request_charset.c
+    src/utils/request_code_lines.c
+    src/utils/request_wml.c
+    src/wap_gateway/wap_gateway.c
+    src/wap_gateway/wbxml.c
     src/utils/request_lang.c
     src/utils/request_theme.c
     src/utils/theme_catalog.c
@@ -104,6 +110,7 @@ set(SOURCES
     src/modules/analytics/analytics.c
     src/modules/analytics/geoip.c
     src/modules/analytics_view/analytics_view.c
+    src/modules/analytics_view/country_continent.c
 
     # Web server utilities (multipart)
     src/web_server/utils/multipart_parser.c
@@ -120,6 +127,7 @@ set(SOURCES
     src/db/cms_users_admin.c
     src/db/cms_media.c
     src/db/cms_media_galleries.c
+    src/db/short_links.c
     src/db/cms_site_settings.c
     src/db/cms_themes.c
     src/db/cms_fonts.c

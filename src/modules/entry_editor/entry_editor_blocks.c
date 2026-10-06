@@ -125,9 +125,6 @@ char *entry_editor_render_block(const CmsContentBlockEdit *block,
     if (strcmp(block->type, "generic") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/generic_epoch%d.html",
                                    langs, lang_count, epoch);
-    if (strcmp(block->type, "image-paragraph") == 0)
-        return render_extra_block(block, "dashboard/entries/editor/blocks/image-paragraph_epoch%d.html",
-                                   langs, lang_count, epoch);
     if (strcmp(block->type, "table") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/table_epoch%d.html",
                                    langs, lang_count, epoch);

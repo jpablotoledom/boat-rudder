@@ -11,11 +11,13 @@ a {
   text-decoration: none;
 }
 
-a:link,
-a:visited,
-a:active {
-  color: var(--br-color-navbar-menu-normal, #ffffff);
-}
+/* Generic in-page links (paragraph text, captions, anything not the nav
+   bar or a dedicated "link"/"gallery" block, which carry their own color)
+   - kept separate from the navbar's own menu colors, see cms_themes.h. */
+a:link    { color: var(--br-color-link-normal, #ffffff); }
+a:visited { color: var(--br-color-link-visited, #ffffff); }
+a:hover   { color: var(--br-color-link-hover, #98ffdd); }
+a:active  { color: var(--br-color-link-active, #ffffff); }
 
 h1 {
   text-align: left;
@@ -25,7 +27,15 @@ h1 {
 }
 
 h2 {
-  margin: 16px 0;
+  font-size: 24px;
+  margin: 30px 0 16px 0;
+  border-bottom: 1px solid #4a4a4a;
+  padding-bottom: 12px;
+}
+
+h3 {
+  font-size: 20px;
+  margin: 30px 0 16px 0;
 }
 
 /*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
@@ -90,7 +100,6 @@ h2 {
   z-index: 2;
   margin: 13vh auto;
   transition: all 1s;
-  text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
 }
 
 .boat-rudder__navbar__menu {
@@ -120,6 +129,7 @@ h2 {
 
 .boat-rudder__navbar__menu_item a {
   color: var(--br-color-navbar-menu-normal, #ffffff);
+  text-shadow: 1px 1px #467a8e;
 }
 
 .boat-rudder__navbar__menu_item a:hover {
@@ -132,6 +142,7 @@ h2 {
 
 .boat-rudder__navbar__menu_item--selected a {
   color: var(--br-color-navbar-menu-active, #00ffab);
+  text-shadow: 1px 1px #98009d;
 }
 
 /* The mobile dropdown's copy of the user link (menu-user-mobile_epoch3.html)
@@ -285,6 +296,7 @@ h2 {
   padding: 10px;
   border: 1px solid #7b0a74;
   text-align: left;
+  vertical-align: top;
 }
 
 .boat-rudder__dashboard__form {
@@ -319,11 +331,11 @@ h2 {
   margin-top: 10px;
 }
 
-/* .boat-rudder__dashboard__inline-form {
+.boat-rudder__dashboard__inline-form {
   display: flex;
   align-items: center;
   gap: 10px;
-} */
+}
 
 .boat-rudder__dashboard__inline-form form {
   margin: 0;
@@ -484,20 +496,20 @@ h2 {
 }
 
 .boat-rudder__home-content__item__byline-date {
-  color: #fba8f6;
+  color: var(--br-color-blog-list-item-date, #e68e4e);
 }
 
 /* HOME BLOG */
 .boat-rudder__home-blog {
   width: 100%;
   display: flex;
+  background-color: var(--br-color-body-background, #241144);
   background-image: url('/themes/dark/assets/blog-list/matrix-grid_epoch3.gif');
   background-repeat: repeat-y;
-  background-size: contain;
   display: flex;
   justify-content: center;
-  background-attachment: fixed;
-  background-position: center;
+  background-position: center top;
+  background-size: 100% auto;
 }
 
 .boat-rudder__home-blog__container {
@@ -516,14 +528,18 @@ h2 {
 
 .boat-rudder__home-blog__item__image {
   width: 180px;
+  height: 100%;
+  min-height: 135px;
   flex-shrink: 0;
   overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
-.boat-rudder__home-blog__item__image img {
-  width: 100%;
+.boat-rudder__home-blog__item > a {
   display: block;
-  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .boat-rudder__home-blog__item__container {
@@ -545,12 +561,6 @@ h2 {
 
 .boat-rudder__home-blog__item__byline-date {
   color: var(--br-color-blog-list-item-date, #e68e4e);
-}
-
-.boat-rudder__home-blog__item__byline-categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .boat-rudder__home-blog__empty {
@@ -598,10 +608,10 @@ h2 {
   height: 280px;
   background-image: url('/themes/dark/assets/footer/grid_epoch3.jpg');
   background-repeat: no-repeat;
-  background-size: cover;
+  background-position: center top;
+  background-size: 100% auto;
   display: flex;
   align-items: end;
-  background-position: center;
 }
 
 .boat-rudder__footer-title {
@@ -639,12 +649,12 @@ h2 {
 
 .boat-rudder__entry-header__byline-owner,
 .boat-rudder__entry-byline-owner {
-  color: #f2e200;
+  color: var(--br-color-blog-list-item-author, #dfd106);
 }
 
 .boat-rudder__entry-header__byline-date,
 .boat-rudder__entry-byline-date {
-  color: #fba8f6;
+  color: var(--br-color-blog-list-item-date, #e68e4e);
 }
 
 .boat-rudder__entry-byline {
@@ -670,34 +680,44 @@ h2 {
 
 .boat-rudder__entry-meta {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   margin: 10px 0 20px;
 }
 
+/* Equal thirds, so the categories in the middle column land in the true
+   center of the row no matter how long the author name or date are. */
 .boat-rudder__entry-header__author {
+  flex: 1;
+  text-align: left;
   font-size: 0.85em;
-  color: #888;
+  color: var(--br-color-blog-list-item-author, #dfd106);
 }
 
 .boat-rudder__entry-header__categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  text-align: center;
   margin: 0;
-  justify-content: flex-end;
+  color: var(--br-color-blog-list-item-categories, #888888);
+  font-size: 0.85em;
 }
 
-.boat-rudder__entry-category {
-  background-color: var(--br-color-blog-list-item-categories, #98ffdd);
-  color: #ffffff;
-  padding: 4px 10px;
-  border-radius: 12px;
+.boat-rudder__entry-header__date {
+  flex: 1;
+  text-align: right;
+  color: var(--br-color-blog-list-item-date, #e68e4e);
   font-size: 0.85em;
+  white-space: nowrap;
+}
+
+a.boat-rudder__entry-category {
+  color: var(--br-color-blog-list-item-categories, #888888);
   text-decoration: none;
 }
 
-.boat-rudder__entry-category:hover { background-color: #2a7c00; }
+a.boat-rudder__entry-category:hover {
+  color: var(--br-color-blog-list-item-categories-hover, #ffffff);
+}
 
 /* ============================================================
    GALLERY (public)
@@ -747,50 +767,6 @@ h2 {
   grid-column-start: span 2;
 }
 
-/* "+N more" overlay */
-.boat-rudder__gallery-item--more {
-  position: relative; cursor: pointer;
-}
-.boat-rudder__gallery-more-overlay {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; font-weight: 700; color: #fff;
-  border-radius: 4px;
-}
-.boat-rudder__gallery-item--more:hover .boat-rudder__gallery-more-overlay {
-  background: rgba(0,0,0,0.4);
-}
-
-/* GALLERY LIGHTBOX */
-.boat-rudder__gallery-lightbox {
-  display: none; position: fixed; z-index: 2000;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.92);
-  align-items: center; justify-content: center;
-}
-.boat-rudder__gallery-lightbox__img {
-  max-width: 90vw; max-height: 85vh; object-fit: contain;
-  border-radius: 4px;
-}
-.boat-rudder__gallery-lightbox__close {
-  position: absolute; top: 16px; right: 24px;
-  color: #aaa; font-size: 32px; cursor: pointer; z-index: 2001;
-  line-height: 1;
-}
-.boat-rudder__gallery-lightbox__close:hover { color: #fff; }
-.boat-rudder__gallery-lightbox__prev,
-.boat-rudder__gallery-lightbox__next {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  background: rgba(255,255,255,0.1); border: none; color: #ddd;
-  font-size: 28px; padding: 16px 12px; cursor: pointer;
-  border-radius: 4px; z-index: 2001;
-}
-.boat-rudder__gallery-lightbox__prev { left: 16px; }
-.boat-rudder__gallery-lightbox__next { right: 16px; }
-.boat-rudder__gallery-lightbox__prev:hover,
-.boat-rudder__gallery-lightbox__next:hover { background: rgba(255,255,255,0.2); color: #fff; }
-
 /* ============================================================
    ENTRY EDITOR (boat-rudder__entry-editor)
    ============================================================ */
@@ -806,7 +782,7 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 /* Top bar */
 .boat-rudder__entry-editor__topbar {
   position: fixed; top: 0; left: 0; width: 100%; height: 44px;
-  background: #1a1a1a; border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid #3a3a3a;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 16px; z-index: 200; box-sizing: border-box;
 }
@@ -908,7 +884,7 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 
 /* Main content area */
 .boat-rudder__entry-editor__main {
-  flex: 1; overflow-y: auto; padding: 16px 20px; background: #1a1a1a;
+  flex: 1; overflow-y: auto; padding: 16px 20px;
 }
 
 /* Metadata form */
@@ -955,10 +931,10 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 
 .boat-rudder__entry-editor__meta-btn {
   background: #1a1a1a; color: #ccc; border: 1px solid #3a3a3a;
-  padding: 6px 14px; font-size: 12px; border-radius: 3px;
-  cursor: pointer; width: 100%; margin-top: 6px; text-align: center;
+  padding: 3px 14px; font-size: 12px; border-radius: 3px;
+  cursor: pointer; width: 100%; text-align: center;
 }
-.boat-rudder__entry-editor__meta-btn:hover { background: #333; color: #fff; }
+.boat-rudder__entry-editor__meta-btn:hover { background: #333; color: #fff; border-color: #2563eb;}
 
 .boat-rudder__entry-editor__sidebar-divider { border: none; border-top: 1px solid #2a2a2a; margin: 12px 0; }
 
@@ -995,20 +971,49 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 .boat-rudder__entry-editor__block__header { display: none; }
 .boat-rudder__entry-editor__block__body { display: none; }
 .boat-rudder__entry-editor__block__preview { padding: 4px 14px; min-height: 10px; }
+/* A floated image's preview deliberately escapes its own block, so the
+   following blocks' previews wrap around it as the published page does; the
+   block list contains it at the end, and a block being edited clears it so
+   its form never wraps around a picture. */
+#entryBlocks { display: flow-root; }
+/* Every block is position: relative, and positioned boxes paint over floats -
+   so the next block's (transparent, full-width) box would sit on top of the
+   floated picture and take its clicks. Lift the figure above it; wrapping is
+   unaffected. */
+.boat-rudder__entry-editor__block__preview .boat-rudder__entry-image--float-left,
+.boat-rudder__entry-editor__block__preview .boat-rudder__entry-image--float-right {
+  position: relative; z-index: 1;
+  /* The page's 4px, plus the 6px the editor adds between this figure and
+     the wrapped text that the page doesn't have: this block's bottom border
+     (1px), the next block's top border (1px) and its preview padding (4px). */
+  margin-top: 10px;
+}
+/* On the page a floated figure's block takes no height of its own; here its
+   preview's padding and min-height would push the next block (and its text)
+   down while the picture stays up. */
+.boat-rudder__entry-editor__block__preview:has(> .boat-rudder__entry-image--float-left),
+.boat-rudder__entry-editor__block__preview:has(> .boat-rudder__entry-image--float-right) {
+  padding-top: 0; padding-bottom: 0; min-height: 0;
+}
 
 /* Hover: subtle left accent */
 .boat-rudder__entry-editor__block:not(.boat-rudder__entry-editor__block--editing):hover {
-  background: rgba(255,255,255,0.025);
-  border-left: 2px solid #3a3a3a;
+  background: rgba(141, 141, 141, 0.24);
+  border-left: 2px solid #6d6d6d;
 }
 
 /* Edit mode: full block appearance */
 .boat-rudder__entry-editor__block--editing {
+  clear: both;
   cursor: default;
   background: #222; border: 1px solid #2563eb;
   border-radius: 5px; margin-bottom: 10px;
 }
 .boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__header { display: flex; }
+/* The header bar drags the block from any empty spot (setupDragHandles());
+   its own controls keep their normal pointer. */
+.boat-rudder__entry-editor__block__header { cursor: grab; }
+.boat-rudder__entry-editor__block__header :is(button, input, select, a, label) { cursor: pointer; }
 .boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__body { display: block; }
 .boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__preview { display: none; }
 
@@ -1033,7 +1038,6 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 .boat-rudder__entry-editor__block__type-label.type-youtube-embed   { color: #f87171; }
 .boat-rudder__entry-editor__block__type-label.type-code-text       { color: #fbbf24; }
 .boat-rudder__entry-editor__block__type-label.type-generic         { color: #c084fc; }
-.boat-rudder__entry-editor__block__type-label.type-image-paragraph { color: #2dd4bf; }
 .boat-rudder__entry-editor__block__type-label.type-table           { color: #a3e635; }
 .boat-rudder__entry-editor__block__type-label.type-social-networks { color: #fb923c; }
 
@@ -1051,7 +1055,7 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 
 /* Trash button */
 .boat-rudder__entry-editor__block__trash-btn {
-  background: none; border: none; color: #555; font-size: 13px;
+  background: none; border: none; color: #ddd; font-size: 16px;
   cursor: pointer; padding: 1px 5px 1px 2px; line-height: 1;
   opacity: 0; transition: opacity 0.15s, color 0.15s;
 }
@@ -1067,13 +1071,22 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 
 /* Move up/down buttons */
 .boat-rudder__entry-editor__block__move-btn {
-  background: none; border: none; color: #555; font-size: 14px;
-  cursor: pointer; padding: 1px 4px; border-radius: 3px; line-height: 1;
+  background: none; border: none; color: #dddddd; font-size: 16px;
+  cursor: pointer; padding: 3px 4px; border-radius: 3px; line-height: 1;
 }
 .boat-rudder__entry-editor__block__move-btn:hover { background: #383838; color: #aaa; }
 
+/* Paragraph Split / Merge (header actions, paragraph blocks only) */
+.boat-rudder__entry-editor__para-btn {
+  background: #1a1a1a; border: 1px solid #3a3a3a; color: #999;
+  padding: 3px 14px; font-size: 11px; border-radius: 3px;
+  cursor: pointer; line-height: 1.4; white-space: nowrap;
+}
+.boat-rudder__entry-editor__para-btn:hover:not(:disabled) { border-color: #2563eb; color: #fff; background: #333; }
+.boat-rudder__entry-editor__para-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
 /* Drag handle in header */
-.boat-rudder__entry-editor__block__drag { color: #444; font-size: 15px; cursor: grab; padding: 0 4px; user-select: none; }
+.boat-rudder__entry-editor__block__drag { color: #ddd; font-size: 16px; cursor: grab; padding: 0 4px; user-select: none; }
 
 .boat-rudder__entry-editor__block__body { padding: 10px 12px; }
 
@@ -1112,7 +1125,7 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
 
 /* Rich text editor (contenteditable) */
 .boat-rudder__entry-editor__richtext {
-  width: 100%; background: #1a1a1a; border: 1px solid #333;
+  width: 100%; background-color: var(--br-color-body-background, #241144); border: 1px solid #333;
   color: #d4d4d4; padding: 8px 10px; font-size: 14px; line-height: 1.7;
   border-radius: 3px; min-height: 80px; font-family: inherit;
   outline: none; cursor: text; box-sizing: border-box;
@@ -1157,6 +1170,27 @@ body.is-dragging { cursor: grabbing !important; user-select: none; }
   cursor: pointer; width: auto !important; margin: 0;
 }
 .boat-rudder__entry-editor__toolbar__select:hover { border-color: #666; color: #fff; }
+
+/* Table block editor */
+.boat-rudder__entry-editor__table-editor { overflow-x: auto; }
+.boat-rudder__entry-editor__table-row {
+  display: flex; align-items: stretch; min-width: max-content;
+}
+.boat-rudder__entry-editor__table-row + .boat-rudder__entry-editor__table-row {
+  border-top: 1px solid #2a2a2a;
+}
+.boat-rudder__entry-editor__table-cell {
+  min-width: 80px; flex: 1;
+  background: #1a1a1a; border: none; border-right: 1px solid #2a2a2a;
+  color: #d4d4d4; padding: 6px 8px; font-size: 13px;
+  margin: 0; box-sizing: border-box; outline: none;
+}
+.boat-rudder__entry-editor__table-cell:last-child { border-right: none; }
+.boat-rudder__entry-editor__table-cell:focus { background: #0f2744; color: #fff; }
+.boat-rudder__entry-editor__table-cell--header {
+  background: #1e2d3d; color: #93c5fd;
+  font-weight: 600; border-bottom: 2px solid #2563eb;
+}
 
 /* Source editor (HTML view) */
 .boat-rudder__entry-editor__source-editor {
@@ -1226,10 +1260,16 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 .boat-rudder__entry-editor__preview__image { text-align: center; margin: 8px 0; }
 .boat-rudder__entry-editor__preview__image img { max-width: 100%; height: auto; border-radius: 3px; }
 .boat-rudder__entry-editor__preview__image figcaption { font-style: italic; color: #888; font-size: 13px; margin-top: 4px; }
-.boat-rudder__entry-editor__preview__byline { font-size: 13px; color: #888; margin: 4px 0; }
-.boat-rudder__entry-editor__preview__byline-author { color: #f2e200; }
-.boat-rudder__entry-editor__preview__byline-date { color: #fba8f6; margin-left: 12px; }
+.boat-rudder__entry-editor__preview__byline { font-size: 13px; color: #888; margin: 4px 0; display:flex; justify-content: space-between; }
+.boat-rudder__entry-editor__preview__byline-author { color: var(--br-color-blog-list-item-author, #dfd106); }
+.boat-rudder__entry-editor__preview__byline-date { color: var(--br-color-blog-list-item-date, #e68e4e); margin-left: 12px; }
 .boat-rudder__entry-editor__preview__empty { color: #3a3a3a; font-size: 12px; font-style: italic; }
+.boat-rudder__entry-editor__preview__table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.boat-rudder__entry-editor__preview__table td,
+.boat-rudder__entry-editor__preview__table th {
+  border: 1px solid #333; padding: 5px 8px; color: #d4d4d4; text-align: left;
+}
+.boat-rudder__entry-editor__preview__table th { background: #1e2d3d; color: #93c5fd; font-weight: 600; }
 
 /* + Add block */
 .boat-rudder__entry-editor__add-block { position: relative; margin-top: 6px; }
@@ -1245,6 +1285,8 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
   padding: 5px; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
 .boat-rudder__entry-editor__add-block__dropdown.open { display: block; }
+/* Opened downward when there's no room above the button (see toggleAddBlockDropdown()). */
+.boat-rudder__entry-editor__add-block__dropdown--down { bottom: auto; top: calc(100% + 4px); }
 .boat-rudder__entry-editor__add-block__option {
   display: block; width: 100%; background: none; border: none;
   color: #bbb; text-align: left; padding: 7px 10px;
@@ -1263,25 +1305,29 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 /* ============================================================
    MODAL
    ============================================================ */
+/* The photo viewer opens on top of other modals too (the media picker). */
+#imageModal { z-index: 1100; }
 .boat-rudder__modal {
   display: none; background-color: rgba(0,0,0,0.5);
-  position: fixed; z-index: 1000; left: 0; top: 0;
-  width: 100vw; height: 100vh;
+  /* inset rather than 100vw/100vh: 100vw counts a page scrollbar too, which
+     widens the modal past the visible area and shifts its center right. */
+  position: fixed; z-index: 1000; inset: 0;
   align-items: center; justify-content: center;
 }
 .boat-rudder__modal-overlay {
-  position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+  position: absolute; inset: 0; background: rgba(72, 72, 72, 0.84);
 }
 .boat-rudder__modal-content {
   position: relative; background: #2f2f2f; color: #f0f0f0;
-  border-radius: 12px; width: 80vw; height: 80vh;
+  border-radius: 12px; width: 90vw; height: 90vh;
   display: flex; flex-direction: column; overflow: hidden;
   z-index: 1; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  padding: 1vh 1vw;
+  box-sizing: border-box;
+  max-width: 1150px; max-height: 850px; margin: auto;
 }
 .boat-rudder__modal-close {
-  position: absolute; right: 10px; top: 10px;
-  cursor: pointer; font-size: 20px; z-index: 2; color: #aaa;
+  position: absolute; right: 10px; top: 2px;
+  cursor: pointer; font-size: 30px; z-index: 2; color: #aaa;
 }
 .boat-rudder__modal-close:hover { color: #fff; }
 
@@ -1387,6 +1433,25 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
   cursor: pointer; border-radius: 2px;
 }
 .boat-rudder__media__select-btn:hover { background: #9d0d95; }
+.boat-rudder__media__select-btn + .boat-rudder__media__select-btn { margin-left: 8px; }
+.boat-rudder__media__select-btn--danger { background: #3a0000; }
+.boat-rudder__media__select-btn--danger:hover { background: #5a0000; color: #f87171; }
+
+.boat-rudder__media__move-picker {
+  margin: 0 12px 10px; padding: 10px 12px;
+  background: #111; border: 1px solid #7b0a74; border-radius: 3px;
+}
+.boat-rudder__media__move-picker-title {
+  font-size: 12px; font-weight: 700; color: #c084fc; margin-bottom: 6px;
+}
+.boat-rudder__media__move-picker-list {
+  list-style: none; margin: 0 0 8px; padding: 0;
+  max-height: 160px; overflow-y: auto;
+}
+.boat-rudder__media__move-picker-item { padding: 4px 0; font-size: 13px; color: #ccc; }
+.boat-rudder__media__move-picker-item label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.boat-rudder__media__move-picker-empty { font-size: 12px; color: #555; font-style: italic; }
+.boat-rudder__media__move-picker-actions { display: flex; gap: 6px; }
 
 .boat-rudder__media__grid-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
 .boat-rudder__media__grid {
@@ -1396,7 +1461,8 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 .boat-rudder__media__photo {
   position: relative; background: #111;
   border: 1px solid #1e1e1e; border-radius: 3px;
-  cursor: pointer; user-select: none; overflow: hidden;
+  cursor: zoom-in; /* clicking the photo views it; only the checkbox selects */
+  user-select: none; overflow: hidden;
   transition: border-color 0.15s, background 0.15s;
 }
 .boat-rudder__media__photo:hover { border-color: #7b0a74; background: #160e16; }
@@ -1415,8 +1481,9 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 }
 .boat-rudder__media__photo.selected .boat-rudder__media__photo-name { color: #c084fc; }
 .boat-rudder__media__photo input[type="checkbox"] {
-  position: absolute; top: 5px; left: 5px; z-index: 2;
-  opacity: 0; transition: opacity 0.15s;
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  width: 18px; height: 18px; margin: 0;
+  opacity: 0.6; transition: opacity 0.15s;
   accent-color: #c084fc; cursor: pointer;
 }
 .boat-rudder__media__photo:hover input[type="checkbox"],
@@ -1448,40 +1515,49 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 .boat-rudder__category__menu {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   margin: 10px;
 }
 
 /* ── Public block elements ─────────────────────────────────────────────────── */
 
 .boat-rudder__link {
-  margin-bottom: 16px;
+  margin: 16px 0;
 }
 
 .boat-rudder__separator {
   margin: 28px 0;
+  margin: 50px 0;
+  color: var(--br-color-blog-list-item-border, #00ffab);
 }
 
-a.boat-rudder__link__a {
-  color: #56e9fd;
-  cursor: pointer;
-}
+/* Links from the "link" block and from inline rich-text links (the
+   paragraph editor's link button) - styled from the same "Generic links"
+   settings as any other in-page link, not the navbar's own menu colors. */
+a.boat-rudder__link__a { cursor: pointer; }
+a.boat-rudder__link__a:link { color: var(--br-color-link-normal, #ffffff); }
+a.boat-rudder__link__a:visited { color: var(--br-color-link-visited, #ffffff); }
+a.boat-rudder__link__a:hover { color: var(--br-color-link-hover, #98ffdd); }
+a.boat-rudder__link__a:active { color: var(--br-color-link-active, #ffffff); }
 
+/* Same "Generic links" settings as the "link" block / rich-text links,
+   not the navbar's own menu colors - see a.boat-rudder__link__a above. */
 a.boat-rudder__social-network {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #56e9fd;
   text-decoration: none;
   cursor: pointer;
   margin-bottom: 6px;
 }
-a.boat-rudder__social-network:hover { text-decoration: underline; }
-a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
-
-.boat-rudder__image-paragraph {
-  margin-right: 20px;
-  margin-bottom: 20px;
+a.boat-rudder__social-network:link { color: var(--br-color-link-normal, #ffffff); }
+a.boat-rudder__social-network:visited { color: var(--br-color-link-visited, #ffffff); }
+a.boat-rudder__social-network:hover {
+  color: var(--br-color-link-hover, #98ffdd);
+  text-decoration: underline;
 }
+a.boat-rudder__social-network:active { color: var(--br-color-link-active, #ffffff); }
+a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 
 .boat-rudder__youtube-embed {
   display: flex;
@@ -1501,27 +1577,79 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder__code-text-container {
   min-height: 100px;
   padding: 20px;
-  border: 1px solid aliceblue;
-  background-color: #000080;
-  outline: 9px solid #444;
+  border: 8px solid #888888;
+  background-color: var(--br-color-code-background);
   margin-top: 25px;
   margin-bottom: 20px;
+  color: var(--br-color-code-text);
 }
-.boat-rudder__code-text-container pre { margin: 0; }
-.boat-rudder__code-text-container code { font-family: monospace; white-space: pre-wrap; word-break: break-word; }
+.boat-rudder__code-text-container pre { 
+  margin: 0;
+  max-height: 200px;
+  overflow: scroll;
+}
+.boat-rudder__code-text-container code { font-family: monospace; white-space: pre; counter-reset: br-code-line; }
 
-.boat-rudder__code-text-subtitle {
-  margin-top: 10px;
-  text-align: center;
-  margin-bottom: 30px;
+.boat-rudder__code-text-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(240, 248, 255, 0.35);
+  font-family: monospace;
 }
+.boat-rudder__code-text-lang { color: var(--br-color-code-comment); }
+.boat-rudder__code-text-actions { display: flex; gap: 8px; }
+.boat-rudder__code-text-container.is-expanded pre { max-height: none; }
+.boat-rudder__code-text-copy {
+  background: transparent;
+  border: 1px solid aliceblue;
+  color: var(--br-color-code-text);
+  font: inherit;
+  padding: 2px 12px;
+  cursor: pointer;
+}
+.boat-rudder__code-text-copy:hover { background: aliceblue; color: var(--br-color-code-background); }
+
+/* Line numbers as generated content: never part of the code's text, so
+   neither selecting nor the Copy button picks them up. */
+.boat-rudder__code-line { counter-increment: br-code-line; }
+.boat-rudder__code-line::before {
+  content: counter(br-code-line);
+  display: inline-block;
+  min-width: 2.5em;
+  margin-right: 1em;
+  padding-right: 0.75em;
+  border-right: 1px solid var(--br-color-code-line-number);
+  color: var(--br-color-code-line-number);
+  text-align: right;
+  user-select: none;
+}
+
+/* Syntax colors come from the theme's "Code colors" settings (see
+   cms_themes.h's code_*): function calls share the keyword color and
+   attributes/CSS properties share the tag color. */
+.boat-rudder__code-token--kw   { color: var(--br-color-code-keyword); font-weight: bold; }
+.boat-rudder__code-token--fn   { color: var(--br-color-code-keyword); }
+.boat-rudder__code-token--str  { color: var(--br-color-code-string); }
+.boat-rudder__code-token--com  { color: var(--br-color-code-comment); font-style: italic; }
+.boat-rudder__code-token--num  { color: var(--br-color-code-number); }
+.boat-rudder__code-token--var  { color: var(--br-color-code-variable); }
+.boat-rudder__code-token--pre,
+.boat-rudder__code-token--tag,
+.boat-rudder__code-token--attr { color: var(--br-color-code-tag); }
 
 .boat-rudder__list-container {
   padding-left: 24px;
   margin: 8px 0;
 }
 .boat-rudder__list-container li { margin: 4px 0; }
-
+.boat-rudder__container-table {
+  width: 100%;
+  overflow: scroll;
+}
 .boat-rudder__table {
   width: 100%;
   border-collapse: collapse;
@@ -1530,23 +1658,27 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 }
 .boat-rudder__table th,
 .boat-rudder__table td {
-  border: 1px solid #444;
+  border: 1px solid var(--br-color-table-border, #444);
   padding: 8px 12px;
   text-align: left;
   vertical-align: top;
 }
 .boat-rudder__table th {
-  background: #1e2d3d;
-  color: #93c5fd;
+  background: var(--br-color-table-header, #1e2d3d);
   font-weight: 600;
+  white-space: nowrap;
 }
-.boat-rudder__table tr:nth-child(even) td { background: #1a1a1a; }
+.boat-rudder__table tr:nth-child(odd) td { background: var(--br-color-table-row-a, #1a1a1a); }
+.boat-rudder__table tr:nth-child(even) td { background: var(--br-color-table-row-b, #141414); }
 
 /* Paragraph variants. These replace the inline style="..." that the previous
    CMS stored in extra_data; the block now names the variant and the theme
    owns the styling. */
 .boat-rudder__paragraph {
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 26px;
+  margin: 16px 0;
+  overflow: scroll;
 }
 .boat-rudder__paragraph--lead {
   font-size: 18px;
@@ -1561,7 +1693,11 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder__entry-editor__image-preview {
   display: flex; align-items: center; justify-content: center;
   min-height: 60px; padding: 8px;
-  background: #141414; border: 1px solid #2a2a2a; border-radius: 3px;
+  background-color: var(--br-color-body-background, #241144);
+  border: 1px solid #2a2a2a; border-radius: 3px;
+}
+.boat-rudder__entry-editor__gallery-preview {
+  background-color: var(--br-color-body-background, #241144);
 }
 .boat-rudder__entry-editor__image-thumb {
   max-width: 100%; max-height: 260px;
@@ -1583,6 +1719,11 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder__entry-image--left   { margin-left: 0; margin-right: auto; text-align: left; }
 .boat-rudder__entry-image--center { margin-left: auto; margin-right: auto; text-align: center; }
 .boat-rudder__entry-image--right  { margin-left: auto; margin-right: 0; text-align: right; }
+
+/* Float: the figure leaves the flow and the following text wraps around it
+   (this used to be the separate "image-paragraph" block). */
+.boat-rudder__entry-image--float-left  { float: left;  margin: 4px 20px 20px 0; text-align: center; }
+.boat-rudder__entry-image--float-right { float: right; margin: 4px 0 20px 20px; text-align: center; }
 
 /* Clicking an image opens the gallery lightbox */
 .boat-rudder__entry-image img[data-full] { cursor: pointer; }
@@ -1635,14 +1776,19 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   color: inherit; text-decoration: none; padding: 4px 10px;
   border: 1px solid transparent; border-radius: 3px; white-space: nowrap;
 }
-.boat-rudder__navbar__user:hover { border-color: currentColor; }
+.boat-rudder__navbar__user:hover {
+  color: var(--br-color-navbar-menu-hover, #98ffdd);
+}
 
 .boat-rudder__navbar__lang { position: relative; display: inline-block; }
 .boat-rudder__navbar__lang__btn {
-  background: none; border: 1px solid transparent; color: inherit;
+  background: none; border: 1px solid transparent; 
+  color: var(--br-color-navbar-menu-normal, #ffffff);
   font: inherit; padding: 4px 10px; cursor: pointer; border-radius: 3px;
 }
-.boat-rudder__navbar__lang__btn:hover { border-color: currentColor; }
+.boat-rudder__navbar__lang__btn:hover { 
+  color: var(--br-color-navbar-menu-hover, #98ffdd);
+}
 .boat-rudder__navbar__lang__menu {
   display: none; position: absolute; right: 0; top: 100%;
   min-width: 160px; z-index: 50;
@@ -1660,11 +1806,14 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 /* Theme switcher - same shape as the language drop-down above. */
 .boat-rudder__navbar__theme { position: relative; display: inline-block; }
 .boat-rudder__navbar__theme__btn {
-  background: none; border: 1px solid transparent; color: inherit;
+  background: none; border: 1px solid transparent; 
+  color: var(--br-color-navbar-menu-normal, #ffffff);
   font: inherit; padding: 4px 10px; cursor: pointer; border-radius: 3px;
   text-transform: capitalize;
 }
-.boat-rudder__navbar__theme__btn:hover { border-color: currentColor; }
+.boat-rudder__navbar__theme__btn:hover {
+  color: var(--br-color-navbar-menu-hover, #98ffdd);
+}
 .boat-rudder__navbar__theme__menu {
   display: none; position: absolute; right: 0; top: 100%;
   min-width: 160px; z-index: 50;
@@ -1749,17 +1898,41 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder__analytics__kv-table tr:last-child td { border-bottom: none; }
 .boat-rudder__analytics__bar { display: inline-block; height: 6px; background: #7b0a74; border-radius: 1px; margin-left: 8px; vertical-align: middle; min-width: 2px; }
 .boat-rudder__analytics__pct { color: #555; font-size: 11px; }
+/* Browsers/OSes breakdown tree: one expandable <details> per family (Chrome,
+   Firefox, ...) whose children are that family's versions. */
+.boat-rudder__analytics__tree { font-size: 13px; }
+.boat-rudder__analytics__tree-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 4px; border-bottom: 1px solid #141414;
+}
+.boat-rudder__analytics__tree-node > summary { cursor: pointer; list-style: none; }
+.boat-rudder__analytics__tree-node > summary::-webkit-details-marker { display: none; }
+.boat-rudder__analytics__tree-node > summary:hover { background: #151515; }
+.boat-rudder__analytics__tree-node > summary .boat-rudder__analytics__tree-name::before {
+  content: "\25B8"; display: inline-block; width: 14px; color: #666;
+}
+.boat-rudder__analytics__tree-node[open] > summary .boat-rudder__analytics__tree-name::before { content: "\25BE"; }
+.boat-rudder__analytics__tree-row--leaf .boat-rudder__analytics__tree-name { padding-left: 14px; }
+.boat-rudder__analytics__tree-name { color: #bbb; word-break: break-all; }
+.boat-rudder__analytics__tree-versions { color: #555; font-size: 11px; }
+.boat-rudder__analytics__tree-count { color: #c084fc; font-weight: 700; white-space: nowrap; padding-left: 12px; }
+.boat-rudder__analytics__tree-children { background: #0a0a0a; }
+.boat-rudder__analytics__tree-children td:first-child { padding-left: 28px; }
 
 /*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
 /* RESPONSIVE */
 @media (max-width: 1200px) {
   .boat-rudder__navbar__title_onslidelogo {
-    /* margin: 12vh auto; */
-    font-size: 5vw;
+    margin-left: -8vw;
+    margin-top: 13vw;
+  }
+  .boat-rudder__home-blog, 
+  .boat-rudder__footer {
+    background-size: auto;
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 960px) {
   .boat-rudder__navbar__title {
     margin-right: 0;
   }
@@ -1779,19 +1952,27 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   }
 
   .boat-rudder__navbar__menu {
-    display: none;
-    position: absolute;
-    top: 75px;
-    left: 0;
+    position: fixed;
+    top: -230px;
+    flex-direction: column;
+    margin-left: 0;
+    width: 100%;
+    padding: 0;
+    /* display: none; */
+    /* left: 0;
     width: 100%;
     margin-left: 0;
     flex-direction: column;
     background-color: #000000;
-    z-index: 999;
+    z-index: 999; */
   }
 
   .boat-rudder__navbar__menu.menu--open {
-    display: flex;
+    top: 60px;
+    width: 100%;
+    flex-direction: column;
+    background-color: #000000;
+    z-index: 999;
   }
 
   .boat-rudder__navbar__menu_item {
@@ -1799,6 +1980,14 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
     padding: 12px;
     border-right: none;
     border-top: 1px solid #333333;
+  }
+
+  .boat-rudder__navbar__menu_item--user {
+    font-weight: bold;
+  }
+
+  .boat-rudder__navbar__menu_item:last-child {
+    border-top: 1px solid #8c0089;;
   }
 
   /* Below 800px the horizontal corner link has nowhere to sit without
@@ -1811,16 +2000,22 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   .boat-rudder__navbar__menu_item--user {
     display: block;
   }
-
-  .boat-rudder__gallery-container {
-    padding: 15px;
-    grid-template-columns: repeat(2, 1fr);
-  }
   .boat-rudder__gallery-item:nth-child(1) {
     grid-column-start: span 1;
   }
-  .boat-rudder__gallery-item:nth-child(4) {
-    grid-column-start: span 1;
+
+  .boat-rudder__home-blog__item__byline {
+    flex-wrap: wrap;
+  }
+
+  .boat-rudder__home-blog__item__byline-categories {
+    order: 3;
+    width: 100%;
+    text-align: left;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--br-color-blog-list-item-border, #7b0a74);
+    color: var(--br-color-blog-list-item-categories, #888888);
   }
 
   /* Small screens: the hamburger owns the left edge and the title the centre,
@@ -1834,7 +2029,48 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   .boat-rudder__youtube-embed__video iframe { width: 450px; height: 253px; }
 }
 
-@media (max-width: 500px) {
+/* Below 600px the theme and language selectors live inside the hamburger
+   dropdown (see placeOptions() in menu_epoch3.html); the drop-down lists
+   expand in place instead of floating, since the dropdown is full width. */
+@media (max-width: 599px) {
+  /* The extra row makes the closed dropdown taller than the 230px offset. */
+  .boat-rudder__navbar__menu:not(.menu--open) { top: -100vh; }
+  .boat-rudder__navbar__menu_options {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 12px;
+    border-top: 1px solid #333333;
+  }
+  .boat-rudder__navbar__menu_options .boat-rudder__navbar__lang__btn,
+  .boat-rudder__navbar__menu_options .boat-rudder__navbar__theme__btn {
+    font-size: 16px; padding: 6px 12px; border-color: currentColor;
+  }
+  .boat-rudder__navbar__menu_options .boat-rudder__navbar__lang__menu,
+  .boat-rudder__navbar__menu_options .boat-rudder__navbar__theme__menu {
+    right: auto; left: 50%; transform: translateX(-50%);
+  }
+
+  .boat-rudder__home-blog__item {
+    flex-direction: column;
+  }
+  .boat-rudder__home-blog__item__container {
+    margin-left: 0;
+  }
+  .boat-rudder__home-blog__item__image {
+    width: 100%;
+    height: 0;
+    padding-top: 56.25%;
+    min-height: 0;
+    margin-bottom: 20px;
+  }
+  .boat-rudder__home-blog__container {
+    width: 100%;
+  }
+}
+
+@media (max-width: 499px) {
   .boat-rudder__mainbanner__top-padding {
     padding-top: 45%;
   }
@@ -1844,8 +2080,8 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   }
 
   .boat-rudder__navbar__title_onslidelogo {
-    font-size: 13vw;
-    margin: 20vh auto;
+    margin-top: 22%;
+    font-size: 28px;
   }
 
   .boat-rudder__youtube-embed__video iframe { width: auto; height: auto; }
@@ -1854,4 +2090,21 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   .boat-rudder__navbar__lang__menu { min-width: 140px; }
   .boat-rudder__navbar__theme__btn { font-size: 13px; }
   .boat-rudder__navbar__theme__menu { min-width: 140px; }
+
+  .boat-rudder__page-entry {
+    width: 90%;
+  }
+  
+  .boat-rudder__gallery-container {
+    padding: 15px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .boat-rudder__gallery-item:nth-child(4) {
+    grid-column-start: span 1;
+  }
+  .boat-rudder__code-text-container {
+    outline: 0;
+    padding: 6px;
+    border: 2px solid #888;
+  }
 }

@@ -395,11 +395,16 @@ char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t coun
                                        navbar_bg.rgb, navbar_bg.alpha, c->navbar_menu_normal,
                                        c->navbar_menu_hover, c->navbar_menu_active,
                                        c->navbar_logo, font_options,
+                                       c->link_normal, c->link_hover, c->link_visited, c->link_active,
                                        body_bg.rgb, body_bg.alpha, c->body_background_epoch1,
                                        home_bg.rgb, home_bg.alpha, c->home_content_text,
                                        blog_item_bg.rgb, blog_item_bg.alpha, c->blog_list_item_border,
                                        c->blog_list_item_author, c->blog_list_item_categories,
-                                       c->blog_list_item_date,
+                                       c->blog_list_item_categories_hover, c->blog_list_item_date,
+                                       c->table_header, c->table_border, c->table_row_a, c->table_row_b,
+                                       c->code_background, c->code_text, c->code_keyword,
+                                       c->code_string, c->code_comment, c->code_number,
+                                       c->code_variable, c->code_tag, c->code_line_number,
                                        c->footer_logo, footer_bg.rgb, footer_bg.alpha,
                                        themes[i].key, themes[i].key, themes[i].key, themes[i].key);
         free(font_options);

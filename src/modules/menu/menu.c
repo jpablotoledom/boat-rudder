@@ -31,6 +31,20 @@ static const CmsMenuItem FALLBACK_ITEMS[] = {
 // paths end at the same place - a plain GET that sets the cookie and bounces
 // back - so switching language never needs JavaScript.
 //
+// Epoch 2's link (menu-lang_epoch2.html) is colored the same as the nav
+// menu's own items (see the EPOCH_EARLY/EPOCH_MIDDLE block below), through
+// the same {{COLOR_MENU_NORMAL}}/{{COLOR_MENU_HOVER}} tokens in
+// layout_epoch2.html - but by `#id`, not `td a.class`: unlike the menu
+// items, this link showed a *different* resting color depending on whether
+// the reader had already visited /language before, meaning <body vlink=...>
+// (visited) apparently outranks <body link=...> (unvisited) in whatever
+// specificity this engine grants them, higher than the `td a.class`
+// (0,1,2) that was already enough for the unvisited case. Rather than
+// chase that number too, an ID selector sidesteps the whole question - it
+// outranks any class/type-based rule unconditionally, so it doesn't matter
+// what <body link>/<body vlink> are actually worth here. The theme
+// selector (menu-theme_epoch2.html) shares the same fix, its own id.
+//
 // Returns a malloc'd string ("" when there is nothing to offer: fewer than two
 // languages, or the templates are missing), never NULL unless allocation fails.
 static char *language_selector(int epoch) {
@@ -209,6 +223,24 @@ static char *user_menu_item_mobile(int epoch) {
 }
 
 char *menu(const char *current_url, int epoch) {
+    // WML: every page's first screen is one ~860-byte packet (see
+    // wap_gateway/wbxml.h), and the full menu - logo, every section, the
+    // language link with its return URL - took over half of it, leaving the
+    // page's own content for screen 2. So pages carry a single "[Menu]" link
+    // instead, to /menu, which shows the full menu (below) and a way back.
+    if (epoch == EPOCH_WML && strcmp(request_path(), "/menu") != 0) {
+        char *path = generate_url_theme("menu/menu-compact_epoch%d.html", epoch);
+        char *tpl  = path ? read_file_to_string(path) : NULL;
+        free(path);
+        if (tpl) {
+            char ret[1024];
+            url_encode(ret, request_path(), sizeof(ret));
+            char *compact = render_template(tpl, ret);
+            free(tpl);
+            return compact;
+        }
+    }
+
     char *menu_item_path    = generate_url_theme("menu/menu-item_epoch%d.html", epoch);
     char *selected_item_path = generate_url_theme("menu/menu-item-selected_epoch%d.html", epoch);
     char *separator_path    = generate_url_theme("menu/menu-item-separator_epoch%d.html", epoch);
@@ -244,19 +276,65 @@ char *menu(const char *current_url, int epoch) {
         goto cleanup;
     }
 
-    // Epoch 1/2's selected-item template has no CSS to lean on (epoch 3's
-    // equivalent just uses the boat-rudder__navbar__menu_item--selected
-    // class, already wired to --br-color-navbar-menu-active), so the
-    // current-page highlight color is substituted straight into a <font
-    // color> attribute here - see menu-item-selected_epoch{1,2}.html. Epoch
-    // 1's *un*selected item has the same problem (no <body link=...>-style
-    // fallback of its own the way epoch 2's does - see
-    // menu-item_epoch{1,2}.html), so it takes navbar-menu-normal the same
-    // way; epoch 2's unselected item already inherits the theme-driven
-    // <body link="..."> color, so it is left alone.
-    int needs_active_color = (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE);
+    // Epoch 1 has no stylesheet at all, so its color has to be a real <font
+    // color> attribute, substituted straight in here - see
+    // menu-item(-selected)_epoch1.html. That used to also cover epoch 2 (no
+    // stylesheet *it* could lean on either, historically), but its own
+    // inline <style> block (layout_epoch2.html) does exist, so epoch 2's two
+    // states are colored from there instead - #boat-rudder-navbar-menu-item
+    // (-selected), via splice_retro_colors()'s {{COLOR_MENU_NORMAL}}/
+    // {{COLOR_MENU_ACTIVE}}/{{COLOR_MENU_HOVER}} tokens - not a per-item
+    // inline attribute.
+    //
+    // Several rounds of real-browser testing (IE5/Windows 3.11, the one
+    // that keeps disagreeing with every plausible-looking CSS-specificity
+    // fix) got this to an id instead of a class - condensed, since the
+    // dead ends matter less than the pattern: an inline `style="color:..."`
+    // per item broke hover outright (this engine won't let even
+    // `!important` override an element's own inline style, unlike
+    // IE5/Windows 95); a bare `.boat-rudder__menu__item { color }` class
+    // fixed hover but lost the *resting* color to <body link="..."> outright
+    // (specificity 0,1,0 - a spec-compliant engine should never let a
+    // zero-specificity presentational hint win here, so this one plainly
+    // doesn't follow that part of the spec); grouping in `:link`/`:visited`
+    // pseudo-classes changed nothing (both grouped selectors and pairing
+    // `:link`/`:visited` with a class are separately documented as
+    // unreliable on real mid-90s engines, so that rule likely just got
+    // dropped whole); a plain `a.boat-rudder__menu__item` (type+class,
+    // 0,1,1) and a `<td>`-qualified `td a.boat-rudder__menu__item` (0,1,2)
+    // both *still* lost on unselected items, even though the same
+    // technique's doubled-up selected-state version won outright - meaning
+    // whatever specificity this engine effectively grants <body link>/
+    // <body vlink> is real, non-zero, and apparently higher for vlink
+    // (visited) than for link (unvisited), high enough that no class-based
+    // number chased here has cleared it reliably. An id selector sidesteps
+    // needing to know that number at all - it outranks any class/type
+    // combination unconditionally. Every *unselected* item shares one id
+    // (`#boat-rudder-navbar-menu-item`) rather than each getting its own -
+    // invalid HTML (ids must be unique), but real engines match `#id` by
+    // plain attribute equality, not by first confirming uniqueness, so
+    // every item with that id still gets colored; the one currently-selected
+    // item gets the other id instead.
+    //
+    // The hover rule had to move from class to id too, one step behind: a
+    // bare `.boat-rudder__menu__item:hover` (class+pseudo) stopped winning
+    // the moment the resting rule became an id, since an id selector
+    // outranks any number of classes regardless of pseudo-classes among
+    // them - so hover is `#boat-rudder-navbar-menu-item:hover` now, id+
+    // pseudo, matching the shared unselected-item id exactly like the
+    // resting rule does. There's deliberately no
+    // `#boat-rudder-navbar-menu-item-selected:hover` counterpart - hovering
+    // the current page's own item just keeps its selected color, which is
+    // the one part of this whole saga confirmed as *wanted* rather than
+    // merely tolerated.
+    //
+    // An unselected epoch 2 item still needs *a* color statement of its own,
+    // rather than just inheriting the theme's <body link="...">, since that
+    // attribute now carries the separate "generic links" color
+    // (cms_themes.h's link_normal), not navbar-menu-normal.
+    int needs_color = (epoch == EPOCH_EARLY);
     CmsThemeColors colors;
-    if (needs_active_color) cms_get_theme_colors(request_theme(), &colors);
+    if (needs_color) cms_get_theme_colors(request_theme(), &colors);
 
     for (size_t i = 0; i < item_count; i++) {
         const char *sep = (i + 1 < item_count) ? separator : "";
@@ -264,11 +342,9 @@ char *menu(const char *current_url, int epoch) {
         int is_selected = current_url && strcmp(current_url, menu_items[i].link) == 0;
         const char *tpl = is_selected ? selected_item_tpl : menu_item_tpl;
         char *item;
-        if (is_selected && needs_active_color) {
-            item = render_template(tpl, menu_items[i].link, colors.navbar_menu_active,
-                                    menu_items[i].name, sep);
-        } else if (!is_selected && epoch == EPOCH_EARLY) {
-            item = render_template(tpl, menu_items[i].link, colors.navbar_menu_normal,
+        if (needs_color) {
+            item = render_template(tpl, menu_items[i].link,
+                                    is_selected ? colors.navbar_menu_active : colors.navbar_menu_normal,
                                     menu_items[i].name, sep);
         } else {
             item = render_template(tpl, menu_items[i].link, menu_items[i].name, sep);
@@ -396,7 +472,26 @@ char *menu(const char *current_url, int epoch) {
             char *theme_html = theme_selector(epoch);
             lang_html = theme_html ? str_append(lang_html, theme_html) : NULL;
             free(theme_html);
-            result = lang_html ? render_template(menu_tpl, logo, items, lang_html) : NULL;
+
+            if (epoch == EPOCH_MIDDLE) {
+                // menu_epoch2.html's own <table> takes the theme's navbar
+                // background directly (no CSS var to lean on, same as every
+                // other epoch 1/2 color) - it was rendering unstyled before,
+                // just inheriting the page's own body background regardless
+                // of what the "Navbar > Background" setting said.
+                // navbar-background may carry an alpha byte for epoch 3's
+                // CSS background-color, which a plain HTML bgcolor attribute
+                // has no notion of (same fix as the table block and the
+                // blog-list item card), so this strips it down first.
+                CmsThemeColors navbar_colors;
+                cms_get_theme_colors(request_theme(), &navbar_colors);
+                char navbar_bg[8];
+                int unused_alpha;
+                cms_split_hex_alpha(navbar_colors.navbar_background, navbar_bg, &unused_alpha);
+                result = lang_html ? render_template(menu_tpl, navbar_bg, logo, items, lang_html) : NULL;
+            } else {
+                result = lang_html ? render_template(menu_tpl, logo, items, lang_html) : NULL;
+            }
         }
     }
     free(lang_html);

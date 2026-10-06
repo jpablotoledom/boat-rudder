@@ -85,3 +85,23 @@ mongoc_collection_t *mongodb_manager_get_collection(const char *collection_name)
     if (!client) return NULL;
     return mongoc_client_get_collection(client, global_db_name, collection_name);
 }
+
+mongoc_cursor_t *mongodb_manager_aggregate(const char *collection_name, const bson_t *pipeline) {
+    mongoc_client_t *client = mongodb_manager_get_client();
+    if (!client) return NULL;
+
+    bson_t *cmd = BCON_NEW("aggregate", BCON_UTF8(collection_name), "cursor", "{", "}");
+    BSON_APPEND_ARRAY(cmd, "pipeline", pipeline);
+
+    mongoc_database_t *db = mongoc_client_get_database(client, global_db_name);
+    bson_t reply;
+    bson_error_t error;
+    if (!mongoc_database_command_simple(db, cmd, NULL, &reply, &error))
+        LOG_ERROR("mongodb_manager_aggregate(%s): %s", collection_name, error.message);
+    bson_destroy(cmd);
+    mongoc_database_destroy(db);
+
+    // Takes ownership of (and destroys) `reply`; a failed command's reply
+    // yields a cursor that simply returns no documents.
+    return mongoc_cursor_new_from_command_reply_with_opts(client, &reply, NULL);
+}

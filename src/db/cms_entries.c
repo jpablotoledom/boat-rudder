@@ -232,13 +232,15 @@ static void parse_content(const bson_t *doc, const char *lang, CmsEntry *out) {
     out->content_count = i;
 }
 
-int cms_get_entry_by_link(const char *link, const char *lang, CmsEntry *out) {
+int cms_get_entry_by_link(const char *link, const char *lang, int include_drafts, CmsEntry *out) {
     memset(out, 0, sizeof(*out));
 
     mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
     if (!collection) return 0;
 
-    bson_t *query = BCON_NEW("link", BCON_UTF8(link), "enabled", BCON_BOOL(true));
+    bson_t *query = include_drafts
+        ? BCON_NEW("link", BCON_UTF8(link))
+        : BCON_NEW("link", BCON_UTF8(link), "enabled", BCON_BOOL(true));
     mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
 
     int found = 0;
@@ -250,6 +252,8 @@ int cms_get_entry_by_link(const char *link, const char *lang, CmsEntry *out) {
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup(link);
         out->type = (bson_iter_init_find(&iter, doc, "type") && BSON_ITER_HOLDS_UTF8(&iter))
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
+        out->enabled = bson_iter_init_find(&iter, doc, "enabled") &&
+                       BSON_ITER_HOLDS_BOOL(&iter) && bson_iter_bool(&iter);
 
         parse_header(doc, lang, out);
         parse_categories(doc, lang, out);

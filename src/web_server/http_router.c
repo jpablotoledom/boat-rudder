@@ -18,6 +18,7 @@
 #include "../db/cms_users_admin.h"
 #include "../db/mongodb_manager.h"
 #include "../db/session_manager.h"
+#include "../db/short_links.h"
 #include "../html_builder/orchestrator.h"
 #include "../modules/analytics/analytics.h"
 #include "../modules/analytics_view/analytics_view.h"
@@ -44,6 +45,9 @@
 #include "../utils/build_epoch_response.h"
 #include "../utils/generate_url_theme.h"
 #include "../utils/read_file.h"
+#include "../utils/request_charset.h"
+#include "../utils/request_code_lines.h"
+#include "../utils/request_wml.h"
 #include "../utils/request_lang.h"
 #include "../utils/request_theme.h"
 #include "../utils/theme_catalog.h"
@@ -100,6 +104,107 @@ static char *absolute_location(void *ctx, HttpRequest *req, const char *path) {
     return out;
 }
 
+// Media files on disk live at ./html/content/posts/<author>/<dir>/<name>,
+// under whichever size-variant suffix scripts/image-optimizer.sh wrote
+// (same-extension for _full/_half/_small, always .gif for _medium/_micro -
+// see image_for_epoch() in entry_page.c). A dashboard upload's own bare
+// name has no such file, so unlink()/rename() failing on it is routine and
+// silently ignored, exactly like the ones for the size variants.
+static void media_variant_path(char *out, size_t out_size, const char *dir_path,
+                               const char *name, const char *suffix, int force_gif) {
+    char stem[256] = {0};
+    const char *ext = strrchr(name, '.');
+    size_t stem_len = ext ? (size_t)(ext - name) : strlen(name);
+    if (stem_len >= sizeof(stem)) stem_len = sizeof(stem) - 1;
+    memcpy(stem, name, stem_len);
+    stem[stem_len] = '\0';
+    snprintf(out, out_size, "%s/%s%s%s", dir_path, stem, suffix,
+             force_gif ? ".gif" : (ext ? ext : ""));
+}
+
+static void media_item_dir_path(const CmsMediaItem *item, char *out, size_t out_size) {
+    snprintf(out, out_size, "./html/content/posts/%s/%s", item->author_username, item->dir_name);
+}
+
+// Deletes every size variant of a media item from disk (the base file plus
+// the optimizer's _full/_half/_small/_medium/_micro copies).
+static void media_delete_variants(const CmsMediaItem *item) {
+    char dir_path[512];
+    media_item_dir_path(item, dir_path, sizeof(dir_path));
+
+    static const char *same_ext_suffixes[] = { "", "_full", "_half", "_small", NULL };
+    static const char *gif_suffixes[]      = { "_medium", "_micro", NULL };
+
+    char path[1024];
+    for (int i = 0; same_ext_suffixes[i]; i++) {
+        media_variant_path(path, sizeof(path), dir_path, item->name, same_ext_suffixes[i], 0);
+        unlink(path);
+    }
+    for (int i = 0; gif_suffixes[i]; i++) {
+        media_variant_path(path, sizeof(path), dir_path, item->name, gif_suffixes[i], 1);
+        unlink(path);
+    }
+}
+
+// Moves every size variant of a media item to dest_dir_name (same author),
+// creating that directory on disk if it doesn't exist yet. Returns 0 even
+// when some variants had nothing to move - only a failure to prepare the
+// destination directory is fatal, matching how the DB update after this
+// call is the operation callers actually care about.
+static int media_move_variants(const CmsMediaItem *item, const char *dest_dir_name) {
+    char src_dir[512], dst_dir[512];
+    media_item_dir_path(item, src_dir, sizeof(src_dir));
+    snprintf(dst_dir, sizeof(dst_dir), "./html/content/posts/%s/%s", item->author_username, dest_dir_name);
+
+    struct stat st;
+    if (stat(dst_dir, &st) == -1 && mkdir(dst_dir, 0775) != 0) {
+        LOG_ERROR("media_move_variants: could not create %s: %s", dst_dir, strerror(errno));
+        return -1;
+    }
+
+    static const char *same_ext_suffixes[] = { "", "_full", "_half", "_small", NULL };
+    static const char *gif_suffixes[]      = { "_medium", "_micro", NULL };
+
+    char src_path[1024], dst_path[1024];
+    for (int i = 0; same_ext_suffixes[i]; i++) {
+        media_variant_path(src_path, sizeof(src_path), src_dir, item->name, same_ext_suffixes[i], 0);
+        media_variant_path(dst_path, sizeof(dst_path), dst_dir, item->name, same_ext_suffixes[i], 0);
+        rename(src_path, dst_path);
+    }
+    for (int i = 0; gif_suffixes[i]; i++) {
+        media_variant_path(src_path, sizeof(src_path), src_dir, item->name, gif_suffixes[i], 1);
+        media_variant_path(dst_path, sizeof(dst_path), dst_dir, item->name, gif_suffixes[i], 1);
+        rename(src_path, dst_path);
+    }
+    return 0;
+}
+
+// Uploads with no directory selected (e.g. from the entry editor's "Select
+// photos" picker before any directory has been created) go into this
+// author's "default" directory instead of failing - created on first use,
+// physically and in the DB, exactly like any other directory. The caller
+// can move the file elsewhere afterwards with the "Move to..." picker.
+static int resolve_or_create_default_media_directory(const char *user_id, const char *username,
+                                                      CmsMediaDirectory *out) {
+    if (cms_get_media_directory_by_name("default", user_id, out)) return 0;
+
+    char dirpath[512];
+    snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/default", username);
+    struct stat st;
+    if (stat(dirpath, &st) == -1 && mkdir(dirpath, 0775) != 0) {
+        LOG_ERROR("resolve_or_create_default_media_directory: could not create %s: %s",
+                  dirpath, strerror(errno));
+        return -1;
+    }
+
+    char new_id[25];
+    if (cms_create_media_directory("default", "posts", user_id, new_id) != 0) {
+        LOG_ERROR("resolve_or_create_default_media_directory: DB insert failed");
+        return -1;
+    }
+    return cms_get_media_directory_by_id(new_id, out) ? 0 : -1;
+}
+
 static void send_simple(void *ctx, const char *status, const char *body) {
     char header[512];
     int body_len = (int)strlen(body);
@@ -146,7 +251,7 @@ static int resolve_epoch(HttpRequest *req) {
 // send_simple() if the template could not be loaded/rendered.
 static void send_error_response(void *ctx, int status_code, const char *status_line, int epoch) {
     char title[64];
-    snprintf(title, sizeof(title), "Boat Rudder - Error %d", status_code);
+    snprintf(title, sizeof(title), "{{SITE_NAME}} - Error %d", status_code);
 
     char *content  = error_content(epoch, status_code, NULL);
     char *body     = buildPageWebSite(epoch, title, content);
@@ -188,11 +293,14 @@ static void send_or_error(void *ctx, char *response, const char *method, int epo
 // 404 if the entry doesn't exist, mongodb is not ready, or entry.type !=
 // expected_type. Takes ownership of `category_menu_html` (pass NULL for
 // non-blog pages).
+// include_drafts: the visitor holds a dashboard session, so an unpublished
+// entry is served too (a preview from the editor) instead of a 404 - marked
+// "[Draft]" in its title and kept out of any cache.
 static void serve_cms_entry(void *ctx, const char *link, const char *expected_type,
                              const char *lang, const char *method, int epoch,
-                             char *category_menu_html, int page) {
+                             char *category_menu_html, int include_drafts) {
     CmsEntry entry;
-    if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, &entry)) {
+    if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, include_drafts, &entry)) {
         if (strcmp(entry.type, expected_type) != 0) {
             cms_entry_free(&entry);
             free(category_menu_html);
@@ -208,8 +316,10 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
         else
             snprintf(current_url, sizeof(current_url), "/page/%s", link);
 
-        char *title   = strdup(entry.header_title);
-        char *content = entry_page(&entry, epoch, page, NULL);
+        int draft = !entry.enabled;
+        char *title   = draft ? render_template("[Draft] %s", entry.header_title)
+                              : strdup(entry.header_title);
+        char *content = entry_page(&entry, epoch);
         cms_entry_free(&entry);
 
         char *body = NULL;
@@ -220,7 +330,8 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
             free(content);
             free(category_menu_html);
         }
-        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+        char *response = body ? build_epoch_response(body, draft ? "Cache-Control: no-store\r\n" : "",
+                                                      epoch) : NULL;
         free(title);
         free(body);
         send_or_error(ctx, response, method, epoch);
@@ -228,6 +339,35 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
         free(category_menu_html);
         send_error_response(ctx, 404, "404 Not Found", epoch);
     }
+}
+
+// "Back to <entry title>" for a QR page's link back to `back` (a
+// "/blog/<link>" or "/page/<link>" path), its title looked up here rather
+// than carried in the QR link's own URL; just "Back" for any other path, or
+// an entry that can't be found.
+static void qr_back_label(const char *back, const char *lang, char *out, size_t out_size) {
+    snprintf(out, out_size, "Back");
+    const char *link = NULL;
+    if (!strncmp(back, "/blog/", 6)) link = back + 6;
+    else if (!strncmp(back, "/page/", 6)) link = back + 6;
+    if (!link || !*link || !mongodb_manager_is_ready()) return;
+
+    char slug[256];
+    snprintf(slug, sizeof(slug), "%s", link);
+    slug[strcspn(slug, "?#")] = '\0';
+
+    CmsEntry entry;
+    if (cms_get_entry_by_link(slug, lang, 0, &entry) && entry.header_title && entry.header_title[0])
+        snprintf(out, out_size, "Back to %s", entry.header_title);
+    cms_entry_free(&entry);
+}
+
+// Whether this request carries a valid dashboard session - what lets
+// serve_cms_entry() show a draft.
+static int viewer_can_preview_drafts(HttpRequest *req) {
+    if (!mongodb_manager_is_ready()) return 0;
+    char user_id[USER_ID_HEX_BUF_SIZE];
+    return validate_session_cookie(get_header_value(req, "Cookie"), user_id) == 1;
 }
 
 // Shared by every /dashboard/* sub-route: sends a 503 and returns 0 if
@@ -935,6 +1075,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         request_user_set(get_header_value(&req, "Cookie"));
         request_theme_set(get_header_value(&req, "Cookie"),
                            get_query_param(params, param_count, "theme"));
+        // Independent of resolve_epoch() below: that resolves which
+        // templates render (honoring force_epoch/preview_epoch overrides),
+        // this resolves what the *real* visiting browser can decode, off
+        // its actual User-Agent regardless of any override - see
+        // utils/request_charset.h.
+        request_charset_set(get_header_value(&req, "User-Agent"));
+        request_code_lines_set(get_query_param(params, param_count, "code_lines"));
+        request_wml_set(req.url, get_query_param(params, param_count, "wml_pages"));
         char content_lang[16];
         strncpy(content_lang, request_lang(), sizeof(content_lang) - 1);
         content_lang[sizeof(content_lang) - 1] = '\0';
@@ -973,7 +1121,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char *content  = login(epoch, NULL);
-                    char *body     = buildPageWebSite(epoch, "Boat Rudder - Login", content);
+                    char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content);
                     char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);
@@ -996,7 +1144,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         }
 
                         char *content  = dashboard(epoch, content_lang, user_id, role);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1016,7 +1164,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = categories_admin_list(epoch, content_lang);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1040,7 +1188,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         for (size_t i = 0; i < lang_count; i++) values[i] = strdup("");
 
                         char *content  = categories_admin_form(epoch, "", langs, lang_count, values, NULL);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1066,7 +1214,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char **values = calloc(lang_count, sizeof(char *));
                         if (cms_get_category_name_values(id, langs, lang_count, values) == 0) {
                             char *content  = categories_admin_form(epoch, id, langs, lang_count, values, NULL);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1089,7 +1237,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = languages_admin(epoch, NULL);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1106,7 +1254,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = menu_admin_list(epoch, content_lang);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1130,7 +1278,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         for (size_t i = 0; i < lang_count; i++) values[i] = strdup("");
 
                         char *content  = menu_admin_form(epoch, "", "", 0, false, langs, lang_count, values, NULL);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1161,7 +1309,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                                       link, sizeof(link), &order, &enabled) == 0) {
                             char *content  = menu_admin_form(epoch, id, link, order, enabled,
                                                               langs, lang_count, values, NULL);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1186,7 +1334,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *name     = cms_get_site_name();
                         char *content  = site_settings_general_page(epoch, name, NULL);
                         free(name);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1208,7 +1356,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             char *values[EPOCH_COUNT];
                             cms_get_theme_banner_values(id, values);
                             char *content  = site_settings_banner_page(epoch, id, values);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1232,7 +1380,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             char *values[EPOCH_COUNT];
                             cms_get_theme_footer_values(id, values);
                             char *content  = site_settings_footer_page(epoch, id, values);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1257,7 +1405,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             for (int e = -1; e <= 3; e++)
                                 cms_get_theme_logo_config(id, e, &configs[epoch_to_index(e)]);
                             char *content  = site_settings_logo_page(epoch, id, configs);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1280,7 +1428,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             char *value     = cms_get_theme_css(id);
                             char *content   = site_settings_css_page(epoch, id, value);
                             free(value);
-                            char *body      = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body      = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response  = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1298,7 +1446,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = site_settings_preview_page(epoch);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1316,7 +1464,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         const char *error = get_query_param(params, param_count, "error");
                         char *content  = fonts_admin_list(epoch, error);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1346,7 +1494,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         }
 
                         char *content  = site_settings_themes_page(epoch, entries, key_count);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1386,7 +1534,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = users_admin_list(epoch, NULL);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1411,7 +1559,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         int week  = atoi(get_query_param(params, param_count, "week"));
 
                         char *content  = analytics_view(epoch, period, year, month, week, date, from, to);
-                        char *body     = content ? buildPageWebSite(epoch, "Boat Rudder - Dashboard", content) : NULL;
+                        char *body     = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content) : NULL;
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1428,7 +1576,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
                         char *content  = users_admin_form(epoch, "", "", "", "author", NULL);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1450,7 +1598,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             char *name = cms_get_user_name_by_id(id);
                             char *content  = users_admin_form(epoch, id, name ? name : "", email, role, NULL);
                             free(name);
-                            char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                             free(body);
                             send_or_error(ctx, response, req.method, epoch);
@@ -1485,7 +1633,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 cms_get_categories(content_lang, &categories, &category_count);
 
                                 char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count);
-                                char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                                char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                                 free(body);
                                 send_or_error(ctx, response, req.method, epoch);
@@ -1515,7 +1663,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         cms_get_media_directories(&dirs, &dir_count);
 
                         char *content  = media_admin_page(epoch, dirs, dir_count, NULL, 0);
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Media", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Media", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -1554,6 +1702,33 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
+            } else if (strcmp(decoded_url, "/dashboard/api/media/directory/item") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    send_simple(ctx, "403 Forbidden", "Forbidden");
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        const char *dir_id = get_query_param(params, param_count, "id");
+                        CmsMediaDirectory dir;
+                        if (!dir_id || !cms_get_media_directory_by_id(dir_id, &dir)) {
+                            send_simple(ctx, "404 Not Found", "Directory not found");
+                        } else {
+                            char username[64] = {0};
+                            cms_get_username_by_id(user_id, username, sizeof(username));
+                            strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
+
+                            char *html = media_admin_render_directory_item(&dir, epoch);
+                            char *response = build_json_response(html ? html : "");
+                            free(html);
+                            connection_write(ctx, response, strlen(response));
+                            free(response);
+                            connection_close(ctx);
+                        }
+                    }
+                }
+
             } else if (strcmp(decoded_url, "/dashboard/api/media/modal") == 0) {
                 int epoch = resolve_epoch(&req);
 
@@ -1566,7 +1741,15 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         size_t dir_count = 0;
                         cms_get_media_directories(&dirs, &dir_count);
 
-                        char *html = media_admin_modal(epoch, dirs, dir_count, NULL, 0);
+                        // Opens on the latest uploads across every directory
+                        // (newest first, one page): with no directory selected,
+                        // the picker's infinite scroll keeps paging that same
+                        // all-directories list, and clicking a directory narrows it.
+                        CmsMediaItem *items = NULL;
+                        size_t item_count = 0;
+                        cms_get_media_items(NULL, 0, MEDIA_PAGE_SIZE, &items, &item_count);
+
+                        char *html = media_admin_modal(epoch, dirs, dir_count, items, item_count);
                         if (html) {
                             char header_buf[128];
                             snprintf(header_buf, sizeof(header_buf),
@@ -1583,6 +1766,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         }
                         connection_close(ctx);
 
+                        cms_media_items_free(items, item_count);
                         cms_media_directories_free(dirs, dir_count);
                     }
                 }
@@ -1670,6 +1854,32 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
 
+            } else if (strcmp(decoded_url, "/menu") == 0) {
+                // The full site menu, for WML's compact "[Menu]" link (see
+                // menu.c): the page layout's own menu renders in full on
+                // this path, and the content is just a way back to where
+                // the reader came from. Epochs without a menu-page template
+                // simply don't have this page.
+                int epoch = resolve_epoch(&req);
+                char return_raw[512];
+                url_decode(return_raw, get_query_param(params, param_count, "return"));
+                char safe_return[512];
+                language_sanitize_return(return_raw, safe_return, sizeof(safe_return));
+
+                char *tpl_path = generate_url_theme("menu/menu-page_epoch%d.html", epoch);
+                char *tpl = tpl_path ? read_file_to_string(tpl_path) : NULL;
+                free(tpl_path);
+                if (!tpl) {
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else {
+                    char *content = render_template(tpl, safe_return);
+                    free(tpl);
+                    char *body = content ? buildPageWebSite(epoch, "Menu", content) : NULL;
+                    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+
             } else if (strcmp(decoded_url, "/theme") == 0) {
                 // Mirrors /language exactly - the epoch 1/2 nav bar link's
                 // full-page fallback (menu.c's theme_selector()), listing
@@ -1685,8 +1895,123 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                int page = atoi(get_query_param(params, param_count, "page"));
-                serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch, NULL, page);
+                serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch, NULL,
+                                viewer_can_preview_drafts(&req));
+
+            } else if (strncmp(decoded_url, "/qr/", 4) == 0 && decoded_url[4] != '\0') {
+                int epoch = resolve_epoch(&req);
+                const char *code = decoded_url + 4;
+                char *target = mongodb_manager_is_ready() ? short_link_resolve(code) : NULL;
+                if (target) {
+                    char *response = build_redirect_response(target, "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                    free(target);
+                } else {
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                }
+
+            } else if (strncmp(decoded_url, "/youtube-qr/", 12) == 0 && decoded_url[12] != '\0') {
+                // Always epoch 0's own page, regardless of the visitor's
+                // detected epoch: this route exists solely so an inline QR
+                // this wide doesn't get split across a paginated text
+                // browser's screen boundary (see render_youtube_embed()'s
+                // own comment) - there is only ever one variant of it.
+                const char *video_id = decoded_url + 12;
+
+                char back_raw[512];
+                url_decode(back_raw, get_query_param(params, param_count, "back"));
+                char safe_back[512];
+                language_sanitize_return(back_raw, safe_back, sizeof(safe_back));
+
+                char back_label[560];
+                qr_back_label(safe_back, content_lang, back_label, sizeof(back_label));
+
+                char short_url[128];
+                youtube_short_url(video_id, short_url, sizeof(short_url));
+
+                char *qr_text = request_needs_legacy_charset()
+                    ? generate_qr_asciiblock_text(short_url)
+                    : generate_qr_halfblock_text(short_url);
+
+                if (!qr_text) {
+                    send_error_response(ctx, 404, "404 Not Found", EPOCH_PRESTANDARD);
+                } else {
+                    char *page_tpl_path = generate_url_theme(
+                        "elements/youtube-embed/youtube-qr-page_epoch%d.html", EPOCH_PRESTANDARD);
+                    char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
+                    free(page_tpl_path);
+
+                    char *page_html = page_tpl
+                        ? render_template(page_tpl, qr_text, short_url, safe_back, back_label)
+                        : NULL;
+                    free(page_tpl);
+                    free(qr_text);
+
+                    if (page_html) {
+                        char *response = build_epoch_response(page_html, "", EPOCH_PRESTANDARD);
+                        send_or_error(ctx, response, req.method, EPOCH_PRESTANDARD);
+                        free(page_html);
+                    } else {
+                        send_error_response(ctx, 500, "500 Internal Server Error", EPOCH_PRESTANDARD);
+                    }
+                }
+
+            } else if (strncmp(decoded_url, "/image-qr/", 10) == 0 && decoded_url[10] != '\0') {
+                // Same reasoning and structure as /youtube-qr/ just above:
+                // always epoch 0's own page, so an inline QR never gets cut
+                // across a paginated text browser's screen boundary. The
+                // code names an existing short_links entry (see
+                // render_image()/short_links.h) whose target is the image's
+                // own full-size URL - the QR here encodes the short
+                // "/qr/<code>" redirect to it, not the image path directly,
+                // for the same QR-density reasons as the gallery/video pages.
+                const char *code = decoded_url + 10;
+
+                char back_raw[512];
+                url_decode(back_raw, get_query_param(params, param_count, "back"));
+                char safe_back[512];
+                language_sanitize_return(back_raw, safe_back, sizeof(safe_back));
+
+                char back_label[560];
+                qr_back_label(safe_back, content_lang, back_label, sizeof(back_label));
+
+                char short_path[64];
+                snprintf(short_path, sizeof(short_path), "/qr/%s", code);
+                char short_url[600];
+                if (public_url[0]) {
+                    snprintf(short_url, sizeof(short_url), "%s%s", public_url, short_path);
+                } else {
+                    char *abs = absolute_location(ctx, &req, short_path);
+                    snprintf(short_url, sizeof(short_url), "%s", abs ? abs : short_path);
+                    free(abs);
+                }
+
+                char *qr_text = request_needs_legacy_charset()
+                    ? generate_qr_asciiblock_text(short_url)
+                    : generate_qr_halfblock_text(short_url);
+
+                if (!qr_text) {
+                    send_error_response(ctx, 404, "404 Not Found", EPOCH_PRESTANDARD);
+                } else {
+                    char *page_tpl_path = generate_url_theme(
+                        "elements/image/image-qr-page_epoch%d.html", EPOCH_PRESTANDARD);
+                    char *page_tpl = page_tpl_path ? read_file_to_string(page_tpl_path) : NULL;
+                    free(page_tpl_path);
+
+                    char *page_html = page_tpl
+                        ? render_template(page_tpl, qr_text, short_url, safe_back, back_label)
+                        : NULL;
+                    free(page_tpl);
+                    free(qr_text);
+
+                    if (page_html) {
+                        char *response = build_epoch_response(page_html, "", EPOCH_PRESTANDARD);
+                        send_or_error(ctx, response, req.method, EPOCH_PRESTANDARD);
+                        free(page_html);
+                    } else {
+                        send_error_response(ctx, 500, "500 Internal Server Error", EPOCH_PRESTANDARD);
+                    }
+                }
 
             } else if (strncmp(decoded_url, "/gallery/", 9) == 0 && decoded_url[9] != '\0') {
                 int epoch = resolve_epoch(&req);
@@ -1789,8 +2114,31 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 char gallery_path[300];
                                 snprintf(gallery_path, sizeof(gallery_path), "/gallery/%s", gallery_id);
 
+                                // A QR built straight from this page's own URL grows
+                                // with it - the gallery path alone is already 33+
+                                // characters before the domain, dense enough to make
+                                // the Cello-rendered text QR (see qr_generator.h)
+                                // overflow its own row width. Routing it through
+                                // "/qr/<code>" instead keeps the QR (and the link
+                                // printed under it, since a reader retyping it by
+                                // hand benefits the same way) as short as the code
+                                // itself, regardless of how long gallery_path is.
+                                char *short_code = mongodb_manager_is_ready()
+                                    ? short_link_get_or_create(gallery_path) : NULL;
+
                                 char gallery_url[600];
-                                if (public_url[0]) {
+                                if (short_code) {
+                                    char qr_path[64];
+                                    snprintf(qr_path, sizeof(qr_path), "/qr/%s", short_code);
+                                    if (public_url[0]) {
+                                        snprintf(gallery_url, sizeof(gallery_url), "%s%s", public_url, qr_path);
+                                    } else {
+                                        char *abs = absolute_location(ctx, &req, qr_path);
+                                        snprintf(gallery_url, sizeof(gallery_url), "%s", abs ? abs : qr_path);
+                                        free(abs);
+                                    }
+                                    free(short_code);
+                                } else if (public_url[0]) {
                                     snprintf(gallery_url, sizeof(gallery_url), "%s%s", public_url, gallery_path);
                                 } else {
                                     char *abs = absolute_location(ctx, &req, gallery_path);
@@ -1819,7 +2167,15 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                         free(line);
                                     }
                                 } else if (qr_tpl) {
-                                    char *qr_text = generate_qr_halfblock_text(gallery_url);
+                                    // Cello, the one real exception classified
+                                    // into epoch 0 (see detect_epoch.c/
+                                    // request_charset.h), can't decode the
+                                    // Unicode half-blocks any more than it
+                                    // can decode any other multi-byte UTF-8 -
+                                    // it gets the plain-ASCII equivalent.
+                                    char *qr_text = request_needs_legacy_charset()
+                                        ? generate_qr_asciiblock_text(gallery_url)
+                                        : generate_qr_halfblock_text(gallery_url);
                                     if (qr_text) {
                                         char *line = render_template(qr_tpl, qr_text, gallery_url, gallery_url);
                                         if (line) html = str_append(html, line);
@@ -1923,7 +2279,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 cms_categories_free(cats, cat_count);
 
                 char *content  = blog_list(epoch, content_lang);
-                char *body     = buildBlogListWebSiteAtUrl(epoch, "Boat Rudder - Blog", content, "/blog", cat_menu);
+                char *body     = buildBlogListWebSiteAtUrl(epoch, "{{SITE_NAME}} - Blog", content, "/blog", cat_menu);
                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
@@ -1968,10 +2324,50 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 }
 
+            } else if (strcmp(decoded_url, "/blog/categories") == 0) {
+                // The full category menu, for WML's compact "[Categories]"
+                // link (see category_menu.c), plus a way back. The category
+                // being browsed (when coming from /blog/category/<slug>)
+                // stays highlighted. Epochs without a category-menu-page
+                // template simply don't have this page.
+                int epoch = resolve_epoch(&req);
+                char return_raw[512];
+                url_decode(return_raw, get_query_param(params, param_count, "return"));
+                char safe_return[512];
+                language_sanitize_return(return_raw[0] ? return_raw : "/blog",
+                                         safe_return, sizeof(safe_return));
+
+                char *tpl_path = generate_url_theme("category-menu/category-menu-page_epoch%d.html", epoch);
+                char *tpl = tpl_path ? read_file_to_string(tpl_path) : NULL;
+                free(tpl_path);
+                if (!tpl) {
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else {
+                    char current[256] = "";
+                    if (strncmp(safe_return, "/blog/category/", 15) == 0) {
+                        snprintf(current, sizeof(current), "%s", safe_return + 15);
+                        current[strcspn(current, "?#&")] = '\0';
+                    }
+                    CmsCategoryItem *cats = NULL;
+                    size_t cat_count = 0;
+                    cms_get_categories(content_lang, &cats, &cat_count);
+                    char *cat_menu = category_menu_render(cats, cat_count,
+                                                          current[0] ? current : NULL, epoch);
+                    cms_categories_free(cats, cat_count);
+
+                    char *content = render_template(tpl, cat_menu ? cat_menu : "", safe_return);
+                    free(cat_menu);
+                    free(tpl);
+                    char *body = content ? buildPageWebSite(epoch, "Categories", content) : NULL;
+                    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+
             } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
-                int page = atoi(get_query_param(params, param_count, "page"));
-                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL, page);
+                serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL,
+                                viewer_can_preview_drafts(&req));
 
             } else if (match_theme_css_url(decoded_url, id, sizeof(id))) {
                 if (!theme_key_is_valid(id)) {
@@ -2003,7 +2399,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             if (epoch != EPOCH_MODERN) {
                 char *content  = login(epoch, NULL);
-                char *body     = buildPageWebSite(epoch, "Boat Rudder - Login", content);
+                char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content);
                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
@@ -2032,7 +2428,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char *content  = login(epoch, "Invalid email or password.");
-                    char *body     = buildPageWebSite(epoch, "Boat Rudder - Login", content);
+                    char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content);
                     response       = body ? build_epoch_response(body, "", epoch) : NULL;
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);
@@ -2182,6 +2578,53 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                     char *response = build_redirect_response("/dashboard/menu", "", epoch);
                     send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/api/block-preview") == 0) {
+            // The entry editor's preview of an unselected block, for the
+            // types whose public rendering is server-made (code-text's
+            // highlighting, gallery's thumbnails, table's themed rows, the YouTube
+            // iframe, image's size/float, paragraph's style): the same epoch 3 output a
+            // reader gets, so the editor never shows a second, drifting copy.
+            int epoch = resolve_epoch(&req);
+
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    size_t cap = req.body_length > 0 ? (size_t)req.body_length + 1 : 1;
+                    char *text = malloc(cap);
+                    char type[32];
+                    char extra[256];
+                    char *html = NULL;
+                    if (text) {
+                        parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
+                        parse_urlencoded_field(req.body, req.body_length, "text", text, cap);
+                        parse_urlencoded_field(req.body, req.body_length, "extra", extra, sizeof(extra));
+                        if (strcmp(type, "code-text") == 0 || strcmp(type, "gallery") == 0 ||
+                            strcmp(type, "table") == 0 || strcmp(type, "youtube-embed") == 0 ||
+                            strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0)
+                            html = entry_page_render_block(type, text, extra, EPOCH_MODERN);
+                    }
+                    free(text);
+
+                    if (html) {
+                        char head[256];
+                        snprintf(head, sizeof(head),
+                                 "HTTP/1.1 200 OK\r\n"
+                                 "Content-Type: text/html; charset=UTF-8\r\n"
+                                 "Content-Length: %zu\r\n"
+                                 "X-Content-Type-Options: nosniff\r\n"
+                                 "Connection: close\r\n\r\n", strlen(html));
+                        connection_write(ctx, head, strlen(head));
+                        connection_write(ctx, html, strlen(html));
+                        free(html);
+                    } else {
+                        send_simple(ctx, "500 Internal Server Error", "Error");
+                    }
+                    connection_close(ctx);
                 }
             }
 
@@ -2576,7 +3019,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     } else {
                         char *content  = site_settings_general_page(epoch, name,
                             name[0] ? "No se pudo guardar el nombre del sitio." : "El nombre del sitio no puede estar vacio.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -2625,6 +3068,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                                 colors.navbar_menu_active, sizeof(colors.navbar_menu_active));
                         parse_urlencoded_field(req.body, req.body_length, "navbar-logo",
                                                 colors.navbar_logo, sizeof(colors.navbar_logo));
+                        parse_urlencoded_field(req.body, req.body_length, "link-normal",
+                                                colors.link_normal, sizeof(colors.link_normal));
+                        parse_urlencoded_field(req.body, req.body_length, "link-hover",
+                                                colors.link_hover, sizeof(colors.link_hover));
+                        parse_urlencoded_field(req.body, req.body_length, "link-visited",
+                                                colors.link_visited, sizeof(colors.link_visited));
+                        parse_urlencoded_field(req.body, req.body_length, "link-active",
+                                                colors.link_active, sizeof(colors.link_active));
                         parse_bg_color_field(req.body, req.body_length, "body-background",
                                              "body-background-alpha",
                                              colors.body_background, sizeof(colors.body_background));
@@ -2645,8 +3096,36 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                                 colors.blog_list_item_author, sizeof(colors.blog_list_item_author));
                         parse_urlencoded_field(req.body, req.body_length, "blog-list-item-categories",
                                                 colors.blog_list_item_categories, sizeof(colors.blog_list_item_categories));
+                        parse_urlencoded_field(req.body, req.body_length, "blog-list-item-categories-hover",
+                                                colors.blog_list_item_categories_hover, sizeof(colors.blog_list_item_categories_hover));
                         parse_urlencoded_field(req.body, req.body_length, "blog-list-item-date",
                                                 colors.blog_list_item_date, sizeof(colors.blog_list_item_date));
+                        parse_urlencoded_field(req.body, req.body_length, "table-header",
+                                                colors.table_header, sizeof(colors.table_header));
+                        parse_urlencoded_field(req.body, req.body_length, "table-border",
+                                                colors.table_border, sizeof(colors.table_border));
+                        parse_urlencoded_field(req.body, req.body_length, "table-row-a",
+                                                colors.table_row_a, sizeof(colors.table_row_a));
+                        parse_urlencoded_field(req.body, req.body_length, "table-row-b",
+                                                colors.table_row_b, sizeof(colors.table_row_b));
+                        parse_urlencoded_field(req.body, req.body_length, "code-background",
+                                                colors.code_background, sizeof(colors.code_background));
+                        parse_urlencoded_field(req.body, req.body_length, "code-text",
+                                                colors.code_text, sizeof(colors.code_text));
+                        parse_urlencoded_field(req.body, req.body_length, "code-keyword",
+                                                colors.code_keyword, sizeof(colors.code_keyword));
+                        parse_urlencoded_field(req.body, req.body_length, "code-string",
+                                                colors.code_string, sizeof(colors.code_string));
+                        parse_urlencoded_field(req.body, req.body_length, "code-comment",
+                                                colors.code_comment, sizeof(colors.code_comment));
+                        parse_urlencoded_field(req.body, req.body_length, "code-number",
+                                                colors.code_number, sizeof(colors.code_number));
+                        parse_urlencoded_field(req.body, req.body_length, "code-variable",
+                                                colors.code_variable, sizeof(colors.code_variable));
+                        parse_urlencoded_field(req.body, req.body_length, "code-tag",
+                                                colors.code_tag, sizeof(colors.code_tag));
+                        parse_urlencoded_field(req.body, req.body_length, "code-line-number",
+                                                colors.code_line_number, sizeof(colors.code_line_number));
                         parse_urlencoded_field(req.body, req.body_length, "footer-logo",
                                                 colors.footer_logo, sizeof(colors.footer_logo));
                         parse_bg_color_field(req.body, req.body_length, "footer-logo-background",
@@ -2828,7 +3307,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
                         char *content  = languages_admin(epoch, "Idioma desconocido o ya agregado.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -2868,7 +3347,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
                         char *content  = languages_admin(epoch, "No se puede eliminar el idioma predeterminado o el ultimo idioma.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -2895,7 +3374,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     } else {
                         char *content  = users_admin_form(epoch, "", name, email, role,
                                               "No se pudo crear el usuario. Verifica el email y la contrasena.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     }
@@ -2921,7 +3400,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (strcmp(id, user_id) == 0 && strcmp(role, "admin") != 0 && cms_count_admins() == 1) {
                         char *content  = users_admin_form(epoch, id, name, email, role,
                                               "No puedes quitarte el unico rol de administrador.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     } else if (cms_update_user(id, name, email, role, password) == 0) {
@@ -2929,7 +3408,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     } else {
                         char *content  = users_admin_form(epoch, id, name, email, role,
                                               "No se pudo actualizar el usuario. Verifica el email.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     }
@@ -2952,13 +3431,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                     if (strcmp(id, user_id) == 0) {
                         char *content  = users_admin_list(epoch, "No puedes eliminar tu propia cuenta.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     } else if (cms_get_user_role(id, target_role, sizeof(target_role)) == 0 &&
                                strcmp(target_role, "admin") == 0 && cms_count_admins() == 1) {
                         char *content  = users_admin_list(epoch, "No se puede eliminar el ultimo administrador.");
-                        char *body     = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content);
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     } else {
@@ -3110,6 +3589,75 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             }
 
         } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/media/delete") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char ids[4096];
+                    parse_urlencoded_field(req.body, req.body_length, "ids", ids, sizeof(ids));
+
+                    int deleted = 0, failed = 0;
+                    char *saveptr = NULL;
+                    for (char *tok = strtok_r(ids, ",", &saveptr); tok; tok = strtok_r(NULL, ",", &saveptr)) {
+                        CmsMediaItem item;
+                        if (cms_get_media_item_by_id(tok, &item)) {
+                            media_delete_variants(&item);
+                            if (cms_delete_media(tok) == 0) deleted++; else failed++;
+                        } else {
+                            failed++;
+                        }
+                    }
+
+                    LOG_INFO("media delete: deleted=%d failed=%d", deleted, failed);
+                    if (failed > 0 && deleted == 0)
+                        send_simple(ctx, "500 Internal Server Error", "Could not delete images");
+                    else
+                        send_simple(ctx, "200 OK", "Deleted");
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/api/media/move") == 0) {
+            int epoch = resolve_epoch(&req);
+            if (epoch != EPOCH_MODERN) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char ids[4096], dest_dir[32];
+                    parse_urlencoded_field(req.body, req.body_length, "ids", ids, sizeof(ids));
+                    parse_urlencoded_field(req.body, req.body_length, "dest_dir", dest_dir, sizeof(dest_dir));
+
+                    CmsMediaDirectory dest;
+                    if (!cms_get_media_directory_by_id(dest_dir, &dest)) {
+                        send_simple(ctx, "400 Bad Request", "Unknown destination directory");
+                    } else {
+                        int moved = 0, failed = 0;
+                        char *saveptr = NULL;
+                        for (char *tok = strtok_r(ids, ",", &saveptr); tok; tok = strtok_r(NULL, ",", &saveptr)) {
+                            CmsMediaItem item;
+                            if (cms_get_media_item_by_id(tok, &item) &&
+                                media_move_variants(&item, dest.name) == 0 &&
+                                cms_move_media(tok, dest_dir) == 0) {
+                                moved++;
+                            } else {
+                                failed++;
+                            }
+                        }
+
+                        LOG_INFO("media move: moved=%d failed=%d to dir=%s", moved, failed, dest_dir);
+                        if (failed > 0 && moved == 0)
+                            send_simple(ctx, "500 Internal Server Error", "Could not move images");
+                        else
+                            send_simple(ctx, "200 OK", "Moved");
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
                    strcmp(decoded_url, "/dashboard/api/media/upload") == 0) {
             int epoch = resolve_epoch(&req);
             if (epoch != EPOCH_MODERN) {
@@ -3126,20 +3674,31 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         const MultipartPart *dir_part = multipart_find(mp, "media-directory-selected");
                         const MultipartPart *file_part = multipart_find(mp, "file");
 
-                        if (!dir_part || !file_part || file_part->filename[0] == '\0') {
-                            send_simple(ctx, "400 Bad Request", "Missing directory or file");
+                        if (!file_part || file_part->filename[0] == '\0') {
+                            send_simple(ctx, "400 Bad Request", "Missing file");
                             free_multipart(mp);
                         } else {
                             char dir_id_buf[32] = {0};
-                            size_t dlen = dir_part->data_len < sizeof(dir_id_buf) - 1 ? dir_part->data_len : sizeof(dir_id_buf) - 1;
-                            memcpy(dir_id_buf, dir_part->data, dlen);
+                            if (dir_part) {
+                                size_t dlen = dir_part->data_len < sizeof(dir_id_buf) - 1 ? dir_part->data_len : sizeof(dir_id_buf) - 1;
+                                memcpy(dir_id_buf, dir_part->data, dlen);
+                            }
 
+                            char username[64] = {0};
+                            cms_get_username_by_id(user_id, username, sizeof(username));
+
+                            // No directory selected (or the id no longer exists): fall
+                            // back to this author's "default" directory rather than
+                            // rejecting the upload.
                             CmsMediaDirectory dir;
-                            if (!cms_get_media_directory_by_id(dir_id_buf, &dir)) {
-                                send_simple(ctx, "404 Not Found", "Directory not found");
+                            int dir_ok = cms_get_media_directory_by_id(dir_id_buf, &dir) ||
+                                        resolve_or_create_default_media_directory(user_id, username, &dir) == 0;
+
+                            if (!dir_ok) {
+                                send_simple(ctx, "500 Internal Server Error", "Could not resolve upload directory");
+                                free_multipart(mp);
                             } else {
-                                char username[64] = {0};
-                                cms_get_username_by_id(user_id, username, sizeof(username));
+                                strncpy(dir_id_buf, dir.id, sizeof(dir_id_buf) - 1);
 
                                 // Sanitize filename
                                 char sanitized[256] = {0};
@@ -3207,9 +3766,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                     char media_id[25];
                                     cms_insert_media(db_name, user_id, dir_id_buf, media_id);
 
+                                    // dir_id rides along so the picker can select/reveal
+                                    // the "default" directory when none was chosen up front.
                                     char json_response[2048];
                                     snprintf(json_response, sizeof(json_response),
-                                             "{\"ok\":true,\"filename\":\"%s\"}", optimized_path);
+                                             "{\"ok\":true,\"filename\":\"%s\",\"dir_id\":\"%s\"}",
+                                             optimized_path, dir_id_buf);
                                     char *response = build_json_response(json_response);
                                     connection_write(ctx, response, strlen(response));
                                     free(response);

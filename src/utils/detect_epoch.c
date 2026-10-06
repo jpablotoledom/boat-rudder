@@ -44,7 +44,16 @@ int detect_epoch(const char *user_agent) {
         return EPOCH_WML;
     }
 
-    // Pre-standard text-mode browsers.
+    // Pre-standard text-mode browsers. Cello genuinely belongs here feature-
+    // wise (text-only - it views an image via an external helper, not
+    // inline, same as Lynx), but it's also a real 1993 browser that predates
+    // UTF-8 entirely, unlike EPOCH_PRESTANDARD's *other* real reader (a
+    // modern Lynx/w3m/ELinks running in a UTF-8 locale today, which this
+    // epoch's charset is actually chosen for - see content_type_for_epoch()
+    // in build_epoch_response.c). Rather than split Cello into a template
+    // set it doesn't otherwise need, request_charset.c carves out just its
+    // charset handling by name, independently of this classification -
+    // see that file's own doc comment.
     if (contains(user_agent, "Lynx") || contains(user_agent, "Cello") ||
         contains(user_agent, "Line Mode Browser") ||
         contains(user_agent, "ELinks") || contains(user_agent, "w3m")) {

@@ -5,6 +5,12 @@
         <button class="boat-rudder__entry-editor__block__trash-btn" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
         <span class="boat-rudder__entry-editor__block__type-label type-paragraph">&para; Paragraph</span>
         <div class="boat-rudder__entry-editor__block__header-actions">
+          <button class="boat-rudder__entry-editor__para-btn" onmousedown="event.preventDefault()"
+                  onclick="event.stopPropagation();splitParagraph(this)"
+                  title="Split: move everything after the cursor into a new paragraph below">&#9986; Split</button>
+          <button class="boat-rudder__entry-editor__para-btn boat-rudder__entry-editor__merge-btn" disabled
+                  onclick="event.stopPropagation();mergeParagraphUp(this)"
+                  title="Merge: join this paragraph onto the end of the one above">&#8613; Merge</button>
           <button class="boat-rudder__entry-editor__block__move-btn" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
           <button class="boat-rudder__entry-editor__block__move-btn" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
           <span class="boat-rudder__entry-editor__block__drag">&#8942;</span>

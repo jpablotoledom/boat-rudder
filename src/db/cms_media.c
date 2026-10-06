@@ -73,6 +73,19 @@ void cms_media_directories_free(CmsMediaDirectory *items, size_t count) {
     free(items);
 }
 
+static void fill_media_directory_from_doc(CmsMediaDirectory *out, const bson_t *doc) {
+    memset(out, 0, sizeof(*out));
+    bson_iter_t iter;
+    if (bson_iter_init_find(&iter, doc, "_id") && BSON_ITER_HOLDS_OID(&iter))
+        bson_oid_to_string(bson_iter_oid(&iter), out->id);
+    if (bson_iter_init_find(&iter, doc, "name") && BSON_ITER_HOLDS_UTF8(&iter))
+        copy_str(out->name, sizeof(out->name), &iter);
+    if (bson_iter_init_find(&iter, doc, "parent") && BSON_ITER_HOLDS_UTF8(&iter))
+        copy_str(out->parent, sizeof(out->parent), &iter);
+    if (bson_iter_init_find(&iter, doc, "author_id") && BSON_ITER_HOLDS_OID(&iter))
+        bson_oid_to_string(bson_iter_oid(&iter), out->author_id);
+}
+
 bool cms_get_media_directory_by_id(const char *id_hex, CmsMediaDirectory *out) {
     memset(out, 0, sizeof(*out));
     if (!id_hex || strlen(id_hex) != 24) return false;
@@ -89,16 +102,34 @@ bool cms_get_media_directory_by_id(const char *id_hex, CmsMediaDirectory *out) {
     bool found = false;
 
     if (mongoc_cursor_next(cursor, &doc)) {
+        fill_media_directory_from_doc(out, doc);
         found = true;
-        bson_iter_t iter;
-        if (bson_iter_init_find(&iter, doc, "_id") && BSON_ITER_HOLDS_OID(&iter))
-            bson_oid_to_string(bson_iter_oid(&iter), out->id);
-        if (bson_iter_init_find(&iter, doc, "name") && BSON_ITER_HOLDS_UTF8(&iter))
-            copy_str(out->name, sizeof(out->name), &iter);
-        if (bson_iter_init_find(&iter, doc, "parent") && BSON_ITER_HOLDS_UTF8(&iter))
-            copy_str(out->parent, sizeof(out->parent), &iter);
-        if (bson_iter_init_find(&iter, doc, "author_id") && BSON_ITER_HOLDS_OID(&iter))
-            bson_oid_to_string(bson_iter_oid(&iter), out->author_id);
+    }
+
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(query);
+    mongoc_collection_destroy(col);
+    return found;
+}
+
+bool cms_get_media_directory_by_name(const char *name, const char *author_id, CmsMediaDirectory *out) {
+    memset(out, 0, sizeof(*out));
+    if (!name || !author_id || !bson_oid_is_valid(author_id, strlen(author_id))) return false;
+
+    mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_DIRECTORIES_COLLECTION);
+    if (!col) return false;
+
+    bson_oid_t author_oid;
+    bson_oid_init_from_string(&author_oid, author_id);
+    bson_t *query = BCON_NEW("name", BCON_UTF8(name), "author_id", BCON_OID(&author_oid));
+
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(col, query, NULL, NULL);
+    const bson_t *doc;
+    bool found = false;
+
+    if (mongoc_cursor_next(cursor, &doc)) {
+        fill_media_directory_from_doc(out, doc);
+        found = true;
     }
 
     mongoc_cursor_destroy(cursor);
@@ -178,6 +209,49 @@ int cms_delete_media_directory(const char *id_hex) {
 }
 
 // ---- media items ----
+
+// Fills one CmsMediaItem from an aggregate result document shaped by the
+// $lookup/$unwind stages below (author_info, dir_info alongside the raw
+// media fields) - shared by cms_get_media_items() and
+// cms_get_media_item_by_id() so the two stay in sync.
+static void fill_media_item_from_doc(CmsMediaItem *item, const bson_t *doc) {
+    memset(item, 0, sizeof(*item));
+
+    bson_iter_t iter;
+    if (bson_iter_init_find(&iter, doc, "_id") && BSON_ITER_HOLDS_OID(&iter))
+        bson_oid_to_string(bson_iter_oid(&iter), item->id);
+    if (bson_iter_init_find(&iter, doc, "name") && BSON_ITER_HOLDS_UTF8(&iter))
+        copy_str(item->name, sizeof(item->name), &iter);
+    if (bson_iter_init_find(&iter, doc, "date") && BSON_ITER_HOLDS_UTF8(&iter))
+        copy_str(item->date, sizeof(item->date), &iter);
+    if (bson_iter_init_find(&iter, doc, "format") && BSON_ITER_HOLDS_UTF8(&iter))
+        copy_str(item->format, sizeof(item->format), &iter);
+    if (bson_iter_init_find(&iter, doc, "author_id") && BSON_ITER_HOLDS_OID(&iter))
+        bson_oid_to_string(bson_iter_oid(&iter), item->author_id);
+
+    if (bson_iter_init_find(&iter, doc, "author_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
+        bson_iter_t sub;
+        if (bson_iter_recurse(&iter, &sub) && bson_iter_find(&sub, "email") && BSON_ITER_HOLDS_UTF8(&sub)) {
+            const char *email = bson_iter_utf8(&sub, NULL);
+            const char *at = email ? strchr(email, '@') : NULL;
+            size_t len = at ? (size_t)(at - email) : (email ? strlen(email) : 0);
+            if (len >= sizeof(item->author_username)) len = sizeof(item->author_username) - 1;
+            if (len > 0) memcpy(item->author_username, email, len);
+            item->author_username[len] = '\0';
+        }
+    }
+    if (bson_iter_init_find(&iter, doc, "dir_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
+        bson_iter_t sub;
+        if (bson_iter_recurse(&iter, &sub)) {
+            if (bson_iter_find(&sub, "name") && BSON_ITER_HOLDS_UTF8(&sub))
+                copy_str(item->dir_name, sizeof(item->dir_name), &sub);
+            if (bson_iter_find(&sub, "parent") && BSON_ITER_HOLDS_UTF8(&sub))
+                copy_str(item->dir_parent, sizeof(item->dir_parent), &sub);
+        }
+    }
+    if (bson_iter_init_find(&iter, doc, "dir_id") && BSON_ITER_HOLDS_OID(&iter))
+        bson_oid_to_string(bson_iter_oid(&iter), item->dir_id);
+}
 
 void cms_get_media_items(const char *dir_id, int skip, int limit,
                          CmsMediaItem **out, size_t *out_count) {
@@ -278,7 +352,7 @@ void cms_get_media_items(const char *dir_id, int skip, int limit,
         bson_append_document_end(pipeline, &s);
     }
 
-    mongoc_cursor_t *cursor = mongoc_collection_aggregate(col, MONGOC_QUERY_NONE, pipeline, NULL, NULL);
+    mongoc_cursor_t *cursor = mongodb_manager_aggregate(MEDIA_COLLECTION, pipeline);
     const bson_t *doc;
 
     size_t cap = 32;
@@ -287,44 +361,7 @@ void cms_get_media_items(const char *dir_id, int skip, int limit,
 
     while (mongoc_cursor_next(cursor, &doc)) {
         if (count >= cap) { cap *= 2; list = realloc(list, cap * sizeof(*list)); }
-        CmsMediaItem *item = &list[count];
-        memset(item, 0, sizeof(*item));
-
-        bson_iter_t iter;
-        if (bson_iter_init_find(&iter, doc, "_id") && BSON_ITER_HOLDS_OID(&iter))
-            bson_oid_to_string(bson_iter_oid(&iter), item->id);
-        if (bson_iter_init_find(&iter, doc, "name") && BSON_ITER_HOLDS_UTF8(&iter))
-            copy_str(item->name, sizeof(item->name), &iter);
-        if (bson_iter_init_find(&iter, doc, "date") && BSON_ITER_HOLDS_UTF8(&iter))
-            copy_str(item->date, sizeof(item->date), &iter);
-        if (bson_iter_init_find(&iter, doc, "format") && BSON_ITER_HOLDS_UTF8(&iter))
-            copy_str(item->format, sizeof(item->format), &iter);
-        if (bson_iter_init_find(&iter, doc, "author_id") && BSON_ITER_HOLDS_OID(&iter))
-            bson_oid_to_string(bson_iter_oid(&iter), item->author_id);
-
-        if (bson_iter_init_find(&iter, doc, "author_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
-            bson_iter_t sub;
-            if (bson_iter_recurse(&iter, &sub) && bson_iter_find(&sub, "email") && BSON_ITER_HOLDS_UTF8(&sub)) {
-                const char *email = bson_iter_utf8(&sub, NULL);
-                const char *at = email ? strchr(email, '@') : NULL;
-                size_t len = at ? (size_t)(at - email) : (email ? strlen(email) : 0);
-                if (len >= sizeof(item->author_username)) len = sizeof(item->author_username) - 1;
-                if (len > 0) memcpy(item->author_username, email, len);
-                item->author_username[len] = '\0';
-            }
-        }
-        if (bson_iter_init_find(&iter, doc, "dir_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
-            bson_iter_t sub;
-            if (bson_iter_recurse(&iter, &sub)) {
-                if (bson_iter_find(&sub, "name") && BSON_ITER_HOLDS_UTF8(&sub))
-                    copy_str(item->dir_name, sizeof(item->dir_name), &sub);
-                if (bson_iter_find(&sub, "parent") && BSON_ITER_HOLDS_UTF8(&sub))
-                    copy_str(item->dir_parent, sizeof(item->dir_parent), &sub);
-            }
-        }
-        if (bson_iter_init_find(&iter, doc, "dir_id") && BSON_ITER_HOLDS_OID(&iter))
-            bson_oid_to_string(bson_iter_oid(&iter), item->dir_id);
-
+        fill_media_item_from_doc(&list[count], doc);
         count++;
     }
 
@@ -396,6 +433,121 @@ int cms_delete_media(const char *id_hex) {
     if (ret != 0) LOG_ERROR("cms_delete_media: %s", error.message);
 
     bson_destroy(selector);
+    mongoc_collection_destroy(col);
+    return ret;
+}
+
+bool cms_get_media_item_by_id(const char *id_hex, CmsMediaItem *out) {
+    memset(out, 0, sizeof(*out));
+    if (!id_hex || strlen(id_hex) != 24 || !bson_oid_is_valid(id_hex, 24)) return false;
+
+    mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_COLLECTION);
+    if (!col) return false;
+
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, id_hex);
+
+    // Same $lookup/$unwind shape as cms_get_media_items(), just narrowed to
+    // one document up front instead of a whole directory's worth.
+    bson_t *pipeline = bson_new();
+    int stage = 0;
+    char idx[8];
+
+    {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_t s, m;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_DOCUMENT_BEGIN(&s, "$match", &m);
+        BSON_APPEND_OID(&m, "_id", &oid);
+        bson_append_document_end(&s, &m);
+        bson_append_document_end(pipeline, &s);
+    }
+    {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_t s, l;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_DOCUMENT_BEGIN(&s, "$lookup", &l);
+        BSON_APPEND_UTF8(&l, "from", USERS_COLLECTION);
+        BSON_APPEND_UTF8(&l, "localField", "author_id");
+        BSON_APPEND_UTF8(&l, "foreignField", "_id");
+        BSON_APPEND_UTF8(&l, "as", "author_info");
+        bson_append_document_end(&s, &l);
+        bson_append_document_end(pipeline, &s);
+    }
+    {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_t s, u;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_DOCUMENT_BEGIN(&s, "$unwind", &u);
+        BSON_APPEND_UTF8(&u, "path", "$author_info");
+        BSON_APPEND_BOOL(&u, "preserveNullAndEmptyArrays", true);
+        bson_append_document_end(&s, &u);
+        bson_append_document_end(pipeline, &s);
+    }
+    {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_t s, l;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_DOCUMENT_BEGIN(&s, "$lookup", &l);
+        BSON_APPEND_UTF8(&l, "from", MEDIA_DIRECTORIES_COLLECTION);
+        BSON_APPEND_UTF8(&l, "localField", "dir_id");
+        BSON_APPEND_UTF8(&l, "foreignField", "_id");
+        BSON_APPEND_UTF8(&l, "as", "dir_info");
+        bson_append_document_end(&s, &l);
+        bson_append_document_end(pipeline, &s);
+    }
+    {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_t s, u;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_DOCUMENT_BEGIN(&s, "$unwind", &u);
+        BSON_APPEND_UTF8(&u, "path", "$dir_info");
+        BSON_APPEND_BOOL(&u, "preserveNullAndEmptyArrays", true);
+        bson_append_document_end(&s, &u);
+        bson_append_document_end(pipeline, &s);
+    }
+    {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_t s;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_INT32(&s, "$limit", 1);
+        bson_append_document_end(pipeline, &s);
+    }
+
+    mongoc_cursor_t *cursor = mongodb_manager_aggregate(MEDIA_COLLECTION, pipeline);
+    const bson_t *doc;
+    bool found = false;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        fill_media_item_from_doc(out, doc);
+        found = true;
+    }
+
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(pipeline);
+    mongoc_collection_destroy(col);
+    return found;
+}
+
+int cms_move_media(const char *id_hex, const char *dest_dir_id) {
+    if (!id_hex || strlen(id_hex) != 24 || !bson_oid_is_valid(id_hex, 24)) return -1;
+    if (!dest_dir_id || strlen(dest_dir_id) != 24 || !bson_oid_is_valid(dest_dir_id, 24)) return -1;
+
+    mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_COLLECTION);
+    if (!col) return -1;
+
+    bson_oid_t oid, dest_oid;
+    bson_oid_init_from_string(&oid, id_hex);
+    bson_oid_init_from_string(&dest_oid, dest_dir_id);
+
+    bson_t *selector = BCON_NEW("_id", BCON_OID(&oid));
+    bson_t *update = BCON_NEW("$set", "{", "dir_id", BCON_OID(&dest_oid), "}");
+
+    bson_error_t error;
+    int ret = mongoc_collection_update_one(col, selector, update, NULL, NULL, &error) ? 0 : -1;
+    if (ret != 0) LOG_ERROR("cms_move_media: %s", error.message);
+
+    bson_destroy(selector);
+    bson_destroy(update);
     mongoc_collection_destroy(col);
     return ret;
 }

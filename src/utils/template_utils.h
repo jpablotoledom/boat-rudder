@@ -6,6 +6,10 @@
 // plain copy of `src` is returned. Returns NULL on allocation failure.
 char *str_replace_first(const char *src, const char *needle, const char *replacement);
 
+// Like str_replace_first(), but replaces every occurrence of `needle`, not
+// just the first. Returns NULL on allocation failure.
+char *str_replace_all(const char *src, const char *needle, const char *replacement);
+
 // Renders a printf-style template into a new malloc'd, NUL-terminated
 // string. Returns NULL on allocation/formatting failure.
 char *render_template(const char *tpl, ...);
@@ -14,11 +18,6 @@ char *render_template(const char *tpl, ...);
 // string), freeing `dst`. Returns the new buffer, or NULL on allocation
 // failure (in which case `dst` has already been freed).
 char *str_append(char *dst, const char *src);
-
-// Builds a "<title>page_title</title>" tag as a new malloc'd string, for
-// substitution into a template's {{PAGE_TITLE}} placeholder. Returns NULL on
-// allocation failure.
-char *build_title_tag(const char *page_title);
 
 // Returns a new malloc'd URL with `suffix` inserted before the file extension.
 // e.g. image_url_variant("/img/photo.jpg", "_small") → "/img/photo_small.jpg"

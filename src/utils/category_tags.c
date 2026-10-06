@@ -15,25 +15,33 @@ static char *load_part(const char *subpath_fmt, int epoch) {
     return tpl;
 }
 
-char *category_tags_render(char **links, char **names, size_t count, int epoch) {
-    if (count == 0 || !names) return strdup("");
-
-    char *item_tpl = load_part("elements/category/category_epoch%d.html", epoch);
+static char *render_tags(char *item_tpl, char **links, char **names, size_t count, int epoch) {
     if (!item_tpl) return strdup("");
 
-    // Every epoch links its tags. An anchor is the one thing all of them can
-    // do - WML included - so a category tag is clickable wherever it appears.
+    // Every epoch links its tags - an anchor is the one thing all of them can
+    // do, WML included - except where category_tags_render_list() picked a
+    // name-only template and passed no links.
     int linked = links != NULL;
 
     char *sep_tpl = load_part("elements/category/category-separator_epoch%d.html", epoch);
 
-    // Epoch 1/2 have no CSS custom properties (see
-    // develop_docs/plans/theme-system-plan.md's epoch 1/2 analysis), so the
-    // category tag color - today hardcoded in category_epoch{1,2}.html -
-    // becomes a %s substituted straight into the <font color>/style
-    // attribute instead. Epoch 3 already carries its own color via the
-    // boat-rudder__entry-category CSS class; -1/0 have no color model.
-    int needs_color = (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE);
+    // Epoch 1 has no CSS custom properties at all (see develop_docs/plans/
+    // theme-system-plan.md's epoch 1/2 analysis), so its category tag color
+    // becomes a %s substituted straight into a <font color> attribute
+    // instead. Epoch 2 does have CSS1, but real-browser testing (IE5/
+    // Windows 3.11, the same engine that forced the navbar's own menu items
+    // off inline color entirely - see menu.c's long comment on that) showed
+    // it won't let an inline `style="color:..."` be overridden on :hover at
+    // all, `!important` included - a category tag colored that way would
+    // silently never show a hover color there. Category tags all share one
+    // theme-wide color anyway (unlike menu items, which differ selected vs
+    // not), so epoch 2 gets no per-tag color argument here either - just an
+    // id (see category_epoch2.html) that layout_epoch2.html's own <style>
+    // block colors, resting and :hover both, the same way it already colors
+    // #boat-rudder-navbar-lang-link/-theme-link. Epoch 3 already carries its
+    // own color via the boat-rudder__entry-category CSS class; -1/0 have no
+    // color model.
+    int needs_color = (epoch == EPOCH_EARLY);
     CmsThemeColors retro;
     if (needs_color) cms_get_theme_colors(request_theme(), &retro);
 
@@ -54,4 +62,20 @@ char *category_tags_render(char **links, char **names, size_t count, int epoch) 
     free(sep_tpl);
     free(item_tpl);
     return result;
+}
+
+char *category_tags_render(char **links, char **names, size_t count, int epoch) {
+    if (count == 0 || !names) return strdup("");
+    return render_tags(load_part("elements/category/category_epoch%d.html", epoch),
+                       links, names, count, epoch);
+}
+
+char *category_tags_render_list(char **links, char **names, size_t count, int epoch) {
+    if (count == 0 || !names) return strdup("");
+    // A category-list template takes the name alone (no link) - WML's blog
+    // cards drop the anchors to leave the ~860-byte screen to the summary.
+    // Epochs without one show the same linked tags as the article page.
+    char *list_tpl = load_part("elements/category/category-list_epoch%d.html", epoch);
+    if (list_tpl) return render_tags(list_tpl, NULL, names, count, epoch);
+    return category_tags_render(links, names, count, epoch);
 }

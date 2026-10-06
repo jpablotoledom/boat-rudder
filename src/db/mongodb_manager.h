@@ -38,4 +38,14 @@ mongoc_client_t *mongodb_manager_get_client(void);
 // the result. Returns NULL if no client is available.
 mongoc_collection_t *mongodb_manager_get_collection(const char *collection_name);
 
+// Runs an aggregation `pipeline` (an array-like document: keys "0", "1", ...)
+// on `collection_name` and returns a cursor over its results (caller must
+// mongoc_cursor_destroy() it), or NULL if no client is available. Use this
+// instead of mongoc_collection_aggregate(): libmongoc 1.30.4-1+deb13u3
+// (Debian security update, 2026-09-26) broke that helper - it fails
+// client-side with 'database name "<db>.<collection>" invalid: contains "."'
+// and never sends the command - while running the aggregate command directly
+// and wrapping its reply in a cursor does the same job unaffected.
+mongoc_cursor_t *mongodb_manager_aggregate(const char *collection_name, const bson_t *pipeline);
+
 #endif // MONGODB_MANAGER_H

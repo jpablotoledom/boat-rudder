@@ -333,7 +333,12 @@ int generate_qr_wbmp(const char *text, const char *fs_path) {
     QRcode *qr = QRcode_encodeString(text, 0, QR_ECLEVEL_L, QR_MODE_8, 1);
     if (!qr) return -1;
 
-    const int scale = 4, margin = 2;
+    // 2 px per module: a version 2-3 code (the site's short /qr/ links and
+    // youtu.be URLs) comes out 58-66 px square, ~470-600 bytes - inside both
+    // a WAP phone's screen (a Nokia 7110's is 96x65) and the single ~975-byte
+    // packet a Palm Rover renders (see wap_gateway/wbxml.h). At 4 px they were
+    // 116-148 px and 1.7-2.8 KB, too big for either.
+    const int scale = 2, margin = 2;
     int size = qr->width;
     int img_size = (size + margin * 2) * scale;
     unsigned char *pixels = malloc((size_t)img_size * img_size);
@@ -365,11 +370,62 @@ int generate_qr_wbmp(const char *text, const char *fs_path) {
     return ret;
 }
 
+// A plain-text footer inside the same <pre> block as the QR grid itself -
+// every epoch-0 reader gets it, Cello or not (the QR's own charset/glyphs
+// are what differ between generate_qr_halfblock_text() and
+// generate_qr_asciiblock_text(); this footer needs no special font, so it's
+// identical either way), pointing the reader at instructions for whatever
+// text-mode font setup their browser needs to actually see the code above.
+// The border lines run as wide as the longer of the QR grid or the note
+// text itself, so a small QR's border still fully frames a note wider than
+// the code is.
+static void write_qr_footer(char **pp, int grid) {
+    static const char LINE1[] = "More information on how to configure your text font to view";
+    static const char LINE2[] = "QR codes at http://theretrocenter.com/page/text-browsers";
+    int len1 = (int)(sizeof(LINE1) - 1);
+    int len2 = (int)(sizeof(LINE2) - 1);
+
+    int width = grid;
+    if (len1 > width) width = len1;
+    if (len2 > width) width = len2;
+    int pad1 = (width - len1) / 2;
+    int pad2 = (width - len2) / 2;
+
+    char *p = *pp;
+    *p++ = '\n';
+    memset(p, '-', (size_t)width); p += width;
+    *p++ = '\n';
+    memset(p, ' ', (size_t)pad1); p += pad1;
+    memcpy(p, LINE1, (size_t)len1); p += len1;
+    *p++ = '\n';
+    memset(p, ' ', (size_t)pad2); p += pad2;
+    memcpy(p, LINE2, (size_t)len2); p += len2;
+    *p++ = '\n';
+    memset(p, '-', (size_t)width); p += width;
+    *p++ = '\n';
+    *pp = p;
+}
+
+// Upper bound on write_qr_footer()'s output for a given grid width, for
+// callers to size their buffer against - the footer's own two fixed lines
+// bound `width` regardless of how small grid is, so this pads generously
+// rather than computing the exact figure twice.
+static size_t qr_footer_extra_len(int grid) {
+    int width = grid > 96 ? grid : 96;
+    return (size_t)width * 3 + 64;
+}
+
 char *generate_qr_halfblock_text(const char *text) {
     QRcode *qr = QRcode_encodeString(text, 0, QR_ECLEVEL_L, QR_MODE_8, 1);
     if (!qr) return NULL;
 
-    const int margin = 2;
+    // No quiet-zone margin: real QR readers want one, but nothing here is
+    // realistically getting camera-scanned off a CRT next to a machine this
+    // old - the link right below the code is the actual way to reach it -
+    // and every extra column of blank border eats into how much room is
+    // left before a wide QR outgrows the reader's window width (see
+    // <nobr> below).
+    const int margin = 0;
     int size = qr->width;
     int grid = size + margin * 2;
     int term_rows = (grid + 1) / 2; // 2 QR rows packed into 1 terminal row
@@ -380,11 +436,30 @@ char *generate_qr_halfblock_text(const char *text) {
     // stretched to twice the height a phone camera expects. Packing 2 QR
     // rows into 1 terminal row with the upper/lower/full Unicode block
     // glyphs corrects for that and comes out looking square.
-    char *buf = malloc((size_t)term_rows * (grid * 3 + 2) + 1);
+    //
+    // <pre>, same as generate_qr_asciiblock_text() (see that function's own
+    // doc comment for the full history) - no epoch-0 reader gets special-
+    // cased here, Cello included: this function's own charset (UTF-8 half-
+    // blocks) is what's Cello-specific, already handled upstream by which
+    // of these two functions gets called (see request_needs_legacy_charset()
+    // call sites), not by anything in this function's own markup. <pre>
+    // preserves the grid's whitespace/newlines as-is, so a real space
+    // renders as empty and a plain '\n' breaks the row - no '.'/<br>
+    // stand-ins needed. <nobr>...</nobr> around each row still stands: a
+    // long enough URL needs a high enough QR version that `grid` outgrows
+    // the reader's window width, and old text browsers can still wrap a
+    // <pre> line whose run of non-whitespace characters is wider than the
+    // window - <nobr> (predates CSS; `white-space: nowrap` isn't an option)
+    // forces horizontal scroll instead of a mid-row wrap.
+    char *buf = malloc((size_t)term_rows * (grid * 6 + 20) + qr_footer_extra_len(grid) + 20);
     if (!buf) { QRcode_free(qr); return NULL; }
 
     char *p = buf;
+    memcpy(p, "<pre>", 5);
+    p += 5;
     for (int tr = 0; tr < term_rows; tr++) {
+        memcpy(p, "<nobr>", 6);
+        p += 6;
         int qr_top = tr * 2 - margin;
         int qr_bot = tr * 2 + 1 - margin;
         for (int c = 0; c < grid; c++) {
@@ -398,10 +473,84 @@ char *generate_qr_halfblock_text(const char *text) {
             if      (top && bot) { *p++ = (char)0xE2; *p++ = (char)0x96; *p++ = (char)0x88; }
             else if (top)        { *p++ = (char)0xE2; *p++ = (char)0x96; *p++ = (char)0x80; }
             else if (bot)        { *p++ = (char)0xE2; *p++ = (char)0x96; *p++ = (char)0x84; }
-            else                 { *p++ = ' '; }
+            else                 { *p++ = ' '; } // empty cell
         }
-        *p++ = '\n';
+        memcpy(p, "</nobr>\n", 8);
+        p += 8;
     }
+    write_qr_footer(&p, grid);
+    memcpy(p, "</pre>", 6);
+    p += 6;
+    *p = '\0';
+    QRcode_free(qr);
+    return buf;
+}
+
+char *generate_qr_asciiblock_text(const char *text) {
+    QRcode *qr = QRcode_encodeString(text, 0, QR_ECLEVEL_L, QR_MODE_8, 1);
+    if (!qr) return NULL;
+
+    // No quiet-zone margin - see generate_qr_halfblock_text()'s own doc
+    // comment on why.
+    const int margin = 0;
+    int size = qr->width;
+    int grid = size + margin * 2;
+    int term_rows = (grid + 1) / 2; // 2 QR rows packed into 1 terminal row
+
+    // <pre>, not plain text: Cello has no notion of HTML's `face` attribute
+    // at all (it predates that Netscape extension) - each text role
+    // (Default font, Monospace, Address, Headings, ...) is instead a
+    // *local* font picked from Configure > Fonts, entirely outside this
+    // page's control. Once that local Monospace/Terminal-font mapping is
+    // set up on the reader's end (confirmed working), <pre> is exactly the
+    // role that wants - it preserves the grid's whitespace natively, unlike
+    // <address> (the earlier workaround, back when only <address>'s font
+    // role would take a bitmap font). A real space character for empty
+    // cells, not the '.' placeholder that role needed before - <pre>
+    // preserves it as-is, no risk of it collapsing or reading as a stray
+    // entity. <nobr> around each row stays regardless, for the same reason
+    // generate_qr_halfblock_text() needs it - see that function's own doc
+    // comment.
+    //
+    // A footer note follows the code itself in the same <pre> block - see
+    // write_qr_footer()'s own doc comment.
+    char *buf = malloc((size_t)term_rows * (grid * 6 + 20) + qr_footer_extra_len(grid) + 20);
+    if (!buf) { QRcode_free(qr); return NULL; }
+
+    char *p = buf;
+    memcpy(p, "<pre>", 5);
+    p += 5;
+    for (int tr = 0; tr < term_rows; tr++) {
+        memcpy(p, "<nobr>", 6);
+        p += 6;
+        int qr_top = tr * 2 - margin;
+        int qr_bot = tr * 2 + 1 - margin;
+        for (int c = 0; c < grid; c++) {
+            int col = c - margin;
+            int top = (qr_top >= 0 && qr_top < size && col >= 0 && col < size)
+                      ? (qr->data[qr_top * size + col] & 0x01) : 0;
+            int bot = (qr_bot >= 0 && qr_bot < size && col >= 0 && col < size)
+                      ? (qr->data[qr_bot * size + col] & 0x01) : 0;
+            // Not actually Û/Ü/ß: these are the UTF-8 encodings of the
+            // Latin-1 code points U+00DB/U+00DC/U+00DF, chosen for the byte
+            // value utf8_to_latin1() transcodes them down to - 0xDB/0xDC/
+            // 0xDF - which happen to be the CP437 full/upper-half/lower-half
+            // block glyphs in "Terminal", the bitmap OEM font Windows ships
+            // (set Cello's Configure > Fonts > Monospace/Terminal role to it
+            // to see them). A real block character, not an ASCII
+            // approximation, riding the one byte-exact encoding path this
+            // project already has for Cello.
+            if      (top && bot) { *p++ = (char)0xC3; *p++ = (char)0x9B; } // -> 0xDB, full block
+            else if (top)        { *p++ = (char)0xC3; *p++ = (char)0x9F; } // -> 0xDF, upper half
+            else if (bot)        { *p++ = (char)0xC3; *p++ = (char)0x9C; } // -> 0xDC, lower half
+            else                 { *p++ = ' '; } // empty cell
+        }
+        memcpy(p, "</nobr>\n", 8);
+        p += 8;
+    }
+    write_qr_footer(&p, grid);
+    memcpy(p, "</pre>", 6);
+    p += 6;
     *p = '\0';
     QRcode_free(qr);
     return buf;

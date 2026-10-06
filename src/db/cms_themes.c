@@ -44,10 +44,28 @@ static const ThemeDefaultEntry THEME_DEFAULTS[] = {
             .blog_list_item_border     = "#00ffab",
             .blog_list_item_author     = "#dfd106",
             .blog_list_item_categories = "#98ffdd",
+            .blog_list_item_categories_hover = "#ffffff",
             .blog_list_item_date       = "#e68e4e",
             .footer_logo               = "#ffffff",
             .footer_logo_background    = "#000000",
             .body_background_epoch1    = "#241144",
+            .link_normal               = "#ffffff",
+            .link_hover                = "#98ffdd",
+            .link_visited              = "#ffffff",
+            .link_active               = "#ffffff",
+            .table_header              = "#1e2d3d",
+            .table_border              = "#444444",
+            .table_row_a               = "#1a1a1a",
+            .table_row_b               = "#141414",
+            .code_background           = "#000080",
+            .code_text                 = "#ffffff",
+            .code_keyword              = "#ffff55",
+            .code_string               = "#55ffff",
+            .code_comment              = "#aaaaaa",
+            .code_number               = "#ff55ff",
+            .code_variable             = "#ffaa55",
+            .code_tag                  = "#ff5555",
+            .code_line_number          = "#8080c0",
         },
     },
     // Values from the project's Figma file, "Color palette Light" variable
@@ -67,10 +85,28 @@ static const ThemeDefaultEntry THEME_DEFAULTS[] = {
             .blog_list_item_border     = "#0009ac",
             .blog_list_item_author     = "#cb5600",
             .blog_list_item_categories = "#0076c0",
+            .blog_list_item_categories_hover = "#000000",
             .blog_list_item_date       = "#00636a",
             .footer_logo               = "#ffffff",
             .footer_logo_background    = "#000000",
             .body_background_epoch1    = "#8dd3ff",
+            .link_normal               = "#680072",
+            .link_hover                = "#006d49",
+            .link_visited              = "#680072",
+            .link_active               = "#680072",
+            .table_header              = "#cbebff",
+            .table_border              = "#b0b0b0",
+            .table_row_a               = "#ffffff",
+            .table_row_b               = "#f0f0f0",
+            .code_background           = "#000080",
+            .code_text                 = "#ffffff",
+            .code_keyword              = "#ffff55",
+            .code_string               = "#55ffff",
+            .code_comment              = "#aaaaaa",
+            .code_number               = "#ff55ff",
+            .code_variable             = "#ffaa55",
+            .code_tag                  = "#ff5555",
+            .code_line_number          = "#8080c0",
         },
     },
 };
@@ -183,10 +219,28 @@ int cms_get_theme_colors(const char *key, CmsThemeColors *out) {
             copy_field(&colors, "blog-list-item-border", out->blog_list_item_border, sizeof(out->blog_list_item_border));
             copy_field(&colors, "blog-list-item-author", out->blog_list_item_author, sizeof(out->blog_list_item_author));
             copy_field(&colors, "blog-list-item-categories", out->blog_list_item_categories, sizeof(out->blog_list_item_categories));
+            copy_field(&colors, "blog-list-item-categories-hover", out->blog_list_item_categories_hover, sizeof(out->blog_list_item_categories_hover));
             copy_field(&colors, "blog-list-item-date", out->blog_list_item_date, sizeof(out->blog_list_item_date));
             copy_field(&colors, "footer-logo", out->footer_logo, sizeof(out->footer_logo));
             copy_field(&colors, "footer-logo-background", out->footer_logo_background, sizeof(out->footer_logo_background));
             copy_field(&colors, "body-background-epoch1", out->body_background_epoch1, sizeof(out->body_background_epoch1));
+            copy_field(&colors, "link-normal", out->link_normal, sizeof(out->link_normal));
+            copy_field(&colors, "link-hover", out->link_hover, sizeof(out->link_hover));
+            copy_field(&colors, "link-visited", out->link_visited, sizeof(out->link_visited));
+            copy_field(&colors, "link-active", out->link_active, sizeof(out->link_active));
+            copy_field(&colors, "table-header", out->table_header, sizeof(out->table_header));
+            copy_field(&colors, "table-border", out->table_border, sizeof(out->table_border));
+            copy_field(&colors, "table-row-a", out->table_row_a, sizeof(out->table_row_a));
+            copy_field(&colors, "table-row-b", out->table_row_b, sizeof(out->table_row_b));
+            copy_field(&colors, "code-background", out->code_background, sizeof(out->code_background));
+            copy_field(&colors, "code-text", out->code_text, sizeof(out->code_text));
+            copy_field(&colors, "code-keyword", out->code_keyword, sizeof(out->code_keyword));
+            copy_field(&colors, "code-string", out->code_string, sizeof(out->code_string));
+            copy_field(&colors, "code-comment", out->code_comment, sizeof(out->code_comment));
+            copy_field(&colors, "code-number", out->code_number, sizeof(out->code_number));
+            copy_field(&colors, "code-variable", out->code_variable, sizeof(out->code_variable));
+            copy_field(&colors, "code-tag", out->code_tag, sizeof(out->code_tag));
+            copy_field(&colors, "code-line-number", out->code_line_number, sizeof(out->code_line_number));
         }
     }
 
@@ -223,10 +277,28 @@ int cms_update_theme_colors(const char *key, const CmsThemeColors *colors) {
                 "blog-list-item-border", BCON_UTF8(colors->blog_list_item_border),
                 "blog-list-item-author", BCON_UTF8(colors->blog_list_item_author),
                 "blog-list-item-categories", BCON_UTF8(colors->blog_list_item_categories),
+                "blog-list-item-categories-hover", BCON_UTF8(colors->blog_list_item_categories_hover),
                 "blog-list-item-date", BCON_UTF8(colors->blog_list_item_date),
                 "footer-logo", BCON_UTF8(colors->footer_logo),
                 "footer-logo-background", BCON_UTF8(colors->footer_logo_background),
                 "body-background-epoch1", BCON_UTF8(colors->body_background_epoch1),
+                "link-normal", BCON_UTF8(colors->link_normal),
+                "link-hover", BCON_UTF8(colors->link_hover),
+                "link-visited", BCON_UTF8(colors->link_visited),
+                "link-active", BCON_UTF8(colors->link_active),
+                "table-header", BCON_UTF8(colors->table_header),
+                "table-border", BCON_UTF8(colors->table_border),
+                "table-row-a", BCON_UTF8(colors->table_row_a),
+                "table-row-b", BCON_UTF8(colors->table_row_b),
+                "code-background", BCON_UTF8(colors->code_background),
+                "code-text", BCON_UTF8(colors->code_text),
+                "code-keyword", BCON_UTF8(colors->code_keyword),
+                "code-string", BCON_UTF8(colors->code_string),
+                "code-comment", BCON_UTF8(colors->code_comment),
+                "code-number", BCON_UTF8(colors->code_number),
+                "code-variable", BCON_UTF8(colors->code_variable),
+                "code-tag", BCON_UTF8(colors->code_tag),
+                "code-line-number", BCON_UTF8(colors->code_line_number),
             "}",
         "}"
     );

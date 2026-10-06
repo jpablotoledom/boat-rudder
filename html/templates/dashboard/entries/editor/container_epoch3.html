@@ -42,7 +42,6 @@
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('generic')">&#9965; HTML</button>
-    <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('image-paragraph')">&#9654; Img+Text</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('table')">&#9974; Table</button>
     <button class="boat-rudder__entry-editor__block-toolbar__btn" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
   </div>
@@ -188,9 +187,58 @@
     refreshBlockPreview(block);
   };
 
+  // Escape, or a click anywhere outside the block being edited, closes it -
+  // except while the media picker or the image lightbox is open on top,
+  // which handle their own Escape and whose clicks belong to them.
+  function overlayOpen() {
+    var media = document.querySelector('#modalContainer .boat-rudder__modal');
+    if (media && getComputedStyle(media).display !== 'none') return true;
+    var lightbox = document.getElementById('imageModal');
+    return !!(lightbox && lightbox.classList.contains('active'));
+  }
+
+  function closeAddBlockMenu() {
+    var menu = document.getElementById('addBlockMenu');
+    if (!menu || !menu.classList.contains('open')) return false;
+    menu.classList.remove('open');
+    return true;
+  }
+
+  // Escape closes the topmost thing first: an open "+ Add block" menu, and
+  // only on a second press the block being edited.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || overlayOpen()) return;
+    if (closeAddBlockMenu()) return;
+    if (activeEditBlock) deactivateBlock(activeEditBlock);
+  });
+
+  // Judged by where the press started, not where the click lands: a text
+  // selection dragged out of the block still started inside it. Bubble
+  // phase, so a click on another block has already switched to that one,
+  // and a toolbar button's insertNewComponent() has already captured the
+  // open block as its insertion anchor before this closes it.
+  var pressTarget = null;
+  document.addEventListener('mousedown', function (e) { pressTarget = e.target; }, true);
+  document.addEventListener('click', function (e) {
+    var t = pressTarget || e.target;
+    pressTarget = null;
+    if (document.contains(t) && !t.closest('.boat-rudder__entry-editor__add-block')) closeAddBlockMenu();
+    if (!activeEditBlock || overlayOpen()) return;
+    if (!document.contains(t)) return; // removed by its own handler (a deleted table row...)
+    if (activeEditBlock.contains(t) || t.closest('#modalContainer, #imageModal')) return;
+    // "+ Add block" keeps the open block: the new one is inserted right after
+    // it (insertNewComponent() anchors on activeEditBlock), and closing it
+    // here would also shrink the layout under the menu as it opens.
+    if (t.closest('.boat-rudder__entry-editor__add-block')) return;
+    // The top bar's controls act on the whole entry (language, save,
+    // publish...): switching language or saving mid-edit keeps the block open.
+    if (t.closest('.boat-rudder__entry-editor__topbar')) return;
+    deactivateBlock(activeEditBlock);
+  });
+
   function initBlockEditors(block) {
     var type = block.dataset.type;
-    if (type === 'paragraph') initParagraphEditors(block);
+    if (type === 'paragraph') { initParagraphEditors(block); updateMergeButton(block); }
     if (type === 'title') initBlockHeadingBtns(block);
     if (type === 'gallery') initGalleryBlock(block);
     if (type === 'image') initImageBlock(block);
@@ -198,13 +246,54 @@
     if (type === 'list') initListBlock(block);
     if (type === 'youtube-embed') initYouTubeBlock(block);
     if (type === 'code-text') initCodeBlock(block);
-    if (type === 'image-paragraph') initImageParagraphBlock(block);
     if (type === 'table') initTableBlock(block);
     if (type === 'social-networks') initSocialBlock(block);
     applyLangVisibility(block);
   }
 
   /* ---- Block preview rendering ---- */
+
+  // Block types whose public rendering is made server-side (code-text's
+  // highlighting, gallery's thumbnails/tiles, table's rows, image's size/align
+  // classes, paragraph's style variant) get previewed with that exact
+  // epoch 3 output from /dashboard/api/block-preview, so the editor can't
+  // drift from what readers see. `fallbackHtml` only fills the gap before the
+  // first response (or if it fails); a per-block token drops a slower, older
+  // response that lands after a newer one.
+  //
+  // An unchanged block keeps its current preview: the editor refreshes every
+  // preview often (language switch, closing a block), and replacing the
+  // markup would reload a YouTube iframe or every gallery image each time.
+  function fetchServerPreview(blockEl, preview, type, text, extra, fallbackHtml, done) {
+    var key = type + '\u0000' + text + '\u0000' + extra;
+    // The node check catches another branch having replaced the preview
+    // since (e.g. "Empty table"), which makes the cached key stale.
+    if (blockEl._previewKey === key && blockEl._previewNode &&
+        blockEl._previewNode.parentNode === preview) return;
+    if (!preview.innerHTML) preview.innerHTML = fallbackHtml;
+    var token = (blockEl._previewToken || 0) + 1;
+    blockEl._previewToken = token;
+    var params = new URLSearchParams();
+    params.set('type', type);
+    params.set('text', text);
+    params.set('extra', extra);
+    fetch('/dashboard/api/block-preview', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    })
+      .then(function (r) { if (!r.ok) throw new Error('Failed'); return r.text(); })
+      .then(function (html) {
+        if (blockEl._previewToken !== token) return;
+        preview.innerHTML = html;
+        blockEl._previewKey = key;
+        blockEl._previewNode = preview.firstElementChild;
+        if (done) done();
+      })
+      .catch(function () { if (blockEl._previewToken === token) preview.innerHTML = fallbackHtml; });
+  }
+
   window.refreshBlockPreview = function (blockEl) {
     if (!blockEl) return;
     var type = blockEl.dataset.type;
@@ -224,30 +313,44 @@
 
     if (type === 'title') {
       var level = parseInt(extra) || 2;
-      preview.innerHTML = '<h' + level + ' class="boat-rudder__entry-editor__preview__title">' + escapeHtml(text) + '</h' + level + '>';
+      preview.innerHTML = text.trim()
+        ? '<h' + level + ' class="boat-rudder__entry-editor__preview__title">' + escapeHtml(text) + '</h' + level + '>'
+        : '<span class="boat-rudder__entry-editor__preview__empty">Empty title</span>';
     } else if (type === 'paragraph') {
-      preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__paragraph">' + (text || '<span class="boat-rudder__entry-editor__preview__empty">Empty paragraph</span>') + '</div>';
+      if (text) {
+        fetchServerPreview(blockEl, preview, 'paragraph', text, extra,
+          '<div class="boat-rudder__entry-editor__preview__paragraph">' + text + '</div>');
+      } else {
+        preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__paragraph"><span class="boat-rudder__entry-editor__preview__empty">Empty paragraph</span></div>';
+      }
     } else if (type === 'image') {
       if (text) {
         // The stored path has no size suffix; only the generated variants exist
-        // on disk, so the preview asks for the thumbnail like galleries do.
+        // on disk, so the fallback asks for the thumbnail like galleries do.
         var imgThumb = text.trim().replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
         // extra_data is "caption|width|align": only the first field is text.
         var imgCaption = extra.split('|')[0];
-        preview.innerHTML = '<figure class="boat-rudder__entry-editor__preview__image"><img src="' + escapeHtml(imgThumb) + '" alt="' + escapeHtml(imgCaption) + '"><figcaption>' + escapeHtml(imgCaption) + '</figcaption></figure>';
+        fetchServerPreview(blockEl, preview, 'image', text, extra,
+          '<figure class="boat-rudder__entry-editor__preview__image"><img src="' + escapeHtml(imgThumb) + '" alt="' + escapeHtml(imgCaption) + '"><figcaption>' + escapeHtml(imgCaption) + '</figcaption></figure>');
       } else {
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">No image URL</span>';
       }
     } else if (type === 'byline') {
-      preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__byline"><span class="boat-rudder__entry-editor__preview__byline-author">' + escapeHtml(text) + '</span><span class="boat-rudder__entry-editor__preview__byline-date">' + escapeHtml(extra) + '</span></div>';
+      preview.innerHTML = (text.trim() || extra.trim())
+        ? '<div class="boat-rudder__entry-editor__preview__byline"><span class="boat-rudder__entry-editor__preview__byline-author">' + escapeHtml(text) + '</span><span class="boat-rudder__entry-editor__preview__byline-date">' + escapeHtml(extra) + '</span></div>'
+        : '<span class="boat-rudder__entry-editor__preview__empty">Empty byline</span>';
     } else if (type === 'gallery') {
-      if (text) {
-        var urls = text.split(';').filter(Boolean);
+      if (text && text.split(';').some(function (u) { return u.trim(); })) {
+        var urls = text.split(';').filter(function (u) { return u.trim(); });
         var thumbs = urls.map(function (u) {
           var t = u.trim().replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
           return '<img class="boat-rudder__entry-editor__preview__thumb" src="' + escapeHtml(t) + '" alt="">';
         }).join('');
-        preview.innerHTML = thumbs || '<span class="boat-rudder__entry-editor__preview__empty">Empty gallery</span>';
+        // buildGalleries (lightbox_epoch3.html) folds a gallery behind its
+        // "+N" tile; it only runs on page load, so rerun it for the new one.
+        fetchServerPreview(blockEl, preview, 'gallery', text, extra, thumbs, function () {
+          if (window.buildGalleries) window.buildGalleries();
+        });
       } else {
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">Empty gallery</span>';
       }
@@ -268,12 +371,16 @@
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">Empty list</span>';
       }
     } else if (type === 'youtube-embed') {
-      preview.innerHTML = extra
-        ? '<div class="boat-rudder__entry-editor__preview__youtube">&#9654; ' + escapeHtml(extra) + '</div>'
-        : '<span class="boat-rudder__entry-editor__preview__empty">No YouTube URL</span>';
+      if (extra) {
+        fetchServerPreview(blockEl, preview, 'youtube-embed', text, extra,
+          '<div class="boat-rudder__entry-editor__preview__youtube">&#9654; ' + escapeHtml(extra) + '</div>');
+      } else {
+        preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">No YouTube URL</span>';
+      }
     } else if (type === 'code-text') {
       if (text) {
-        preview.innerHTML = '<pre class="boat-rudder__entry-editor__preview__code"><code>' + escapeHtml(text.substring(0, 200)) + (text.length > 200 ? '...' : '') + '</code></pre>';
+        fetchServerPreview(blockEl, preview, 'code-text', text, extra,
+          '<pre class="boat-rudder__entry-editor__preview__code"><code>' + escapeHtml(text) + '</code></pre>');
       } else {
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">Empty code block</span>';
       }
@@ -283,16 +390,17 @@
       } else {
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">Empty HTML block</span>';
       }
-    } else if (type === 'image-paragraph') {
-      if (text) {
-        preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__image-paragraph"><img src="' + escapeHtml(text) + '" style="max-height:80px;"></div>';
-      } else {
-        preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">No image</span>';
-      }
     } else if (type === 'table') {
       if (text) {
-        var rows = text.split('\n').filter(function (l) { return l.trim(); });
-        preview.innerHTML = '<div class="boat-rudder__entry-editor__preview__table">' + rows.length + ' row(s)</div>';
+        var tRows = text.split('\n').filter(function (l) { return l.trim(); }).map(function (l) { return l.split('|'); });
+        var tHasHeader = extra === 'header';
+        var tHtml = '<table class="boat-rudder__entry-editor__preview__table">' +
+          tRows.map(function (cells, rowIdx) {
+            var tag = tHasHeader && rowIdx === 0 ? 'th' : 'td';
+            return '<tr>' + cells.map(function (c) { return '<' + tag + '>' + escapeHtml(c) + '</' + tag + '>'; }).join('') + '</tr>';
+          }).join('') +
+          '</table>';
+        fetchServerPreview(blockEl, preview, 'table', text, extra, tHtml);
       } else {
         preview.innerHTML = '<span class="boat-rudder__entry-editor__preview__empty">Empty table</span>';
       }
@@ -315,6 +423,22 @@
     }
   }
 
+  // Image and gallery previews are their published markup, whose pictures
+  // (and a gallery's "+N" tile) open the lightbox - but in the editor a click
+  // there should select the block, and the pictures are most of what there
+  // is to click (a floated image leaves its block with almost no height of
+  // its own). Capture phase, so it runs before their own handlers and can
+  // stop them.
+  document.getElementById('entryBlocks').addEventListener('click', function (e) {
+    var hit = e.target.closest(
+      '.boat-rudder__entry-editor__block__preview .boat-rudder__entry-image img,' +
+      '.boat-rudder__entry-editor__block__preview .boat-rudder__gallery-item');
+    if (!hit) return;
+    e.stopPropagation();
+    e.preventDefault();
+    activateBlock(hit.closest('.boat-rudder__entry-editor__block'));
+  }, true);
+
   /* ---- Rich text (paragraph) ---- */
   var _savedRichRange = null;
   function saveRichSelection() {
@@ -332,6 +456,18 @@
     var url = prompt('URL:');
     if (!url) return;
     document.execCommand('createLink', false, url);
+
+    // execCommand has no way to set a class on the anchor it creates, so tag
+    // whichever link in the active editor is still missing it - since every
+    // link already there from a previous use of this button already carries
+    // it, that classless one is the one just made.
+    var editor = document.activeElement;
+    if (editor && editor.classList && editor.classList.contains('boat-rudder__entry-editor__richtext')) {
+      editor.querySelectorAll('a[href]:not(.boat-rudder__link__a)').forEach(function (a) {
+        a.className = 'boat-rudder__link__a';
+      });
+      syncRichtext(editor);
+    }
   };
 
   window.toggleSource = function (btn) {
@@ -444,6 +580,195 @@
       });
     });
   }
+
+  /* ---- Paragraph split / merge ---- */
+
+  var PARA_BLOCK_TAGS = /^(P|DIV|UL|OL|BLOCKQUOTE|PRE|H[1-6]|TABLE|FIGURE|HR)$/;
+
+  function htmlBox(html) {
+    var d = document.createElement('div');
+    d.innerHTML = html || '';
+    return d;
+  }
+
+  // Whitespace, a <br>, or an element with no text and no picture in it.
+  function isEmptyNode(n) {
+    if (n.nodeType === 3) return !n.textContent.replace(/[\s ]/g, '');
+    if (n.nodeType !== 1) return true;
+    if (n.tagName === 'BR') return true;
+    if (/^(IMG|HR|IFRAME|VIDEO)$/.test(n.tagName) || n.querySelector('img,hr,iframe,video')) return false;
+    return !n.textContent.replace(/[\s ]/g, '');
+  }
+
+  // Drops the empty leftovers a cut leaves at either edge (a dangling <br>,
+  // an emptied <p>, the &#160; between <br>s).
+  function trimEdges(box) {
+    while (box.firstChild && isEmptyNode(box.firstChild)) box.removeChild(box.firstChild);
+    while (box.lastChild && isEmptyNode(box.lastChild)) box.removeChild(box.lastChild);
+  }
+
+  // Where each of a paragraph block's own "paragraphs" begins, as indexes
+  // into box.childNodes: runs of top-level content separated by <br>, or a
+  // block element (<p>, <ul>...) on its own - how the stored HTML marks them
+  // (most of it is plain text with <br>&#160;<br> between paragraphs).
+  function segmentStarts(box) {
+    var starts = [], inRun = false;
+    Array.from(box.childNodes).forEach(function (n, i) {
+      if (n.nodeType === 1 && n.tagName === 'BR') { inRun = false; return; }
+      if (n.nodeType !== 1 && isEmptyNode(n)) return;
+      if (n.nodeType === 1 && PARA_BLOCK_TAGS.test(n.tagName)) { starts.push(i); inRun = false; return; }
+      if (!inRun) { starts.push(i); inRun = true; }
+    });
+    return starts;
+  }
+
+  // Splits `html` after its first `keep` paragraphs: [head, tail]. With no
+  // more than `keep` of them, everything stays in the head.
+  function splitAfterSegments(html, keep) {
+    var box = htmlBox(html);
+    var starts = segmentStarts(box);
+    if (keep >= starts.length) return [html || '', ''];
+    var tail = document.createElement('div');
+    Array.from(box.childNodes).slice(starts[keep]).forEach(function (n) { tail.appendChild(n); });
+    trimEdges(box);
+    trimEdges(tail);
+    return [box.innerHTML, tail.innerHTML];
+  }
+
+  // Two blocks' HTML as one: kept apart as separate paragraphs, with a blank
+  // line unless a block element (<p>...) already separates them.
+  function joinParagraphHtml(a, b) {
+    if (!a.replace(/[\s ]/g, '')) return b;
+    if (!b.replace(/[\s ]/g, '')) return a;
+    var aEndsBlock = /<\/(p|div|ul|ol|blockquote|pre|h[1-6]|table|figure)>\s*$/i.test(a);
+    var bStartsBlock = /^\s*<(p|div|ul|ol|blockquote|pre|h[1-6]|table|figure|hr)[\s>]/i.test(b);
+    return a + (aEndsBlock || bStartsBlock ? '' : '<br><br>') + b;
+  }
+
+  // A paragraph block's text for `lang`, in its stored textarea and - once
+  // the block has been opened - its rich-text editor.
+  function setParagraphText(block, lang, html) {
+    var lc = block.querySelector('.boat-rudder__entry-editor__block__lang-content[data-lang="' + lang + '"]');
+    if (!lc) return;
+    var ta = lc.querySelector('[name="text"]');
+    if (ta) ta.value = html;
+    var rich = lc.querySelector('.boat-rudder__entry-editor__richtext');
+    if (rich) rich.innerHTML = html;
+  }
+
+  // Merge is only possible from the second paragraph of a run onward.
+  function updateMergeButton(block) {
+    var btn = block && block.querySelector('.boat-rudder__entry-editor__merge-btn');
+    if (!btn) return;
+    var prev = block.previousElementSibling;
+    btn.disabled = !(prev && prev.dataset.type === 'paragraph');
+  }
+  new MutationObserver(function () {
+    if (activeEditBlock) updateMergeButton(activeEditBlock);
+  }).observe(document.getElementById('entryBlocks'), { childList: true });
+
+  // Moves everything after the cursor into a new paragraph block right
+  // below. The cursor sits in one language's text; every other language is
+  // cut after the same number of paragraphs (see segmentStarts()) - the
+  // paragraph the cursor is in stays above, whole, in the others.
+  window.splitParagraph = function (btn) {
+    var block = btn.closest('.boat-rudder__entry-editor__block');
+    var panel = block.querySelector('.boat-rudder__entry-editor__block__lang-content[data-lang="' + currentLang + '"]');
+    var div = panel && panel.querySelector('.boat-rudder__entry-editor__richtext');
+    var sel = window.getSelection();
+    var range = null;
+    if (div && div.style.display !== 'none') {
+      if (sel.rangeCount && div.contains(sel.getRangeAt(0).startContainer)) range = sel.getRangeAt(0);
+      else if (_savedRichRange && div.contains(_savedRichRange.startContainer)) range = _savedRichRange;
+    }
+    if (!range) {
+      setStatus('Place the cursor in the text where it should split', 'error');
+      return;
+    }
+
+    var before = document.createRange();
+    before.setStart(div, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    var after = document.createRange();
+    after.setStart(range.startContainer, range.startOffset);
+    after.setEnd(div, div.childNodes.length);
+
+    var head = document.createElement('div');
+    head.appendChild(before.cloneContents());
+    trimEdges(head);
+    var tail = document.createElement('div');
+    tail.appendChild(after.cloneContents());
+    trimEdges(tail);
+    if (!head.innerHTML || !tail.innerHTML) {
+      setStatus('Place the cursor between text: there must be text before and after it', 'error');
+      return;
+    }
+
+    var keep = segmentStarts(head).length;
+    var parts = {};
+    block.querySelectorAll('.boat-rudder__entry-editor__block__lang-content').forEach(function (lc) {
+      var lang = lc.dataset.lang;
+      var ta = lc.querySelector('[name="text"]');
+      parts[lang] = lang === currentLang ? [head.innerHTML, tail.innerHTML]
+                                         : splitAfterSegments(ta ? ta.value : '', keep);
+    });
+
+    createBlockAfter(block, 'paragraph').then(function (newBlock) {
+      if (!newBlock) return;
+      Object.keys(parts).forEach(function (lang) {
+        setParagraphText(block, lang, parts[lang][0]);
+        setParagraphText(newBlock, lang, parts[lang][1]);
+      });
+      var style = block.querySelector('[name="extra_data"]');
+      var newStyle = newBlock.querySelector('[name="extra_data"]');
+      if (style && newStyle) newStyle.value = style.value;
+
+      activateBlock(newBlock);
+      var rich = newBlock.querySelector('.boat-rudder__entry-editor__block__lang-content[data-lang="' + currentLang + '"] .boat-rudder__entry-editor__richtext');
+      if (rich) {
+        rich.focus();
+        var caret = document.createRange();
+        caret.setStart(rich, 0);
+        caret.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(caret);
+      }
+      newBlock.scrollIntoView({ block: 'nearest' });
+      setContentChanged();
+    });
+  };
+
+  // Appends this paragraph block's text, in every language, to the end of
+  // the paragraph block right above it, and removes this one.
+  window.mergeParagraphUp = function (btn) {
+    var block = btn.closest('.boat-rudder__entry-editor__block');
+    var prev = block.previousElementSibling;
+    if (!prev || prev.dataset.type !== 'paragraph') return;
+
+    var joined = {};
+    block.querySelectorAll('.boat-rudder__entry-editor__block__lang-content').forEach(function (lc) {
+      var lang = lc.dataset.lang;
+      var ta = lc.querySelector('[name="text"]');
+      var prevTa = prev.querySelector('.boat-rudder__entry-editor__block__lang-content[data-lang="' + lang + '"] [name="text"]');
+      joined[lang] = joinParagraphHtml(prevTa ? prevTa.value : '', ta ? ta.value : '');
+    });
+
+    postForm(apiUrl('/blocks/' + block.dataset.blockId + '/delete'), new URLSearchParams()).then(function (data) {
+      if (!data.ok) {
+        setStatus('Error: ' + data.error, 'error');
+        return;
+      }
+      Object.keys(joined).forEach(function (lang) { setParagraphText(prev, lang, joined[lang]); });
+      if (activeEditBlock === block) activeEditBlock = null;
+      block.remove();
+      activateBlock(prev);
+      setContentChanged();
+      // The merged block is already deleted server-side, but its text lives
+      // only in this page (in the block above) until saved - save right away
+      // so leaving without saving can't lose it.
+      saveContent();
+    });
+  };
 
   /* ---- Heading level ---- */
   window.setHeadingLevel = function (btn, level) {
@@ -588,32 +913,69 @@
   /* ---- Add / remove blocks ---- */
   window.toggleAddBlockDropdown = function () {
     var menu = document.getElementById('addBlockMenu');
-    menu.classList.toggle('open');
+    var opening = !menu.classList.contains('open');
+    menu.classList.toggle('open', opening);
+    if (!opening) return;
+
+    // The menu opens upward, since the button sits under the last block. The
+    // editor area scrolls (overflow-y: auto), so with little or nothing above
+    // the button - an entry with no blocks yet - an upward menu is clipped
+    // out of sight: open it downward then, scrolled into view.
+    var down = 'boat-rudder__entry-editor__add-block__dropdown--down';
+    menu.classList.remove(down);
+    var btn = menu.previousElementSibling;
+    var scroller = menu.closest('.boat-rudder__entry-editor__main');
+    var roomAbove = btn.getBoundingClientRect().top -
+                    (scroller ? scroller.getBoundingClientRect().top : 0);
+    if (menu.offsetHeight + 4 > roomAbove) {
+      menu.classList.add(down);
+      menu.scrollIntoView({ block: 'nearest' });
+    }
   };
 
-  window.insertNewComponent = function (type) {
+  // Creates a block of `type` server-side right after `anchor` (or at the
+  // end when there's none), puts it on the page and resolves with its
+  // element, or null on failure - shared by the add-block buttons and
+  // splitParagraph().
+  function createBlockAfter(anchor, type) {
     var blocksEl = document.getElementById('entryBlocks');
+    var order = anchor ? Array.from(blocksEl.children).indexOf(anchor) + 1 : blocksEl.children.length;
     var params = new URLSearchParams();
     params.set('type', type);
-    params.set('order', blocksEl.children.length);
+    params.set('order', order);
 
-    postForm(apiUrl('/blocks'), params).then(function (data) {
+    return postForm(apiUrl('/blocks'), params).then(function (data) {
       if (!data.ok) {
         setStatus('Error: ' + data.error, 'error');
-        return;
+        return null;
       }
       var wrapper = document.createElement('div');
       wrapper.innerHTML = data.html;
       var blockEl = wrapper.firstElementChild;
-      blocksEl.appendChild(blockEl);
+      if (anchor && anchor.parentNode === blocksEl) {
+        anchor.after(blockEl);
+      } else {
+        blocksEl.appendChild(blockEl);
+      }
       applyLangVisibility(blockEl);
+      setupDragHandles();
+      setContentChanged();
+      return blockEl;
+    });
+  }
+
+  window.insertNewComponent = function (type) {
+    // New blocks land right after whichever one is currently selected, not
+    // always at the end - captured now, since activateBlock() below will
+    // clear activeEditBlock once the new block takes its place.
+    var anchor = activeEditBlock;
+    createBlockAfter(anchor, type).then(function (blockEl) {
+      if (!blockEl) return;
       refreshBlockPreview(blockEl);
       var menu = document.getElementById('addBlockMenu');
       if (menu) menu.classList.remove('open');
       activateBlock(blockEl);
       blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setupDragHandles();
-      setContentChanged();
     });
   };
 
@@ -655,11 +1017,16 @@
 
   function setupDragHandles() {
     getBlockRows().forEach(function (row) {
-      var grips = [row.querySelector('.boat-rudder__entry-editor__block__grip'), row.querySelector('.boat-rudder__entry-editor__block__drag')].filter(Boolean);
+      // The open block's whole header bar drags too, from any spot that
+      // isn't one of its own controls (trash, Split/Merge, move, close...).
+      var grips = [row.querySelector('.boat-rudder__entry-editor__block__grip'),
+                   row.querySelector('.boat-rudder__entry-editor__block__header')].filter(Boolean);
       grips.forEach(function (grip) {
         if (grip.dataset.dragInit) return;
         grip.dataset.dragInit = '1';
         grip.addEventListener('mousedown', function (e) {
+          if (e.button !== 0) return;
+          if (e.target.closest('button, input, select, textarea, a, label')) return;
           e.preventDefault();
           e.stopPropagation();
           dragging = row;
@@ -719,10 +1086,15 @@
   });
 
   /* ---- Preview post ---- */
+  // Opens the entry's public URL - drafts included, since the server shows
+  // unpublished entries to anyone signed in to the dashboard (marked
+  // "[Draft]" in the title). Pages live under /page/, posts under /blog/.
   window.openBlogPreview = function () {
     var linkInput = document.querySelector('#metaSidebar [name="link"]');
+    var typeInput = document.querySelector('#metaSidebar [name="type"]');
     if (linkInput && linkInput.value) {
-      window.open('/blog/' + linkInput.value, '_blank');
+      var section = (typeInput && typeInput.value === 'page') ? '/page/' : '/blog/';
+      window.open(section + encodeURIComponent(linkInput.value), '_blank');
     } else {
       window.open('/dashboard', '_blank');
     }
@@ -810,26 +1182,88 @@
     setContentChanged();
   };
 
-  /* ---- Image-paragraph block ---- */
-  function initImageParagraphBlock(block) {
-    var hidden = block.querySelector('[name="extra_data"]');
-    var sel = block.querySelector('.boat-rudder__entry-editor__align-select');
-    if (sel && hidden) sel.value = hidden.value || '';
+  /* ---- Table block ----
+     The raw textarea (rows on lines, cells separated by '|') stays the
+     source of truth the server reads; a visual grid is built over it per
+     language panel, mirroring the richtext swap-in above, and every edit
+     to the grid is serialized straight back into that textarea. */
+  function parseTableRows(text) {
+    if (!text || !text.trim())
+      return [['Column 1', 'Column 2', 'Column 3'], ['', '', ''], ['', '', '']];
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+      .filter(function (r) { return r.length > 0; })
+      .map(function (row) { return row.split('|'); });
   }
 
-  window.setAlignExtraData = function (sel) {
-    var block = sel.closest('.boat-rudder__entry-editor__block');
-    if (!block) return;
-    var hidden = block.querySelector('[name="extra_data"]');
-    if (hidden) hidden.value = sel.value;
-    setContentChanged();
-  };
+  function makeTableCell(value, isHeader, ta) {
+    var cell = document.createElement('input');
+    cell.type = 'text';
+    cell.className = 'boat-rudder__entry-editor__table-cell' +
+      (isHeader ? ' boat-rudder__entry-editor__table-cell--header' : '');
+    cell.value = value || '';
+    cell.addEventListener('click', function (e) { e.stopPropagation(); });
+    cell.addEventListener('input', function () { syncTableEditor(ta); });
+    return cell;
+  }
 
-  /* ---- Table block ---- */
+  function buildTableGrid(editor, rows, hasHeader, ta) {
+    editor.innerHTML = '';
+    rows.forEach(function (cells, rowIdx) {
+      var rowDiv = document.createElement('div');
+      rowDiv.className = 'boat-rudder__entry-editor__table-row';
+      cells.forEach(function (val) {
+        rowDiv.appendChild(makeTableCell(val, hasHeader && rowIdx === 0, ta));
+      });
+      editor.appendChild(rowDiv);
+    });
+  }
+
+  function tableHasHeader(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    return !!hidden && hidden.value === 'header';
+  }
+
+  function syncTableEditor(ta) {
+    var lc = ta.closest('.boat-rudder__entry-editor__block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder__entry-editor__table-editor');
+    if (!editor) return;
+    var rows = Array.from(editor.querySelectorAll('.boat-rudder__entry-editor__table-row')).map(function (row) {
+      return Array.from(row.querySelectorAll('.boat-rudder__entry-editor__table-cell'))
+        .map(function (c) { return c.value; }).join('|');
+    });
+    ta.value = rows.join('\n');
+    onBlockInput(ta);
+  }
+
   function initTableBlock(block) {
     var hidden = block.querySelector('[name="extra_data"]');
     var cb = block.querySelector('.boat-rudder__entry-editor__table-header-toggle');
-    if (cb && hidden) cb.checked = (hidden.value === 'header');
+    var hasHeader = hidden ? hidden.value === 'header' : false;
+    if (cb) cb.checked = hasHeader;
+
+    block.querySelectorAll('.boat-rudder__entry-editor__block__lang-content').forEach(function (lc) {
+      var ta = lc.querySelector('[name="text"]');
+      if (!ta || lc.querySelector('.boat-rudder__entry-editor__table-editor')) return;
+
+      var toolbar = document.createElement('div');
+      toolbar.className = 'boat-rudder__entry-editor__toolbar';
+      toolbar.innerHTML =
+        '<button type="button" class="boat-rudder__entry-editor__toolbar__btn" title="Add row" onclick="event.stopPropagation();addTableRow(this)">+&#8594; Row</button>' +
+        '<button type="button" class="boat-rudder__entry-editor__toolbar__btn" title="Add column" onclick="event.stopPropagation();addTableCol(this)">+&#8595; Col</button>' +
+        '<span class="boat-rudder__entry-editor__toolbar__sep"></span>' +
+        '<button type="button" class="boat-rudder__entry-editor__toolbar__btn" title="Delete last row" onclick="event.stopPropagation();delTableRow(this)">&#8722; Row</button>' +
+        '<button type="button" class="boat-rudder__entry-editor__toolbar__btn" title="Delete last column" onclick="event.stopPropagation();delTableCol(this)">&#8722; Col</button>';
+
+      var editor = document.createElement('div');
+      editor.className = 'boat-rudder__entry-editor__table-editor';
+
+      lc.insertBefore(toolbar, ta);
+      lc.insertBefore(editor, ta);
+      ta.style.display = 'none';
+
+      buildTableGrid(editor, parseTableRows(ta.value), hasHeader, ta);
+      syncTableEditor(ta);
+    });
   }
 
   window.setTableHeader = function (cb) {
@@ -837,7 +1271,81 @@
     if (!block) return;
     var hidden = block.querySelector('[name="extra_data"]');
     if (hidden) hidden.value = cb.checked ? 'header' : '';
+    block.querySelectorAll('.boat-rudder__entry-editor__block__lang-content').forEach(function (lc) {
+      var editor = lc.querySelector('.boat-rudder__entry-editor__table-editor');
+      var firstRow = editor && editor.querySelector('.boat-rudder__entry-editor__table-row');
+      if (!firstRow) return;
+      firstRow.querySelectorAll('.boat-rudder__entry-editor__table-cell').forEach(function (c) {
+        c.classList.toggle('boat-rudder__entry-editor__table-cell--header', cb.checked);
+      });
+    });
+    refreshBlockPreview(block);
     setContentChanged();
+  };
+
+  window.addTableRow = function (btn) {
+    var lc = btn.closest('.boat-rudder__entry-editor__block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder__entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var firstRow = editor.querySelector('.boat-rudder__entry-editor__table-row');
+    var colCount = firstRow ? firstRow.querySelectorAll('.boat-rudder__entry-editor__table-cell').length : 3;
+    var rowDiv = document.createElement('div');
+    rowDiv.className = 'boat-rudder__entry-editor__table-row';
+    for (var i = 0; i < colCount; i++) rowDiv.appendChild(makeTableCell('', false, ta));
+    editor.appendChild(rowDiv);
+    syncTableEditor(ta);
+  };
+
+  // Epoch 0/1 render tables as fixed-width ASCII art sized for an 80-column
+  // text terminal (see entry_page.c's render_table_ascii()); each column
+  // costs at least 3 border/padding characters plus a 6-character content
+  // floor once the row is too wide to fit and has to shrink, so a 9th
+  // column can never fit even at that floor (1 + 9*3 + 9*6 = 82 > 80).
+  // Capping the editor at 8 keeps every table on that renderer's readable
+  // side instead of letting it degrade quietly at render time.
+  var MAX_TABLE_COLS = 8;
+
+  window.addTableCol = function (btn) {
+    var lc = btn.closest('.boat-rudder__entry-editor__block__lang-content');
+    var block = btn.closest('.boat-rudder__entry-editor__block');
+    var editor = lc && lc.querySelector('.boat-rudder__entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var firstRow = editor.querySelector('.boat-rudder__entry-editor__table-row');
+    var colCount = firstRow ? firstRow.querySelectorAll('.boat-rudder__entry-editor__table-cell').length : 0;
+    if (colCount >= MAX_TABLE_COLS) {
+      alert('Tables are limited to ' + MAX_TABLE_COLS + ' columns, so they still fit an 80-column text browser.');
+      return;
+    }
+    var hasHeader = tableHasHeader(block);
+    editor.querySelectorAll('.boat-rudder__entry-editor__table-row').forEach(function (row, rowIdx) {
+      row.appendChild(makeTableCell('', hasHeader && rowIdx === 0, ta));
+    });
+    syncTableEditor(ta);
+  };
+
+  window.delTableRow = function (btn) {
+    var lc = btn.closest('.boat-rudder__entry-editor__block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder__entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var rows = editor.querySelectorAll('.boat-rudder__entry-editor__table-row');
+    if (rows.length > 1) { rows[rows.length - 1].remove(); syncTableEditor(ta); }
+  };
+
+  window.delTableCol = function (btn) {
+    var lc = btn.closest('.boat-rudder__entry-editor__block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder__entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var firstRow = editor.querySelector('.boat-rudder__entry-editor__table-row');
+    if (!firstRow || firstRow.querySelectorAll('.boat-rudder__entry-editor__table-cell').length <= 1) return;
+    editor.querySelectorAll('.boat-rudder__entry-editor__table-row').forEach(function (row) {
+      var cells = row.querySelectorAll('.boat-rudder__entry-editor__table-cell');
+      if (cells.length > 0) cells[cells.length - 1].remove();
+    });
+    syncTableEditor(ta);
   };
 
   /* ---- Social-networks block ---- */
@@ -899,10 +1407,10 @@
     var opts = (block.querySelector('[name="extra_data"]') || {}).value || '';
     var parts = opts.split('|');
     var width = ['100', '50', '30'].indexOf(parts[1]) >= 0 ? parts[1] : '100';
-    var align = ['left', 'center', 'right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
+    var align = ['left', 'center', 'right', 'float-left', 'float-right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
     img.style.width = width + '%';
     container.style.justifyContent =
-      align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+      /left$/.test(align) ? 'flex-start' : /right$/.test(align) ? 'flex-end' : 'center';
 
     container.appendChild(img);
   };
@@ -918,7 +1426,7 @@
     var align = block.querySelector('.boat-rudder__entry-editor__image-align');
     if (caption) caption.value = parts[0] || '';
     if (size) size.value = ['100', '50', '30'].indexOf(parts[1]) >= 0 ? parts[1] : '100';
-    if (align) align.value = ['left', 'center', 'right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
+    if (align) align.value = ['left', 'center', 'right', 'float-left', 'float-right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
     renderImagePreview(block);
   }
 

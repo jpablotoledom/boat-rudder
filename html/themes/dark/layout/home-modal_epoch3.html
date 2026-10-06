@@ -9,13 +9,6 @@
   const modalImage = document.getElementById('homeBlogModalImage');
   const closeModal = document.getElementById('homeBlogModalClose');
 
-  document.querySelectorAll('.boat-rudder__home-blog__item__image img').forEach((image) => {
-    image.addEventListener('click', () => {
-      modalImage.src = image.src;
-      modal.classList.add('active');
-    });
-  });
-
   closeModal.addEventListener('click', () => modal.classList.remove('active'));
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.remove('active');

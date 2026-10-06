@@ -1,12 +1,17 @@
 # Boat Rudder - Authentication and Dashboard
 
 Everything behind `/login` and `/dashboard`: the session layer, the two roles, and each
-maintainer (Entries, Categories, Languages, Menu, Users, Media). The public rendering side is in
-[rendering.md](rendering.md); the server foundation in [architecture.md](architecture.md).
+maintainer (Entries, Categories, Languages, Menu, Users, Media, Settings, Analytics). The public
+rendering side is in [rendering.md](rendering.md); the server foundation in
+[architecture.md](architecture.md). The complete route list with guards is
+[routes.md](routes.md); the security model (CSRF, ownership, known gaps) is
+[security.md](security.md).
 
-The two largest features have their own documents and are only summarised here:
-[entry-editor.md](entry-editor.md) for `/dashboard/entries/<id>/edit`, and
-[media-admin.md](media-admin.md) for `/dashboard/media`.
+The largest features have their own documents and are only summarised here:
+[entry-editor.md](entry-editor.md) for `/dashboard/entries/<id>/edit`,
+[media-admin.md](media-admin.md) for `/dashboard/media`, [themes.md](themes.md) and
+[fonts.md](fonts.md) for `/dashboard/settings*`, and [analytics.md](analytics.md) for
+`/dashboard/analytics`.
 
 ---
 
@@ -97,7 +102,7 @@ char *error_content(int epoch, int status_code, const char *message);
 ```
 Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, message). If
 `message` is `NULL`, a default message for `status_code` is used (a static table covering
-`400`/`403`/`404`/`405`/`431`/`500`/`503`); unrecognized codes fall back to `"Error"`.
+`400`/`403`/`404`/`405`/`431`/`500`/`503`); unrecognized codes (e.g. `413`) fall back to `"Error"`.
 
 ### Routes
 
@@ -105,7 +110,7 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
-| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN`, an Administrador (`role == "admin"`) sees the Categories/Languages/Menu/Users nav links (`dashboard/nav-admin_epoch3.html`) and a read-only table of every `entries` document (any `type`, up to `ENTRIES_LIST_LIMIT`, newest `header.date` first) via `entries_admin_rows(epoch, lang, NULL, NULL)`; an Autor sees no extra nav links and only their own `type:"blog"` entries via `entries_admin_rows(epoch, lang, "blog", user_id)`. Rows have the same fields as the blog list plus `type` ("Page"/"Blog"). Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
+| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN`, an Administrador (`role == "admin"`) sees the Categories/Languages/Menu/Users/Analytics/Site settings nav links (`dashboard/nav-admin_epoch3.html`) and a read-only table of every `entries` document (any `type`, up to `ENTRIES_LIST_LIMIT`, newest `header.date` first) via `entries_admin_rows(epoch, lang, NULL, NULL)`; an Autor sees no extra nav links and only their own `type:"blog"` entries via `entries_admin_rows(epoch, lang, "blog", user_id)`. Rows have the same fields as the blog list plus `type` ("Page"/"Blog"). Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
 | `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()` - Administrador only, an Autor session gets `302 /dashboard`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
 | `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
 | `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
@@ -126,7 +131,10 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/dashboard/entries/<id>/edit` | `GET` | `require_dashboard_session_role()` + `can_edit_entry()`. See [entry-editor.md](entry-editor.md). |
 | `/dashboard/entries/<id>/delete` | `POST` | `require_admin_session()` - Administrador only; an Autor can never delete entries, even their own. `cms_delete_entry()`, `302 /dashboard`. |
 | `/dashboard/api/entries/<id>/...` | `POST` | The editor's five AJAX endpoints (`meta`, `header`, `content`, `blocks`, `blocks/<block_id>/delete`). All share the same gate: `require_dashboard_session_role()`, `404 {"ok":false,"error":"not found"}` if `<id>` doesn't resolve, `403 {"ok":false,"error":"forbidden"}` if `!can_edit_entry()`. Payloads and responses in [entry-editor.md](entry-editor.md). |
-| `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session()` - any role. See [media-admin.md](media-admin.md). |
+| `/dashboard/api/block-preview` | `POST` | `require_dashboard_session()` - any role. Renders one block as epoch 3 would, for the editor ([entry-editor.md](entry-editor.md#block-preview)). |
+| `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session()` - any role, no per-item ownership check. See [media-admin.md](media-admin.md). |
+| `/dashboard/settings`, `/dashboard/settings/themes*`, `/dashboard/settings/preview`, `/dashboard/settings/fonts*`, `/dashboard/api/theme-assets/*` | `GET`/`POST` | **`EPOCH_MODERN` only**, `require_admin_session()`. Site name, themes (activate, colors, banner, footer, logo, CSS), epoch preview, font library. See [themes.md](themes.md), [fonts.md](fonts.md) and the full list in [routes.md](routes.md#settings-themes-fonts-preview). |
+| `/dashboard/analytics` | `GET` | **`EPOCH_MODERN` only**, `require_admin_session()`. Visit report by period. See [analytics.md](analytics.md#the-report). |
 | `/dashboard/users` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()`. Renders `users_admin_list(epoch, NULL)`: every `users` document sorted by email, with its role label ("Administrador"/"Autor" - a missing `role` field reads as `"admin"`/"Administrador"). |
 | `/dashboard/users/new` | `GET` | Same guards. Renders `users_admin_form(epoch, "", "", "author", NULL)`. |
 | `/dashboard/users/new` | `POST` | Same guards. `parse_user_form()` reads `email`/`password`/`role` (an absent `role` defaults to `"author"`); `cms_create_user()` hashes the password and inserts `{email, password, role}`. On success, `302 /dashboard/users`; on failure (duplicate email, invalid role, DB error), re-renders `users_admin_form()` (`200`) with "No se pudo crear el usuario. Verifica el email y la contrasena." |
@@ -139,8 +147,10 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 
 The login form (and all credential handling) is restricted to `EPOCH_MODERN`, enforced
 server-side on **both** `GET` and `POST /login` via `resolve_epoch()` - never inferred from
-client-supplied data beyond the same `User-Agent`/`force_epoch` resolution used everywhere
-else. Other epochs see a static "this functionality is not available" message and never reach
+client-supplied data beyond the same `resolve_epoch()` used everywhere else (`force_epoch`,
+then `?preview_epoch=`, then `User-Agent`). `?preview_epoch=3` can therefore make an old browser
+*render* the epoch 3 form, but the credential check itself still only runs for an epoch-3
+request, and nothing about a session depends on the epoch it was created from. Other epochs see a static "this functionality is not available" message and never reach
 `auth_login_user()`.
 
 See [diagrams/auth-components.puml](../diagrams/auth-components.puml) for the component
@@ -149,9 +159,10 @@ the `POST /login` sequence diagram.
 
 ---
 
-## Dashboard maintainers: Entries, Categories, Languages, Menu and Users
+## Dashboard maintainers: Entries, Categories, Languages, Menu, Users, Settings and Analytics
 
-Admin features under `/dashboard`. The Categories, Languages, Menu and Users maintainers are
+Admin features under `/dashboard`. The Categories, Languages, Menu, Users, Settings and
+Analytics maintainers are
 separate pages, **`EPOCH_MODERN` only** (other epochs `302 /dashboard`, matching the
 `/login`/`/dashboard` precedent), each requiring an **Administrador** session via
 `require_admin_session()` (`http_router.c`): `503` if mongodb is not ready, `302 /login` if the
@@ -165,7 +176,8 @@ privileges" below).
 `entries_admin_rows(epoch, lang, type_filter, created_by_hex)` returns the `<tbody>` rows for
 the table embedded in `dashboard_epoch<N>.html` (`EPOCH_MODERN` only - `dashboard()` passes them
 through `render_template()`; other epochs' static templates are returned unchanged). The table
-lists `entries` documents (`db.entries.find({enabled: true})`, up to `ENTRIES_LIST_LIMIT`,
+lists `entries` documents (`db.entries.find({})` - **no** `enabled` filter, so drafts are listed
+too - up to `ENTRIES_LIST_LIMIT`,
 newest `header.date` first - see `cms_get_admin_entries()` in `cms_entries.c`); `type_filter`
 and `created_by_hex`, if non-NULL, restrict the query to `{type: type_filter, created_by:
 ObjectId(created_by_hex)}` - `dashboard()` passes `(NULL, NULL)` for an Administrador (every
@@ -220,7 +232,7 @@ document instead of a 5-table relational model).
   `content[]` block's edit form - move-up/down/remove buttons, one
   `blocks/lang-field_epoch<N>.html` per language (the block's `text.<lang>`), a type-specific
   `extra_data` field for `image` ("Caption / alt text") and `byline` ("Date"), and an empty
-  preview `<div>` filled client-side. Loads `blocks/<type>_epoch<N>.html` for the 14 types
+  preview `<div>`. Loads `blocks/<type>_epoch<N>.html` for the 13 types
   `entry_page.c`'s `render_block()` renders publicly, minus `gallery`-specific handling
   (unknown types render `""`, mirroring that function). Only epoch 3 editor templates exist,
   which is consistent with the editor being `EPOCH_MODERN`-only. `entry_editor_render_blocks()`
@@ -236,14 +248,16 @@ document instead of a 5-table relational model).
   `insertNewComponent(type)` / `removeComponent()` call the `/blocks` and
   `/blocks/<block_id>/delete` endpoints and patch the DOM without a full reload.
   `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
-  the next `saveContent()` (block `order` = DOM index at save time). `refreshBlockPreview()`
-  mirrors `entry_page.c`'s public renderers client-side (`title`->`<h2>`, `paragraph`->`<p>`,
-  `image`->`<figure><img><figcaption>`, `byline`->two `<span>`s), HTML-escaping field values for
-  the preview only (the saved/rendered HTML itself follows the project's no-escaping
-  convention, like every other admin form).
+  the next `saveContent()` (block `order` = DOM index at save time). Previews of simple blocks
+  are built client-side; `code-text`, `gallery`, `table`, `youtube-embed`, `image` and
+  `paragraph` are fetched from `POST /dashboard/api/block-preview`, which returns the real epoch 3
+  rendering (`entry_page_render_block()`), so the preview can't drift from the public page.
 - **Editor UX** (epoch 3): the editor uses a document-style layout with a fixed top bar (save-all, autosave toggle, publish toggle, language tabs), a block type toolbar, and a two-column layout (left: meta + header sidebars; right: content blocks). Blocks default to a document-like preview mode; clicking a block enters edit mode showing the full form. Paragraph blocks have a WYSIWYG rich-text toolbar. Title blocks have H1-H6 level selectors. Gallery blocks show a thumbnail preview area with drag-and-drop reordering and a "Select photos" button that opens the media picker modal. Blocks support drag-and-drop reordering.
 - **Gallery block**: supported in editor (thumbnail preview, drag-drop reorder) and public view (see "Gallery block" below). Selecting photos opens the `/dashboard/api/media/modal` endpoint, which returns the media admin UI inside a modal overlay.
-- **Future work**: the `image-single` block type, and older-epoch templates for the nine epoch-3-only block types - see `develop_docs/plans/cms-entry-model-plan.md`.
+- **Drafts**: the publish toggle is the entry's `enabled` flag. A draft is listed in the
+  dashboard and viewable at its public URL by any signed-in user (marked `[Draft]`), and is
+  `404` for everyone else - see [rendering.md](rendering.md#cms-entries-get-pagelink-get-bloglink).
+- **Future work**: see [entry-editor.md](entry-editor.md#7-future-work).
 
 ### Content language resolution (`src/db/cms_languages.c`, `src/db/language_catalog.c`)
 
@@ -259,17 +273,20 @@ typedef struct { char *code; char *name; int is_default; } CmsLanguageItem;
   succeeds; inserts `{code:"en", name:"English", is_default:true}` iff `languages` is empty.
 - `cms_resolve_default_lang(out, out_size)`: `db.languages.findOne({is_default:true}).code`,
   falling back to `iso_lang(lang)` (the global `lang` from `configs/settings.conf`) if mongodb
-  is not ready or no document has `is_default:true`. Called once per request in
-  `http_router.c`'s route block (`content_lang`) and once in `menu()`, then passed to
-  `buildHomeWebSite()`, `blog_list()`, `serve_cms_entry()` and `cms_get_menu_items()` instead of
-  the old global `lang`.
+  is not ready or no document has `is_default:true`. It is the **site default**; the language a
+  request actually renders in is resolved once per request by `request_lang_set()`
+  (`src/utils/request_lang.c`): a valid `?lang=` wins, then a valid `lang` cookie (set by
+  `/language/set`), then this default. The router reads it back with `request_lang()` as
+  `content_lang` and passes it to `buildHomeWebSite()`, `blog_list()`, `serve_cms_entry()`, and
+  `menu()` reads it itself. See [rendering.md](rendering.md#language-selection-and-persistence).
 - Because callers now pass an already-resolved ISO code (which may be any `LANGUAGE_CATALOG`
   entry, not just `en`/`es`), `cms_get_entry_by_link()`, `cms_get_blog_entries()`
   (`cms_entries.c`) and `cms_get_menu_items()` (`cms_menu.c`) no longer call `iso_lang()`
   internally - `iso_lang()` is now only called from `cms_resolve_default_lang()`'s fallback path.
-- `src/db/language_catalog.c`: a curated, static `LANGUAGE_CATALOG[]` of ~25 ISO 639-1 codes +
-  English names, used to validate/name new languages and to build the "add language" `<select>`
-  on `/dashboard/languages`.
+- `src/db/language_catalog.c`: a curated, static `LANGUAGE_CATALOG[]` of ISO 639-1 codes with
+  their English name, native name and short form (`abbr`, for the compact nav-bar button), used
+  to validate/name new languages, to build the "add language" `<select>` on
+  `/dashboard/languages`, and by the public language picker.
 - `cms_add_language(code)` / `cms_set_default_language(code)` / `cms_remove_language(code)`:
   insert/promote/remove a `languages` document. `cms_set_default_language()` takes effect
   immediately (no restart), since `cms_resolve_default_lang()` re-queries `languages` on every
@@ -393,18 +410,21 @@ A media library for uploading and managing images used in entries. Requires a da
 | Route | Behavior |
 |---|---|
 | `GET /dashboard/media` | Full media admin page |
-| `GET /dashboard/api/media/contents` | Paginated photo grid (HTML fragment) |
+| `GET /dashboard/api/media/contents` | Paginated photo grid (HTML fragment, `MEDIA_PAGE_SIZE` = 36) |
+| `GET /dashboard/api/media/directory/item` | One directory tile (after creating it) |
 | `GET /dashboard/api/media/modal` | Media picker modal (for entry editor) |
 | `POST /dashboard/api/media/directory` | Create directory |
 | `POST /dashboard/api/media/directory/rename` | Rename directory + physical folder |
 | `POST /dashboard/api/media/directory/delete` | Delete (empty) directory |
-| `POST /dashboard/api/media/upload` | Multipart upload → optimizer → DB insert |
+| `POST /dashboard/api/media/delete` | Delete items and every size variant |
+| `POST /dashboard/api/media/move` | Move items (files + DB) to another directory |
+| `POST /dashboard/api/media/upload` | Multipart upload → optimizer → DB insert; no directory → author's `default` |
 | `GET /gallery/<id>` | **Public** gallery page (epoch-aware, no session required) |
 
 **Gallery block** (`elements/gallery/`, `src/modules/entry_page/entry_page.c`): the `gallery` content block type stores semicolon-separated image URLs in `content[].text` and the `media_galleries._id` in `extra_data`. When saving an entry with gallery blocks, the router calls `cms_upsert_media_gallery()` to keep the `media_galleries` collection in sync. Public rendering:
 - Epoch 3: CSS grid (3 columns), max 5 visible + "+N remaining" overlay. Click opens a full-screen lightbox with prev/next navigation and keyboard support (←/→/Esc).
 - Epochs 1-2: table of thumbnails linking to `/gallery/<id>?img=N`; the gallery page shows a main image with prev/next links and a thumbnail strip.
-- Epochs -1/0: text link to `/gallery/<id>`.
+- Epochs -1/0: text link to `/gallery/<id>`, whose page shows a QR code (through a `/qr/<code>` short link) instead of the photos.
 
 ### Routing helpers (`src/web_server/http_router.c`)
 
@@ -417,8 +437,9 @@ A media library for uploading and managing images used in entries. Requires a da
   `/dashboard/entries/new` and the entry editor routes.
 - `require_admin_session(ctx, req, epoch, user_id_out)`: `require_dashboard_session_role()` +
   `302 /dashboard` (returning `0`) if `role != "admin"`. Used by `/dashboard/users*`,
-  `/dashboard/categories*`, `/dashboard/languages*`, `/dashboard/menu*` and
-  `/dashboard/entries/<id>/delete`.
+  `/dashboard/categories*`, `/dashboard/languages*`, `/dashboard/menu*`,
+  `/dashboard/settings*` (including fonts), `/dashboard/analytics`,
+  `/dashboard/api/theme-assets/*` and `/dashboard/entries/<id>/delete`.
 - `can_edit_entry(role, user_id, entry)`: see "Roles and privileges" above.
 - `parse_user_form(req, out_email, ..., out_password, ..., out_role, ...)`: reads
   `email`/`password`/`role` from the POST body for `cms_create_user()`/`cms_update_user()`; an
@@ -434,6 +455,40 @@ A media library for uploading and managing images used in entries. Requires a da
   `parse_urlencoded_field()`, but collects every value for `key` (used for the entries meta
   form's `categories` multi-select, where each selected option shares `name="categories"`).
   Each returned `out_values[i]` is malloc'd; the caller frees them.
+- `match_theme_epoch_route(decoded_url, segment, key_out, …, epoch_out, …)`: matches
+  `/dashboard/settings/themes/<key>/<segment>/<epoch>` for the banner/footer/logo saves (the
+  epoch may be `-1`).
+- `match_theme_css_url()`: matches the public `/themes/<key>/styles_epoch3.css`.
+- `theme_assets_dir()`, `sanitize_asset_filename()`, `mkdir_recursive()`: validation and
+  filesystem helpers for the theme-assets and font uploads ([security.md](security.md#request-handling)).
+- `parse_bg_color_field()`: joins a color picker and an opacity field into `#rrggbb[aa]`.
+- `viewer_can_preview_drafts()`: any valid session - lets `serve_cms_entry()` show drafts.
+
+---
+
+## Settings (`/dashboard/settings`)
+
+Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
+
+| Page | What it edits | Stored in |
+|---|---|---|
+| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere) | `site_settings.site_name` |
+| `/dashboard/settings/themes` | One panel per directory under `html/themes/`: *Set active*, the 34 colors (backgrounds with opacity), the epoch 3 logo font, links to the per-theme editors | `site_settings.active_theme`, `themes.colors`, `themes.logo_font` |
+| `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) + image upload/browse | `themes.banner_html`, `themes.footer_html`, files in `html/themes/<key>/assets/` |
+| `…/themes/<key>/logo` | Per-epoch logo: text (0), image (−1, 1, 2; −1 auto-converted to WBMP) or either (3) | `themes.logo` |
+| `…/themes/<key>/css` | Full epoch 3 stylesheet, with *Restore original* | `themes.css_epoch3` |
+| `/dashboard/settings/preview` | Nothing - an iframe of the site in any epoch and screen size (`?preview_epoch=`) | - |
+| `/dashboard/settings/fonts` | Uploaded font library ([fonts.md](fonts.md)) | `fonts`, `html/assets/fonts/` |
+
+Modules: `src/modules/site_settings_admin/`, `src/modules/fonts_admin/`; templates under
+`html/templates/dashboard/settings/` and `…/fonts/`.
+
+## Analytics (`/dashboard/analytics`)
+
+Admin-only, epoch 3. A report of the per-day visit counters recorded for every public page view:
+totals per epoch, routes, browsers and operating systems (grouped by family), countries (grouped
+by continent) and the top 20 entries, for a day, ISO week, month, year, last year, all time or a
+custom range. Module `src/modules/analytics_view/`; reference [analytics.md](analytics.md).
 
 ---
 

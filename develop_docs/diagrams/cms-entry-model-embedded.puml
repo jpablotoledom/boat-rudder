@@ -1,6 +1,6 @@
 @startuml cms-entry-model-embedded
 
-title Boat Rudder - "Entry" Document Model (embedded)
+title Boat Rudder - "Entry" Document Model (embedded, as implemented)
 
 skinparam backgroundColor #FAFAFA
 skinparam linetype ortho
@@ -17,63 +17,76 @@ skinparam note {
 entity "entries" as ENTRIES {
     * _id : ObjectId
     --
-    link : string <<unique slug>>
-    type : string ("blog" | "page" | ...)
-    order : int
-    enabled : bool
-    menu : bool
-    name : map<lang, string>        <<embedded translation, lang = ISO 639-1>>
+    link : string <<slug, unique by convention>>
+    type : string ("blog" | "page")
+    enabled : bool  <<false = draft>>
+    created_by : ObjectId --> users  <<ownership for role "author">>
     categories : ObjectId[] --> entry_categories
     --
-    .. header (embedded, was its own collection) ..
-    header.image_url : string
-    header.title   : map<lang, string>  <<embedded translation>>
-    header.summary : map<lang, string>  <<embedded translation>>
-    header.author  : map<lang, string>  <<embedded translation>>
+    .. header (embedded) ..
+    header.image_url : string  <<bare path, no size suffix>>
+    header.title   : map<lang, string>
+    header.summary : map<lang, string>
+    header.author_id : ObjectId --> users
     header.date : datetime
+    header.hide_author : bool
     --
-    .. content[] (embedded array, was its own collection) ..
+    .. content[] (embedded array) ..
     content[]._id : ObjectId
-    content[].type : string <<element type>>
+    content[].type : string <<13 block types>>
     content[].order : int
-    content[].text : map<lang, string>  <<embedded translation>>
-    content[].extra_data : string
+    content[].text : map<lang, string>
+    content[].extra_data : string <<untranslated, per type>>
 }
 
 entity "entry_categories" as ENTRYCAT {
     * _id : ObjectId
     --
-    name : map<lang, string>   <<embedded translation, lang = ISO 639-1>>
+    name : map<lang, string>
+}
+
+entity "users" as USERS {
+    * _id : ObjectId
+    --
+    name, email, password (Argon2id), role
+}
+
+entity "media_galleries" as GALLERIES {
+    * _id : ObjectId
+    --
+    content : string[]  <<image paths>>
+    entry_id : ObjectId --> entries
 }
 
 entity "media / media_directories" as MEDIA {
     * _id : ObjectId
     --
-    "(unchanged: still standalone,\nreferenced from content[].extra_data\nwhen type == \"gallery\")"
+    "(standalone; entries reference
+    images by path, not by id)"
 }
 
 ENTRIES }o--o{ ENTRYCAT : categories[]
-ENTRIES ..> MEDIA       : content[].type == "gallery"
+ENTRIES }o--|| USERS : created_by,\nheader.author_id
+GALLERIES }o--|| ENTRIES : entry_id
+ENTRIES ..> GALLERIES : content[].extra_data\n(type == "gallery")
+ENTRIES ..> MEDIA : header.image_url,\nimage / gallery paths
 
 note right of ENTRIES
   One document per page, fully self-contained:
-  reading a page is a single findOne({link}).
-  No $lookup / $unwind needed for header,
-  content blocks, or their translations.
+  reading a page is a single
+  findOne({link, enabled: true}) - or {link}
+  for a signed-in user previewing a draft.
+  Block types: title, paragraph, byline, image,
+  gallery, separator, link, list, table,
+  code-text, youtube-embed, social-networks,
+  generic. ("image-paragraph" was merged into
+  "image" - migration 2026-10-01.)
 end note
 
 note right of ENTRYCAT
-  Kept as its own collection because categories
-  are reused across many entries (many-to-many);
-  embedding "translation" here just removes the
-  separate translation collection for category names.
-end note
-
-note bottom
-  4 collections total:
-  entries (header + content + translation embedded),
-  entry_categories (translation embedded),
-  media, media_directories
+  Own collection because categories are
+  shared many-to-many. The public slug is
+  derived with slugify(name), never stored.
 end note
 
 note left of ENTRIES

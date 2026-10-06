@@ -1,9 +1,13 @@
 # Boat Rudder - Public Page Rendering
 
 How every public route is turned into markup: the epoch system, the per-epoch template
-convention, and one section per public page type. The server foundation underneath
-(sockets, router, static files) is in [architecture.md](architecture.md); the admin side is in
-[dashboard.md](dashboard.md).
+convention, the response layer, and one section per public page type. The server foundation
+underneath (sockets, router, static files) is in [architecture.md](architecture.md); the admin
+side is in [dashboard.md](dashboard.md). Related references: [routes.md](routes.md) (every
+route), [templates-catalog.md](templates-catalog.md) (every template and its arguments),
+[themes.md](themes.md) (theme resolution and personalization),
+[qr-and-short-links.md](qr-and-short-links.md), [code-highlighting.md](code-highlighting.md) and
+[wap-gateway.md](wap-gateway.md) (epoch −1 on real WAP devices).
 
 ---
 
@@ -19,7 +23,7 @@ client the simplest markup its browser can handle, from WAP-era phones to modern
 | Epoch | Constant | Target | `Content-Type` |
 |---|---|---|---|
 | -1 | `EPOCH_WML` | WAP 1.x phones | `text/vnd.wap.wml` |
-| 0 | `EPOCH_PRESTANDARD` | Text browsers (e.g. Lynx, w3m, ELinks) | `text/html; charset=UTF-8` |
+| 0 | `EPOCH_PRESTANDARD` | Text browsers (e.g. Lynx, w3m, ELinks) - and Cello | `text/html; charset=UTF-8` (bare `text/html` for Cello) |
 | 1 | `EPOCH_EARLY` | Old browsers (table layouts, `<font>`) | `text/html` |
 | 2 | `EPOCH_MIDDLE` | Netscape 4 / MSIE 5 era - table layout, no external stylesheet | `text/html; charset=UTF-8` |
 | 3 | `EPOCH_MODERN` | Modern HTML5 + CSS3 | `text/html; charset=UTF-8` |
@@ -30,8 +34,13 @@ configured MIME viewers *literally*, `charset` and all, and a header it doesn't 
 known type shows "Undefined Viewer for MIME Type" instead of the page. Epoch 0's real-world
 reader is a modern terminal emulator (Lynx/w3m/ELinks running today in a UTF-8 locale) rather
 than a genuinely pre-Unicode machine, so it keeps a normal UTF-8 declaration; epoch 1 and WML
-predate UTF-8 outright and are transcoded to Latin-1 instead - see "Character encoding
-(epoch 1, WML)" below.
+predate UTF-8 outright and are transcoded to Latin-1 instead - see "Character encoding" below,
+which also covers the one real pre-Unicode browser classified into epoch 0 (Cello).
+
+Which epoch renders a request is decided by `resolve_epoch()` (`http_router.c`): `force_epoch`
+from the config if set, otherwise a valid `?preview_epoch=N` (the dashboard's preview iframe -
+honored on every route), otherwise `detect_epoch(User-Agent)`. The WAP gateway uses
+`preview_epoch=-1` to fetch WML for real phones.
 
 `detect_epoch()` (`src/utils/detect_epoch.c`) classifies `EPOCH_WML` from a substring list built
 from actual WAP 1.x-era browser/device identifiers: the Openwave/Unwired Planet UP.Browser
@@ -90,10 +99,19 @@ Two practical consequences. Adding a part to every page of an epoch is a one-fil
 fourteen. And because the `layout/` files are substituted textually rather than through
 `vsnprintf`, they carry a literal `%` - only fragments need `%%`.
 
-### Templates (`html/themes/<theme>/`)
+### Templates (`html/templates/` and `html/themes/<theme>/`)
+
+Templates live in two trees. `html/themes/<theme>/` holds what a theme draws differently - the
+`layout/`, `menu/`, `mainbanner/`, `home-content/`, `home-blog/`, `category-menu/` folders,
+`page/page-home_*` and `styles_epoch3.css`. Everything else (content blocks, entry wrappers,
+page shells, login, errors, dashboard) is shared in `html/templates/`. `generate_url_theme()`
+tries the active theme's copy first and falls back to the shared one, so a theme only contains
+what it overrides - see [themes.md](themes.md#3-template-resolution). The exhaustive list, with
+each template's argument count and markers, is [templates-catalog.md](templates-catalog.md);
+the folder notes below explain the *why* of the less obvious ones.
 
 **Convention: no HTML/markup embedded in C.** All HTML, WML and other markup lives in
-template files under `html/themes/<theme>/`, loaded via `generate_url_theme()` +
+template files, loaded via `generate_url_theme()` +
 `read_file_to_string()` and rendered with `render_template()` / `str_replace_first()`. C code
 must not contain inline markup string literals (e.g. `"<p>...</p>"`); if a new piece of markup
 is needed, add a template file instead. The one accepted exception is the catastrophic
@@ -101,7 +119,7 @@ fallback in `send_error_response()` (`http_router.c`), which sends the plain-tex
 via `send_simple()` when the template pipeline itself has failed and cannot be relied on.
 
 Each visual component has one HTML template per epoch, named `<component>_epoch<N>.html`
-(`<N>` ∈ {-1, 0, 1, 2, 3}), under `html/themes/<theme>/<component>/`:
+(`<N>` ∈ {-1, 0, 1, 2, 3}), under `<component>/` in one of the two trees:
 
 - `page/` - one fragment per page type, all of them filling the layout's `{{CONTENT}}`:
   `page-home_epoch<N>.html` (4 `%s`: menu, mainbanner, home content, home blog - home is the only
@@ -109,8 +127,15 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   `page-entry_epoch{2,3}.html` and `page-blog_epoch{2,3}.html` variants, which the epochs below
   2 fall back out of into `page_epoch<N>.html`. Each carries `{{FOOTER}}`, and on epoch 3
   `{{LIGHTBOX}}` or `{{HOME-MODAL}}`.
-- `menu/` - `menu_epoch<N>.html` (1 `%s`: items), `menu-item_epoch<N>.html` (3 `%s`: link, name, separator), `menu-item-selected_epoch<N>.html` (same 3 `%s`, adds `--selected` CSS modifier for the active nav item), `menu-item-separator_epoch<N>.html` (static). See "Menu" above.
-- `mainbanner/` - hero/banner block, static per epoch (no placeholders).
+- `menu/` (per theme) - `menu_epoch<N>.html` (the container: logo/title, items, language and
+  theme controls, user), `menu-item_epoch<N>.html` / `menu-item-selected_epoch<N>.html` (the
+  selected one adds the `--selected` modifier for the active nav item),
+  `menu-item-separator_epoch<N>.html`, `menu-logo_epoch{-1,1,2}.html` (default logo),
+  `menu-lang*`, `menu-theme*`, `menu-user*`, and for WML `menu-compact_epoch-1.html` /
+  `menu-page_epoch-1.html`. Argument counts: [templates-catalog.md](templates-catalog.md). See
+  "Menu" below.
+- `mainbanner/` (per theme) - hero/banner block per epoch, no `printf` arguments; it is only the
+  fallback for a banner saved per theme from the dashboard (`themes.banner_html`).
 - `home-content/` - `home-content_epoch<N>.html` (1 `%s`: items) and
   `home-content-item_epoch<N>.html` (3 `%s`: title, date, text).
 - `home-blog/` - `home-blog_epoch<N>.html` (1 `%s`: items) and `home-blog-item_epoch<N>.html`
@@ -167,9 +192,11 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   `gallery-page-thumbstrip_epoch{1,2}.html` (one `%s` wrapping the thumbnail rows) and
   `gallery-page-thumb_epoch{1,2}.html`; epoch 3 uses a `gallery-page-item_epoch3.html` grid.
   Epochs -1/0 render `gallery-page-qr_epoch<N>.html` instead - a QR code (WBMP image for WML,
-  Unicode half-block `<pre>` art for epoch 0 - see "Character encoding" below for why the two
-  need different renderings) encoding the gallery's own public URL, plus the URL again as a plain
-  text link - since the requesting browser cannot show the photos either way, the page hands the
+  Unicode half-block `<pre>` art for epoch 0, Latin-1 block art for Cello - see "Character
+  encoding" below for why they need different renderings) encoding a short `/qr/<code>` link to
+  the gallery (`public_url`-based when configured - see
+  [qr-and-short-links.md](qr-and-short-links.md)), plus that URL again as a plain text link -
+  since the requesting browser cannot show the photos either way, the page hands the
   reader a code to scan with the phone sitting next to the old machine, mirroring the previous
   site. Epochs 1-2 additionally cap the inline gallery at 3 images and append
   `gallery-view-all_epoch<N>.html` (a link to the standalone page, when the block names a
@@ -187,9 +214,10 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   (`%3$s`) - fixed placement, not a template of its own, since the link itself never varies in
   shape, only in where it points. `list/` has `list-container_epoch<N>.html` (2 `%s`: items, then the tag - `ul` or `ol` - which WML leaves unused because it has no list element) and `list-item_epoch<N>.html`; `table/` has `table_epoch<N>.html` for epochs 0-3, plus `table-row_epoch<N>.html` /
   `table-cell_epoch<N>.html` / `table-header-cell_epoch<N>.html` for epochs 2-3, whose real
-  `<table>` is coloured to match epoch 3's palette (`#1e2d3d` header, `#93c5fd` header text,
-  `#1a1a1a` cells) using the same trick as the home-blog cards: the outer `<table>` carries the
-  border colour as its `bgcolor` and `cellspacing="1"`, so the 1px gap between cells shows it -
+  `<table>` is coloured from the theme's own table tokens (`table-header`, `table-border`,
+  `table-row-a`/`-b`, alternating per row) using the same trick as the home-blog cards: the outer
+  `<table>` carries the border colour as its `bgcolor` and `cellspacing="1"`, so the 1px gap
+  between cells shows it -
   Netscape 4 does not propagate a table's `bgcolor` to its own cells, so each `<th>`/`<td>` sets
   its own.
 
@@ -226,26 +254,30 @@ as-is and must use a single `%`.
 ```
 http_router.c  (route == "/")
   │
-  ├─ epoch = (force_epoch in -1..3) ? force_epoch : detect_epoch(User-Agent)
+  ├─ epoch = resolve_epoch(req)      force_epoch → ?preview_epoch → detect_epoch(UA)
+  ├─ per-request state already set: request_lang(), request_theme(), request_charset, ...
   │
   ├─ buildHomeWebSite(epoch, lang)        ── html_builder/orchestrator.c
   │     ├─ page/page-home_epoch<N>.html    ── loaded by buildHomeWebSite()
   │     ├─ menu("/", epoch)                ── modules/menu
   │     │     cms_get_menu_items(lang, &items, &count) ── src/db/cms_menu.c
-  │     ├─ mainbanner(epoch)                   ── modules/mainbanner
+  │     ├─ mainbanner(epoch)               ── modules/mainbanner (theme DB banner or file)
   │     ├─ home_content(epoch, lang)       ── modules/home_content
   │     ├─ home_blog(epoch, lang)          ── modules/blog_list
   │     │     cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &items, &count) ── src/db/cms_entries.c
-  │     └─ render_template(container, menu, mainbanner, home_content, home_blog)
+  │     ├─ render_template(container, menu, mainbanner, home_content, home_blog)
+  │     └─ page_layout_wrap()              ── footer, footer logo, site name, layout,
+  │                                            title, theme colors (see themes.md)
   │
   └─ build_epoch_response(body, extra_headers, epoch) ── utils/build_epoch_response.c
-        sets Content-Type per epoch, reuses SECURITY_HEADERS
+        link re-tagging, WML pagination, Latin-1, Content-Type per epoch, SECURITY_HEADERS
+        (see "The response layer" below)
 ```
 
 Each module resolves its template path via `generate_url_theme("<subpath>_epoch%d.html", epoch)`,
-which expands to `./html/themes/<theme>/<subpath>` (relative to the process working directory,
-using the global `theme` from `config_loader`), reads it with `read_file_to_string()`, and renders
-it with `render_template()`. The orchestrator frees every intermediate buffer on all paths.
+which expands to `./html/themes/<request_theme()>/<subpath>` if that file exists and to
+`./html/templates/<subpath>` otherwise (relative to the process working directory), reads it with
+`read_file_to_string()`, and renders it with `render_template()`. The orchestrator frees every intermediate buffer on all paths.
 
 For `HEAD /`, `http_router.c` builds the same response and truncates it at the end of the header
 block (`\r\n\r\n`) before writing.
@@ -266,12 +298,13 @@ listing and the editor still show the real name.
 ```
 http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │
-  ├─ serve_cms_entry(ctx, link, expected_type, lang, method, epoch, category_menu_html)
+  ├─ serve_cms_entry(ctx, link, expected_type, lang, method, epoch, category_menu_html,
+  │     │                 include_drafts = viewer_can_preview_drafts(req))
   │     │                                          ── src/web_server/http_router.c
   │     │  Takes ownership of category_menu_html (both routes currently pass NULL).
   │     │
-  │     ├─ cms_get_entry_by_link(link, lang, &entry)  ── src/db/cms_entries.c
-  │     │     db.entries.findOne({ link, enabled: true })
+  │     ├─ cms_get_entry_by_link(link, lang, include_drafts, &entry)  ── src/db/cms_entries.c
+  │     │     db.entries.findOne({ link, enabled: true })   (just { link } with include_drafts)
   │     │     resolves header.* and content[].text map<lang,string> to `lang`
   │     │     (an already-resolved ISO code from cms_resolve_default_lang()),
   │     │     falling back to "en" if the requested language is missing
@@ -291,15 +324,23 @@ http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │     │     ├─ entry/entry-meta_epoch3.html          (epoch 3 only: author + categories strip;
   │     │     │     older epochs fall back to the bare categories block)
   │     │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
-  │     │           See "Content block types" below (14 types)
+  │     │           See "Content block types" below (13 types)
   │     │
-  │     └─ buildEntryWebSiteAtUrl(epoch, entry.header_title, content, current_url, cat_menu)
+  │     └─ buildEntryWebSiteAtUrl(epoch, title, content, current_url, cat_menu)
+  │           title = "[Draft] <title>" for an unpublished entry
   │           current_url = "/blog" for blog entries, "/page/<link>" for pages
   │           uses page/page-entry_epoch{2,3}.html, falling back to page_epoch<N>.html
+  │
+  └─ build_epoch_response(body, draft ? "Cache-Control: no-store" : "", epoch)
 ```
 
-`cms_get_entry_by_link()`'s query (`db.entries.findOne({ link, enabled: true })`) has no `type`
-filter; `serve_cms_entry()` 404s unless `entries.type` matches the route's `expected_type` -
+**Drafts.** An entry with `enabled: false` is a draft. Anonymous visitors get `404`. A visitor
+holding any valid dashboard session (`viewer_can_preview_drafts()`) gets the page, titled
+`[Draft] …` and sent with `Cache-Control: no-store`, so authors can preview from the editor
+through the real public URL. Draft entries never appear in the home or `/blog` listings
+(those still filter on `enabled: true`).
+
+`cms_get_entry_by_link()`'s query has no `type` filter; `serve_cms_entry()` 404s unless `entries.type` matches the route's `expected_type` -
 `"page"` for `/page/<link>`, `"blog"` for `/blog/<link>`. This keeps a single canonical URL per
 entry: blog articles live at `/blog/<link>` (linked from the home blog list and `/blog`
 listing), `/page/<link>` is for `type: "page"` only. Unknown `content[].type` values render as
@@ -315,22 +356,27 @@ interprets those two fields differently:
 | Type | `text` | `extra_data` | Epochs |
 |---|---|---|---|
 | `title` | heading text | heading level `1`-`6` (anything else = `2`) | -1..3 |
-| `paragraph` | rich text (stored as HTML) | style variant, e.g. `lead` / `note` | -1..3 |
+| `paragraph` | rich text (stored as HTML) | style variant: `lead` / `note` (validated modifier) | -1..3 |
 | `byline` | author | date | -1..3 |
-| `image` | image base URL | `"<caption>\|<width>\|<align>"` (see below) | -1..3 |
+| `image` | image base URL | `"<caption>\|<width>\|<align>"`, align incl. `float-left`/`float-right` (see below) | -1..3 |
 | `gallery` | `;`-separated image URLs | `media_galleries._id` | -1..3 |
 | `separator` | unused | style variant (validated modifier) | -1..3 |
 | `link` | link label | target URL (`#` if empty) | -1..3 |
 | `list` | one item per line | `"ol"` for ordered, anything else = unordered | -1..3 |
 | `table` | rows by line, cells by `\|` | `"header"` makes row 0 a header row | -1..3 |
-| `code-text` | code body | caption shown above the code (e.g. a filename) | -1..3 |
+| `code-text` | code body | language key (`javascript`, `c`, `python`, …, `""` = plain) - see [code-highlighting.md](code-highlighting.md) | -1..3 |
 | `youtube-embed` | caption / link label | watch/short/embed URL, normalized to `/embed/<id>` | -1..3 |
-| `image-paragraph` | image URL (see note below) | `"left"` / `"right"` alignment | -1..3 |
 | `social-networks` | display name (falls back to the icon name) | `"<icon>\|<url>"` | -1..3 |
-| `generic` | raw HTML passthrough | unused | 3 |
+| `generic` | raw HTML passthrough | unused | -1..3 |
 
-Every type except `generic` now has a template for each epoch (the older-epoch files were
-ported from the legacy CMS in `../the-retro-center-old`). Where a template is still missing,
+The former `image-paragraph` type (an image floated beside text) was merged into `image` with
+`float-left`/`float-right` alignment; existing blocks are converted by
+`scripts/migrations/2026-10-01-merge-image-paragraph.js` ([migrations.md](migrations.md)). Its
+`elements/image-paragraph/` and editor templates are still in the tree but nothing loads them.
+
+Every type has a template for each epoch (the older-epoch files were ported from the legacy CMS
+in `../the-retro-center-old`) - except `table` on WML, which is built in C (see above). Where a
+template is missing,
 `load_template()` returns `NULL` and the renderer yields `""`, so the entry still renders
 without that block. An unknown `content[].type` renders as `""` for the same reason.
 
@@ -338,13 +384,14 @@ without that block. An unknown `content[].type` renders as `""` for the same rea
 or as plain text with literal newlines (what the CMS migration produced). HTML collapses a bare
 newline into a space, so `expand_newlines()` turns each one into a line break the target epoch
 understands - `<br/>` for WML, `<br>` elsewhere - before the text reaches the template.
-`code-text` needs the same treatment on WML and epochs 0-1 (`epoch <= EPOCH_EARLY`): `<pre>` is
-only a reliable way to keep line breaks on browsers modern enough to honor its whitespace rules,
-and NCSA Mosaic 1.x/Cello-era engines don't consistently - live-tested, a real build ran an
-entire code block onto one line, `<pre>` and all, exactly the way it would collapse whitespace in
-ordinary flow text. Converting `\n` to an explicit `<br>` makes each line break a browser command
-rather than whitespace it can choose to ignore. Epoch 2/3 keep the raw newline inside `<pre>`,
-which is reliable on anything that recent.
+`code-text` is **syntax-highlighted on the server** for epochs 0-3 (`src/utils/code_highlight.c`):
+CSS-classed spans on epoch 3, `<font color>` from the theme's code palette on epochs 1-2, plain
+numbered text on epoch 0, with a reload-based line-number toggle (`?code_lines=off`) on epochs
+0-2. Line breaks still need care: `<pre>` is only reliable on browsers that honor its whitespace
+rules, and NCSA Mosaic 1.x/Cello-era engines don't consistently - live-tested, a real build ran an
+entire code block onto one line - so epoch 1 ends each highlighted line with `<br>`, and WML (no
+`<pre>` at all) goes through `expand_newlines()`. Full behavior:
+[code-highlighting.md](code-highlighting.md).
 
 A run of 2+ consecutive `<br>` marks a paragraph break rather than a mid-paragraph line break -
 whether it got there as literal HTML typed into the rich-text editor, or was just produced by
@@ -383,10 +430,14 @@ default and never reaches the page.
 
 `image` packs three fields as `"<caption>|<width>|<align>"` - the same pipe convention
 `social-networks` uses. `width` is one of `100`/`50`/`30` and `align` one of
-`left`/`center`/`right`, both defaulting to `100`/`center`. A value with no `|` is all
-caption, which is how blocks written before these options look. Epoch 3 turns them into
-modifier classes (`boat-rudder__entry-image--w50`); epochs 1-2 have no stylesheet, so they
-carry the values as attributes - `align` on the wrapping element and `width` on the `<img>`.
+`left`/`center`/`right`/`float-left`/`float-right`, defaulting to `100`/`center`. A value with no
+`|` is all caption, which is how blocks written before these options look. Epoch 3 turns them
+into modifier classes (`boat-rudder__entry-image--w50`, `--float-left`); epochs 1-2 have no
+stylesheet, so they carry the values as attributes - `align` on the wrapping element and `width`
+on the `<img>` - and a floated image uses its own `image-float_epoch{1,2}.html` (HTML `align` on
+the image/table, so following text wraps around it). Epochs −1/0 can't show the picture: they
+print `[Image: <caption>]` and a `[View image QR]` link to `/image-qr/<code>`, a short link to the
+`_full` file ([qr-and-short-links.md](qr-and-short-links.md)).
 
 The standalone gallery page (`/gallery/<id>?img=N`) is laid out with tables in epochs 1-2, and
 its thumbnail strip is chunked six to a row: these browsers do not reflow a table row, so one
@@ -414,8 +465,9 @@ any `<img>` written directly into a retro template.
 `social-networks` builds its icon path as
 `/themes/dark/assets/social-networks/<icon>.<ext>`, picking the extension per epoch: `.svg`
 for epoch 3, `.gif` for epoch 2, `-s.gif` (small) for epoch 1, and no icon at all for
-epochs -1/0, whose templates keep it inside a comment. Note the theme segment is hardcoded,
-so this block type does not follow the active `theme` setting.
+epochs -1/0, whose templates keep it inside a comment. Note the theme segment is hardcoded
+(`/themes/dark/...` in `render_social_networks()`), so this block type does not follow the
+request's theme.
 
 Epoch 0 shows the raw URL as the link text rather than the display name (`the block's `%1$s`
 argument used twice, for `href` and the visible text) - since the requesting browser almost
@@ -443,16 +495,15 @@ are generated by `scripts/image-optimizer.sh`, and the renderer appends the one 
 | `home_blog`, `blog_list`, `entries_admin` thumbnails | `_small` |
 | `gallery` block, epoch 3 | `_small` (grid) + `_full` (lightbox) |
 | `gallery` block, epoch 1 | `_micro`, extension rewritten to `.gif` |
-| `image` block, epoch 3 / 2 / 1 | `_full` / `_half` / `_medium.gif` |
-| `image-paragraph` block, epoch 3 / 1-2 | `_full` / `_micro.gif` |
+| `image` block, epoch 3 / 2 / 1 | `_full` / `_medium.gif` / `_micro.gif` (click-through: `_full` lightbox / `_half` link) |
+| `image` block QR, epochs −1/0 | `_full` (via short link) |
 | `/gallery/<id>` page | `_small` + `_full` |
 
 Epoch 1 gets GIFs because HTML 3.2 browsers cannot display JPEG reliably.
 
-`image-paragraph` is the one exception to "bare path, renderer appends a suffix": its
-`content[].text` stores the path **with `_full` already baked in**, not a bare path. Getting
-`_micro` for epochs 1-2 therefore means splicing out the stored `_full` first
-(`image_paragraph_src()` in `entry_page.c`) rather than appending a second suffix on top of it.
+The old `image-paragraph` type was the one exception to "bare path, renderer appends a suffix" -
+it stored the path with `_full` baked in. The merge migration strips that suffix, so every image
+path is now bare.
 
 The optimizer also creates a base-name symlink pointing at `_half` so a bare URL resolves on
 its own, but **that covers only images run through the script** - images uploaded through the
@@ -467,14 +518,15 @@ block has nowhere to store.
 
 `youtube-embed` cannot embed a player before HTML5, so retro epochs render a **QR code** the
 reader scans with a phone, plus a text link. `utils/qr_generator/` encodes it with
-`libqrencode` and writes the asset per epoch: a GIF (epochs 1-2), a WBMP (WML), or Unicode
-half-blocks inline (epoch 0). Assets are cached under `html/content/qr/` (gitignored,
-regenerated on demand) and written via a temp file + `rename()`, since several connection
-threads may render the same page at once.
+`libqrencode` and writes the asset per epoch: a GIF (epochs 1-2) or a WBMP (WML) inline; epoch 0
+gets a `[View video QR]` link to `/youtube-qr/<id>`, a page holding nothing but the text QR, so a
+paginated text browser can't split the code across two screens. Assets are cached under
+`html/content/qr/` (gitignored, regenerated on demand) and written via a temp file + `rename()`,
+since several connection threads may render the same page at once. Details:
+[qr-and-short-links.md](qr-and-short-links.md).
 
-**Not yet implemented**: the `image-single` block type (legacy entries using it were migrated
-to `image`), and older-epoch templates for `generic` - see
-`develop_docs/plans/cms-entry-model-plan.md` for the full target schema.
+**Not implemented**: the `image-single` block type (legacy entries using it were migrated to
+`image`) - see `develop_docs/plans/cms-entry-model-plan.md` for the original target schema.
 
 ### Legacy HTTP compatibility
 
@@ -497,7 +549,8 @@ gaps only surfaced against an actual client (`curl`/modern browsers never hit ei
   the socket one `poll()`-bounded 400ms window to prove more data is actually still arriving
   before concluding the header block is finished with whatever it already has - long enough that
   a genuinely slow, well-formed multi-packet request is never mistaken for a truncated one, short
-  enough that a real "no blank line coming" client isn't stuck waiting on the 30s socket timeout.
+  enough that a real "no blank line coming" client isn't stuck waiting on the socket timeout
+(`connection_io_timeout_secs`).
 
 Both fixes only affect *how long the server waits to start responding* - the response itself was,
 for a while, also rewritten to omit headers entirely for a version-less request (a literal HTTP/0.9
@@ -509,7 +562,7 @@ regardless of which request style triggered it.
 
 ### Character encoding
 
-Epoch 1 and WML.
+Epoch 1, WML, and Cello in epoch 0.
 
 Every stored/authored string in the CMS is UTF-8, but UTF-8 wasn't defined until 1993 and didn't
 reach the web until HTML 4 (1997) - epoch 1 (NCSA Mosaic, Cello) and WML predate it entirely and
@@ -527,11 +580,20 @@ Latin-1 bytes the transcode just produced as invalid.
 Epoch 0 is deliberately **not** included in this transcode, even though it shares the "text-only"
 label with epoch 1: its realistic reader today is a terminal browser (Lynx/w3m/ELinks) running in
 a UTF-8 locale, not a genuinely pre-Unicode machine, so it keeps plain UTF-8 - see the epoch table
-above. This is also why the `youtube-embed` QR code is drawn differently per epoch: epoch 0's
-Unicode half-block art (two QR modules packed into one terminal row, correcting for a monospace
-cell being taller than it is wide) assumes the UTF-8 terminal that epoch actually targets, while
-epoch 1/WML never see it - their QR is a GIF/WBMP image instead, not text at all - so there is no
-codepage conflict to design around for them.
+above. This is also why QR codes are drawn differently per epoch: epoch 0's Unicode half-block
+art (two QR modules packed into one terminal row, correcting for a monospace cell being taller
+than it is wide) assumes the UTF-8 terminal that epoch actually targets, while epoch 1/WML get a
+GIF/WBMP image instead.
+
+**The Cello exception (`request_charset`).** Cello (1993) is a genuinely pre-Unicode GUI browser,
+but it lands in epoch 0 because its feature set (no dependable inline images) matches epoch 0's
+templates, not epoch 1's. `request_charset_set(User-Agent)` (`src/utils/request_charset.c`)
+records, per request, whether the **real** browser needs the Latin-1 downgrade. When it does,
+`build_epoch_response.c` transcodes epoch 0 bodies too, sends bare `text/html`, and the QR
+generators switch to `generate_qr_asciiblock_text()` - Latin-1 `Û Ü ß`, which become the CP437
+block glyphs `0xDB/0xDC/0xDF` in the "Terminal" font. This flag deliberately ignores
+`force_epoch` and `?preview_epoch=`: those choose which templates render, not what the visiting
+browser can decode, so previewing epoch 0 from a modern browser still gets UTF-8.
 
 ### Language selection and persistence
 
@@ -554,7 +616,8 @@ only sticks for that one click rather than the whole session, the same trade-off
 site made for these epochs.
 
 To make a language choice survive *navigating away* from that one page (not just the single
-click that set it), `inject_lang_into_links()` (`build_epoch_response.c`) rewrites every
+click that set it), `inject_query_param_into_links(html, "lang", …)` (`build_epoch_response.c`)
+rewrites every
 site-relative `href` in the finished response to carry `?lang=xx`/`&lang=xx` forward, for these
 same three epochs only - the one centralized place that fixes it for every module that ever
 builds a link (menu, categories, blog list, galleries, pagination...) rather than threading the
@@ -562,13 +625,18 @@ query parameter through each of them individually. An href's `&` separator is wr
 here, not a bare `&` - required for WML, whose parser is strict XML and treats a bare `&` as a
 hard syntax error, unlike HTML's lenient parsers.
 
+Themes follow the same pattern one epoch range over: epochs 1/2 have no reliable way to keep a
+theme cookie through the `/theme/set` redirect, so the response layer also tags every internal
+link with `?theme=<key>` for those two epochs (epoch 0 and WML have no theme control at all).
+Theme resolution itself is in [themes.md](themes.md#2-which-theme-renders-a-request).
+
 ### WML strict-XML fixups
 
 `build_epoch_response.c`.
 
 WML is XML, not HTML - a browser-tolerated shortcut in HTML fails outright as "the element is not
 well formed" in a real WAP client. Two author-content patterns needed fixing up for it, both
-handled once, in the same centralized place `inject_lang_into_links()` runs from
+handled once, in the same centralized place the link re-tagging runs from
 (`retrofit_body_for_epoch()`):
 
 - **A literal, author-typed `<br>`** - one that never passed through `expand_newlines()`, which
@@ -588,31 +656,53 @@ future WML template: `<a>` may only contain `#PCDATA`, `br`, or `img` - never `<
 emphasis tags nested inside it (the reverse nesting, `<b><a>...</a></b>`, is fine, since `<b>`'s
 own content model does allow an anchor).
 
-### Pagination
+### The response layer
+
+`build_epoch_response()` (`src/utils/build_epoch_response.c`) is the last step of every HTML/WML
+page and the one place that adapts finished markup to the client. `retrofit_body_for_epoch()`
+applies, in order:
+
+| Step | Epochs | What |
+|---|---|---|
+| Language re-tagging | −1, 0, 1 | `?lang=<code>` on every site-relative link |
+| WML pagination | −1, unless `?wml_pages=all` | `wml_paginate()` - see below |
+| Theme re-tagging | 1, 2 | `?theme=<key>` on every site-relative link |
+| WML fixups | −1 | `<br>` → `<br/>`, HTML lists → `- item<br/>` lines |
+| Latin-1 transcode | −1, 1, and 0 for Cello | `utf8_to_latin1()` |
+
+Then it adds the epoch's `Content-Type`, `X-Content-Type-Options` and `X-Frame-Options`, and any
+extra headers the route passed (e.g. `Cache-Control: no-store` for drafts). Redirects
+(`build_redirect_response()`) carry a small per-epoch body with a link, for clients that don't
+follow `Location`.
+
+### WML pagination
 
 WML only.
 
-A real WAP 1.x device has essentially no memory to spare: a Nokia 7110 (1999, the phone that
-popularized WAP) topped out around 1400 bytes per deck, *compiled* to WMLC - raw markup runs
-larger still. A single article - title, byline, several paragraphs, maybe a table or a gallery
-link - routinely reaches 15-16KB of raw WML, which even a generous modern WAP emulator will
-refuse outright ("Internet error 122: The requested resource is too large"), confirmed live.
+A real WAP 1.x device has essentially no memory to spare: a Nokia 7110 (1999) topped out around
+1400 bytes per deck *compiled* to WMLC, and the Palm Neomar/Rover browser this project tests the
+WAP gateway with renders nothing beyond a single ~975-byte UDP packet. A single article routinely
+reaches 15-16 KB of raw WML, which even a generous WAP emulator refuses ("Internet error 122:
+The requested resource is too large").
 
-`entry_page()` (`src/modules/entry_page/entry_page.c`) takes `page` (1-based) and an optional
-`total_pages_out` alongside `entry`/`epoch`. Every epoch except WML ignores both and always
-renders the whole entry (`total_pages_out` set to 1). For WML, each content block is rendered
-individually first (`render_blocks()`) rather than concatenated as it goes, so pagination can
-group whole blocks onto a deck without ever splitting one down the middle - a new page starts
-once the running byte total would exceed `WML_PAGE_BUDGET` (2000 raw bytes, a rough but
-deliberately conservative target given the real device numbers above), except a page is never
-left empty: at least one block always lands on it even if that one block alone is over budget
-(an oversized table, say). Each deck but the last (or first) ends with a `[Prev] [Next] (n/total)`
-line built from `entry->type`/`entry->link` - `/blog/<link>?page=N` or `/page/<link>?page=N` -
-which `inject_lang_into_links()` (above) still carries the current language across
-transparently, since it operates on the finished page regardless of where its links came from.
-`http_router.c`'s `/blog/<link>` and `/page/<link>` routes read `?page=` from the query string
-and pass it straight through; an out-of-range value clamps into `[1, total_pages]` rather than
-producing an empty page.
+Pagination is therefore done **once, for every WML response, in the response layer** - not by
+individual routes (the old per-entry `?page=` scheme and `WML_PAGE_BUDGET` are gone):
+
+- `retrofit_body_for_epoch()` converts the deck to Latin-1 and calls `wml_paginate()`
+  (`src/wap_gateway/wbxml.c`) with `WAP_PAGE_BYTES` = **860 compiled bytes** - the same limit,
+  measured the same way (compiled WBXML size of the Latin-1 text), that the WAP gateway uses for
+  its packets, so a page looks identical over HTTP and through the gateway.
+- The first card is split into pages of at most that size; text is cut at word boundaries. Each
+  page is a one-card deck ending with `<< Prev` / `Next >>` links to the same URL with
+  `__page=N` (the page number is read from the request's own query string via
+  `request_wml_target()`). A deck that fits in one page is sent unchanged.
+- The Prev/Next links are language-tagged in a second pass, like every other link.
+- `?wml_pages=all` (`request_wml_unpaged()`) skips this step: the WAP gateway asks for the whole
+  deck and paginates it into packets itself ([wap-gateway.md](wap-gateway.md#wbxml-compilation-and-pagination)).
+
+To keep the first page useful, WML pages carry a single `[Menu]` link (to `/menu`) instead of the
+full nav bar, and a single `[Categories]` link (to `/blog/categories`) instead of the category bar
+- see "Menu" and "Category menu" below.
 
 ### Home blog list (`/`)
 
@@ -636,7 +726,9 @@ home_blog(epoch, lang)                          ── src/modules/blog_list/blo
                         (no entry-categories wrapper)
 ```
 
-`HOME_BLOG_LIMIT` (`src/db/cms_entries.h`, currently 10) bounds the result size;
+`HOME_BLOG_LIMIT` (`src/db/cms_entries.h`, currently 10) bounds the result size. The home
+`home-blog` folder lives in each theme, and theme assets for the cards live under
+`html/themes/<theme>/assets/blog-list/` (renamed from `home-content/`);
 `cms_get_blog_entries()` allocates a fixed-size array of that length and never grows it. On a
 DB error or if MongoDB is not ready, it returns `*out_count == 0` and the empty-state template
 is shown - the home blog list is decorative and must never fail the home page.
@@ -713,6 +805,11 @@ names slugify identically are indistinguishable in the URL (the first match wins
 active entry too; if the container or item template is missing, the whole bar degrades to `""`
 rather than failing the page.
 
+**WML compact bar.** On epoch −1, `category_menu_render()` returns
+`category-menu/category-menu-compact_epoch-1.html` - a single `[Categories]` link to
+`/blog/categories?return=<current path>` - on every page except `/blog/categories` itself, which
+renders the full bar (with the category being browsed still highlighted) plus a way back.
+
 A category tag is a link in every epoch, WML included - an anchor is the one thing all of them
 can do. All four places that list an entry's categories - the cards on home and `/blog`, the article
 page, and the dashboard's entry list - go through `category_tags_render()`
@@ -751,6 +848,20 @@ menu(current_url, epoch)                        ── src/modules/menu/menu.c
   └─ for each other item:                          menu-item_epoch<N>.html
        (both: 3 %s - link, name, separator)
 ```
+
+Besides the items, `menu()` assembles:
+
+- **Logo / title** - from the theme's per-epoch logo config (`themes.logo`, see
+  [themes.md](themes.md#5-banner-footer-and-logo-per-theme-per-epoch)), falling back to the
+  legacy raw logo, then to `menu-logo_epoch<N>.html`; on epoch 3 the title is text (site name or
+  custom text in a chosen font) or an image. Omitted on the home page, where the banner stands
+  in for it.
+- **Language control** (`menu-lang*`) and **theme control** (`menu-theme*`, only when there are
+  at least two themes; epoch 3 drop-down, epoch 1/2 link to `/theme`, none on 0/−1).
+- **Signed-in user** (`menu-user*`, epoch 3) from `request_user_name()`.
+- **WML compact mode** - on epoch −1 every page except `/menu` gets `menu-compact_epoch-1.html`,
+  a single `[Menu]` link to `/menu?return=<current path>`; `/menu` renders the full menu plus a
+  way back. The full menu used to eat over half of the 860-byte first page.
 
 `menu` documents are `{ _id, link, name: <map<lang,string>>, order, enabled }`. `MENU_ITEM_LIMIT` (`src/db/cms_menu.h`, currently 20) bounds the result size. If `cms_get_menu_items()` returns 0 items (DB not ready, empty collection, or a DB error), `menu()` falls back to a single built-in `{"/", "Home"}` item so the nav bar is never empty.
 

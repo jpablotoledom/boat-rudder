@@ -1,6 +1,6 @@
 @startuml template-composition
 
-title Boat Rudder - Template Composition (per epoch N)
+title Boat Rudder - Template Composition (home page, per epoch N)
 
 skinparam backgroundColor #FAFAFA
 skinparam object {
@@ -8,63 +8,84 @@ skinparam object {
     BorderColor #2196F3
     FontColor #1A1A1A
 }
-
-object "page/page-home_epoch<N>.html" as CONTAINER {
-  {{FOOTER}} -> literal replace
-  %s (1) -> menu
-  %s (2) -> mainbanner
-  %s (3) -> home_content
-  %s (4) -> home_blog
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
 }
 
-object "menu_epoch<N>.html" as MENU {
-  %s -> items
+package "html/themes/<theme>/ (per theme)" {
+    object "layout/layout_epoch<N>.html" as LAYOUT {
+      {{PAGE_TITLE}}, {{CONTENT}}, {{BODY_BACKGROUND}}
+      epoch 3: {{THEME_COLORS}}
+      epoch 1/2: {{COLOR_*}}
+    }
+
+    object "page/page-home_epoch<N>.html" as CONTAINER {
+      {{FOOTER}}, {{HOME-MODAL}} -> literal replace
+      %s (1) -> menu
+      %s (2) -> mainbanner
+      %s (3) -> home_content
+      %s (4) -> home_blog
+    }
+
+    object "layout/footer_epoch<N>.html" as FOOTER {
+      {{FOOTER_LOGO}}, {{SITE_NAME}}
+      (or themes.footer_html.<epoch>)
+    }
+
+    object "menu/menu_epoch<N>.html" as MENU {
+      %s -> logo/title, items,
+      language, theme, user
+      (3-5 args, per epoch)
+    }
+
+    object "menu/menu-item[-selected]_epoch<N>.html" as MENUITEM {
+      %s -> link
+      %s -> label
+      %s -> separator
+    }
+
+    object "menu/menu-item-separator_epoch<N>.html" as SEP {
+      static, no placeholders
+    }
+
+    object "mainbanner/mainbanner_epoch<N>.html" as MAINBANNER {
+      {{SITE_NAME}}, no %s
+      (or themes.banner_html.<epoch>)
+    }
+
+    object "home-content/home-content_epoch<N>.html" as HOMECONTENT {
+      %s -> items
+    }
+
+    object "home-content/home-content-item_epoch<N>.html" as HOMEITEM {
+      %s -> title, date, text
+      (built-in UPDATES[] only; the "/" entry's
+      blocks use html/templates/elements/*)
+    }
+
+    object "home-blog/home-blog_epoch<N>.html" as HOMEBLOG {
+      %s -> heading
+      %s -> items
+    }
+
+    object "home-blog/home-blog-item_epoch<N>.html" as BLOGITEM {
+      epoch -1/0: link, title, summary,
+      author, categories, date
+      --
+      epoch 1/2/3: + thumbnail image
+      (epochs 1/2: + theme colors)
+    }
 }
 
-object "menu-item_epoch<N>.html" as MENUITEM {
-  %s -> link
-  %s -> label
-  %s -> separator
+package "html/templates/ (shared)" {
+    object "elements/category/category_epoch<N>.html" as CAT {
+      %s -> link, name
+    }
 }
 
-object "menu-item-separator_epoch<N>.html" as SEP {
-  static, no placeholders
-}
-
-object "mainbanner_epoch<N>.html" as MAINBANNER {
-  static per epoch,
-  no placeholders
-}
-
-object "home-content_epoch<N>.html" as HOMECONTENT {
-  %s -> items
-}
-
-object "home-content-item_epoch<N>.html" as HOMEITEM {
-  %s -> title
-  %s -> date
-  %s -> text
-}
-
-object "home-blog_epoch<N>.html" as HOMEBLOG {
-  %s -> items
-}
-
-object "home-blog-item_epoch<N>.html" as BLOGITEM {
-  epoch -1/0:
-  %s -> title
-  %s -> date
-  %s -> summary
-  --
-  epoch 1/2/3:
-  %s -> image
-  %s -> link
-  %s -> title
-  %s -> summary
-  %s -> author
-  %s -> date
-}
-
+LAYOUT *-- CONTAINER : {{CONTENT}}
+CONTAINER *-- FOOTER : {{FOOTER}}
 CONTAINER *-- MENU
 CONTAINER *-- MAINBANNER
 CONTAINER *-- HOMECONTENT
@@ -73,8 +94,11 @@ MENU *-- "0..N" MENUITEM
 MENUITEM o-- SEP : separator arg
 HOMECONTENT *-- "0..N" HOMEITEM
 HOMEBLOG *-- "0..N" BLOGITEM
+BLOGITEM o-- "0..N" CAT : categories arg
 
 note bottom of CONTAINER
+  generate_url_theme(): the theme's file wins,
+  else html/templates/<same path>.
   %s arguments are substituted via printf %s:
   any literal "%" already inside an argument
   passes through unchanged (no double-escaping).
@@ -82,13 +106,17 @@ end note
 
 note bottom of MENUITEM
   "%%" -> literal "%" escaping is required ONLY
-  in templates used as the *format string*
-  (container, menu, menu-item,
-  home-content, home-content-item).
+  in templates used as the *format string*.
+  {{MARKER}} files and templates inserted as %s
+  ARGUMENTS (mainbanner, separator, footer)
+  use a single "%".
+end note
 
-  Templates inserted as %s ARGUMENTS
-  (mainbanner, menu-item-separator) must use
-  a single "%".
+note right of MENU
+  WML (epoch -1): replaced by
+  menu-compact_epoch-1.html, a single
+  [Menu] link to /menu, on every page
+  except /menu itself.
 end note
 
 @enduml

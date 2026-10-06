@@ -51,6 +51,13 @@
 > into `themes.<key>` and reshapes `/dashboard/settings` so a theme's colors, banner and footer
 > are edited together.
 
+> **Update (2026-10-06):** §7 item 5 (static-file fallback for `assets/social-networks` /
+> `assets/blog-list`) was not needed: §8.2 stayed unresolved and both themes carry their own
+> copies (`social-networks` icons are still hardcoded to `/themes/dark/` in `entry_page.c`).
+> §10's "13 variables" has since grown to **34** tokens (`src/db/cms_themes.h`): footer, links,
+> table block, code-text block and an epoch-1-only body background were added, and five
+> backgrounds accept an alpha channel. Current reference: [themes.md](../reference/themes.md).
+
 ## 1. Goal
 
 Today `html/themes/dark/` is one directory holding ~150 template files, and it mixes two things
@@ -314,7 +321,7 @@ changes, per the classification in §2:
    `assets/blog-list/`, if §8.2 is resolved in favor of moving them.
 6. Update every reference doc that documents the current single-tree layout -
    [architecture.md](../reference/architecture.md), [rendering.md](../reference/rendering.md),
-   and [boat-rudder.md §2.3](../boat-rudder.md#23-templates-one-file-per-component-per-epoch) -
+   and [boat-rudder.md §2.3](../boat-rudder.md#23-templates-htmltemplates-shared--htmlthemestheme-brand-one-file-per) -
    to describe the two-tree layout.
 7. A second theme is **not** required to prove this out - `dark` alone, split across two
    directories with `generate_url_theme()`'s fallback verified request-by-request (force each
@@ -465,7 +472,7 @@ deliberate shared default, rather than a per-theme duplicate, is the actual prop
 
 ## 10. Figma-sourced 13-variable color model (replaces §5's 7-field `CmsThemeColors`)
 
-> **Status**: implemented. `CmsThemeColors` now carries exactly the 13 variables defined in the
+> **Status**: implemented (since grown to 34 tokens - see the update note at the top). `CmsThemeColors` then carried exactly the 13 variables defined in the
 > project's Figma file ("Color palette Dark"/"Color palette Light" collections), replacing the
 > old ad-hoc 7-token set (`background`/`text`/`accent`/`author`/`date`/`category`/`border`). One
 > merged, non-epoch-split color form still applies (per §9's "no separar por época" requirement) -

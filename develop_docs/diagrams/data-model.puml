@@ -1,0 +1,159 @@
+@startuml data-model
+
+title Boat Rudder - MongoDB Data Model (one database per site)
+
+skinparam backgroundColor #FAFAFA
+skinparam linetype ortho
+skinparam entity {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #F9A825
+}
+
+package "Content" {
+    entity entries {
+        * _id : ObjectId
+        --
+        link, type ("blog"|"page"), enabled
+        created_by : ObjectId
+        categories : ObjectId[]
+        header { title{}, summary{}, image_url,
+                 author_id, date, hide_author }
+        content[] { _id, type, order, text{}, extra_data }
+    }
+    entity entry_categories {
+        * _id : ObjectId
+        --
+        name : map<lang,string>
+    }
+    entity menu {
+        * _id : ObjectId
+        --
+        link, order, enabled
+        name : map<lang,string>
+    }
+    entity languages {
+        * _id : ObjectId
+        --
+        code (ISO 639-1), name, is_default
+    }
+}
+
+package "Media" {
+    entity media {
+        * _id : ObjectId
+        --
+        name, date, format
+        author_id : ObjectId
+        dir_id : ObjectId
+    }
+    entity media_directories {
+        * _id : ObjectId
+        --
+        name, parent ("posts")
+        author_id : ObjectId
+    }
+    entity media_galleries {
+        * _id : ObjectId
+        --
+        content : string[] (paths)
+        entry_id : ObjectId
+    }
+}
+
+package "Users" {
+    entity users {
+        * _id : ObjectId
+        --
+        name, email
+        password (Argon2id)
+        role ("admin"|"author")
+    }
+    entity sessions {
+        * _id : ObjectId
+        --
+        user_id : ObjectId
+        token (64 hex), created_at, expires_at
+    }
+}
+
+package "Personalization" {
+    entity site_settings <<singleton>> {
+        * _id : ObjectId
+        --
+        site_name
+        active_theme
+    }
+    entity themes <<sparse, per key>> {
+        * _id : ObjectId
+        --
+        key (= html/themes/<key>/)
+        colors { 34 tokens }
+        banner_html / footer_html / logo_html
+          { epoch_neg1 .. epoch3 }
+        logo { epochN: {mode, text, font,
+               navbar_image, footer_image} }
+        logo_font, css_epoch3
+    }
+    entity fonts {
+        * _id : ObjectId
+        --
+        name, filename
+    }
+    entity short_links {
+        * _id : string (7-char base62 code)
+        --
+        target_path
+    }
+}
+
+package "Analytics" {
+    entity page_visits_daily {
+        * _id : "YYYY-MM-DD"
+        --
+        date, year, month, week, total
+        by_epoch{}, by_browser{}, by_os{},
+        by_country{}, by_route{}
+    }
+    entity entry_visits_daily {
+        * _id : "<type>__<slug>__<date>"
+        --
+        date, year, month, week
+        entry_type, slug, total, by_epoch{}
+    }
+}
+
+users ||--o{ sessions : user_id
+users ||--o{ entries : created_by /\nheader.author_id
+users ||--o{ media : author_id
+users ||--o{ media_directories : author_id
+media_directories ||--o{ media : dir_id
+entries }o--o{ entry_categories : categories[]
+entries ||--o{ media_galleries : entry_id\n(+ gallery block extra_data)
+site_settings ..> themes : active_theme = key
+themes ..> fonts : logo font name
+entry_visits_daily ..> entries : slug = link
+short_links ..> media_galleries : target_path\n"/gallery/<id>"
+
+note bottom of themes
+  No document = the theme renders from its
+  files + THEME_DEFAULTS. Empty values fall
+  back to the theme's on-disk files.
+end note
+
+note as N1
+  No foreign keys, no cascades: readers tolerate
+  dangling references. Only the default _id
+  indexes exist - see data-model.md for
+  recommended indexes.
+end note
+
+@enduml

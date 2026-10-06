@@ -7,6 +7,12 @@
 > planned (entries listing and editor, media library, Categories / Languages / Menu / Users
 > maintainers, two roles); this document is kept as the design record of the original increment.
 
+> **Update (2026-10-06):** paths in this document such as `html/themes/dark/login/`,
+> `html/themes/dark/dashboard/` and `html/themes/dark/elements/` predate the theme-system split;
+> those templates now live under `html/templates/` (see
+> [templates-catalog.md](../reference/templates-catalog.md)). The text below is kept as the
+> original design record and was not rewritten.
+
 ---
 
 ## 1. Goals and Constraints

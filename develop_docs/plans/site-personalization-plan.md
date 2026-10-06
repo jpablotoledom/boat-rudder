@@ -22,6 +22,11 @@
 > for colors. `cms_get_site_banner()`/`cms_get_site_footer()` and their `/dashboard/settings/
 > banner`/`/footer` routes described in §3-§7 below are superseded by that plan once implemented.
 
+> **Update (2026-10-06):** template paths like `html/themes/dark/dashboard/settings/...` now live
+> under `html/templates/dashboard/settings/`; banner/footer are per theme (see the relationship
+> note below). Logos are now structured per epoch (`themes.logo`, with WBMP conversion for WML)
+> and the epoch 3 stylesheet is editable - current reference: [themes.md](../reference/themes.md).
+
 Diagrams: reuse [diagrams/site-settings-components.puml](../diagrams/site-settings-components.puml)
 as a base; extend it once implementation starts.
 

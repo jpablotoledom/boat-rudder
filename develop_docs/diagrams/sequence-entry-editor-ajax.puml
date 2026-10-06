@@ -16,29 +16,32 @@ skinparam sequence {
 
 actor "Browser\n(editor <script>)" as BROWSER
 participant "http_router" as ROUTER
-participant "require_dashboard_session" as SESSION
+participant "require_dashboard_session_role\n+ can_edit_entry" as SESSION
 participant "cms_entries_admin" as ADMIN
 participant "entry_editor_blocks" as BLOCKS
+participant "entry_page\n(public renderer)" as PUB
 participant "json_utils" as JSONUTIL
 participant "MongoDB\n(entries)" as MONGO
 
 note over ROUTER, SESSION
-  Every route below: epoch != EPOCH_MODERN -> 302 /dashboard;
-  require_dashboard_session() -> 503 (mongo down) |
-  302 /login (missing/invalid session) | proceed.
+  Every /api/entries/<id>/... route: epoch != EPOCH_MODERN -> 302 /dashboard;
+  require_dashboard_session_role() -> 503 (mongo down) |
+  302 /login (missing/invalid session); then
+  cms_get_entry_for_edit() -> 404 {"ok":false,"error":"not found"};
+  !can_edit_entry() -> 403 {"ok":false,"error":"forbidden"}.
   Responses are application/json; charset=UTF-8.
 end note
 
 == editorSaveAll(): saveMeta() + saveHeader() + saveContent() ==
 
-BROWSER -> ROUTER : POST .../meta\nlink, type, enabled, categories[] (multi)
+BROWSER -> ROUTER : POST .../meta\nlink, type, enabled, categories[] (multi)\n(type forced to "blog" for an author)
 ROUTER -> ROUTER : parse_urlencoded_field/_multi()
 ROUTER -> ADMIN : cms_update_entry_meta(id, link, type,\nenabled, category_ids)
 ADMIN -> MONGO : updateOne({_id}, {$set: {link, type,\nenabled, categories: [...]}})
 ADMIN --> ROUTER : 0 | -1
 ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
 
-BROWSER -> ROUTER : POST .../header\nimage_url, date,\ntitle_<lang>/summary_<lang>\n(author is read-only: header.author_id)
+BROWSER -> ROUTER : POST .../header\nimage_url, date, hide_author (1/0),\ntitle_<lang>/summary_<lang>\n(author is read-only: header.author_id)
 ROUTER -> ADMIN : cms_update_entry_header(id, image_url, date,\nlangs, title/summary values)
 ADMIN -> MONGO : updateOne({_id}, {$set: {\n"header.image_url", "header.date",\n"header.title.<lang>", ...}})
 ADMIN --> ROUTER : 0 | -1
@@ -47,9 +50,11 @@ ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
 BROWSER -> ROUTER : POST .../content\ncontent_count, content_<i>_id/type/order/\nextra_data/text_<lang>
 ROUTER -> ROUTER : build CmsContentBlockEdit[]\n(content_count capped at 200)
 ROUTER -> ADMIN : cms_update_entry_content(id, langs, blocks)
-ADMIN -> MONGO : updateOne({_id}, {$set: {content: [...]}})\n(full array replace)
+ADMIN -> MONGO : updateOne({_id}, {$set: {content: [...]}})\n(full array replace; blocks without a valid\nid are minted a new ObjectId, not dropped)
 ADMIN --> ROUTER : 0 | -1
-ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"update failed"}
+ROUTER -> ROUTER : for each gallery block:\ncms_upsert_media_gallery() → id into extra_data
+ROUTER --> BROWSER : {"ok":true,"ids":[...]} | 400 {"ok":false,"error":"update failed"}
+BROWSER -> BROWSER : copy ids back into data-block-id
 
 BROWSER -> BROWSER : setStatus("Saved" | "Save failed")\n(or scheduled via editorScheduleAutoSave(), 3s debounce)
 
@@ -77,6 +82,15 @@ ADMIN -> MONGO : updateOne({_id}, {$pull: {content: {_id: block_id}}})
 ADMIN --> ROUTER : 0 | -1
 ROUTER --> BROWSER : {"ok":true} | 400 {"ok":false,"error":"remove failed"}
 BROWSER -> BROWSER : blockEl.remove()
+
+== refreshBlockPreview(): server-rendered preview ==
+
+BROWSER -> ROUTER : POST /dashboard/api/block-preview\ntype, text, extra\n(paragraph, image, gallery, table,\nyoutube-embed, code-text; skipped if unchanged)
+ROUTER -> ROUTER : require_dashboard_session() only\n(no entry id, no ownership check)
+ROUTER -> PUB : entry_page_render_block(type, text, extra, EPOCH_MODERN)
+PUB --> ROUTER : html (exactly what readers get)
+ROUTER --> BROWSER : 200 text/html | 500
+BROWSER -> BROWSER : replace preview if still the latest\nrequest for this block (token check)
 
 note over BROWSER
   moveBlockUp()/moveBlockDown() are pure

@@ -11,6 +11,14 @@
 > per-language map was the wrong shape - and the reference keeps the name in one place when a
 > user is renamed.
 
+> **Update (2026-10-06):** the block set has evolved since this plan: `image-paragraph` was merged
+> into `image` (new `float-left`/`float-right` alignment; existing data converted by
+> `scripts/migrations/2026-10-01-merge-image-paragraph.js`), `entries` gained `created_by` and
+> `header.hide_author`, and `enabled: false` now means *draft* (viewable by signed-in users).
+> The current schema is in [data-model.md](../reference/data-model.md#entries); the diagram
+> [cms-entry-model-embedded.puml](../diagrams/cms-entry-model-embedded.puml) was redrawn to match
+> the implementation.
+
 Diagram: [diagrams/cms-entry-model-embedded.puml](../diagrams/cms-entry-model-embedded.puml)
 
 ## 1. Goal

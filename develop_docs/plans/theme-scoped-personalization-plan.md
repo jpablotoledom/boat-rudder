@@ -24,6 +24,12 @@
 > moves banner/footer into the `themes` collection, alongside colors, and reshapes
 > `/dashboard/settings` so a theme's colors, banner and footer are edited together as one thing.
 
+> **Update (2026-10-06):** the per-theme scope grew beyond colors/banner/footer: structured
+> per-epoch **logos** (`themes.logo`, epoch −1 uploads converted to WBMP), a **logo font**
+> (`themes.logo_font`, backed by the new `fonts` collection), and a full **epoch 3 CSS override**
+> (`themes.css_epoch3`, with *Restore original*). §9.2 is still open. Current reference:
+> [themes.md](../reference/themes.md).
+
 ## 1. Goal
 
 Today, "Site settings" is flat: site name, Banner, Footer, Preview and Themes are five

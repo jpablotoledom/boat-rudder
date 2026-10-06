@@ -1,4 +1,4 @@
-/* Minimal declarations for libqrencode — header-only substitute for libqrencode-dev */
+/* Minimal declarations for libqrencode - header-only substitute for libqrencode-dev */
 #ifndef QRENCODE_MINIMAL_H
 #define QRENCODE_MINIMAL_H
 

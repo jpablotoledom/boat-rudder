@@ -58,7 +58,7 @@ does not invalidate the other one's objects.
 
 | | Files recompiled | Time |
 |---|---|---|
-| From clean (`./boat_rudder_builder.sh clean` first) | 52 | ~2.7 s |
+| From clean (`./boat_rudder_builder.sh clean` first) | every source (79 today) | a few seconds |
 | After editing one `.c` | 1 | ~0.7 s |
 | After editing a widely-included header (`utils/log.h`) | 19 | ~1.1 s |
 
@@ -190,16 +190,28 @@ Compiles the project for production and installs it as a **systemd service**.
 **What it does:**
 1. Calls `compile_prod.sh` to produce a fresh release binary.
 2. Creates `/usr/local/bin/boat-rudder/` and copies into it, straight from the project root:
-   - `boat-rudder` (binary from `bin/`, marked executable)
-   - `configs/`
-   - `html/` (creates an empty one with a warning if absent)
-   - `ssl/` (only if it contains `.pem` files)
+   - `boat-rudder` - with `install -m 755`, which replaces the file instead of writing into it,
+     so it works while the old binary is running ("Text file busy" with `cp`).
+   - `configs/settings.conf` - **only on the first install.** It is per-host (ports, WAP gateway
+     addresses, log level…), so a reinstall keeps the installed file, writes the repository's
+     version next to it as `settings.conf.dist`, and lists every key the installed file lacks
+     (those run with their built-in defaults - see [configuration.md](configuration.md)).
+   - `html/` - merged over the installed copy with `cp -rT`: templates and themes are updated,
+     files that only exist on the server (media uploaded from the dashboard under
+     `html/content/`) are kept. Creates an empty one with a warning if absent.
+   - `data/GeoLite2-Country.mmdb` - copied to `data/` if present; otherwise a warning that every
+     visitor country will be "Unknown" ([analytics.md](analytics.md#geoip-optional)).
+   - `ssl/` - **only seeded on the first install** (when the installed `ssl/` is empty), so
+     certificates renewed in place on the server are never overwritten by a stale checkout.
 
    This is the one place where the content tree really is copied: the installed service runs
    from `/usr/local/bin/boat-rudder/`, independent of the source checkout.
-3. Copies `scripts/boat-rudder.service` to `/etc/systemd/system/`.
-4. Runs `systemctl daemon-reload`, `systemctl enable`, `systemctl start`.
-5. Prints the service status and the log tail command.
+3. Installs `scripts/boat-rudder.logrotate` as `/etc/logrotate.d/boat-rudder` (if
+   `/etc/logrotate.d` exists).
+4. Copies `scripts/boat-rudder.service` to `/etc/systemd/system/`.
+5. Runs `systemctl daemon-reload`, `systemctl enable` and `systemctl restart` (restart, so a
+   reinstall replaces the running old binary).
+6. Prints the service status and the log tail command.
 
 **Install path:** `/usr/local/bin/boat-rudder/`
 
@@ -212,8 +224,8 @@ Compiles the project for production and installs it as a **systemd service**.
 # Check status
 systemctl status boat-rudder
 
-# Follow logs
-journalctl -u boat-rudder -f
+# Follow logs (the unit appends stdout/stderr to this file, not to the journal)
+tail -f /var/log/boat-rudder.log
 
 # Restart after config changes
 systemctl restart boat-rudder
@@ -240,8 +252,13 @@ Stops and completely removes the systemd service and all installed files.
 2. Disables the service with `systemctl disable`.
 3. Removes `/etc/systemd/system/boat-rudder.service`.
 4. Runs `systemctl daemon-reload`.
-5. Removes `/usr/local/bin/boat-rudder/` recursively.
+5. Removes `/usr/local/bin/boat-rudder/` recursively - **including** the host's
+   `configs/settings.conf`, `ssl/`, `data/` and every uploaded file under `html/content/`. Back
+   up first if any of it matters.
 6. Lists any remaining units matching `boat-rudder` for verification.
+
+It does **not** remove `/etc/logrotate.d/boat-rudder` nor `/var/log/boat-rudder.log*`; delete
+them by hand if wanted.
 
 **Delegates to:** `scripts/uninstall.sh`
 
@@ -283,12 +300,16 @@ boat-rudder/
 ├── ssl/
 │   ├── cert.pem                # Read live at runtime
 │   └── key.pem
+├── data/
+│   └── GeoLite2-Country.mmdb   # Optional, read at startup for analytics
 └── html/                       # Document root: templates, assets and uploaded media
-    ├── themes/dark/...
-    └── content/posts/...       # Media uploads land here
+    ├── templates/...           # Shared templates
+    ├── themes/<theme>/...      # Per-theme templates, assets, styles_epoch3.css
+    ├── assets/fonts/...        # Font library
+    └── content/posts/...       # Media uploads land here (content/qr/ caches QR images)
 ```
 
-The binary is **not** self-contained: it resolves `./configs`, `./html` and `./ssl` relative to
+The binary is **not** self-contained: it resolves `./configs`, `./html`, `./ssl` and `./data` relative to
 its working directory, which is why every script `cd`s to the project root before starting it.
 To run it from somewhere else, use `install` - that is what assembles a standalone
 `/usr/local/bin/boat-rudder/` tree.
@@ -297,9 +318,9 @@ To run it from somewhere else, use `install` - that is what assembles a standalo
 
 ## Configuration File (`configs/settings.conf`)
 
-`rundebug` always syncs `configs/settings.conf` from the project root into `bin/` before
-starting, so the config can be edited without recompiling. `install` copies it into
-`/usr/local/bin/boat-rudder/configs/`.
+`rundebug` starts the binary with `-c ./configs/settings.conf` from the project root, so the
+config can be edited without recompiling or copying. `install` copies it into
+`/usr/local/bin/boat-rudder/configs/` on the first install only (see `install` above).
 
 Every key is documented in **[configuration.md](configuration.md)**, the single configuration
 reference.
@@ -334,6 +355,25 @@ reference.
 
 The systemd service is configured with `Restart=on-failure` - if the process crashes, it restarts automatically after 5 seconds.
 
+### The systemd unit (`scripts/boat-rudder.service`)
+
+| Setting | Value | Why |
+|---|---|---|
+| `ExecStart` | `/usr/local/bin/boat-rudder/boat-rudder -c …/configs/settings.conf …/html` | Absolute paths into the install directory |
+| `WorkingDirectory` | `/usr/local/bin/boat-rudder` | Templates, `data/` and `ssl/` are resolved relative to it |
+| `User` / `Group` | `root` | Binds ports 80/443 directly. Consider an unprivileged user plus `AmbientCapabilities=CAP_NET_BIND_SERVICE` - see [security.md](security.md#known-gaps) |
+| `KillSignal` / `TimeoutStopSec` / `SendSIGKILL` | `SIGTERM` / `10` / `yes` | Graceful shutdown takes ≤ ~1 s plus up to 10 s draining TLS connections |
+| `Restart` / `RestartSec` | `on-failure` / `5` | |
+| `StandardOutput` / `StandardError` | `append:/var/log/boat-rudder.log` | One log file, rotated by logrotate |
+| `After` / `Wants` | `network-online.target` | |
+
+### `boat-rudder.logrotate`
+
+Installed as `/etc/logrotate.d/boat-rudder`: `/var/log/boat-rudder.log` rotated **weekly** or
+when it exceeds **20 MB**, **8** rotations kept, compressed (`delaycompress`), `missingok`,
+`notifempty`. It uses **`copytruncate`** because systemd holds the file open in append mode -
+moving it away would leave the server writing to the rotated file.
+
 ---
 
 ## Privileged Ports (Linux)
@@ -363,7 +403,10 @@ These scripts are not meant to be called directly but can be if needed. All of t
 | `scripts/mongodb_start.sh` | nothing (manual) | `./scripts/mongodb_start.sh` |
 | `scripts/mongodb_dump.sh` | nothing (manual) | `./scripts/mongodb_dump.sh` |
 | `scripts/mongodb_restore.sh` | nothing (manual) | `./scripts/mongodb_restore.sh` |
-| `scripts/show/banner`, `scripts/show/divbar` | sourced by the other scripts for console output | not standalone |
+| `scripts/migrations/*.js` | nothing (manual, `mongosh`) | see [migrations.md](migrations.md) |
+| `scripts/boat-rudder.service` | copied by `install` | not executable |
+| `scripts/boat-rudder.logrotate` | copied by `install` | not executable |
+| `scripts/show/banner`, `scripts/show/divbar` | sourced (`source ./scripts/show/…`) by `compile_*`, `install`, `uninstall`, `run_debug`, `clean`, `create_local_cert` for console output: the ASCII banner and a divider line | not standalone - plain shell fragments, no shebang |
 
 ### `scripts/image-optimizer.sh`
 
@@ -385,6 +428,22 @@ Both dump and restore read the database name from `mongodb_db` in `configs/setti
 they follow whichever site this checkout is configured for - no database name is hardcoded.
 `mongodb_restore.sh` **drops the existing collections** before restoring.
 
+> The dump directory `db_backup/` (and `db_backup_clean/`) is currently **tracked in git** and
+> contains `users.bson` (password hashes) and `sessions.bson` (session tokens). Dumps of a real
+> site should stay out of version control - see [security.md](security.md#known-gaps).
+
+### Database migrations
+
+One-off `mongosh` scripts under `scripts/migrations/`, named `YYYY-MM-DD-<what>.js`,
+idempotent, run by hand against the site's database after a backup:
+
+```bash
+./scripts/mongodb_dump.sh
+mongosh "mongodb://localhost:27017/<mongodb_db>" scripts/migrations/<file>.js
+```
+
+Conventions, catalog and how to write one: [migrations.md](migrations.md).
+
 ---
 
 ## Prerequisites
@@ -393,23 +452,36 @@ they follow whichever site this checkout is configured for - no database name is
 
 ```bash
 # Debian / Ubuntu
-sudo apt install cmake gcc libssl-dev libmongoc-dev libsodium-dev
+sudo apt install cmake gcc pkg-config libssl-dev libmongoc-dev libsodium-dev libqrencode-dev
+sudo apt install libmaxminddb-dev          # optional: GeoIP
 
 # Fedora / RHEL
-sudo dnf install cmake gcc openssl-devel mongo-c-driver-devel libsodium-devel
+sudo dnf install cmake gcc pkgconf openssl-devel mongo-c-driver-devel libsodium-devel qrencode-devel
+sudo dnf install libmaxminddb-devel        # optional: GeoIP
 
 # Arch / Manjaro
-sudo pacman -S cmake gcc openssl mongo-c-driver libsodium
+sudo pacman -S cmake gcc pkgconf openssl mongo-c-driver libsodium qrencode
+sudo pacman -S libmaxminddb                # optional: GeoIP
 ```
 
-`libmongoc` and `libsodium` are not optional: the CMake build links them unconditionally for the
-database-backed CMS, the dashboard and Argon2id password hashing.
+`libmongoc`, `libsodium` and `libqrencode` are not optional: the CMake build links them
+unconditionally (the database-backed CMS and dashboard, Argon2id password hashing, QR codes for
+retro epochs). `libqrencode` ships no pkg-config file, so CMake looks for the library itself -
+the runtime package (`libqrencode4`) is enough. **`libmaxminddb` is optional**: when
+`pkg-config` finds it, CMake defines `HAVE_MAXMINDDB` and links it; without it the build still
+succeeds and analytics records every country as `Unknown`. `libm` is linked explicitly.
+
+The full dependency and vendored-code list is in [third-party.md](third-party.md).
 
 Runtime dependencies (not needed to compile, but the media library is broken without them):
 
 ```bash
 sudo apt install mongodb-org imagemagick jpegoptim gifsicle
+sudo apt install mongodb-mongosh   # to run scripts/migrations/ (package name per MongoDB's repo)
 ```
+
+Optional runtime data: `data/GeoLite2-Country.mmdb` (MaxMind GeoLite2, see
+[third-party.md](third-party.md#geolite2)).
 
 Optional (for `rundebug` with debugger):
 ```bash
@@ -419,7 +491,8 @@ sudo apt install gdb
 ### macOS
 
 ```bash
-brew install cmake openssl mongo-c-driver libsodium
+brew install cmake pkg-config openssl mongo-c-driver libsodium qrencode
+brew install libmaxminddb                     # optional: GeoIP
 brew install imagemagick jpegoptim gifsicle   # runtime, for the media library
 
 # Pass OpenSSL location to CMake (Homebrew installs it to a non-default path)

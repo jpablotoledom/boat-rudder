@@ -15,61 +15,89 @@ skinparam activity {
 
 start
 
-:Parse argv → resolve root_directory;
+:Parse argv ([-c <config>] <root_directory>)\n→ realpath(root_directory);
 
-:load_config("./configs/settings.conf")\nhttp_port, https_port, ssl_enabled,\nssl_cert, ssl_key, verbose_level;
+:load_config(config_path)\nports, TLS, logging, trusted_proxies, theme, lang,\npublic_url, force_epoch, mongodb_*, session TTL,\nddos_*, connection_io_timeout_secs, wap_gateway_*;
 
 if (config load failed?) then (yes)
     :LOG_ERROR + EXIT_FAILURE;
     stop
 endif
 
+if (mongodb_manager_init(uri, db) == 0?) then (yes)
+    :cms_languages_ensure_seeded();
+else (no)
+    :LOG_WARN "MongoDB unavailable"\n(/login and /dashboard → 503);
+endif
+
+:geoip_init("./data/GeoLite2-Country.mmdb")\n(no-op stub without libmaxminddb;\nmissing file → countries "Unknown");
+
 :Register signal handlers\nSIGINT / SIGTERM → handle_shutdown()\nSIGCHLD → sigchld_handler()\nSIGPIPE → SIG_IGN;
 
-:server_start(root_dir, ...);
+partition "server_start()" {
+    :ip_table = calloc(ddos_max_ips);
+    :pthread_create(ip_table_cleanup_thread);
+    :HTTP socket: bind(http_port), listen(128);
+    if (ssl_enabled?) then (yes)
+        :HTTPS socket: bind(https_port), listen(128)\ntls_create_context(cert, key) → ssl_ctx;
+    endif
+    :pthread_create(accept_loop_thread);
+}
+
+if (wap_gateway_enabled?) then (yes)
+    :wap_gateway_start()\nUDP sockets per wap_gateway_ips ×\n{rover_port, wsp_port}\npthread_create(gateway_loop);
+    note right
+      After server_start():
+      the gateway fetches every
+      page from http_port
+    end note
+endif
 
 fork
-    :Create HTTP socket\nbind(http_port)\nlisten(backlog=128);
+    partition "accept thread" {
+        repeat
+            :select(http, https; timeout 1 s);
+            if (HTTP fd ready?) then (yes)
+                :accept();
+                if (too_many_connections(ip) or\nconnection cap reached?) then (yes)
+                    :write 429, close;
+                else (no)
+                    :pthread_create(connection_thread)\npthread_detach;
+                endif
+            endif
+            if (HTTPS fd ready?) then (yes)
+                :accept();
+                if (too_many_connections(ip) or\nconnection cap reached?) then (yes)
+                    :close (no TLS handshake);
+                else (no)
+                    :SSL_new + SSL_set_fd\npthread_create(connection_thread);
+                endif
+            endif
+        repeat while (running?) is (yes)
+    }
 fork again
-    if (ssl_enabled?) then (yes)
-        :Create HTTPS socket\nbind(https_port)\nlisten(backlog=128)\ntls_create_context(cert, key) → ssl_ctx;
-    endif
+    partition "cleanup thread" {
+        repeat
+            :timedwait ddos_cleanup_interval_secs;
+            :lift expired bans,\nfree entries idle > ddos_ip_stale_secs;
+        repeat while (cleanup_running?) is (yes)
+    }
+fork again
+    partition "main thread" {
+        repeat
+            :sleep(1);
+        repeat while (running?) is (yes)
+        ->SIGINT / SIGTERM;
+    }
 end fork
 
-:LOG_INFO "Listening on port(s)";
+:wap_gateway_stop()\njoin gateway thread, close UDP sockets;
 
-repeat
+:server_stop()\nclose listeners, join accept thread\n[TLS] wait ≤ 10 s for active connections,\ntls_free_context()\nstop + join cleanup thread, free(ip_table);
 
-    :select([server_fd_http, server_fd_https]);
+:geoip_cleanup();
 
-    if (HTTP fd ready?) then (yes)
-        :accept() → client_socket;
-        if (too_many_connections(ip)?) then (yes)
-            :close(client_socket);
-        elseif (active_connections >= MAX_CONNECTIONS?) then (yes)
-            :close(client_socket);
-        else (no)
-            :malloc(thread_args)\npthread_create(connection_thread)\npthread_detach;
-        endif
-    endif
-
-    if (HTTPS fd ready?) then (yes)
-        :accept() → client_socket;
-        if (too_many_connections(ip)?) then (yes)
-            :close(client_socket);
-        elseif (active_connections >= MAX_CONNECTIONS?) then (yes)
-            :close(client_socket);
-        else (no)
-            :SSL_new(ssl_ctx)\nSSL_set_fd(ssl, client_socket)\nmalloc(thread_args)\npthread_create(connection_thread)\npthread_detach;
-        endif
-    endif
-
-repeat while (running == 1?) is (yes)
-->no (SIGINT / SIGTERM);
-
-:server_stop()\nclose(server_fd_http)\nclose(server_fd_https)\ntls_free_context(ssl_ctx);
-
-:LOG_INFO "Server shut down";
+:mongodb_manager_cleanup();
 
 stop
 

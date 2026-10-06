@@ -2,6 +2,12 @@
 
 This document describes how data moves through the server from the moment a TCP connection arrives until the response is fully sent.
 
+Diagrams: [startup-flow.puml](../diagrams/startup-flow.puml),
+[sequence-http.puml](../diagrams/sequence-http.puml),
+[sequence-https.puml](../diagrams/sequence-https.puml),
+[sequence-home-route.puml](../diagrams/sequence-home-route.puml),
+[sequence-wap-gateway.puml](../diagrams/sequence-wap-gateway.puml).
+
 ---
 
 ## 1. Server Startup
@@ -9,10 +15,10 @@ This document describes how data moves through the server from the moment a TCP 
 ```
 main()
   │
-  ├─ load_config("./configs/settings.conf")
-  │     Reads: http_port, https_port, ssl_enabled, ssl_cert, ssl_key, verbose_level,
-  │            theme, lang, public_url, force_epoch (retro-compatible CMS, see §5a),
-  │            mongodb_uri, mongodb_db, session_ttl_seconds (login/sessions, see §5b)
+  ├─ load_config("./configs/settings.conf")          (or -c <path>)
+  │     Reads every key in configuration.md: ports/TLS/logging, trusted_proxies,
+  │     theme, lang, public_url, force_epoch, mongodb_*, session_ttl_seconds,
+  │     ddos_* + connection_io_timeout_secs, wap_gateway_*
   │
   ├─ mongodb_manager_init(mongodb_uri, mongodb_db)
   │     sodium_init()  ← required once before any libsodium call
@@ -22,59 +28,85 @@ main()
   ├─ cms_languages_ensure_seeded()   ← only if mongodb_manager_init() succeeded
   │     inserts {code:"en", name:"English", is_default:true} iff `languages` is empty
   │
-  ├─ server_start(root_dir, ssl_enabled, ssl_cert, ssl_key, http_port, https_port)
-  │     ├─ socket(AF_INET, SOCK_STREAM) → server_fd_http
-  │     ├─ bind(server_fd_http, port=http_port)
-  │     ├─ listen(server_fd_http, backlog=128)
-  │     │
-  │     ├─ [if ssl_enabled]
-  │     │     ├─ socket() → server_fd_https
-  │     │     ├─ bind(server_fd_https, port=https_port)
-  │     │     ├─ listen(server_fd_https, backlog=128)
-  │     │     └─ tls_create_context(cert, key) → ssl_ctx
-  │     │
-  │     └─ enter accept loop  ──────────────────────────────►  see §2
+  ├─ geoip_init("./data/GeoLite2-Country.mmdb")      ── modules/analytics/geoip.c
+  │     HAVE_MAXMINDDB: MMDB_open(MMAP); missing/bad file → warning, countries "Unknown"
+  │     without libmaxminddb: no-op stub, logs that country detection is disabled
   │
-  └─ sleep loop until SIGINT/SIGTERM → server_stop()
+  ├─ signal(SIGINT/SIGTERM → handle_shutdown, SIGCHLD → reap)
+  │
+  ├─ server_start(root_dir, ssl_enabled, ssl_cert, ssl_key, http_port, https_port)
+  │     ├─ ip_table = calloc(ddos_max_ips, sizeof(ip_entry_t))
+  │     ├─ pthread_create(ip_table_cleanup_thread)   ──────────────────►  see §2
+  │     ├─ socket/bind/listen(http_port, backlog=128) → server_fd_http
+  │     ├─ [if ssl_enabled]
+  │     │     socket/bind/listen(https_port) → server_fd_https
+  │     │     tls_create_context(cert, key) → ssl_ctx
+  │     ├─ pthread_create(accept_loop_thread)        ──────────────────►  see §2
+  │     └─ return 0                                  (listeners are up)
+  │
+  ├─ wap_gateway_start()                             ── only if wap_gateway_enabled
+  │     must run AFTER server_start(): the gateway fetches every page from
+  │     127.0.0.1:http_port. Opens UDP sockets per wap_gateway_ips × {rover, wsp}
+  │     port, starts the gateway thread. Failure → warning, server continues.
+  │     See wap-gateway.md.
+  │
+  └─ while (running) sleep(1)   until SIGINT/SIGTERM  ─────────────────►  see §7
 ```
 
 ---
 
-## 2. Accept Loop (`server_listener.c`)
+## 2. Accept Loop and Cleanup Thread (`server_listener.c`)
 
-The main thread runs a blocking `select()` over both listening sockets.
+The accept loop runs on **its own thread** (`accept_loop_thread()`), so `server_start()` can
+return and `main()` can react to signals.
 
 ```
 while (running):
-  select([server_fd_http, server_fd_https]) ─── blocks until activity ───┐
-                                                                         │
-  ┌──────────────────────────────────────────────────────────────────────┘
+  select([server_fd_http, server_fd_https], timeout = 1 s)
+  timeout? → re-check running, continue        ← bounds shutdown to ~1 s
   │
   ├─ HTTP socket ready?
   │     accept() → client_socket
-  │     too_many_connections(ip)?  ──yes──► close(client_socket), continue
-  │     try_register_connection()? ──no──►  close(client_socket), continue
+  │     too_many_connections(ip)?   ──yes──► write 429, close, continue
+  │     try_register_connection()?  ──no───► write 429, close, continue
   │     malloc(thread_args) { client_socket, root_dir, ssl=NULL }
-  │     pthread_create(connection_thread, args)   ──────────────►  see §3
+  │     pthread_create(connection_thread, 2 MiB stack)   ─────────►  see §3
   │     pthread_detach(tid)
   │
   └─ HTTPS socket ready?
         accept() → client_socket
-        too_many_connections(ip)?  ──yes──► close(client_socket), continue
-        try_register_connection()? ──no──►  close(client_socket), continue
-        SSL_new(ssl_ctx) → ssl
-        SSL_set_fd(ssl, client_socket)
+        too_many_connections(ip)?   ──yes──► close (no TLS handshake, no 429), continue
+        try_register_connection()?  ──no───► close, continue
+        SSL_new(ssl_ctx) → ssl; SSL_set_fd(ssl, client_socket)
         malloc(thread_args) { client_socket, root_dir, ssl }
-        pthread_create(connection_thread, args)   ──────────────►  see §3
+        pthread_create(connection_thread)   ──────────────────────►  see §3
         pthread_detach(tid)
 ```
 
-**Rate limiting state machine (per IP entry):**
+The `429` is best-effort and only for plain HTTP: completing a TLS handshake just to say "too
+many requests" would spend exactly the CPU the rejection is meant to save.
+
+**Rate limiting state machine (per IP entry, under `ip_table_mutex`):**
 ```
-NEW IP → count=1, blocked=false
-SAME IP within RATE_WINDOW:
-  count++ → if count > RATE_LIMIT: blocked=true, record last_rejected
-  if blocked && (now - last_rejected) > RATE_WINDOW*2: blocked=false, count=0
+NEW IP → empty slot: count=1, blocked=0
+         no empty slot: evict the entry with the oldest last_conn (LRU)
+KNOWN IP:
+  blocked && (now - last_rejected) <= 2 × ddos_rate_window_secs → reject
+  blocked && expired                                            → blocked=0, count=0
+  (now - last_conn) <  ddos_rate_window_secs → count++, last_conn=now
+                                               count > ddos_rate_limit → blocked=1,
+                                               last_rejected=now, reject
+  (now - last_conn) >= ddos_rate_window_secs → count=1, last_conn=now
+```
+
+**Cleanup thread** (`ip_table_cleanup_thread()`), every `ddos_cleanup_interval_secs`
+(`pthread_cond_timedwait`, so `server_stop()` can wake it at once):
+```
+lock ip_table_mutex
+for each entry:
+  blocked && ban expired                       → blocked = 0
+  !blocked && (now - last_conn) > ddos_ip_stale_secs → zero the entry (slot freed)
+unlock; log how many were freed
 ```
 
 ---
@@ -87,7 +119,9 @@ Each connection runs in its own pthread.
 connection_thread(thread_args)
   │
   ├─ malloc(connection_ctx_t) { client_socket, ssl }
-  ├─ setsockopt SO_RCVTIMEO = 30s, SO_SNDTIMEO = 30s   ← raised from 5s for large uploads
+  ├─ setsockopt SO_RCVTIMEO = SO_SNDTIMEO = connection_io_timeout_secs (default 5 s)
+  │     per read/write call - a stalled client is dropped (slow-loris),
+  │     a slow-but-steady upload is not
   │
   ├─ [if ssl != NULL]
   │     SSL_accept(ssl)  ← TLS handshake
@@ -102,71 +136,77 @@ connection_thread(thread_args)
   └─ cleanup:
         SSL_shutdown + SSL_free  (if SSL)
         close(client_socket)
-        unregister_connection()   ← decrements active_connections
+        unregister_connection()   ← decrements active_connections, signals server_stop()
 ```
 
 ---
 
-## 4. HTTP Router (`http_router.c`)
+## 4. HTTP Router
 
-This is the core HTTP processing stage.
+This is the core HTTP processing stage (`http_router.c`). The complete route table is in
+[routes.md](routes.md).
 
 ```
 http_route(read_func, ctx, root_directory)
   │
   ├─ malloc(raw_request, RAW_REQUEST_SIZE=32KB)
   │
-  ├─ READ LOOP: call read_func() until "\r\n\r\n" found (headers complete)
-  │     EOF / error? → goto conn_cleanup
+  ├─ READ LOOP until the header block is complete:
+  │     "\r\n\r\n" or "\n\n"                      → done
+  │     request line without version (HTTP/0.9)   → done immediately
+  │     versioned line, no terminator, plain HTTP → wait ≤ 400 ms for more, else done
+  │     buffer full → 431;  EOF / error → cleanup
+  │
+  ├─ READ BODY (if Content-Length > 0):
+  │     Content-Length > MAX_BODY_SIZE (10 MiB) → 413
+  │     realloc to header + body size, loop read_func() until complete
   │
   ├─ parse_http_request(raw_request) → HttpRequest { method, url, protocol, headers[], body }
-  │     failure? → send 400 Bad Request → goto conn_cleanup
+  │     failure, or protocol present but not "HTTP/…" → 400
   │
-  ├─ Extract headers:
-  │     User-Agent, Cookie, Content-Type, Content-Length
+  ├─ client_ip:
+  │     peer = getpeername()
+  │     is_trusted_proxy(peer) ? X-Real-IP → first X-Forwarded-For → peer : peer
   │
-  ├─ READ BODY (if Content-Length > 0, max 10 MB):
-  │     copy already-read bytes after header end
-  │     loop read_func() until body_bytes_read == content_length
+  ├─ url_parse(url) → route + QueryParam[];  url_decode(route) → decoded_url
   │
-  ├─ Extract client IP:
-  │     X-Real-IP → X-Forwarded-For → getpeername() fallback
+  ├─ PER-REQUEST STATE (thread-local, read by any module below):
+  │     request_lang_set(Cookie, ?lang=)        ?lang= → lang cookie → languages default
+  │     request_path_set(decoded_url)
+  │     request_user_set(Cookie)                session → users.name (navbar)
+  │     request_theme_set(Cookie, ?theme=)      ?theme= → theme cookie →
+  │                                             site_settings.active_theme → config `theme`
+  │     request_charset_set(User-Agent)         real browser needs Latin-1? (Cello)
+  │     request_code_lines_set(?code_lines=)
+  │     request_wml_set(raw url, ?wml_pages=)
+  │     content_lang = request_lang()
   │
-  ├─ Validate request line (sscanf METHOD URL PROTO):
-  │     invalid? → send 400 Bad Request → goto conn_cleanup
+  ├─ analytics_track_visit(method, decoded_url, User-Agent, client_ip, resolve_epoch())
+  │     GET only; skips bots, static extensions, /dashboard*  → see analytics.md
+  │     two $inc upserts (page_visits_daily, entry_visits_daily) on this thread
   │
-  ├─ url_parse(url, route, sizeof(route), params, &param_count) → route + QueryParam[]
-  ├─ url_decode(route) → decoded_url
+  ├─ ROUTE DISPATCH (first match wins; full table in routes.md):
+  │     GET/HEAD "/"                       → home page  ─────────────────►  see §5a
+  │     GET/HEAD "/blog", "/blog/category/<slug>", "/blog/categories", "/blog/<link>"
+  │     GET/HEAD "/page/<link>"            → CMS entry (drafts only with a session)
+  │     GET/HEAD "/gallery/<id>"           → gallery page (QR on epochs -1/0)
+  │     GET/HEAD "/menu", "/language", "/language/set", "/theme", "/theme/set"
+  │     GET/HEAD "/qr/<code>", "/youtube-qr/<id>", "/image-qr/<code>"
+  │     GET/HEAD "/themes/<key>/styles_epoch3.css" → DB-overridable theme CSS
+  │     GET/HEAD/POST "/login", GET "/logout", GET "/dashboard" ──────►  see §5b
+  │     GET/POST "/dashboard/..."          → admin area (E3 + session/role guards)
+  │     GET/HEAD other                     → serve_static_file()  ───────►  see §5
+  │     OPTIONS → 204;  other method → 405
   │
-  ├─ content_lang = cms_resolve_default_lang()   ← db.languages.findOne({is_default:true})
+  │     Every dynamic route resolves its epoch via resolve_epoch(req):
+  │       force_epoch (if -1..3) → ?preview_epoch=N (if -1..3) → detect_epoch(User-Agent)
+  │     and wraps its content with one of the html_builder/orchestrator.c page builders.
   │
-  ├─ ROUTE DISPATCH:
-  │     GET/HEAD, route == "/"           → dynamic home page  ──────────►  see §5a
-  │     GET/HEAD, "/blog"                → blog listing + category bar
-  │     GET/HEAD, "/blog/category/<slug>"→ blog listing filtered by category (404 if no match)
-  │     GET/HEAD, "/blog/<link>"         → CMS entry, type must be "blog"
-  │     GET/HEAD, "/page/<link>"         → CMS entry, type must be "page"
-  │     GET/HEAD, "/gallery/<id>"        → public gallery page (epoch-aware)
-  │     GET/HEAD, route == "/login"      → login page (epoch-aware)  ────►  see §5b
-  │     GET/HEAD, route == "/dashboard"  → dashboard or 302 /login  ─────►  see §5b
-  │     GET/HEAD, route == "/logout"     → destroy session, 302 /  ──────►  see §5b
-  │     POST,     route == "/login"      → authenticate, 302 /dashboard ─►  see §5b
-  │     GET/POST, "/dashboard/..."       → admin area (session-guarded; entries editor,
-  │                                        media, categories, languages, menu, users)
-  │     GET/HEAD, other route            → serve_static_file()  ─────────►  see §5
-  │     OPTIONS → send 204
-  │     other → send 405 Method Not Allowed
-  │
-  │     Every dynamic route resolves its epoch via resolve_epoch(req) and wraps its
-  │     content with one of the html_builder/orchestrator.c page builders.
-  │
-  │     Any non-2xx/3xx response (400/403/404/405/431/500/503) is rendered
+  │     Any non-2xx/3xx response (400/403/404/405/413/431/500/503) is rendered
   │     via send_error_response(ctx, status_code, status_line, epoch)  ──►  see §5c
   │
-  └─ conn_cleanup:
-        free(raw_request)
-        free(req.body)
-        connection_close(ctx)
+  └─ cleanup:
+        free(raw_request); free(req.body); connection_close(ctx)
 ```
 
 ---
@@ -176,10 +216,9 @@ http_route(read_func, ctx, root_directory)
 ```
 GET/HEAD "/"  (http_router.c)
   │
-  ├─ ua = header("User-Agent")
-  ├─ epoch = (force_epoch in -1..3) ? force_epoch : detect_epoch(ua)
+  ├─ epoch = resolve_epoch(req)
+  │     force_epoch (if -1..3) → ?preview_epoch=N → detect_epoch(User-Agent)
   │     -1 = WML, 0 = pre-standard, 1 = early, 2 = middle, 3 = modern
-  │     force_epoch (config_loader, default unset) overrides detection when in range
   │
   ├─ body = buildHomeWebSite(epoch, lang)         ── html_builder/orchestrator.c
   │     ├─ generate_url_theme("page/page-home_epoch%d.html", epoch)
@@ -196,12 +235,13 @@ GET/HEAD "/"  (http_router.c)
   │     │     → str_append into items, then render_template(menu_tpl, items)
   │     │
   │     ├─ mainbanner(epoch)
-  │     │     generate_url_theme("mainbanner/mainbanner_epoch%d.html", epoch) → read_file_to_string()
+  │     │     cms_get_theme_banner(request_theme(), epoch)  ── themes.banner_html.<epoch>
+  │     │       if empty → the theme's mainbanner/mainbanner_epoch%d.html
   │     │
   │     ├─ home_content(epoch, lang)
-  │     │     for each entry in the static UPDATES[] array: render_template(item_tpl, title, date, text)
+  │     │     the "/" CMS entry's content blocks if one exists (entry_page_render_content()),
+  │     │     otherwise the built-in UPDATES[] array: render_template(item_tpl, title, date, text)
   │     │     → str_append into items, then render_template(content_tpl, items)
-  │     │     (still the only static content source left - see the roadmap)
   │     │
   │     ├─ home_blog(epoch, lang)
   │     │     cms_get_blog_entries(lang, HOME_BLOG_LIMIT, &items, &count) ── db.entries.find(
@@ -220,11 +260,22 @@ GET/HEAD "/"  (http_router.c)
   │
   ├─ body == NULL? → send 500 Internal Server Error
   │
+  ├─ (inside the builder) page_layout_wrap(): {{FOOTER}}, {{FOOTER_LOGO}}, {{SITE_NAME}},
+  │     layout_epoch%d.html, {{PAGE_TITLE}}, {{COLOR_*}} (epochs 1/2), {{THEME_COLORS}} (epoch 3)
+  │
   ├─ response = build_epoch_response(body, "", epoch)  ── utils/build_epoch_response.c
+  │     retrofit_body_for_epoch():
+  │       epochs -1/0/1: add ?lang=<code> to internal links
+  │       epoch -1 (unless ?wml_pages=all): wml_paginate() to 860-byte pages,
+  │         page = ?__page=N, Prev/Next links
+  │       epochs 1/2: add ?theme=<key> to internal links
+  │       epoch -1: close <br>, strip HTML lists
+  │       epochs -1/1, and 0 when request_needs_legacy_charset(): UTF-8 → Latin-1
   │     Content-Type by epoch:
   │       -1 → text/vnd.wap.wml
-  │        0,1 → text/html
-  │        2,3 → text/html; charset=UTF-8
+  │        0 → text/html; charset=UTF-8   (bare text/html for Cello)
+  │        1 → text/html                  (no charset: Mosaic matches it literally)
+  │      2,3 → text/html; charset=UTF-8
   │     + SECURITY_HEADERS (X-Content-Type-Options, X-Frame-Options)
   │     free(body)
   │
@@ -233,17 +284,19 @@ GET/HEAD "/"  (http_router.c)
   └─ connection_write(ctx, response, response_len); free(response)
 ```
 
-`generate_url_theme()` resolves every template path as `./html/themes/<theme>/<subpath>`,
-relative to the server's working directory, using the global `theme` from `config_loader`
-(default `dark`). All static assets referenced by the templates (CSS, images, favicon) are
-served from the same `html/` tree via the normal static file path (§5).
+`generate_url_theme()` resolves every template path as `./html/themes/<request_theme()>/<subpath>`
+when the theme has that file, otherwise `./html/templates/<subpath>` - relative to the server's
+working directory (see [themes.md](themes.md#3-template-resolution)). All static assets
+referenced by the templates (images, fonts, favicon) are served from the same `html/` tree via
+the normal static file path (§5); the epoch 3 stylesheet is the exception, served by its own
+route so it can come from the database.
 
 ---
 
 ## 5b. Login, Dashboard and Logout Routes
 
 All four routes share `epoch = resolve_epoch(req)` (`force_epoch` override, else
-`detect_epoch(User-Agent)`) and the generic `page_epoch<N>.html` shell via
+`?preview_epoch=`, else `detect_epoch(User-Agent)`) and the generic `page_epoch<N>.html` shell via
 `buildPageWebSite(epoch, title, content)` (head + menu + `%s` content + footer).
 
 ```
@@ -261,7 +314,7 @@ GET/HEAD "/login"  (http_router.c)
   ├─ content = login(epoch, NULL)              ── modules/login
   │     epoch == EPOCH_MODERN → login_epoch3.html, error %s = ""
   │     epoch != EPOCH_MODERN → login_epoch<N>.html, verbatim ("not available")
-  ├─ body = buildPageWebSite(epoch, "Boat Rudder - Login", content)
+  ├─ body = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content)
   └─ response = build_epoch_response(body, "", epoch); send_or_error(...)
 
 
@@ -288,7 +341,7 @@ POST "/login"  (http_router.c)
         │
         ├─ user_id == NULL?
         │     → content = login(epoch, "Invalid email or password.")
-        │       body = buildPageWebSite(epoch, "Boat Rudder - Login", content)
+        │       body = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content)
         │       200 OK (re-rendered form + error block)
         │
         └─ user_id != NULL:
@@ -325,7 +378,7 @@ GET/HEAD "/dashboard"  (http_router.c)
         │           admin  → entries_admin_rows(epoch, lang, NULL, NULL)     (every entry)
         │           author → entries_admin_rows(epoch, lang, "blog", user_id) (own posts only)
         │         other epochs: static "Welcome to dashboard" fragment
-        │       body = buildPageWebSite(epoch, "Boat Rudder - Dashboard", content)
+        │       body = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content)
         │       200 OK
         │
         └─ != 1 (0 or -1)?
@@ -349,7 +402,7 @@ GET/HEAD "/logout"  (http_router.c)
 
 ## 5c. Centralized Epoch-Aware Error Pages
 
-Every non-2xx/3xx response - `400`, `403`, `404`, `405`, `431`, `500`, `503` - including those
+Every non-2xx/3xx response - `400`, `403`, `404`, `405`, `413`, `431`, `500`, `503` - including those
 returned as a status code from `serve_static_file()` (§5), goes through one helper:
 
 ```
@@ -360,7 +413,7 @@ send_error_response(ctx, status_code, status_line, epoch)  (http_router.c)
   │     message == NULL → default message from a static table
   │     (400/403/404/405/431/500/503; unknown codes → "Error")
   │
-  ├─ body     = buildPageWebSite(epoch, "Boat Rudder - Error <code>", content)
+  ├─ body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Error <code>", content)
   ├─ response = build_epoch_response_status(body, "", epoch, status_line)
   │
   ├─ response == NULL? (template missing / alloc failure)
@@ -442,26 +495,54 @@ Return codes:
 
 ---
 
-## 7. Shutdown Flow
+## 7. Shutdown
 
 ```
 SIGINT / SIGTERM
   │
-  └─ handle_shutdown():  running = 0
+  └─ handle_shutdown():  running = 0           (main's _Atomic flag)
 
-main loop exits
+main loop exits (≤ 1 s)
   │
-  ├─ server_stop():
-  │     running = 0
-  │     close(server_fd_http)
-  │     close(server_fd_https)
-  │     tls_free_context(ssl_ctx)
+  ├─ wap_gateway_stop()
+  │     gateway_running = 0; join gateway thread (≤ 500 ms poll timeout); close UDP sockets
+  │     first, so no new loopback fetch starts against a closing listener
+  │
+  ├─ server_stop()
+  │     running = 0; close(server_fd_http); close(server_fd_https)
+  │     join accept thread (≤ 1 s select timeout)
+  │     [if TLS] wait on conn_cond until active_connections == 0 (≤ 10 s), then
+  │              tls_free_context(ssl_ctx)  ← avoids use-after-free with in-flight handshakes
+  │     stop + join the IP-table cleanup thread; free(ip_table)
+  │
+  ├─ geoip_cleanup()            MMDB_close (no-op without libmaxminddb)
   │
   └─ mongodb_manager_cleanup()
         mongoc_client_pool_destroy() + mongoc_cleanup()
 ```
 
-Active threads finish naturally (they check nothing from main, they just run to completion with the 30 s socket timeout as backstop).
+Detached connection threads are not joined. Each is bounded by `connection_io_timeout_secs`
+per read/write, which is what keeps the 10 s TLS drain wait realistic; on a plain-HTTP-only
+server nothing waits for them. The systemd unit allows 10 s (`TimeoutStopSec=10`) before
+`SIGKILL`.
+
+---
+
+## 8. WAP Gateway Request
+
+A parallel entry point, on its own thread, that ends up back in §4 over loopback:
+
+```
+UDP datagram (rover 49300 / wsp 9200)
+  ├─ framing + PDU type check (GET-family only), URI ≤ 1000 bytes
+  ├─ rate_allow(source ip)  ← wap_gateway_rate_limit per minute
+  ├─ fetch_local("<path>?preview_epoch=-1&wml_pages=all", X-Forwarded-For: <phone>)
+  │     → TCP 127.0.0.1:http_port → §2 → §3 → §4 (WML deck, unpaginated)
+  ├─ wbxml_compile_page(deck, page = __page) → ≤ 860-byte WBXML page
+  └─ sendto(): WTP Result / WSP Reply with application/vnd.wap.wmlc
+```
+
+Details: [wap-gateway.md](wap-gateway.md).
 
 ---
 
@@ -474,7 +555,15 @@ Active threads finish naturally (they check nothing from main, they just run to 
 | `HttpRequest` | `http_request_parser.h` | Parsed HTTP request: method, url, protocol, headers[], body |
 | `HttpHeader` | `http_request_parser.h` | Single header key-value pair |
 | `QueryParam` | `url_parser.h` | Single URL query parameter key-value |
-| `ip_entry_t` | `server_listener.c` (internal) | Per-IP rate limiting state |
+| `ip_entry_t` | `server_listener.c` (internal) | Per-IP rate limiting state; array of `ddos_max_ips`, guarded by `ip_table_mutex` (accept + cleanup threads) |
+| `RateEntry` | `wap_gateway.c` (internal) | WAP gateway per-IP minute window (256 entries, gateway thread only) |
+| `WbxmlBuf` | `wap_gateway/wbxml.h` | Compiled WBXML page (`data`, `len`) |
+| `CmsEntry`, `CmsContentBlock` | `db/cms_entries.h` | An entry resolved to one language, for rendering |
+| `CmsThemeColors` | `db/cms_themes.h` | The theme's 34 color tokens |
+| `CmsLogoConfig` / `CmsLogoMode` | `db/cms_themes.h` | Per-epoch logo: mode (unset/text/image), text, font, images |
+| `CmsFont` | `db/cms_fonts.h` | Uploaded font: id, name, filename |
+| `CodeHighlightPalette` | `utils/code_highlight.h` | Colors and flags for epoch 0-2 highlighting |
+| per-request `__thread` state | `utils/request_*.c` | Language, path, theme, user name, charset, code-lines, WML target |
 
 ---
 

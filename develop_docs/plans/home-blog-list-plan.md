@@ -3,6 +3,10 @@
 > **Status**: implemented - see
 > [rendering.md, "Home blog list"](../reference/rendering.md).
 
+> **Update (2026-10-06):** templates now live in `html/themes/<theme>/home-blog/`, and the
+> blog-card theme images moved from `assets/home-content/` to `assets/blog-list/`. Card colors on
+> epochs 1/2 come from the theme palette ([themes.md](../reference/themes.md)).
+
 ## 1. Context & Goal
 
 `/` currently renders its "Latest Blog Posts" section (`home_blog()`,

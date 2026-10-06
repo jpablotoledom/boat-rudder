@@ -44,7 +44,7 @@ void youtube_short_url(const char *video_id, char *out, size_t out_size) {
 }
 
 /* ================================================================
-   Minimal GIF89a LZW encoder — supports up to 4096-color tables.
+   Minimal GIF89a LZW encoder - supports up to 4096-color tables.
    Here we use min_code_size=2 for a 2-color (B&W) image.
    ================================================================ */
 

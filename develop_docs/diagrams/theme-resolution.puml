@@ -1,0 +1,64 @@
+@startuml theme-resolution
+
+title Boat Rudder - Theme Resolution per Request and Template Lookup
+
+skinparam backgroundColor #FAFAFA
+skinparam activity {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    DiamondBackgroundColor #FFF9C4
+    DiamondBorderColor #F9A825
+}
+
+|request_theme_set()|
+start
+:Inputs: Cookie header, ?theme= query value;
+
+if (?theme=<key> present and\ntheme_key_is_valid(key)?) then (yes)
+  #E8F5E9:theme = key;
+  note right
+    epoch 1 theme links, and the
+    ?theme= tag the response layer
+    adds to every link on epochs 1/2
+  end note
+elseif (cookie "theme" present and valid?) then (yes)
+  #E8F5E9:theme = cookie value;
+  note right
+    set by GET /theme/set?key=&return=
+    (epoch 3 drop-down, epoch 2 /theme page),
+    Max-Age 1 year
+  end note
+else
+  |cms_get_active_theme_key()|
+  if (site_settings.active_theme set and\nhtml/themes/<key>/ exists?) then (yes)
+    #E8F5E9:theme = active_theme;
+  else (no / MongoDB down)
+    #ECEFF1:theme = configs/settings.conf "theme"\n(default "dark");
+  endif
+endif
+
+|request_theme_set()|
+:store in __thread current_theme\n(read by request_theme());
+
+note right
+  theme_key_is_valid(key):
+  1. charset [A-Za-z0-9_-] only (rejects "../", CRLF)
+  2. html/themes/<key>/ is a directory
+end note
+
+|generate_url_theme(subpath_fmt, epoch)|
+:subpath = e.g. "menu/menu_epoch%d.html" → "menu/menu_epoch2.html";
+if (./html/themes/<theme>/<subpath> exists?) then (yes)
+  #E3F2FD:use the theme's file;
+else (no)
+  #FFF3E0:use ./html/templates/<subpath>\n(shared; may not exist → caller handles NULL);
+endif
+
+|page_layout / modules|
+:apply per-theme overrides from the themes collection\n(colors, banner, footer, logo, logo font)\n- each falls back to the theme's file / THEME_DEFAULTS;
+
+|GET /themes/<key>/styles_epoch3.css|
+:cms_get_theme_css(key):\nthemes.css_epoch3 if non-empty,\nelse html/themes/<key>/styles_epoch3.css;
+stop
+
+@enduml

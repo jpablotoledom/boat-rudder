@@ -36,6 +36,7 @@ package "db" {
     [mongodb_manager] as MONGO
     [auth\nauth_login_user()] as AUTH
     [session_manager] as SESSION
+    [cms_users_admin\ncms_get_user_role()] as ROLES
 }
 
 package "utils" {
@@ -46,11 +47,11 @@ package "utils" {
     [config_loader\n(mongodb_uri, mongodb_db,\nsession_ttl_seconds, ssl_enabled)] as CONFIG
 }
 
-database "html/themes/<theme>/\n{login,dashboard,error,page}/" as FS
+database "html/templates/\n{login,dashboard,error,page}/" as FS
 database "MongoDB\n(users, sessions)" as DB
 
 ROUTER --> LOGIN : login(epoch, error_message)\n[GET/POST /login]
-ROUTER --> DASHBOARD : dashboard(epoch)\n[GET /dashboard, valid session]
+ROUTER --> DASHBOARD : dashboard(epoch, lang, user_id, role)\n[GET /dashboard, valid session]
 ROUTER --> ERROR : error_content(epoch, status, msg)\n[send_error_response(): all 4xx/5xx]
 ROUTER --> ORCH : buildPageWebSite(epoch, title, content)
 ORCH --> RESP : build_epoch_response(body, "", epoch)
@@ -58,6 +59,8 @@ ROUTER --> RESP : build_epoch_response_status()\nbuild_redirect_response()
 STATIC --> ROUTER : 0 (sent) | 403/404/500\n[caller renders error]
 
 ROUTER --> MONGO : mongodb_manager_is_ready()
+ROUTER --> ROLES : require_dashboard_session_role()\nrequire_admin_session()
+ROLES --> MONGO : mongodb_manager_get_collection("users")
 ROUTER --> AUTH : auth_login_user(email, password)\n[POST /login, EPOCH_MODERN only]
 ROUTER --> SESSION : generate_session_token()\ncreate_session() / validate_session_cookie()\ndestroy_session()\nbuild_session_cookie_header()
 
@@ -102,6 +105,15 @@ note right of AUTH
   Argon2id (libsodium crypto_pwhash_str_verify).
   NULL for unknown email, wrong password,
   AND db error alike (no enumeration).
+end note
+
+note left of ROLES
+  Guards used by every /dashboard* route:
+  require_dashboard_session() - any role
+  require_dashboard_session_role() + can_edit_entry()
+  require_admin_session() - role "admin"
+  (missing role field = admin).
+  Full matrix: reference/routes.md
 end note
 
 note right of SESSION

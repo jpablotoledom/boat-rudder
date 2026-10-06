@@ -17,6 +17,15 @@
 > defaults* ("Boat Rudder"), used verbatim when the collection is empty or MongoDB is down, so a
 > fresh install still renders exactly as it does today.
 
+> **Update (2026-10-06):** further shipped since: per-theme, per-epoch **logos** (text or image,
+> `themes.logo`), a **font library** for the epoch 3 logo, an editable epoch 3 stylesheet, and
+> `{{SITE_NAME}}` in every page `<title>`. Still not implemented: a configurable **favicon** and
+> SEO metadata. Template paths in this document (`html/themes/dark/dashboard/...`) now live under
+> `html/templates/dashboard/...`. The diagram
+> [site-settings-components.puml](../diagrams/site-settings-components.puml) now shows the
+> implemented design rather than the proposal below. Current reference:
+> [themes.md](../reference/themes.md), [fonts.md](../reference/fonts.md).
+
 Diagram: [diagrams/site-settings-components.puml](../diagrams/site-settings-components.puml)
 
 ## 1. Goal

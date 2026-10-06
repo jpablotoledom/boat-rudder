@@ -68,7 +68,7 @@ that prefix. Internal helpers are `static` and do not need the prefix.
 | Element | Convention | Example |
 |---|---|---|
 | Functions, variables, file-scope statics | `snake_case` | `serve_static_file`, `ip_table` |
-| Macros, compile-time constants | `UPPER_SNAKE_CASE` | `MAX_PARAMS`, `RATE_WINDOW` |
+| Macros, compile-time constants | `UPPER_SNAKE_CASE` | `MAX_PARAMS`, `WAP_PAGE_BYTES` |
 | Struct typedefs (new code) | `snake_case_t` | `connection_ctx_t`, `ip_entry_t` |
 | Function-like macros | `UPPER_SNAKE_CASE`, parenthesize args/result | `SECURITY_HEADERS` |
 
@@ -248,8 +248,16 @@ the request path originates from the client.
 ## 11. Concurrency (CERT POS / CON)
 
 - **Document shared state.** Any data structure touched from more than one
-  `pthread_create`d thread (currently `ip_table` / `active_connections`)
-  must be guarded by a mutex and have a comment stating *what* it protects.
+  `pthread_create`d thread (currently `ip_table` - accept + cleanup threads,
+  `ip_table_mutex` - and `active_connections`, `conn_mutex`) must be guarded
+  by a mutex and have a comment stating *what* it protects. State owned by a
+  single thread (the WAP gateway's rate table) says so in a comment instead.
+- **Per-request state is thread-local.** Values every layer needs (language,
+  path, theme, user, charset, code-lines, WML target) live in `__thread`
+  variables behind a `request_*_set()` / getter pair in `src/utils/`, set
+  once by the router. This is only correct because one connection thread
+  serves exactly one request - never render a page on a different thread
+  than the one that called the setters.
 - **Keep critical sections small** - do the minimum work under the lock,
   then release it before I/O or logging.
 - **Detach or join explicitly.** Connection threads are `pthread_detach`'d
@@ -264,8 +272,12 @@ the request path originates from the client.
 - **`FIO42-C` - close every file descriptor / `SSL*` / socket on every exit
   path**, including error paths. This is what the `cleanup:` label pattern
   (§5) exists for.
-- **Set socket timeouts** (`SO_RCVTIMEO`/`SO_SNDTIMEO`, currently 30 s - raised from 5 s so large uploads can complete) on every
-  new connection so a slow/hostile client can't hold a thread forever.
+- **Set socket timeouts** (`SO_RCVTIMEO`/`SO_SNDTIMEO`, configurable as
+  `connection_io_timeout_secs`, **5 s** by default) on every new connection so a
+  slow/hostile client can't hold a thread forever. The timeout applies per
+  read/write call, so a large upload that keeps moving is unaffected.
+- **Bound every blocking wait** a shutdown depends on (`select()`/`poll()`
+  timeouts, `pthread_cond_timedwait`), so `SIGTERM` can't hang the process.
 - **TLS context lifetime:** `tls_create_context()` /
   `tls_free_context()` must remain a matched pair with a single owner
   (`server_listener.c`); don't call `SSL_CTX_free` directly elsewhere.
@@ -288,6 +300,52 @@ use. When adding a feature that touches any of these, re-read §7-§9:
 `X-Real-IP`/`X-Forwarded-For` are additionally only trusted when the peer is
 in `trusted_proxies` - don't add new "trust this header" logic without the
 same proxy check.
+
+Also untrusted: multipart filenames and fields, urlencoded form fields
+(including names the dashboard JavaScript sends, such as directory names),
+cookie values (`lang`, `theme`, `session`), and UDP datagrams on the WAP
+gateway. Validate names with a whitelist **before** they reach the
+filesystem (`theme_key_is_valid()`, `sanitize_asset_filename()`), and never
+build a path from a client-supplied name that hasn't been through one. The
+current state of these defenses, and known gaps, is in
+[security.md](security.md).
+
+---
+
+## 13b. Site-neutral source tree
+
+Boat Rudder is the software, not a site (see the naming note in
+[architecture.md](architecture.md)). Nothing in `src/`, `html/templates/` or
+the shipped `html/themes/` may name a particular site:
+
+- Use `{{SITE_NAME}}` in templates instead of a literal name (also in `alt`
+  attributes).
+- No hardcoded site URLs in C or templates - absolute URLs come from
+  `public_url` or the request's `Host`.
+- Site-specific values live in the deployment's `configs/settings.conf` and
+  database, never in the repository's defaults.
+
+Known violations to clean up: `alt="The Retro Center"` in the shipped
+themes' `mainbanner_epoch{1,2}.html` and `menu-logo_epoch{1,2}.html`, the
+`http://theretrocenter.com/page/text-browsers` URL in
+`qr_generator.c`'s text-QR footer, and the development host values in the
+tracked `configs/settings.conf`.
+
+---
+
+## 13c. Vendored and ported code
+
+- **Vendored** third-party source lives unmodified under `src/third_party/`
+  (today: `stb_image.h`). Configure it with macros at a single inclusion
+  point (`STB_IMAGE_IMPLEMENTATION`, `STBI_ONLY_PNG`, `STBI_ONLY_JPEG` in
+  `image_convert.c`) rather than editing it, so it can be upgraded by
+  replacing the file. It is exempt from this guide's formatting rules and
+  should not be reformatted.
+- **Ported** code (from neomar-wap-proxy, the-retro-center-old, …) is
+  adapted to this guide when it lands in `src/`, and keeps a header comment
+  naming its origin and what changed.
+- Every vendored or ported component, with its version and license, is
+  listed in [third-party.md](third-party.md). Update it in the same change.
 
 ---
 

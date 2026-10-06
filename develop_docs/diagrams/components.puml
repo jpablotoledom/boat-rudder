@@ -22,7 +22,7 @@ package "Entry Point" {
 }
 
 package "Web Server" {
-    [server_listener] as SS
+    [server_listener\n(accept thread,\nIP-table cleanup thread)] as SS
     [connection_thread] as CT
     [connection] as CONN
     [tls_context] as TLS
@@ -33,42 +33,170 @@ package "Web Server" {
 package "Web Server Utils" {
     [static_file_server] as SH
     [url_parser] as SPLIT
+    [multipart_parser] as MP
+}
+
+package "WAP Gateway" {
+    [wap_gateway\n(UDP thread)] as WAP
+    [wbxml] as WBXML
+}
+
+package "HTML Builder" {
+    [orchestrator] as ORCH
+    [page_layout] as LAYOUT
+}
+
+package "Modules (public)" {
+    [menu / mainbanner /\nhome_content / blog_list /\ncategory_menu] as PUB
+    [entry_page] as ENTRY
+    [language_page] as LANGP
+    [theme_page] as THEMEP
+}
+
+package "Modules (dashboard)" {
+    [dashboard / entries_admin /\nentry_editor / *_admin] as ADMIN
+    [site_settings_admin] as SETTINGS
+    [fonts_admin] as FONTSADM
+    [media_admin] as MEDIAADM
+    [analytics_view\n+ country_continent] as AVIEW
+}
+
+package "Analytics" {
+    [analytics] as ANALYTICS
+    [geoip] as GEOIP
 }
 
 package "Utils" {
     [config_loader] as CONFIG
     [log] as LOG
     [http_utils] as SU
+    [request_* state\n(lang, theme, user,\ncharset, code_lines, wml)] as REQ
+    [theme_catalog] as TCAT
+    [generate_url_theme] as URLTHEME
+    [build_epoch_response] as RESP
+    [code_highlight] as CODEHL
+    [qr_generator] as QR
+    [image_convert] as IMGCONV
+    [wbmp_writer] as WBMP
+    [ua_parser] as UA
+    [detect_epoch] as EPOCH
 }
 
-database "File System\n(html/)" as FS
+package "DB (MongoDB)" {
+    [mongodb_manager] as MDB
+    [auth / session_manager] as AUTH
+    [cms_entries / cms_entries_admin /\ncms_categories / cms_menu /\ncms_languages / cms_users_admin] as CMSDB
+    [cms_media /\ncms_media_galleries] as MEDIADB
+    [cms_site_settings /\ncms_themes / cms_fonts] as THEMEDB
+    [short_links] as SHORT
+}
+
+package "Third party" {
+    [stb_image.h] as STB
+}
+
+database "File System\n(html/templates,\nhtml/themes/<theme>,\nhtml/content)" as FS
+database "MongoDB" as MONGO
 file "configs/settings.conf" as CFGFILE
 file "ssl/*.pem" as SSLFILES
+file "data/GeoLite2-Country.mmdb\n(optional)" as MMDB
+node "libmaxminddb\n(optional, HAVE_MAXMINDDB)" as LIBMMDB
+node "libqrencode" as LIBQR
+actor "WAP device\n(via trc-wap-relay)" as PHONE
 
 ' Entry point relations
 MAIN --> CONFIG : reads config
+MAIN --> MDB : mongodb_manager_init()
+MAIN --> GEOIP : geoip_init() / cleanup()
 MAIN --> SS : server_start() / server_stop()
+MAIN --> WAP : wap_gateway_start() / stop()\n(after server_start)
 MAIN ..> LOG : logging
 
-' Server startup
+' Server
 SS --> CONN : uses connection_ctx_t
 SS --> TLS : tls_create_context()
 SS --> CT : pthread_create()
-
-' Connection thread
 CT --> CONN : plain_read / ssl_read
 CT --> RH : http_route()
-CT ..> LOG : logging
 
-' Request handling
+' Router
 RH --> PARSER : parse_http_request()
 RH --> SPLIT : url_parse()
+RH --> MP : parse_multipart()
+RH --> REQ : request_*_set()
+RH --> ANALYTICS : analytics_track_visit()
+RH --> EPOCH : resolve_epoch()
+RH --> ORCH : build*WebSite()
+RH --> ENTRY : serve_cms_entry() /\nentry_page_render_block()
+RH --> ADMIN
+RH --> SETTINGS
+RH --> FONTSADM
+RH --> MEDIAADM
+RH --> AVIEW
+RH --> LANGP
+RH --> THEMEP
+RH --> SHORT : /qr/<code>
+RH --> QR : gallery / image QR
+RH --> IMGCONV : epoch -1 logo upload
+RH --> RESP
 RH --> SH : serve_static_file()
-RH --> CONN : connection_write() / connection_close()
-RH ..> SU : url_decode()
-RH ..> LOG : logging
 
-' Static handler
+' Rendering
+ORCH --> PUB
+ORCH --> LAYOUT : page_layout_wrap()
+LAYOUT --> THEMEDB : colors, footer, logo,\nfonts, site name
+PUB --> CMSDB
+PUB --> THEMEDB : banner, logo
+ENTRY --> CMSDB
+ENTRY --> CODEHL : code-text
+ENTRY --> QR : youtube / image QR
+ENTRY --> SHORT
+PUB --> URLTHEME
+ENTRY --> URLTHEME
+URLTHEME --> REQ : request_theme()
+URLTHEME --> FS
+REQ --> TCAT : theme_key_is_valid()
+REQ --> THEMEDB : active theme
+REQ --> AUTH : session -> user name
+RESP --> REQ : lang / theme / charset / wml
+RESP --> WBXML : wml_paginate()
+
+' Dashboard
+ADMIN --> CMSDB
+ADMIN --> AUTH
+SETTINGS --> THEMEDB
+SETTINGS --> TCAT
+FONTSADM --> THEMEDB
+MEDIAADM --> MEDIADB
+AVIEW --> MDB
+
+' Analytics
+ANALYTICS --> UA
+ANALYTICS --> GEOIP
+ANALYTICS --> MDB : $inc day buckets
+GEOIP ..> LIBMMDB
+GEOIP ..> MMDB
+
+' Utilities
+QR --> WBMP
+QR ..> LIBQR
+IMGCONV --> STB
+IMGCONV --> WBMP
+
+' DB
+CMSDB --> MDB
+MEDIADB --> MDB
+THEMEDB --> MDB
+SHORT --> MDB
+AUTH --> MDB
+MDB --> MONGO
+
+' WAP gateway
+PHONE --> WAP : UDP 49300 / 9200
+WAP --> RH : loopback HTTP\n?preview_epoch=-1&wml_pages=all
+WAP --> WBXML : wbxml_compile_page()
+
+' Static
 SH --> CONN : connection_write()
 SH --> SU : get_mime_type()
 SH --> FS : open() / read()
@@ -78,21 +206,23 @@ CONFIG <.. CFGFILE : parsed from
 TLS <.. SSLFILES : cert + key loaded from
 
 note right of SS
-  select()-based accept loop
-  MAX_CONNECTIONS = 200
-  per-IP rate limiting (500 req/5s)
+  select() accept loop on its own thread (1 s timeout)
+  ddos_max_connections (200)
+  per-IP: ddos_rate_limit / ddos_rate_window_secs
+  (500 / 5 s, ban 2x window), LRU table of
+  ddos_max_ips guarded by ip_table_mutex,
+  cleanup thread; 429 on rejected plain HTTP
 end note
 
 note right of CT
-  One pthread per connection
+  One detached pthread per connection
   Stack: 2 MB
-  Timeout: 5 s (recv + send)
+  connection_io_timeout_secs (5 s) per read/write
 end note
 
-note right of CONN
-  Unified I/O:
-  plain TCP or SSL
-  MSG_NOSIGNAL on write
+note right of WAP
+  wap_gateway_rate_limit per IP/min
+  860-byte single-packet WBXML pages
 end note
 
 @enduml

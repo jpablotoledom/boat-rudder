@@ -1,6 +1,6 @@
 @startuml site-settings-components
 
-title Boat Rudder - Site Settings (proposed) - Components
+title Boat Rudder - Site Settings, Themes and Fonts (as implemented) - Components
 
 skinparam componentStyle rectangle
 skinparam backgroundColor #FAFAFA
@@ -21,92 +21,100 @@ actor Admin
 actor Visitor
 
 package "web_server" {
-    [http_router] as ROUTER
+    [http_router\nrequire_admin_session()\ntheme_key_is_valid()] as ROUTER
+}
+
+package "modules/site_settings_admin" {
+    [site_settings_general_page()\nsite_settings_themes_page()\nsite_settings_banner_page()\nsite_settings_footer_page()\nsite_settings_logo_page()\nsite_settings_css_page()\nsite_settings_preview_page()] as SETADMIN
+}
+
+package "modules/fonts_admin" {
+    [fonts_admin_list()] as FONTADMIN
 }
 
 package "html_builder" {
-    [orchestrator\nbuildPageWebSite() / buildHomeWebSite()] as ORCH
+    [orchestrator] as ORCH
+    [page_layout_wrap()\nsplice_footer / splice_footer_logo\nsplice_retro_colors / splice_theme_colors\nsplice_site_name] as LAYOUT
 }
 
-package "modules/settings_admin (new)" {
-    [settings_admin\nsettings_admin_page()] as SETADMIN
-}
-
-package "modules/container" {
-    [container\ncontainer()] as CONTAINER
-}
-
-package "modules/mainbanner" {
-    [mainbanner\nmainbanner()] as MAINBANNER
-}
-
-package "modules/menu" {
-    [menu\nmenu()] as MENU
+package "modules" {
+    [mainbanner()] as MAINBANNER
+    [menu()\nlogo + theme_selector()] as MENU
+    [theme_page()\n/theme] as THEMEPAGE
 }
 
 package "db" {
-    [cms_site_settings (new)\ncms_get_site_settings()\ncms_update_site_settings()] as CMSSET
+    [cms_site_settings\nsite_name, active_theme] as CMSSET
+    [cms_themes\ncolors (34), banner_html, footer_html,\nlogo (CmsLogoConfig), logo_html (legacy),\nlogo_font, css_epoch3] as CMSTHEMES
+    [cms_fonts\nname, filename] as CMSFONTS
     [mongodb_manager] as MONGO
 }
 
 package "utils" {
-    [generate_url_theme] as URLTHEME
-    [read_file] as READFILE
-    [template_utils\n(render_template)] as TPL
+    [request_theme\n?theme → cookie → active_theme → config] as REQTHEME
+    [theme_catalog\nlist_theme_keys()] as TCAT
+    [generate_url_theme\ntheme → html/templates fallback] as URLTHEME
+    [image_convert\n+ wbmp_writer] as IMGCONV
 }
 
-database "html/themes/<theme>/\ncontainer, mainbanner,\ndashboard/settings/*" as FS
-database "MongoDB\n(site_settings, singleton)" as DB
+database "html/themes/<key>/\n(templates, assets/, styles_epoch3.css)" as THEMEFS
+database "html/templates/dashboard/settings/\nhtml/templates/dashboard/fonts/" as TPLFS
+database "html/assets/fonts/" as FONTFS
+database "MongoDB\nsite_settings (singleton)\nthemes (sparse, per key)\nfonts" as DB
 
-Admin --> ROUTER : GET/POST /dashboard/settings
-ROUTER --> SETADMIN : settings_admin_page() /\ncms_update_site_settings()
-SETADMIN --> CMSSET
-SETADMIN --> URLTHEME
-SETADMIN --> READFILE
-SETADMIN --> TPL : render_template(settings_epoch3.html)
+' Admin side
+Admin --> ROUTER : /dashboard/settings*\n/dashboard/api/theme-assets/*
+ROUTER --> SETADMIN : pages + POST saves
+ROUTER --> FONTADMIN : /dashboard/settings/fonts
+ROUTER --> CMSSET : site name, activate
+ROUTER --> CMSTHEMES : colors, banner, footer,\nlogo config, css, css/restore
+ROUTER --> CMSFONTS : upload / delete
+ROUTER --> FONTFS : write / remove font file
+ROUTER --> THEMEFS : theme-assets upload/list/delete\n(assets/<component>/epoch<N>/)
+ROUTER --> IMGCONV : epoch -1 logo:\nPNG/JPEG → 1-bit WBMP
+SETADMIN --> TCAT
+SETADMIN --> TPLFS
+FONTADMIN --> TPLFS
 
-Visitor --> ROUTER : GET / , GET /page/<link>, ...
-ROUTER --> ORCH : buildHomeWebSite() / buildPageWebSite()
-ORCH --> CONTAINER : container(epoch, page_title)
-ORCH --> MAINBANNER : mainbanner(epoch)
-ORCH --> MENU : menu(current_url, epoch)
-
-CONTAINER --> CMSSET : cms_get_site_settings()\n[site_name, favicon_url,\nlogo_url, colors]
-MAINBANNER --> CMSSET : cms_get_site_settings()\n[banner_image_url]
-CONTAINER --> URLTHEME
-CONTAINER --> READFILE
-CONTAINER --> TPL : render_template(container_epoch%d.html\n+ inline :root{...} style block)
+' Visitor side
+Visitor --> ROUTER : any page\n/theme, /theme/set\n/themes/<key>/styles_epoch3.css
+ROUTER --> REQTHEME : request_theme_set(Cookie, ?theme)
+REQTHEME --> TCAT : theme_key_is_valid()
+REQTHEME --> CMSSET : cms_get_active_theme_key()
+ROUTER --> ORCH
+ROUTER --> THEMEPAGE
+ROUTER --> CMSTHEMES : cms_get_theme_css(key)\n(DB override or file)
+ORCH --> MAINBANNER
+ORCH --> MENU
+ORCH --> LAYOUT
+MAINBANNER --> CMSTHEMES : cms_get_theme_banner()
+MENU --> CMSTHEMES : cms_get_theme_logo_config()
+MENU --> TCAT : theme_selector()
+LAYOUT --> CMSTHEMES : footer, logo, colors, logo font
+LAYOUT --> CMSFONTS : cms_get_font_filename_by_name()
+LAYOUT --> CMSSET : cms_get_site_name()
+URLTHEME --> REQTHEME
+URLTHEME --> THEMEFS
 
 CMSSET --> MONGO
+CMSTHEMES --> MONGO
+CMSFONTS --> MONGO
 MONGO --> DB
 
-URLTHEME --> FS
-READFILE --> FS
-
-note bottom of CMSSET
-  findOne({}) on a single-document collection.
-  Falls back to hardcoded defaults (current
-  literal values) if the document is missing
-  or MongoDB is unreachable - same pattern as
-  menu()'s FALLBACK_ITEMS.
+note bottom of CMSTHEMES
+  A theme with no document renders exactly from
+  its files + THEME_DEFAULTS. Every empty
+  banner/footer/logo/css value falls back to the
+  theme's on-disk file.
 end note
 
-note right of CONTAINER
-  Epoch3 only: site_name replaces the hardcoded
-  "BOAT RUDDER" footer/title text, favicon_url
-  replaces the hardcoded "/favicon.ico" href,
-  logo_url (if set) adds an <img> next to the
-  site name, and a small inline <style> block
-  (new template fragment) sets
-  --br-color-primary/--br-color-accent
-  consumed by styles_epoch3.css.
-end note
-
-note right of MAINBANNER
-  Epoch3 only: banner_image_url replaces the
-  hardcoded mainbanner_epoch3.jpg <img src>.
-  Epoch -1/0/1/2 banners are unaffected
-  (text-only or fixed decorative tables).
+note right of LAYOUT
+  epoch 3: {{THEME_COLORS}} →
+    <style>:root{--br-color-*...}
+    + @font-face for the logo font
+  epoch 1/2: {{COLOR_*}} → hex attributes
+    (epoch 1 bgcolor = body_background_epoch1)
+  epoch 0/-1: no color model
 end note
 
 @enduml

@@ -27,6 +27,10 @@ package "html_builder" {
     [orchestrator\nbuildPageWebSite()] as ORCH
 }
 
+package "modules/entry_page" {
+    [entry_page\nentry_page_render_block()] as PUBRENDER
+}
+
 package "modules/entry_editor" {
     [entry_editor\nentry_editor_page()] as EDITOR
     [entry_editor_blocks\nrender_block() / render_blocks()] as BLOCKS
@@ -47,11 +51,13 @@ package "utils" {
     [json_utils\n(json_escape_alloc)] as JSON
 }
 
-database "html/themes/<theme>/\ndashboard/entries/editor/*" as FS
+database "html/templates/\ndashboard/entries/editor/*" as FS
 database "MongoDB\n(entries, entry_categories, languages)" as DB
 
 BROWSER --> ROUTER : GET /dashboard/entries/<id>/edit
 BROWSER --> ROUTER : POST /dashboard/api/entries/<id>/...\n(meta, header, content, blocks,\nblocks/<block_id>/delete)\napplication/x-www-form-urlencoded
+BROWSER --> ROUTER : POST /dashboard/api/block-preview\ntype, text, extra
+BROWSER --> ROUTER : GET /dashboard/api/media/modal\n(gallery / image / header picker)
 
 ROUTER --> EDITOR : entry_editor_page(epoch, entry,\ncategories, langs)\n[GET .../edit]
 ROUTER --> CMSADMIN : cms_get_entry_for_edit() / cms_create_entry() /\ncms_update_entry_meta|header|content() /\ncms_add|remove_entry_content_block() /\ncms_delete_entry()
@@ -60,6 +66,7 @@ ROUTER --> CMSCAT : cms_get_categories(content_lang)
 ROUTER --> ORCH : buildPageWebSite(epoch, title, content)\n[GET .../edit]
 ROUTER --> RESP : build_json_response()\nbuild_json_response_status()\n[/api/entries/* routes]
 ROUTER --> JSON : json_escape_alloc(html)\n[POST .../blocks]
+ROUTER --> PUBRENDER : entry_page_render_block(type, text,\nextra, EPOCH_MODERN)\n[POST /dashboard/api/block-preview]
 
 EDITOR --> BLOCKS : entry_editor_render_blocks(entry, langs, epoch)
 EDITOR --> URLTHEME
@@ -101,9 +108,20 @@ note bottom of CMSADMIN
 end note
 
 note bottom of BROWSER
-  4 supported content block types:
-  title, paragraph, image, byline
-  (same types entry_page.c renders publicly).
+  13 content block types (same set entry_page.c
+  renders publicly): title, paragraph, image,
+  byline, gallery, separator, link, list, table,
+  code-text, youtube-embed, social-networks,
+  generic. Previews of paragraph, image, gallery,
+  table, youtube-embed and code-text come from
+  /dashboard/api/block-preview (real epoch 3
+  output); the rest are built client-side.
+end note
+
+note right of PUBRENDER
+  Same renderer as the public
+  /blog/<link> and /page/<link>
+  pages - previews can't drift.
 end note
 
 @enduml

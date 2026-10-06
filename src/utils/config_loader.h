@@ -19,10 +19,12 @@ extern char ssl_key[256];
 // Example: "127.0.0.1,10.0.0.1"
 extern char trusted_proxies[512];
 
-// Active theme (selects the html/themes/<theme>/ directory).
+// Last-resort theme fallback: a request's theme is ?theme= -> `theme` cookie
+// -> site_settings.active_theme -> this value (see utils/request_theme.h).
 extern char theme[64];
 
-// Default content language (reserved for a future language selector).
+// Content language fallback ("Eng"/"Esp"), used only when MongoDB is down or
+// no `languages` document is the default (see db/cms_languages.h).
 extern char lang[16];
 
 // Forces the browser "epoch" used for every "/" request, bypassing
@@ -30,7 +32,9 @@ extern char lang[16];
 // detect_epoch.h. Any other value (default -2) means "auto-detect".
 extern int force_epoch;
 
-// Public base URL of the site (reserved for future SEO/canonical links).
+// Public base URL of the site, no trailing slash. Prefixes the absolute URLs
+// encoded in QR codes (gallery/image QR pages in http_router.c); when empty
+// they are built from the request's Host header.
 extern char public_url[256];
 
 // MongoDB connection URI and database name (login/sessions, epoch3 only).

@@ -16,7 +16,7 @@ no record in the database of which ones were applied.
 | Idempotent | Mandatory. Running a migration twice must be harmless: select only documents still in the old shape, or consume a staging collection and drop it |
 | Self-documenting | The header comment says what changes, why, the exact command line, and why a re-run is safe |
 | Output | `print()` a summary of what was touched, so the operator can tell a no-op from a real run |
-| Code first | Deploy the code that understands the new shape before (or together with) running the migration. Both migrations so far are written so the old shape keeps rendering until migrated, or is simply ignored |
+| Code first | Deploy the code that understands the new shape before (or together with) running the migration. Write migrations so the old shape keeps working (or is safely ignored) until migrated |
 
 ---
 
@@ -43,24 +43,6 @@ in doubt, re-running is safe.
 ---
 
 ## Catalog
-
-### `2026-10-01-merge-image-paragraph.js`
-
-**Why:** the `image-paragraph` block type was folded into `image`, which gained
-`float-left`/`float-right` alignment (`parse_image_options()` in `entry_page.c`).
-
-**What, per block still typed `image-paragraph`:**
-
-| Field | Before | After |
-|---|---|---|
-| `type` | `image-paragraph` | `image` |
-| `text` (string or per-language map) | `.../photo_full.jpg` | `.../photo.jpg` - image blocks store the bare path; the renderer appends the size suffix |
-| `extra_data` | `left` / `right` / `""` | `|30|float-left` / `|30|float-right` / `|30|left` (`caption|width|align`; 30 % is closest to the old fixed 250 px) |
-
-**Idempotence:** selects only `entries` whose `content.type` is still `image-paragraph`.
-
-**If not run:** those blocks are silently skipped by the public renderer (unknown type) and are
-no longer offered by the editor.
 
 ### `2026-10-03-merge-analytics.js`
 

@@ -121,7 +121,6 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `social-networks/` | `social-networks` | −1…3 | 1/4 | |
 | `category/` | `category`, `category-separator` | −1…3 | 2-3 / 0 | category tags (`category_tags.c`) |
 | | `category-list` | −1 | 1 | WML tag list |
-| `image-paragraph/` | `image-paragraph` | −1…3 | 0-2 | **Legacy, unused.** The block type was merged into `image`; no code loads these files any more |
 
 ### Dashboard (`dashboard/`) - epoch 3 only
 
@@ -130,7 +129,7 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `.` | `dashboard` (all epochs; −1…2 are a bare welcome with no admin tools), `nav-admin` | `dashboard.c` |
 | `entries/` | `list-row`, `list-empty` | `entries_admin.c` |
 | `entries/editor/` | `container`, `meta`, `header`, `header-lang-tab`, `lang-tab-button`, `category-option`, `blocks` | `entry_editor.c` ([entry-editor.md](entry-editor.md)) |
-| `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` (+ legacy `image-paragraph`, unused) | `entry_editor_blocks.c` |
+| `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` | `entry_editor_blocks.c` |
 | `categories/`, `menu/`, `users/`, `languages/` | `list`, `list-row`, `list-empty`/`list-error`, `form`, `form-field`, `form-error`, `option`, `list-row-actions` | the matching `*_admin.c` |
 | `media/` | `media`, `media-directory-container`, `media-directory`, `item-photo`, `media-modal` | `media_admin.c` ([media-admin.md](media-admin.md)) |
 | `settings/` | `settings`, `settings-error`, `settings-themes`, `settings-themes-panel` (48 args), `settings-themes-activate`, `settings-asset`, `settings-asset-panel`, `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css`, `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |

@@ -1720,8 +1720,7 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder__entry-image--center { margin-left: auto; margin-right: auto; text-align: center; }
 .boat-rudder__entry-image--right  { margin-left: auto; margin-right: 0; text-align: right; }
 
-/* Float: the figure leaves the flow and the following text wraps around it
-   (this used to be the separate "image-paragraph" block). */
+/* Float: the figure leaves the flow and the following text wraps around it. */
 .boat-rudder__entry-image--float-left  { float: left;  margin: 4px 20px 20px 0; text-align: center; }
 .boat-rudder__entry-image--float-right { float: right; margin: 4px 0 20px 20px; text-align: center; }
 

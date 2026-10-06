@@ -84,7 +84,7 @@ Design rationale: [plans/cms-entry-model-plan.md](../plans/cms-entry-model-plan.
 | Field | Notes |
 |---|---|
 | `enabled` | `false` means **draft**: public routes answer `404` unless the visitor has a valid dashboard session, in which case the entry renders with a `[Draft]` title prefix and `Cache-Control: no-store` (`serve_cms_entry()` + `include_drafts`). New entries are created as drafts. |
-| `content[].type` | One of `title`, `paragraph`, `byline`, `image`, `gallery`, `separator`, `link`, `list`, `youtube-embed`, `code-text`, `generic`, `table`, `social-networks`. Unknown types are skipped when rendering. The former `image-paragraph` type was merged into `image` (migration `2026-10-01-merge-image-paragraph.js`). Per-type `text`/`extra_data` formats: [rendering.md](rendering.md#content-block-types). |
+| `content[].type` | One of `title`, `paragraph`, `byline`, `image`, `gallery`, `separator`, `link`, `list`, `youtube-embed`, `code-text`, `generic`, `table`, `social-networks`. Unknown types are skipped when rendering. Per-type `text`/`extra_data` formats: [rendering.md](rendering.md#content-block-types). |
 | `content[].extra_data` | Untranslated, type-specific configuration (e.g. image `caption|width|align`, code-text language, gallery `_id`). |
 | `content[].text` | Usually `map<lang,string>`; for `image` the value is the bare image path. |
 

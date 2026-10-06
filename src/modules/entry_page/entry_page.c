@@ -310,8 +310,7 @@ static ImageOptions parse_image_options(const char *extra_data) {
         if (strcmp(rest, widths[i]) == 0) o.width = widths[i];
 
     // float-left/float-right take the image out of the flow so the following
-    // text wraps around it - what used to be a separate "image-paragraph"
-    // block before it was folded into this one.
+    // text wraps around it.
     static const char *aligns[] = { "left", "center", "right", "float-left", "float-right", NULL };
     for (int i = 0; second && aligns[i]; i++)
         if (strcmp(second, aligns[i]) == 0) o.align = aligns[i];

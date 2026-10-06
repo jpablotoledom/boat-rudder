@@ -79,8 +79,8 @@ note right of ENTRIES
   Block types: title, paragraph, byline, image,
   gallery, separator, link, list, table,
   code-text, youtube-embed, social-networks,
-  generic. ("image-paragraph" was merged into
-  "image" - migration 2026-10-01.)
+  generic. "image" supports left/center/right
+  and float-left/float-right alignment.
 end note
 
 note right of ENTRYCAT

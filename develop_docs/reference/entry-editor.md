@@ -106,12 +106,6 @@ templates, which now cover every epoch:
 These are the same 13 types `entry_page.c`'s `render_block()` renders publicly - the editor and
 the public renderer are kept deliberately in sync. Unknown types render `""` in both.
 
-`image-paragraph` is gone: it was merged into `image` (float alignment), and existing blocks are
-converted by `scripts/migrations/2026-10-01-merge-image-paragraph.js`
-([migrations.md](migrations.md)). `blocks/image-paragraph_epoch3.html` is still in the tree but
-unused - the "+ Add block" menu no longer offers it and `entry_editor_render_block()` renders
-`""` for the type.
-
 Most blocks share `render_extra_block()`, which feeds the template `(id, lang_fields,
 extra_data)` in that order. `image` uses its own `render_image_block()` because its template
 needs `extra_data` **before** the language fields: the picture is what the body shows, so the
@@ -289,6 +283,5 @@ URLs into the target block's text fields (gallery) or the header `image_url` inp
 - The `image-single` block type (the last block type from the legacy editor not yet ported).
 - A `/gallery/<slug>` human-readable URL (currently `_id` hex only).
 - Deleting `media_galleries` documents when their gallery block or entry is removed.
-- Removing the unused `image-paragraph` editor and public templates.
 - CSRF tokens on the AJAX endpoints (today they rely on `SameSite=Lax`; see
   [security.md](security.md#known-gaps)).

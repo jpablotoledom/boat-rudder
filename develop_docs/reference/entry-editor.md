@@ -283,5 +283,3 @@ URLs into the target block's text fields (gallery) or the header `image_url` inp
 - The `image-single` block type (the last block type from the legacy editor not yet ported).
 - A `/gallery/<slug>` human-readable URL (currently `_id` hex only).
 - Deleting `media_galleries` documents when their gallery block or entry is removed.
-- CSRF tokens on the AJAX endpoints (today they rely on `SameSite=Lax`; see
-  [security.md](security.md#known-gaps)).

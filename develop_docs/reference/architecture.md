@@ -341,9 +341,9 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache validation; a non-zero return code (`403`/`404`/`500`) is rendered via `send_error_response()`.
 - `POST /login` → epoch3 only; other epochs re-render the "not available" `login_epoch<N>.html` without touching the database.
 - `POST /dashboard/api/media/directory` → create media directory.
-- `POST /dashboard/api/media/directory/rename` → rename (renames physical dir via `rename()`).
-- `POST /dashboard/api/media/directory/delete` → delete (removes physical dir via `rmdir()`).
-- `POST /dashboard/api/media/upload` → multipart file upload: saves to `html/content/posts/<username>/<dirname>/`, runs `scripts/image-optimizer.sh`, inserts into `media` collection.
+- `POST /dashboard/api/media/directory/rename` → rename (renames physical dir via `rename()`; path from the DB record and its owner, never from the request).
+- `POST /dashboard/api/media/directory/delete` → delete (removes physical dir via `rmdir()`; empty directories only).
+- `POST /dashboard/api/media/upload` → multipart image upload (JPEG/PNG/GIF/WebP): saves to `html/content/posts/<username>/<dirname>/`, runs `scripts/image-optimizer.sh`, inserts into `media` collection.
 - `POST /dashboard/api/media/move` → moves media items (files and DB) to another directory.
 - `POST /dashboard/api/entries/<id>/content` → after saving blocks, for each `gallery` block calls `cms_upsert_media_gallery()` to sync the `media_galleries` collection and stores the gallery `_id` in the block's `extra_data`.
 - `POST /dashboard/api/block-preview` → `entry_page_render_block()`: the editor's preview of a block, rendered exactly as epoch 3 would.

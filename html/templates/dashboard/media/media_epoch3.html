@@ -23,7 +23,7 @@
         Drop files here or
         <label for="media-file-input" class="boat-rudder__media__upload-browse">browse from your computer</label>
       </div>
-      <input name="media-file-input" id="media-file-input" type="file" multiple class="boat-rudder__media__file-input">
+      <input name="media-file-input" id="media-file-input" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" class="boat-rudder__media__file-input">
       <input name="media-directory-selected" id="media-directory-selected" type="hidden" value="">
       <input name="media-content-start" id="media-content-start" type="hidden" value="0">
       <input name="media-content-end" id="media-content-end" type="hidden" value="36">
@@ -175,11 +175,11 @@
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'newpath=' + encodeURIComponent(name)
     })
-    .then(function (r) { return r.text(); })
+    .then(responseTextOrThrow)
     .then(function (html) {
       document.getElementById('media-directory-contents-list').innerHTML += html;
     })
-    .catch(function (err) { console.error('Error:', err); });
+    .catch(function (err) { console.error('Error:', err); alert(err.message); });
   };
 
   window.selectDirectory = function (directoryId) {
@@ -213,7 +213,6 @@
 
   window.renameDirectory = function () {
     var id = document.getElementById('media-directory-selected').value;
-    var oldName = document.getElementById('media-directory-name_' + id);
     var input = document.getElementById('media-directory_' + id);
     var row = document.getElementById('media-directory-row_' + id);
     var label = document.getElementById('media-directory-label_' + id);
@@ -223,17 +222,21 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'id=' + encodeURIComponent(id) +
-              '&oldname=' + encodeURIComponent(oldName.value) +
               '&newname=' + encodeURIComponent(input.value)
       })
-      .then(function (r) { return r.text(); })
+      .then(responseTextOrThrow)
       .then(function (html) {
         var wrapper = document.createElement('div');
         wrapper.innerHTML = html;
         var li = wrapper.firstElementChild;
         if (li) row.innerHTML = li.innerHTML;
       })
-      .catch(function (err) { console.error('Error:', err); });
+      .catch(function (err) {
+        console.error('Error:', err);
+        alert(err.message);
+        if (label) label.classList.remove('none');
+        if (input) input.classList.add('none');
+      });
     } else {
       if (label) label.classList.remove('none');
       if (input) input.classList.add('none');
@@ -246,20 +249,34 @@
   };
 
   function deleteDirectory(id) {
-    if (!confirm('The directory and its contents will be deleted. This is irreversible.\n\nContinue?')) return;
-    var dirName = document.getElementById('media-directory-name_' + id);
+    if (!confirm('The directory will be deleted. It must be empty: delete or move its images first.\n\nContinue?')) return;
     fetch('/dashboard/api/media/directory/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'id=' + encodeURIComponent(id) + '&dirname=' + encodeURIComponent(dirName.value)
+      body: 'id=' + encodeURIComponent(id)
     })
-    .then(function (r) {
-      if (r.ok) {
-        var row = document.getElementById('media-directory-row_' + id);
-        if (row) row.remove();
-      }
+    .then(responseTextOrThrow)
+    .then(function () {
+      var row = document.getElementById('media-directory-row_' + id);
+      if (row) row.remove();
     })
-    .catch(function (err) { console.error('Error:', err); });
+    .catch(function (err) { console.error('Error:', err); alert(err.message); });
+  }
+
+  // Resolves with the body of a 2xx response; otherwise rejects with the
+  // server's plain-text reason (403 ownership, 409 not empty, ...).
+  function responseTextOrThrow(r) {
+    return r.text().then(function (text) {
+      if (!r.ok) throw new Error(text || ('HTTP ' + r.status));
+      return text;
+    });
+  }
+
+  // Re-lists the selected directory: a move/delete may succeed only for the
+  // images this user owns, so the grid is reloaded rather than pruned.
+  function refreshSelectedDirectory() {
+    var current = document.getElementById('media-directory-selected');
+    if (current && current.value) window.selectDirectory(current.value);
   }
 
   // Media contents
@@ -327,7 +344,7 @@
     var hadNoDir = !baseDir || !baseDir.value;
     var assignedDirId = null;
 
-    var validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    var validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     var queue = Array.from(fileInput.files);
     var idx = 0;
 
@@ -451,14 +468,9 @@
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'ids=' + encodeURIComponent(ids) + '&dest_dir=' + encodeURIComponent(destDirId)
     })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
-      .then(function () {
-        selected.forEach(function (input) {
-          var photo = input.closest('.boat-rudder__media__photo');
-          if (photo) photo.remove();
-        });
-      })
-      .catch(function (err) { console.error('Error moving media:', err); alert('Error moving images.'); })
+      .then(responseTextOrThrow)
+      .then(refreshSelectedDirectory)
+      .catch(function (err) { console.error('Error moving media:', err); alert(err.message); })
       .then(closeMoveMediaPicker);
   };
 
@@ -476,14 +488,9 @@
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'ids=' + encodeURIComponent(ids)
     })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
-      .then(function () {
-        selected.forEach(function (input) {
-          var photo = input.closest('.boat-rudder__media__photo');
-          if (photo) photo.remove();
-        });
-      })
-      .catch(function (err) { console.error('Error deleting media:', err); alert('Error deleting images.'); });
+      .then(responseTextOrThrow)
+      .then(refreshSelectedDirectory)
+      .catch(function (err) { console.error('Error deleting media:', err); alert(err.message); });
   };
 
   // "Use selected" button

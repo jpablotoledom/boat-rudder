@@ -158,8 +158,13 @@ All functions are declared on `window` so they remain available after `activateS
 **Directory management**:
 - `newDirectoryBtnHandler()` - appends a text input to the directory list; `createNewDirectory()` POSTs on blur.
 - `selectDirectory(id)` - sets `#media-directory-selected`, clears the grid, loads page 1.
-- `renameDirectoryBtnHandler()` / `renameDirectory()` - toggle label/input; POST on blur.
-- `deleteDirectoryBtnHandler()` / `deleteDirectory(id)` - confirm + POST.
+- `renameDirectoryBtnHandler()` / `renameDirectory()` - toggle label/input; POSTs `id` + `newname` on blur.
+- `deleteDirectoryBtnHandler()` / `deleteDirectory(id)` - confirm + POST `id` (only empty directories are deleted).
+- Errors from these and the bulk actions are shown with `alert()` using the server's plain-text
+  reason (`responseTextOrThrow()`); after a move/delete the grid is reloaded
+  (`refreshSelectedDirectory()`), since only the user's own images may have been affected.
+- Every POST carries the CSRF token through `/assets/js/csrf.js` (loaded by the page layout), not
+  through code in this template.
 - `validarCaracter(e)` - keypress validator for directory name input (`[a-zA-Z0-9_-]` only).
 
 **Content loading**:
@@ -170,7 +175,7 @@ All functions are declared on `window` so they remain available after `activateS
   grid pages through the newest uploads across every directory.
 
 **Upload**:
-- `upload()` - iterates selected files (JPEG, PNG, GIF only), XHR POST to `/dashboard/api/media/upload` with progress bar per file; reloads directory on completion.
+- `upload()` - iterates selected files (JPEG, PNG, GIF, WebP only; the server re-checks), XHR POST to `/dashboard/api/media/upload` with progress bar per file; reloads directory on completion.
 - Drag-and-drop zone: `dragover`/`dragleave`/`drop` on `#drop-zone`; file-input `change` listener.
 
 **Bulk actions** (on the current selection):
@@ -191,8 +196,15 @@ All functions are declared on `window` so they remain available after `activateS
 
 ## 7. Routes
 
-All routes require `require_dashboard_session()`. The modal and contents routes return raw HTML
-(not wrapped by `buildPageWebSite()`).
+All routes require `require_dashboard_session()` (which, for `POST`, also checks the CSRF
+token). The modal and contents routes return raw HTML (not wrapped by `buildPageWebSite()`).
+
+**Ownership and paths.** Writes go through `media_can_manage()`: an `admin` manages everything,
+an `author` only directories and images whose `author_id` is theirs. On-disk paths are built
+from the DB record - `./html/content/posts/<owner username>/<directory name>/` - never from a
+name or path sent by the client, and every component is re-validated
+(`media_dir_name_valid()`, `media_username_valid()`, `media_file_name_valid()`) before it touches
+the filesystem. See [security.md](security.md#media-ownership).
 
 | Route | Method | Behavior |
 |---|---|---|
@@ -200,12 +212,12 @@ All routes require `require_dashboard_session()`. The modal and contents routes 
 | `GET /dashboard/api/media/contents` | GET | Paginated photo grid HTML (`?directory=<id>&start=N&end=M`) |
 | `GET /dashboard/api/media/directory/item` | GET | One directory `<li>` (`?id=`), JSON-wrapped |
 | `GET /dashboard/api/media/modal` | GET | Media picker modal HTML (raw, no page shell) |
-| `POST /dashboard/api/media/directory` | POST | Create dir on disk + DB. Returns rendered `<li>` HTML. |
-| `POST /dashboard/api/media/directory/rename` | POST | `rename()` + DB update. Returns rendered `<li>` HTML. |
-| `POST /dashboard/api/media/directory/delete` | POST | `rmdir()` + DB delete. `200 OK` on success. |
-| `POST /dashboard/api/media/delete` | POST | `ids` → unlink every variant + delete records. `200` unless every id failed |
-| `POST /dashboard/api/media/move` | POST | `ids`, `dest_dir` → rename every variant + `$set dir_id`. `400` for an unknown destination |
-| `POST /dashboard/api/media/upload` | POST | Multipart `file` + `media-directory-selected`; no/unknown directory → `default`. Optimizer, DB insert. Returns `{"ok":true,"filename":"...","dir_id":"..."}`. |
+| `POST /dashboard/api/media/directory` | POST | `newpath` (3-60 `[A-Za-z0-9_-]`) → dir on disk + DB, owned by the caller. `409` if the caller already has one with that name. Returns rendered `<li>` HTML. |
+| `POST /dashboard/api/media/directory/rename` | POST | `id`, `newname` → `rename()` + DB update (an absent folder on disk is fine). `403` not the owner, `400` invalid name, `409` name taken. Returns rendered `<li>` HTML. |
+| `POST /dashboard/api/media/directory/delete` | POST | `id` → `rmdir()`, then DB delete. `403` not the owner, `409` while `media` records point at it or files remain on disk. `200 OK` on success. |
+| `POST /dashboard/api/media/delete` | POST | `ids` → unlink every variant (plus the optimizer's original-name symlink) + delete records, for the items the caller may manage. `403` if none, `500` if every allowed id failed, else `200` |
+| `POST /dashboard/api/media/move` | POST | `ids`, `dest_dir` → rename every variant + `$set dir_id`. `400` unknown destination, `403` destination or items not the caller's, or items of a different author than the destination |
+| `POST /dashboard/api/media/upload` | POST | Multipart `file` + `media-directory-selected`; no/unknown directory → `default`, another author's → `403`. `.jpg/.jpeg/.png/.gif/.webp` with matching magic bytes, else `415`. Optimizer, DB insert; if the optimizer reports no output the upload is deleted (`415`). Returns `{"ok":true,"filename":"...","dir_id":"..."}`. |
 | `GET /gallery/<id>` | GET | **Public** (no session). Epoch 3: thumbnail grid page. Epochs 1-2: paginated viewer with prev/next + thumbnails. Epochs -1/0: QR code to the gallery. |
 
 ---

@@ -6,12 +6,18 @@
 
 // Per-thread, per-request. See request_user.h for why this is not a parameter.
 static __thread char current_user_name[128] = "";
+static __thread char current_csrf_token[CSRF_TOKEN_BUF_SIZE] = "";
 
 void request_user_set(const char *cookie_header) {
     current_user_name[0] = '\0';
+    current_csrf_token[0] = '\0';
 
     char user_id[USER_ID_HEX_BUF_SIZE];
     if (validate_session_cookie(cookie_header, user_id) != 1) return;
+
+    char session_token[SESSION_TOKEN_BUF_SIZE];
+    if (extract_session_token(cookie_header, session_token, sizeof(session_token)))
+        derive_csrf_token(session_token, current_csrf_token);
 
     // cms_get_user_name_by_id() reflects the "Users" maintainer's optional
     // display `name` field, same as the blog author byline - it is often
@@ -31,4 +37,8 @@ void request_user_set(const char *cookie_header) {
 
 const char *request_user_name(void) {
     return current_user_name;
+}
+
+const char *request_csrf_token(void) {
+    return current_csrf_token;
 }

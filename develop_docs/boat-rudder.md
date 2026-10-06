@@ -1010,9 +1010,9 @@ Features added after the initial home-page MVP (dated history in [../CHANGELOG.m
 - Human-readable gallery URLs (`/gallery/<slug>`; today the route takes the `_id` hex only).
 - WAP gateway: connection-oriented WSP (9201), testing connectionless WSP on real phones, a
   per-device page size.
-- The security gaps listed in [reference/security.md](reference/security.md#known-gaps) (CSRF
-  tokens, media ownership checks, upload type allowlist, path handling in directory
-  rename/delete, session purging).
+- The security gaps listed in [reference/security.md](reference/security.md#known-gaps)
+  (running the service as an unprivileged user, login CSRF / `GET /logout`, login throttling,
+  repository hygiene).
 
 ---
 

@@ -7,6 +7,8 @@
 #include "../utils/http_utils.h"
 #include "../utils/read_file.h"
 #include "../utils/request_theme.h"
+#include "../utils/request_user.h"
+#include "../db/session_manager.h"
 #include "../utils/template_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -368,6 +370,26 @@ static char *splice_site_name(char *html) {
     return result;
 }
 
+// On epoch 3, for a signed-in user, puts the session's CSRF token and the
+// script that attaches it to forms/fetch/XHR (html/assets/js/csrf.js) right
+// before </head> - in the layout itself, so every theme's layout gets it
+// without carrying a marker. The dashboard's POST routes reject requests
+// without it (require_dashboard_session() in http_router.c). Anonymous
+// pages and the retro epochs, which never reach those routes, are untouched.
+static char *splice_csrf_token(char *html, int epoch) {
+    const char *token = request_csrf_token();
+    if (!html || epoch != EPOCH_MODERN || !token[0] || !strstr(html, "</head>")) return html;
+
+    char tags[CSRF_TOKEN_BUF_SIZE + 128];
+    snprintf(tags, sizeof(tags),
+             "<meta name=\"csrf-token\" content=\"%s\">\n"
+             "<script src=\"/assets/js/csrf.js\"></script>\n</head>",
+             token);
+    char *result = str_replace_first(html, "</head>", tags);
+    free(html);
+    return result;
+}
+
 char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
                        const char *body_background) {
     if (!fragment_html) return NULL;
@@ -424,6 +446,12 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
     }
 
     char *with_colors = splice_theme_colors(with_retro_colors);
+    if (!with_colors) {
+        free(fragment_html);
+        return NULL;
+    }
+
+    with_colors = splice_csrf_token(with_colors, epoch);
     if (!with_colors) {
         free(fragment_html);
         return NULL;

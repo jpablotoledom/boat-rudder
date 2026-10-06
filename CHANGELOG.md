@@ -11,6 +11,26 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 
 ## [Unreleased] - v0.0.1
 
+### 2026-10-06 - Dashboard security fixes
+
+**Security**
+- Media directory rename/delete no longer build paths from client-supplied names: the path comes
+  from the `media_directories` record and its owner, new names must match `[A-Za-z0-9_-]{3,60}`
+  (previously `../` let any signed-in user rename directories outside `html/` as root).
+  Non-empty directories can't be deleted, and the record is removed only after `rmdir()`.
+- Media uploads accept only JPEG/PNG/GIF/WebP (extension and magic bytes); a file the optimizer
+  can't process is deleted instead of being published.
+- Media ownership: an `author` can only upload into, rename, delete and move their own
+  directories and images; images move only between directories of their author.
+- CSRF tokens on every dashboard `POST` (session-bound, checked in
+  `require_dashboard_session()`, attached client-side by `/assets/js/csrf.js`).
+- Expired sessions are purged: TTL and unique indexes on `sessions`, created at startup.
+
+**Fixed**
+- Deleting/moving a media item now also handles the optimizer's original-name symlink
+  (e.g. `photo.png -> photo_half.gif`), which was left behind.
+- `media.author_username` is sanitized the same way as the upload directory name.
+
 ### 2026-10-06 - WAP gateway, code highlighting, QR short links (`7c55aef`)
 
 **Added**

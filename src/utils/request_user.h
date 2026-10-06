@@ -21,4 +21,10 @@ void request_user_set(const char *cookie_header);
 // request_user_set() on the same thread.
 const char *request_user_name(void);
 
+// The CSRF token (session_manager.h's derive_csrf_token()) of the session
+// resolved by the last request_user_set() on this thread, or "" if there is
+// no valid session. page_layout_wrap() embeds it in every epoch-3 page served
+// to a signed-in user. Never NULL; same lifetime as request_user_name().
+const char *request_csrf_token(void);
+
 #endif // REQUEST_USER_H

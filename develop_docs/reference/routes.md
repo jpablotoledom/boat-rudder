@@ -32,10 +32,11 @@ traffic is not routed here directly - it re-enters this table over loopback HTTP
 |---|---|---|
 | - | Public | - |
 | **E3** | `resolve_epoch() == 3` | Page routes: `302 /dashboard`. API routes (`/dashboard/api/*`): `403 Forbidden` (plain text). |
-| **S** | `require_dashboard_session()`: valid `session` cookie | `503` if MongoDB is down, otherwise `302 /login` |
+| **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token |
 | **S+R** | `require_dashboard_session_role()`: session, role loaded (missing role = `admin`) | as **S** |
 | **A** | `require_admin_session()`: session with role `admin` | as **S**, plus `302 /dashboard` for an `author` |
 | **Own** | `can_edit_entry()`: `admin`, or `author` on a `blog` entry they created | `302 /dashboard` (page) or JSON `403` (API) |
+| **OwnMedia** | `media_can_manage()`: `admin`, or `author` on a media directory/item whose `author_id` is theirs | `403` (plain text) |
 | **Theme** | `theme_key_is_valid(<key>)`: `html/themes/<key>/` exists | `404` |
 
 `resolve_epoch()` returns `force_epoch` if configured, else a valid `?preview_epoch=N`
@@ -170,20 +171,20 @@ Guards **S+R** and **Own** on every route except `block-preview` (**S**). Detail
 
 ### Media library
 
-Guard **S** (any signed-in user, no per-item ownership check). Detailed in
-[media-admin.md](media-admin.md).
+Guard **S**; the reads are open to any signed-in user, the writes add **S+R** and **OwnMedia**.
+Errors are plain text. Detailed in [media-admin.md](media-admin.md).
 
 | Method | Path | Handler | Response |
 |---|---|---|---|
 | `GET` | `/dashboard/api/media/contents` | `cms_get_media_items()` + `media_admin_render_items()` | JSON-wrapped HTML; query `directory`, `start`, `end` (page = `MEDIA_PAGE_SIZE` = 36) |
 | `GET` | `/dashboard/api/media/directory/item` | `media_admin_render_directory_item()` | JSON-wrapped HTML; query `id` |
 | `GET` | `/dashboard/api/media/modal` | `media_admin_modal()` | **HTML** - picker modal, newest uploads first |
-| `POST` | `/dashboard/api/media/directory` | `cms_create_media_directory()` + `mkdir` | Field `newpath` (3-60 chars `[A-Za-z0-9_-]`) |
-| `POST` | `/dashboard/api/media/directory/rename` | `cms_rename_media_directory()` + `rename()` | |
-| `POST` | `/dashboard/api/media/directory/delete` | `cms_delete_media_directory()` + `rmdir()` | |
-| `POST` | `/dashboard/api/media/delete` | `cms_delete_media()` + unlink of every size variant | |
-| `POST` | `/dashboard/api/media/move` | `cms_move_media()` + `rename()` of every variant | Fields `ids` (comma-separated), `dest_dir`; plain-text result |
-| `POST` | `/dashboard/api/media/upload` | file write + `scripts/image-optimizer.sh` + `cms_insert_media()` | `{ok, filename, dir_id}`; multipart `file`, `media-directory-selected` (empty → author's `default` directory) |
+| `POST` | `/dashboard/api/media/directory` | `cms_create_media_directory()` + `mkdir` | Field `newpath` (3-60 chars `[A-Za-z0-9_-]`, else `400`); always the caller's own; duplicate name `409` |
+| `POST` | `/dashboard/api/media/directory/rename` | `cms_rename_media_directory()` + `rename()` | Fields `id`, `newname` (same rule); current name and owner come from the DB. **OwnMedia**; `404` unknown id, `409` name taken |
+| `POST` | `/dashboard/api/media/directory/delete` | `cms_delete_media_directory()` + `rmdir()` | Field `id`. **OwnMedia**; `409` while it has images (or stray files on disk) |
+| `POST` | `/dashboard/api/media/delete` | `cms_delete_media()` + unlink of every size variant | Field `ids` (comma-separated). **OwnMedia** per item; `403` if none was allowed |
+| `POST` | `/dashboard/api/media/move` | `cms_move_media()` + `rename()` of every variant | Fields `ids` (comma-separated), `dest_dir`; **OwnMedia** on the destination and per item, and only between directories of the item's own author; plain-text result |
+| `POST` | `/dashboard/api/media/upload` | file write + `scripts/image-optimizer.sh` + `cms_insert_media()` | `{ok, filename, dir_id}`; multipart `file` (JPEG/PNG/GIF/WebP by extension **and** magic bytes, else `415`), `media-directory-selected` (empty → author's `default` directory; another author's → `403`) |
 
 ### Theme assets
 

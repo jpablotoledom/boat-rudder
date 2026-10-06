@@ -88,7 +88,7 @@ static void fill_media_directory_from_doc(CmsMediaDirectory *out, const bson_t *
 
 bool cms_get_media_directory_by_id(const char *id_hex, CmsMediaDirectory *out) {
     memset(out, 0, sizeof(*out));
-    if (!id_hex || strlen(id_hex) != 24) return false;
+    if (!id_hex || strlen(id_hex) != 24 || !bson_oid_is_valid(id_hex, 24)) return false;
 
     mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_DIRECTORIES_COLLECTION);
     if (!col) return false;
@@ -168,7 +168,7 @@ int cms_create_media_directory(const char *name, const char *parent,
 }
 
 int cms_rename_media_directory(const char *id_hex, const char *new_name) {
-    if (!id_hex || strlen(id_hex) != 24 || !new_name) return -1;
+    if (!id_hex || strlen(id_hex) != 24 || !bson_oid_is_valid(id_hex, 24) || !new_name) return -1;
 
     mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_DIRECTORIES_COLLECTION);
     if (!col) return -1;
@@ -190,7 +190,7 @@ int cms_rename_media_directory(const char *id_hex, const char *new_name) {
 }
 
 int cms_delete_media_directory(const char *id_hex) {
-    if (!id_hex || strlen(id_hex) != 24) return -1;
+    if (!id_hex || strlen(id_hex) != 24 || !bson_oid_is_valid(id_hex, 24)) return -1;
 
     mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_DIRECTORIES_COLLECTION);
     if (!col) return -1;
@@ -206,6 +206,25 @@ int cms_delete_media_directory(const char *id_hex) {
     bson_destroy(selector);
     mongoc_collection_destroy(col);
     return ret;
+}
+
+int64_t cms_count_media_in_directory(const char *dir_id_hex) {
+    if (!dir_id_hex || strlen(dir_id_hex) != 24 || !bson_oid_is_valid(dir_id_hex, 24)) return -1;
+
+    mongoc_collection_t *col = mongodb_manager_get_collection(MEDIA_COLLECTION);
+    if (!col) return -1;
+
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, dir_id_hex);
+    bson_t *filter = BCON_NEW("dir_id", BCON_OID(&oid));
+
+    bson_error_t error;
+    int64_t count = mongoc_collection_count_documents(col, filter, NULL, NULL, NULL, &error);
+    if (count < 0) LOG_ERROR("cms_count_media_in_directory: %s", error.message);
+
+    bson_destroy(filter);
+    mongoc_collection_destroy(col);
+    return count;
 }
 
 // ---- media items ----
@@ -238,6 +257,17 @@ static void fill_media_item_from_doc(CmsMediaItem *item, const bson_t *doc) {
             if (len >= sizeof(item->author_username)) len = sizeof(item->author_username) - 1;
             if (len > 0) memcpy(item->author_username, email, len);
             item->author_username[len] = '\0';
+
+            // Same mapping as cms_get_username_by_id(), which named the
+            // directory the upload was written to - the two must agree for
+            // the item's files to be found (and this ends up in paths and
+            // in the media grid's <img src>).
+            for (size_t i = 0; i < len; i++) {
+                char c = item->author_username[i];
+                if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                      (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.'))
+                    item->author_username[i] = '-';
+            }
         }
     }
     if (bson_iter_init_find(&iter, doc, "dir_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {

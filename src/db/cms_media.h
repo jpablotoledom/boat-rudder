@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define MEDIA_LIST_LIMIT 200
 #define MEDIA_PAGE_SIZE   36
@@ -45,6 +46,10 @@ int cms_create_media_directory(const char *name, const char *parent,
 int cms_rename_media_directory(const char *id_hex, const char *new_name);
 
 int cms_delete_media_directory(const char *id_hex);
+
+// Number of `media` records whose dir_id is this directory, or -1 on error
+// (invalid id, no DB). Directory deletion refuses a non-empty directory.
+int64_t cms_count_media_in_directory(const char *dir_id_hex);
 
 // Media items ---
 

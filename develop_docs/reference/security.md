@@ -71,8 +71,10 @@ listeners serve the same site.
 | Theme keys (cookie, query, admin forms, asset API) | `theme_key_is_valid()`: charset `[A-Za-z0-9_-]` checked **before** touching the filesystem, then the directory must exist under `html/themes/` - blocks `../` and CRLF headed for `Set-Cookie` |
 | Open redirects (`return`, `back` parameters) | `language_sanitize_return()`: must start with a single `/` (no `//`, no `/\`), no control characters, `"`, `<`, `>`; anything else becomes `/` |
 | Uploaded file names (media, theme assets, fonts) | Whitelist `[A-Za-z0-9._-]`, spaces → `-`; theme assets and fonts also reject a leading `.` and any `..` |
-| Upload types | Theme assets: `.png/.jpg/.jpeg/.gif` (epoch −1: PNG/JPEG only, converted to WBMP). Fonts: `.ttf/.otf/.woff/.woff2`. Media library: **no extension check** (see gaps) |
-| Media directory names | 3-60 chars `[A-Za-z0-9_-]`, no `..` |
+| Upload types | Theme assets: `.png/.jpg/.jpeg/.gif` (epoch −1: PNG/JPEG only, converted to WBMP). Fonts: `.ttf/.otf/.woff/.woff2`. Media library: `.jpg/.jpeg/.png/.gif/.webp` **and** matching magic bytes (`media_upload_is_allowed_image()`), else `415`; if `image-optimizer.sh` does not report a variant it wrote, the raw upload is deleted and `415` returned - the original is never published as-is |
+| Media directory names | `media_dir_name_valid()`: 3-60 chars `[A-Za-z0-9_-]` (no `/`, no `.`), on create **and** rename; names read back from the DB are re-checked before they reach the filesystem or the optimizer's command line |
+| Media paths on disk | Built only from DB records - directory name + the **owner's** username (`media_username_valid()` rejects `""`, `.`, `..`, leading dots) - never from a client-supplied name or path. A legacy record that fails the checks is left alone on disk |
+| Optimizer invocation | `popen()` with single-quoted arguments; every component (username, directory, file name) is restricted to `[A-Za-z0-9._-]`, so the quoting can't be broken |
 | Font names | `[A-Za-z0-9 _-]` only - the value is injected into CSS and stored in MongoDB |
 | Theme raw markup (banner/footer/CSS) | Admin-only; inserted with `str_replace_*`, never as a `printf` format; capped at `THEME_ASSET_HTML_MAX` = 128 KiB |
 | Template rendering | User content passed as `render_template()` *arguments*, never as the format string |
@@ -91,6 +93,8 @@ listeners serve the same site.
 | Session token | 32 bytes from libsodium's CSPRNG, hex-encoded, stored server-side in `sessions` with `expires_at` |
 | Cookie | `session=<token>; HttpOnly; Path=/; SameSite=Lax; Max-Age=<ttl>` plus `; Secure` when `ssl_enabled=1` |
 | Logout | `GET /logout` deletes the session document and clears the cookie |
+| Expiry | Checked on every lookup (`validate_session()`). At startup `session_manager_ensure_indexes()` creates a TTL index `{expires_at: 1}, {expireAfterSeconds: 0}` (MongoDB then purges expired sessions about once a minute), a unique index on `token`, and deletes the backlog of already-expired sessions |
+| CSRF | Every non-`GET`/`HEAD`/`OPTIONS` request through `require_dashboard_session()` (i.e. every dashboard write) must carry the session's CSRF token, else `403`. See [CSRF protection](#csrf-protection) |
 | Modern browsers only | `/login` POST and every `/dashboard*` route require epoch 3 (server-side, not just hidden links) |
 | MongoDB down | Dashboard and login answer `503`, never "logged in" |
 
@@ -99,12 +103,39 @@ listeners serve the same site.
 | Role | Can |
 |---|---|
 | `admin` (also: missing `role` field) | Everything |
-| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries, the whole media library |
+| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, browse everything but upload into, rename, delete and move **only their own** directories and images |
 
 Guards are enforced per route in `http_router.c` (`require_admin_session()`,
 `require_dashboard_session_role()` + `can_edit_entry()`); the full matrix is in
 [routes.md](routes.md#guards). The last admin can't be deleted or demoted, and nobody can delete
 their own account.
+
+### Media ownership
+
+`media_can_manage()` in `http_router.c`: an `admin` manages every author's media; an `author`
+only records whose `author_id` is theirs. Applied to directory rename/delete (`403`), image
+delete/move (per item; `403` when nothing was allowed) and upload (the target directory must be
+the caller's own). Images move only between directories of **their own author** - files live under
+`html/content/posts/<author>/`, so another author's directory is not a valid target, for admins
+either. A directory is deleted only when it has no `media` records (`409` otherwise) and the
+record is removed only after `rmdir()` succeeds (or the directory never existed on disk).
+
+### CSRF protection
+
+- **Token**: `derive_csrf_token()` (`session_manager.c`) = keyed BLAKE2b (libsodium
+  `crypto_generichash`) of the session token, hex-encoded. Bound to the session, stable for its
+  lifetime, nothing stored, and not computable without the `HttpOnly` cookie.
+- **Delivery**: `page_layout_wrap()` adds `<meta name="csrf-token">` and
+  `/assets/js/csrf.js` before `</head>` on epoch-3 pages served to a signed-in user
+  (`request_csrf_token()`, resolved per request in `request_user_set()`). The script adds an
+  `X-CSRF-Token` header to same-origin `fetch()`/`XMLHttpRequest` writes and a hidden
+  `csrf_token` field to `<form method="post">` on submit - templates don't carry the token
+  themselves.
+- **Check**: `require_dashboard_session()` reads the header, else the `csrf_token` field of an
+  urlencoded or multipart body, and compares in constant time (`verify_csrf_token()`).
+  Failures are logged (`CSRF check failed`) and answered `403`.
+- `SameSite=Lax` on the cookie stays as a second layer. `/login` (no session yet) and
+  `GET /logout` are not covered - see gaps.
 
 ### Drafts
 
@@ -141,15 +172,22 @@ accepted forever.
 
 | Gap | Impact | Possible fix |
 |---|---|---|
-| **No CSRF tokens** on dashboard `POST` routes | Mitigated by `SameSite=Lax` (cross-site POSTs don't carry the cookie in modern browsers); still relies on browser behavior | Per-session token in forms and AJAX headers |
-| **Media library has no ownership checks**: any signed-in user (including `author`) can delete, move, rename or delete directories of any author's media | An author can destroy others' media | Check `media.author_id` / `media_directories.author_id` against the session for non-admins |
-| **Media uploads accept any extension** (only the filename charset is sanitized); files are served from the site's own origin | A dashboard user could upload `.html`/`.svg` with script - stored XSS against other dashboard users | Extension/content-type allowlist matching what `image-optimizer.sh` handles |
-| Optimizer is invoked through `popen()` with paths in single quotes; the username part comes from the user's email | An email containing `'` (created by an admin) could break out of the quoting | Validate emails or `exec` without a shell |
-| **Media directory rename/delete trust client-supplied names**: `/dashboard/api/media/directory/rename` builds both paths from the body's `oldname`/`newname`, and `/directory/delete` from `dirname`, joined to the *caller's* username with no validation; delete also removes the DB record even when `rmdir()` fails | Any signed-in user (including `author`) can `rename()` arbitrary directories reachable through `../` - and the shipped systemd unit runs as **root** - or `rmdir` empty ones; deleting a non-empty directory orphans its files and `media` records | Resolve paths from the `media_directories` record (name + author), apply the same `[A-Za-z0-9_-]` rule as creation to `newname`, reject `/` and `..`, only delete the record after a successful `rmdir()`; run the service as an unprivileged user |
-| Expired sessions are never purged | `sessions` grows; old tokens remain in the DB (unusable) | TTL index on `expires_at` - see [data-model.md](data-model.md#index-recommendations) |
+| **Service runs as `root`** (`scripts/boat-rudder.service`) | Any future file-write or command-injection bug gets full control of the host | Dedicated user owning `html/content` and `html/assets`, `AmbientCapabilities=CAP_NET_BIND_SERVICE` for ports 80/443, systemd sandboxing (`ProtectSystem=strict`, `ReadWritePaths=`); check what the WAP gateway's sockets need first |
+| Login CSRF and `GET /logout` | A third-party page can sign a visitor out, or (only from a browser that ignores `SameSite`) into an attacker's account | Origin check or a pre-session token on `/login`; make logout a `POST` |
 | No login throttling | Online password guessing is limited only by the connection rate limit | Per-account/IP failure counter |
 | Analytics writes are synchronous | Each counted page view costs two MongoDB round-trips on the request thread | Batch or async writes |
 | Repository hygiene | `db_backup*/` track `users.bson` (password hashes) and `sessions.bson` (tokens); `data/GeoLite2-Country.mmdb` is tracked despite its license | Remove from version control and rotate affected credentials |
+
+### Resolved
+
+| Former gap | Fix |
+|---|---|
+| Media directory rename/delete built paths from the client's `oldname`/`newname`/`dirname` (`../` reached outside `html/`, with the service running as root) | Paths come from the `media_directories` record and its owner; `newname` must pass `media_dir_name_valid()`; duplicates `409`; non-empty directories `409`; the record is deleted only after a successful `rmdir()` - see [Request handling](#request-handling), [Media ownership](#media-ownership) |
+| Media uploads accepted any extension (stored XSS via `.html`/`.svg`) | Extension + magic-byte allowlist, and only optimizer output is kept |
+| No ownership checks in the media library | `media_can_manage()` on every media write |
+| No CSRF tokens (relied on `SameSite=Lax` only) | Session-bound token checked in `require_dashboard_session()` - [CSRF protection](#csrf-protection) |
+| Expired sessions never purged | TTL index + startup purge (`session_manager_ensure_indexes()`) |
+| Optimizer `popen()` quoting could be broken by a `'` in a path component | All components are charset-restricted (usernames were already mapped by `cms_get_username_by_id()`; directory names are now validated on rename too) |
 
 ---
 

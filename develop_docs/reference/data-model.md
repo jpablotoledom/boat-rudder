@@ -20,7 +20,7 @@ collections). Nothing else in the code base opens a collection.
 | Epoch-keyed sub-document | A per-epoch value (`banner_html`, `footer_html`, `logo_html`, `logo`) is keyed `epoch_neg1`, `epoch0` … `epoch3` - BSON field names cannot start with `-`, so epoch −1 is spelled out (`epoch_field_name()` in `cms_themes.c`). |
 | ObjectId ↔ hex | Every C struct carries ObjectIds as 24-char hex strings (`char id[25]` or `char *id`); conversion happens in `src/db/`. |
 | Graceful degradation | Every reader returns an empty result (or a documented default) when MongoDB is down, so a page never fails because of the database - see [configuration.md](configuration.md#notes). |
-| Indexes | **None beyond `_id` are created by the code or by any script** (checked against the dumps in `db_backup*/`). See [Index recommendations](#index-recommendations). |
+| Indexes | Only the `sessions` indexes are created by the code (`session_manager_ensure_indexes()` at startup); every other collection has `_id` only. See [Index recommendations](#index-recommendations). |
 
 ---
 
@@ -186,8 +186,10 @@ described in [dashboard.md](dashboard.md).
 ```
 
 The token is 32 CSPRNG bytes, hex-encoded, and is the `session` cookie's value. Validation
-checks `expires_at` in code; **expired documents are never deleted** (only `/logout` removes a
-session), so the collection grows - see [Index recommendations](#index-recommendations).
+checks `expires_at` in code. At startup `session_manager_ensure_indexes()` creates
+`{token: 1}` (unique, `token_unique`) and a TTL index `{expires_at: 1}`
+(`expireAfterSeconds: 0`, `expires_at_ttl`), so MongoDB deletes expired sessions on its own, and
+removes the ones already expired. The dashboard's CSRF token is derived from `token`, not stored.
 
 ---
 
@@ -318,12 +320,12 @@ cascades. Readers tolerate dangling references.
 
 ## Index recommendations
 
-The code relies on the default `_id` index only. Queries that would benefit from an index as a
-site grows (create them by hand with `mongosh`; nothing in the code depends on them existing):
+Apart from `sessions` (whose indexes the server creates itself), the code relies on the default
+`_id` index only. Queries that would benefit from an index as a site grows (create them by hand
+with `mongosh`; nothing in the code depends on them existing):
 
 | Collection | Query | Suggested index |
 |---|---|---|
-| `sessions` | `validate_session()` by `token` on every dashboard request | `{token: 1}` unique; optionally a TTL index `{expires_at: 1}, {expireAfterSeconds: 0}` so expired sessions are purged |
 | `entries` | `cms_get_entry_by_link()` by `link`; lists by `{type, enabled}` sorted by `header.date` | `{link: 1}`, `{type: 1, enabled: 1, "header.date": -1}` |
 | `users` | `auth_login_user()` by `email` | `{email: 1}` unique (uniqueness is currently enforced only in code) |
 | `short_links` | `find_code_for_path()` by `target_path` | `{target_path: 1}` unique |

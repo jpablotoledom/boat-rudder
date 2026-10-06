@@ -2,6 +2,7 @@
 
 #include "db/cms_languages.h"
 #include "db/mongodb_manager.h"
+#include "db/session_manager.h"
 #include "modules/analytics/geoip.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
@@ -106,6 +107,7 @@ int main(int argc, char *argv[]) {
         LOG_WARN("MongoDB unavailable - /login and /dashboard will return 503");
     } else {
         cms_languages_ensure_seeded();
+        session_manager_ensure_indexes();
     }
 
     geoip_init(GEOIP_DEFAULT_DB_PATH);

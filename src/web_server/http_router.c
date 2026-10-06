@@ -122,6 +122,31 @@ static void media_variant_path(char *out, size_t out_size, const char *dir_path,
              force_gif ? ".gif" : (ext ? ext : ""));
 }
 
+// scripts/image-optimizer.sh also leaves a symlink under the upload's
+// original name (e.g. photo.png -> photo_half.gif), whose extension the DB
+// record no longer carries (it stores photo.gif). The upload allowlist
+// bounds which extensions that can be; each is tried and only ever acted on
+// when it is a symlink, so another item's real file is never touched.
+static const char *media_upload_link_exts[] = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
+    ".JPG", ".JPEG", ".PNG", ".GIF", ".WEBP", NULL
+};
+
+static void media_link_path(char *out, size_t out_size, const char *dir_path,
+                            const char *name, const char *ext) {
+    char stem[256] = {0};
+    const char *dot = strrchr(name, '.');
+    size_t stem_len = dot ? (size_t)(dot - name) : strlen(name);
+    if (stem_len >= sizeof(stem)) stem_len = sizeof(stem) - 1;
+    memcpy(stem, name, stem_len);
+    snprintf(out, out_size, "%s/%s%s", dir_path, stem, ext);
+}
+
+static int is_symlink(const char *path) {
+    struct stat st;
+    return lstat(path, &st) == 0 && S_ISLNK(st.st_mode);
+}
+
 static void media_item_dir_path(const CmsMediaItem *item, char *out, size_t out_size) {
     snprintf(out, out_size, "./html/content/posts/%s/%s", item->author_username, item->dir_name);
 }
@@ -143,6 +168,10 @@ static void media_delete_variants(const CmsMediaItem *item) {
     for (int i = 0; gif_suffixes[i]; i++) {
         media_variant_path(path, sizeof(path), dir_path, item->name, gif_suffixes[i], 1);
         unlink(path);
+    }
+    for (int i = 0; media_upload_link_exts[i]; i++) {
+        media_link_path(path, sizeof(path), dir_path, item->name, media_upload_link_exts[i]);
+        if (is_symlink(path)) unlink(path);
     }
 }
 
@@ -176,6 +205,13 @@ static int media_move_variants(const CmsMediaItem *item, const char *dest_dir_na
         media_variant_path(dst_path, sizeof(dst_path), dst_dir, item->name, gif_suffixes[i], 1);
         rename(src_path, dst_path);
     }
+    // The link's target is relative ("photo_half.gif"), so it still
+    // resolves once moved next to the variants.
+    for (int i = 0; media_upload_link_exts[i]; i++) {
+        media_link_path(src_path, sizeof(src_path), src_dir, item->name, media_upload_link_exts[i]);
+        media_link_path(dst_path, sizeof(dst_path), dst_dir, item->name, media_upload_link_exts[i]);
+        if (is_symlink(src_path)) rename(src_path, dst_path);
+    }
     return 0;
 }
 
@@ -203,6 +239,91 @@ static int resolve_or_create_default_media_directory(const char *user_id, const 
         return -1;
     }
     return cms_get_media_directory_by_id(new_id, out) ? 0 : -1;
+}
+
+// A media directory name becomes a path component under
+// ./html/content/posts/<author>/ and reaches image-optimizer.sh's command
+// line, so it is held to a plain charset: 3-60 of [A-Za-z0-9_-] - no '/',
+// no '.', hence no "..". Enforced on creation and rename, and re-checked on
+// names read back from the DB before they touch the filesystem.
+static int media_dir_name_valid(const char *name) {
+    size_t len = name ? strlen(name) : 0;
+    if (len < 3 || len > 60) return 0;
+    for (size_t i = 0; i < len; i++) {
+        char c = name[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '-' || c == '_'))
+            return 0;
+    }
+    return 1;
+}
+
+// cms_get_username_by_id() (and the media item's author_username) already
+// map the email's local part onto [A-Za-z0-9._-]; what is still unsafe as a
+// path component is "", "." and ".." - rejected along with any leading dot.
+static int media_username_valid(const char *username) {
+    if (!username || !username[0] || username[0] == '.') return 0;
+    for (const char *p = username; *p; p++) {
+        char c = *p;
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.'))
+            return 0;
+    }
+    return 1;
+}
+
+// A stored media file name: the upload route's sanitized name (charset
+// [A-Za-z0-9._-]), never empty or dot-led.
+static int media_file_name_valid(const char *name) {
+    return media_username_valid(name);
+}
+
+// Whether a media item's on-disk location, built from DB fields, is safe to
+// unlink()/rename() under.
+static int media_item_paths_valid(const CmsMediaItem *item) {
+    return media_username_valid(item->author_username) &&
+           media_dir_name_valid(item->dir_name) &&
+           media_file_name_valid(item->name);
+}
+
+// Ownership rule for the media library: an Administrador manages everyone's
+// media; an Autor only what `author_id` says is theirs.
+static int media_can_manage(const char *role, const char *user_id, const char *owner_id) {
+    return strcmp(role, "admin") == 0 || strcmp(user_id, owner_id) == 0;
+}
+
+// Upload allowlist: the formats scripts/image-optimizer.sh turns into its
+// JPEG/GIF variants, checked on both the extension and the file's magic
+// bytes. Anything else - .html, .svg, .js... - would otherwise be stored and
+// served from the site's own origin. Returns 1 when `name`'s extension and
+// `data` agree on one of them.
+static int media_upload_is_allowed_image(const char *name, const unsigned char *data, size_t len) {
+    const char *ext = strrchr(name, '.');
+    if (!ext || ext == name) return 0;
+
+    if (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0)
+        return len >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+    if (strcasecmp(ext, ".png") == 0)
+        return len >= 8 && memcmp(data, "\x89PNG\r\n\x1a\n", 8) == 0;
+    if (strcasecmp(ext, ".gif") == 0)
+        return len >= 6 && (memcmp(data, "GIF87a", 6) == 0 || memcmp(data, "GIF89a", 6) == 0);
+    if (strcasecmp(ext, ".webp") == 0)
+        return len >= 12 && memcmp(data, "RIFF", 4) == 0 && memcmp(data + 8, "WEBP", 4) == 0;
+    return 0;
+}
+
+// Writes an HTML fragment (a media directory <li>) as a 200 response.
+static void send_html_fragment(void *ctx, const char *html) {
+    char resp[256];
+    snprintf(resp, sizeof(resp),
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/html; charset=UTF-8\r\n"
+             "Content-Length: %zu\r\n"
+             "X-Content-Type-Options: nosniff\r\n"
+             "\r\n",
+             strlen(html));
+    connection_write(ctx, resp, strlen(resp));
+    connection_write(ctx, html, strlen(html));
 }
 
 static void send_simple(void *ctx, const char *status, const char *body) {
@@ -375,6 +496,45 @@ static int viewer_can_preview_drafts(HttpRequest *req) {
 // valid session cookie; otherwise writes the session's user id into
 // user_id_out (>= USER_ID_HEX_BUF_SIZE bytes) and returns 1. Callers must not
 // write to `ctx` if this returns 0.
+static int parse_urlencoded_field(const char *body, int body_length, const char *key,
+                                   char *out, size_t out_size);
+
+// The CSRF token a state-changing request carries: the X-CSRF-Token header
+// (fetch/XHR, set by html/assets/js/csrf.js), else the csrf_token field of
+// an urlencoded or multipart body (HTML forms, same script). Writes "" when
+// there is none.
+static void request_csrf_token_value(HttpRequest *req, char *out, size_t out_size) {
+    out[0] = '\0';
+
+    const char *header = get_header_value(req, CSRF_HEADER_NAME);
+    if (header && header[0]) {
+        strncpy(out, header, out_size - 1);
+        out[out_size - 1] = '\0';
+        return;
+    }
+
+    const char *ct = get_header_value(req, "Content-Type");
+    if (!ct) return;
+
+    if (strncasecmp(ct, "application/x-www-form-urlencoded", 33) == 0) {
+        parse_urlencoded_field(req->body, req->body_length, CSRF_FIELD_NAME, out, out_size);
+    } else if (strncasecmp(ct, "multipart/form-data", 19) == 0) {
+        MultipartResult *mp = parse_multipart(req->body, (size_t)req->body_length, ct);
+        const MultipartPart *part = mp ? multipart_find(mp, CSRF_FIELD_NAME) : NULL;
+        if (part) {
+            size_t len = part->data_len < out_size - 1 ? part->data_len : out_size - 1;
+            memcpy(out, part->data, len);
+            out[len] = '\0';
+        }
+        free_multipart(mp);
+    }
+}
+
+static int is_safe_method(const char *method) {
+    return strcmp(method, "GET") == 0 || strcmp(method, "HEAD") == 0 ||
+           strcmp(method, "OPTIONS") == 0;
+}
+
 static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
     if (!mongodb_manager_is_ready()) {
         send_error_response(ctx, 503, "503 Service Unavailable", epoch);
@@ -386,6 +546,20 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
         char *response = build_redirect_response("/login", "", epoch);
         send_or_error(ctx, response, req->method, epoch);
         return 0;
+    }
+
+    // Every state-changing dashboard route goes through here, so this is the
+    // one CSRF check: the token is bound to the session cookie (see
+    // derive_csrf_token()), which a cross-site page can neither read nor
+    // forge. SameSite=Lax on the cookie remains as a second layer.
+    if (!is_safe_method(req->method)) {
+        char supplied[CSRF_TOKEN_BUF_SIZE + 1];
+        request_csrf_token_value(req, supplied, sizeof(supplied));
+        if (!verify_csrf_token(cookie, supplied)) {
+            LOG_WARN("CSRF check failed: %s %s", req->method, req->url);
+            send_simple(ctx, "403 Forbidden", "Invalid or missing CSRF token. Reload the page and try again.");
+            return 0;
+        }
     }
 
     return 1;
@@ -3449,6 +3623,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             }
 
         // ---- Media admin POST routes ----
+        //
+        // Every on-disk path below is built from DB records and from names
+        // that passed media_dir_name_valid()/media_username_valid() - never
+        // from a client-supplied path - and every change is gated by
+        // media_can_manage(): an Autor only touches their own directories
+        // and items.
 
         } else if (strcmp(req.method, "POST") == 0 &&
                    strcmp(decoded_url, "/dashboard/api/media/directory") == 0) {
@@ -3461,22 +3641,18 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char name[256];
                     parse_urlencoded_field(req.body, req.body_length, "newpath", name, sizeof(name));
 
-                    size_t nlen = strlen(name);
-                    int valid = nlen >= 3 && nlen <= 60;
-                    for (size_t i = 0; valid && i < nlen; i++) {
-                        char c = name[i];
-                        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                              (c >= '0' && c <= '9') || c == '-' || c == '_'))
-                            valid = 0;
-                    }
-                    if (strstr(name, "..")) valid = 0;
+                    char username[64] = {0};
+                    cms_get_username_by_id(user_id, username, sizeof(username));
 
-                    if (!valid) {
+                    CmsMediaDirectory existing;
+                    if (!media_dir_name_valid(name)) {
                         send_simple(ctx, "400 Bad Request", "Invalid directory name (3-60 chars, a-z 0-9 _ -)");
+                    } else if (!media_username_valid(username)) {
+                        LOG_WARN("media directory create: unusable username '%s' for user %s", username, user_id);
+                        send_simple(ctx, "400 Bad Request", "Your account name cannot be used as a media directory");
+                    } else if (cms_get_media_directory_by_name(name, user_id, &existing)) {
+                        send_simple(ctx, "409 Conflict", "A directory with that name already exists");
                     } else {
-                        char username[64] = {0};
-                        cms_get_username_by_id(user_id, username, sizeof(username));
-
                         char dirpath[512];
                         snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, name);
 
@@ -3495,14 +3671,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
                                 char *html = media_admin_render_directory_item(&dir, epoch);
                                 if (html) {
-                                    char hdr[128];
-                                    snprintf(hdr, sizeof(hdr),
-                                             "Content-Type: text/html; charset=UTF-8\r\nContent-Length: %zu\r\n",
-                                             strlen(html));
-                                    char resp[256];
-                                    snprintf(resp, sizeof(resp), "HTTP/1.1 200 OK\r\n%s\r\n", hdr);
-                                    connection_write(ctx, resp, strlen(resp));
-                                    connection_write(ctx, html, strlen(html));
+                                    send_html_fragment(ctx, html);
                                     free(html);
                                 } else {
                                     send_simple(ctx, "500 Internal Server Error", "Render error");
@@ -3513,8 +3682,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         } else {
                             send_simple(ctx, "500 Internal Server Error", "DB insert error");
                         }
-                        connection_close(ctx);
                     }
+                    connection_close(ctx);
                 }
             }
 
@@ -3525,40 +3694,67 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_simple(ctx, "403 Forbidden", "Forbidden");
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
-                    char dir_id[32], oldname[256], newname[256];
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    // Only the directory id and the new name are read from the
+                    // body; the current name and the owner come from the DB.
+                    char dir_id[32], newname[256];
                     parse_urlencoded_field(req.body, req.body_length, "id", dir_id, sizeof(dir_id));
-                    parse_urlencoded_field(req.body, req.body_length, "oldname", oldname, sizeof(oldname));
                     parse_urlencoded_field(req.body, req.body_length, "newname", newname, sizeof(newname));
 
-                    char username[64] = {0};
-                    cms_get_username_by_id(user_id, username, sizeof(username));
+                    CmsMediaDirectory dir, clash;
+                    char owner[64] = {0};
 
-                    char old_path[512], new_path[512];
-                    snprintf(old_path, sizeof(old_path), "./html/content/posts/%s/%s", username, oldname);
-                    snprintf(new_path, sizeof(new_path), "./html/content/posts/%s/%s", username, newname);
+                    if (!cms_get_media_directory_by_id(dir_id, &dir)) {
+                        send_simple(ctx, "404 Not Found", "Unknown directory");
+                    } else if (!media_can_manage(role, user_id, dir.author_id)) {
+                        send_simple(ctx, "403 Forbidden", "You can only rename your own directories");
+                    } else if (!media_dir_name_valid(newname)) {
+                        send_simple(ctx, "400 Bad Request", "Invalid directory name (3-60 chars, a-z 0-9 _ -)");
+                    } else if (cms_get_username_by_id(dir.author_id, owner, sizeof(owner)) != 0 ||
+                               !media_username_valid(owner) || !media_dir_name_valid(dir.name)) {
+                        LOG_WARN("media directory rename: unusable stored path for dir %s ('%s'/'%s')",
+                                 dir.id, owner, dir.name);
+                        send_simple(ctx, "409 Conflict", "This directory cannot be renamed");
+                    } else if (strcmp(dir.name, newname) != 0 &&
+                               cms_get_media_directory_by_name(newname, dir.author_id, &clash)) {
+                        send_simple(ctx, "409 Conflict", "A directory with that name already exists");
+                    } else {
+                        char old_path[512], new_path[512];
+                        snprintf(old_path, sizeof(old_path), "./html/content/posts/%s/%s", owner, dir.name);
+                        snprintf(new_path, sizeof(new_path), "./html/content/posts/%s/%s", owner, newname);
 
-                    if (rename(old_path, new_path) == 0 || errno == ENOENT) {
-                        cms_rename_media_directory(dir_id, newname);
+                        struct stat st;
+                        int ok;
+                        if (strcmp(dir.name, newname) == 0) {
+                            ok = 1;
+                        } else if (stat(new_path, &st) == 0) {
+                            ok = 0;
+                            LOG_WARN("media directory rename: %s already exists on disk", new_path);
+                        } else {
+                            // ENOENT: the directory was never created on disk
+                            // (no upload yet) - only the record changes.
+                            ok = rename(old_path, new_path) == 0 || errno == ENOENT;
+                            if (!ok) LOG_ERROR("media directory rename %s -> %s: %s",
+                                               old_path, new_path, strerror(errno));
+                        }
 
-                        CmsMediaDirectory dir;
-                        if (cms_get_media_directory_by_id(dir_id, &dir)) {
-                            strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
-                            char *html = media_admin_render_directory_item(&dir, epoch);
+                        if (!ok || cms_rename_media_directory(dir.id, newname) != 0) {
+                            send_simple(ctx, "500 Internal Server Error", "Could not rename directory");
+                        } else {
+                            CmsMediaDirectory renamed;
+                            char *html = NULL;
+                            if (cms_get_media_directory_by_id(dir.id, &renamed)) {
+                                strncpy(renamed.author_name, owner, sizeof(renamed.author_name) - 1);
+                                html = media_admin_render_directory_item(&renamed, epoch);
+                            }
                             if (html) {
-                                char hdr[128];
-                                snprintf(hdr, sizeof(hdr),
-                                         "Content-Type: text/html; charset=UTF-8\r\nContent-Length: %zu\r\n",
-                                         strlen(html));
-                                char resp[256];
-                                snprintf(resp, sizeof(resp), "HTTP/1.1 200 OK\r\n%s\r\n", hdr);
-                                connection_write(ctx, resp, strlen(resp));
-                                connection_write(ctx, html, strlen(html));
+                                send_html_fragment(ctx, html);
                                 free(html);
+                            } else {
+                                send_simple(ctx, "500 Internal Server Error", "Render error");
                             }
                         }
-                    } else {
-                        send_simple(ctx, "500 Internal Server Error", "Could not rename directory");
                     }
                     connection_close(ctx);
                 }
@@ -3571,20 +3767,50 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_simple(ctx, "403 Forbidden", "Forbidden");
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
-                    char dir_id[32], dirname[256];
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    char dir_id[32];
                     parse_urlencoded_field(req.body, req.body_length, "id", dir_id, sizeof(dir_id));
-                    parse_urlencoded_field(req.body, req.body_length, "dirname", dirname, sizeof(dirname));
 
-                    char username[64] = {0};
-                    cms_get_username_by_id(user_id, username, sizeof(username));
+                    CmsMediaDirectory dir;
+                    int64_t item_count;
 
-                    char dirpath[512];
-                    snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, dirname);
+                    if (!cms_get_media_directory_by_id(dir_id, &dir)) {
+                        send_simple(ctx, "404 Not Found", "Unknown directory");
+                    } else if (!media_can_manage(role, user_id, dir.author_id)) {
+                        send_simple(ctx, "403 Forbidden", "You can only delete your own directories");
+                    } else if ((item_count = cms_count_media_in_directory(dir.id)) != 0) {
+                        // Deleting it would orphan the items' records and files.
+                        if (item_count < 0)
+                            send_simple(ctx, "500 Internal Server Error", "DB error");
+                        else
+                            send_simple(ctx, "409 Conflict", "The directory is not empty. Delete or move its images first.");
+                    } else {
+                        char owner[64] = {0};
+                        int disk_ok = 1;
 
-                    rmdir(dirpath);
-                    cms_delete_media_directory(dir_id);
-                    send_simple(ctx, "200 OK", "Deleted");
+                        if (cms_get_username_by_id(dir.author_id, owner, sizeof(owner)) == 0 &&
+                            media_username_valid(owner) && media_dir_name_valid(dir.name)) {
+                            char dirpath[512];
+                            snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", owner, dir.name);
+                            if (rmdir(dirpath) != 0 && errno != ENOENT) {
+                                disk_ok = 0;
+                                LOG_WARN("media directory delete: rmdir %s: %s", dirpath, strerror(errno));
+                            }
+                        } else {
+                            // A legacy record whose name is not a safe path
+                            // component: drop the record, touch nothing on disk.
+                            LOG_WARN("media directory delete: skipping disk for dir %s ('%s'/'%s')",
+                                     dir.id, owner, dir.name);
+                        }
+
+                        if (!disk_ok)
+                            send_simple(ctx, "409 Conflict", "The directory still contains files on disk");
+                        else if (cms_delete_media_directory(dir.id) != 0)
+                            send_simple(ctx, "500 Internal Server Error", "Could not delete directory");
+                        else
+                            send_simple(ctx, "200 OK", "Deleted");
+                    }
                 }
             }
 
@@ -3595,24 +3821,32 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_simple(ctx, "403 Forbidden", "Forbidden");
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                     char ids[4096];
                     parse_urlencoded_field(req.body, req.body_length, "ids", ids, sizeof(ids));
 
-                    int deleted = 0, failed = 0;
+                    int deleted = 0, failed = 0, forbidden = 0;
                     char *saveptr = NULL;
                     for (char *tok = strtok_r(ids, ",", &saveptr); tok; tok = strtok_r(NULL, ",", &saveptr)) {
                         CmsMediaItem item;
-                        if (cms_get_media_item_by_id(tok, &item)) {
-                            media_delete_variants(&item);
-                            if (cms_delete_media(tok) == 0) deleted++; else failed++;
-                        } else {
+                        if (!cms_get_media_item_by_id(tok, &item)) {
                             failed++;
+                        } else if (!media_can_manage(role, user_id, item.author_id)) {
+                            forbidden++;
+                        } else {
+                            if (media_item_paths_valid(&item))
+                                media_delete_variants(&item);
+                            else
+                                LOG_WARN("media delete: skipping disk for item %s (unsafe stored path)", item.id);
+                            if (cms_delete_media(tok) == 0) deleted++; else failed++;
                         }
                     }
 
-                    LOG_INFO("media delete: deleted=%d failed=%d", deleted, failed);
-                    if (failed > 0 && deleted == 0)
+                    LOG_INFO("media delete: deleted=%d failed=%d forbidden=%d", deleted, failed, forbidden);
+                    if (deleted == 0 && forbidden > 0)
+                        send_simple(ctx, "403 Forbidden", "You can only delete your own images");
+                    else if (deleted == 0 && failed > 0)
                         send_simple(ctx, "500 Internal Server Error", "Could not delete images");
                     else
                         send_simple(ctx, "200 OK", "Deleted");
@@ -3626,7 +3860,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_simple(ctx, "403 Forbidden", "Forbidden");
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                     char ids[4096], dest_dir[32];
                     parse_urlencoded_field(req.body, req.body_length, "ids", ids, sizeof(ids));
                     parse_urlencoded_field(req.body, req.body_length, "dest_dir", dest_dir, sizeof(dest_dir));
@@ -3634,22 +3869,36 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     CmsMediaDirectory dest;
                     if (!cms_get_media_directory_by_id(dest_dir, &dest)) {
                         send_simple(ctx, "400 Bad Request", "Unknown destination directory");
+                    } else if (!media_can_manage(role, user_id, dest.author_id)) {
+                        send_simple(ctx, "403 Forbidden", "You can only move images into your own directories");
+                    } else if (!media_dir_name_valid(dest.name)) {
+                        send_simple(ctx, "400 Bad Request", "Invalid destination directory");
                     } else {
-                        int moved = 0, failed = 0;
+                        int moved = 0, failed = 0, forbidden = 0;
                         char *saveptr = NULL;
                         for (char *tok = strtok_r(ids, ",", &saveptr); tok; tok = strtok_r(NULL, ",", &saveptr)) {
                             CmsMediaItem item;
-                            if (cms_get_media_item_by_id(tok, &item) &&
-                                media_move_variants(&item, dest.name) == 0 &&
-                                cms_move_media(tok, dest_dir) == 0) {
+                            if (!cms_get_media_item_by_id(tok, &item)) {
+                                failed++;
+                            } else if (!media_can_manage(role, user_id, item.author_id) ||
+                                       strcmp(item.author_id, dest.author_id) != 0) {
+                                // Files live under their author's tree, so a
+                                // directory of another author is no valid target.
+                                forbidden++;
+                            } else if (media_item_paths_valid(&item) &&
+                                       media_move_variants(&item, dest.name) == 0 &&
+                                       cms_move_media(tok, dest.id) == 0) {
                                 moved++;
                             } else {
                                 failed++;
                             }
                         }
 
-                        LOG_INFO("media move: moved=%d failed=%d to dir=%s", moved, failed, dest_dir);
-                        if (failed > 0 && moved == 0)
+                        LOG_INFO("media move: moved=%d failed=%d forbidden=%d to dir=%s",
+                                 moved, failed, forbidden, dest.id);
+                        if (moved == 0 && forbidden > 0)
+                            send_simple(ctx, "403 Forbidden", "Images can only be moved between their author's directories");
+                        else if (moved == 0 && failed > 0)
                             send_simple(ctx, "500 Internal Server Error", "Could not move images");
                         else
                             send_simple(ctx, "200 OK", "Moved");
@@ -3674,82 +3923,110 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         const MultipartPart *dir_part = multipart_find(mp, "media-directory-selected");
                         const MultipartPart *file_part = multipart_find(mp, "file");
 
+                        // Sanitize filename
+                        char sanitized[256] = {0};
+                        if (file_part) {
+                            int j = 0;
+                            for (int k = 0; file_part->filename[k] && j < (int)sizeof(sanitized) - 1; k++) {
+                                char c = file_part->filename[k];
+                                if (c == ' ') sanitized[j++] = '-';
+                                else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                                         (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_')
+                                    sanitized[j++] = c;
+                            }
+                            sanitized[j] = '\0';
+                        }
+
+                        char dir_id_buf[32] = {0};
+                        if (dir_part) {
+                            size_t dlen = dir_part->data_len < sizeof(dir_id_buf) - 1 ? dir_part->data_len : sizeof(dir_id_buf) - 1;
+                            memcpy(dir_id_buf, dir_part->data, dlen);
+                        }
+
+                        char username[64] = {0};
+                        cms_get_username_by_id(user_id, username, sizeof(username));
+
+                        // No directory selected (or the id no longer exists): fall
+                        // back to this author's "default" directory rather than
+                        // rejecting the upload. A directory of another author is
+                        // refused: uploads always land in the caller's own tree.
+                        CmsMediaDirectory dir;
+                        int dir_found = cms_get_media_directory_by_id(dir_id_buf, &dir);
+
                         if (!file_part || file_part->filename[0] == '\0') {
                             send_simple(ctx, "400 Bad Request", "Missing file");
-                            free_multipart(mp);
+                        } else if (!media_file_name_valid(sanitized) ||
+                                   !media_upload_is_allowed_image(sanitized,
+                                        (const unsigned char *)file_part->data, file_part->data_len)) {
+                            send_simple(ctx, "415 Unsupported Media Type",
+                                        "Only JPEG, PNG, GIF and WebP images can be uploaded");
+                        } else if (!media_username_valid(username)) {
+                            LOG_WARN("media upload: unusable username '%s' for user %s", username, user_id);
+                            send_simple(ctx, "400 Bad Request", "Your account name cannot be used as a media directory");
+                        } else if (dir_found && strcmp(dir.author_id, user_id) != 0) {
+                            send_simple(ctx, "403 Forbidden", "You can only upload into your own directories");
+                        } else if (!dir_found &&
+                                   resolve_or_create_default_media_directory(user_id, username, &dir) != 0) {
+                            send_simple(ctx, "500 Internal Server Error", "Could not resolve upload directory");
+                        } else if (!media_dir_name_valid(dir.name)) {
+                            send_simple(ctx, "400 Bad Request", "Invalid upload directory");
                         } else {
-                            char dir_id_buf[32] = {0};
-                            if (dir_part) {
-                                size_t dlen = dir_part->data_len < sizeof(dir_id_buf) - 1 ? dir_part->data_len : sizeof(dir_id_buf) - 1;
-                                memcpy(dir_id_buf, dir_part->data, dlen);
+                            strncpy(dir_id_buf, dir.id, sizeof(dir_id_buf) - 1);
+
+                            // Create dir on disk
+                            char dirpath[512];
+                            snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, dir.name);
+                            mkdir(dirpath, 0775);
+
+                            // Write file
+                            char filepath[1024];
+                            snprintf(filepath, sizeof(filepath), "%s/%s", dirpath, sanitized);
+                            FILE *f = fopen(filepath, "wb");
+                            int write_ok = 0;
+                            if (f) {
+                                write_ok = fwrite(file_part->data, 1, file_part->data_len, f) == file_part->data_len;
+                                fclose(f);
                             }
 
-                            char username[64] = {0};
-                            cms_get_username_by_id(user_id, username, sizeof(username));
-
-                            // No directory selected (or the id no longer exists): fall
-                            // back to this author's "default" directory rather than
-                            // rejecting the upload.
-                            CmsMediaDirectory dir;
-                            int dir_ok = cms_get_media_directory_by_id(dir_id_buf, &dir) ||
-                                        resolve_or_create_default_media_directory(user_id, username, &dir) == 0;
-
-                            if (!dir_ok) {
-                                send_simple(ctx, "500 Internal Server Error", "Could not resolve upload directory");
-                                free_multipart(mp);
+                            if (!write_ok) {
+                                send_simple(ctx, "500 Internal Server Error", "Could not write file");
                             } else {
-                                strncpy(dir_id_buf, dir.id, sizeof(dir_id_buf) - 1);
+                                LOG_INFO("Media file saved: %s (%zu bytes)", filepath, file_part->data_len);
 
-                                // Sanitize filename
-                                char sanitized[256] = {0};
-                                int j = 0;
-                                for (int k = 0; file_part->filename[k] && j < (int)sizeof(sanitized) - 1; k++) {
-                                    char c = file_part->filename[k];
-                                    if (c == ' ') sanitized[j++] = '-';
-                                    else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                                             (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_')
-                                        sanitized[j++] = c;
-                                }
-                                sanitized[j] = '\0';
+                                // Run image optimizer. Every argument is made of
+                                // validated [A-Za-z0-9._-] components, so the single
+                                // quotes cannot be broken out of.
+                                char command[4096];
+                                snprintf(command, sizeof(command),
+                                         "./scripts/image-optimizer.sh '%s' '%s' '%s'",
+                                         dirpath, dirpath, filepath);
+                                LOG_INFO("Running optimizer: %s", command);
 
-                                // Create dir on disk
-                                char dirpath[512];
-                                snprintf(dirpath, sizeof(dirpath), "./html/content/posts/%s/%s", username, dir.name);
-                                mkdir(dirpath, 0775);
-
-                                // Write file
-                                char filepath[1024];
-                                snprintf(filepath, sizeof(filepath), "%s/%s", dirpath, sanitized);
-                                FILE *f = fopen(filepath, "wb");
-                                int write_ok = 0;
-                                if (f) {
-                                    write_ok = fwrite(file_part->data, 1, file_part->data_len, f) == file_part->data_len;
-                                    fclose(f);
+                                char optimized_path[1024] = {0};
+                                FILE *pipe = popen(command, "r");
+                                if (pipe) {
+                                    if (fgets(optimized_path, sizeof(optimized_path), pipe))
+                                        optimized_path[strcspn(optimized_path, "\n")] = '\0';
+                                    pclose(pipe);
                                 }
 
-                                if (!write_ok) {
-                                    send_simple(ctx, "500 Internal Server Error", "Could not write file");
+                                // The optimizer prints the _full variant it wrote. Anything
+                                // else - an error, its "Skipping ... (not an image)" line, or
+                                // nothing - means no variants exist: discard the upload
+                                // instead of publishing the raw file.
+                                size_t dlen = strlen(dirpath);
+                                struct stat ost;
+                                int optimized_ok = strncmp(optimized_path, dirpath, dlen) == 0 &&
+                                                   optimized_path[dlen] == '/' &&
+                                                   !strstr(optimized_path + dlen + 1, "/") &&
+                                                   stat(optimized_path, &ost) == 0 && S_ISREG(ost.st_mode);
+
+                                if (!optimized_ok) {
+                                    LOG_WARN("media upload: optimizer produced no output for %s ('%s')",
+                                             filepath, optimized_path);
+                                    unlink(filepath);
+                                    send_simple(ctx, "415 Unsupported Media Type", "The file could not be processed as an image");
                                 } else {
-                                    LOG_INFO("Media file saved: %s (%zu bytes)", filepath, file_part->data_len);
-
-                                    // Run image optimizer
-                                    char command[4096];
-                                    snprintf(command, sizeof(command),
-                                             "./scripts/image-optimizer.sh '%s' '%s' '%s'",
-                                             dirpath, dirpath, filepath);
-                                    LOG_INFO("Running optimizer: %s", command);
-
-                                    char optimized_path[1024] = {0};
-                                    FILE *pipe = popen(command, "r");
-                                    if (pipe) {
-                                        if (fgets(optimized_path, sizeof(optimized_path), pipe))
-                                            optimized_path[strcspn(optimized_path, "\n")] = '\0';
-                                        pclose(pipe);
-                                    }
-
-                                    if (optimized_path[0] == '\0')
-                                        strncpy(optimized_path, filepath, sizeof(optimized_path) - 1);
-
                                     // Build filename for DB: strip path, remove _full suffix
                                     char *basename = strrchr(optimized_path, '/');
                                     basename = basename ? basename + 1 : optimized_path;
@@ -3777,10 +4054,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                     free(response);
                                 }
                             }
-                            free_multipart(mp);
-                            connection_close(ctx);
                         }
+                        free_multipart(mp);
                     }
+                    connection_close(ctx);
                 }
             }
 

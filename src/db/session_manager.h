@@ -12,6 +12,14 @@
 // bson ObjectId as hex string: 24 chars + NUL.
 #define USER_ID_HEX_BUF_SIZE 25
 
+// CSRF token: 32-byte keyed BLAKE2b of the session token, hex-encoded.
+#define CSRF_TOKEN_BUF_SIZE 65
+
+// Name of the request header (AJAX) and form field (HTML forms, urlencoded
+// or multipart) that carry the CSRF token on dashboard POSTs.
+#define CSRF_HEADER_NAME "X-CSRF-Token"
+#define CSRF_FIELD_NAME  "csrf_token"
+
 // Generates a new session token: 32 random bytes (libsodium CSPRNG),
 // hex-encoded into a malloc'd, NUL-terminated string of
 // SESSION_TOKEN_BUF_SIZE bytes. Caller must free(). Returns NULL on
@@ -50,5 +58,24 @@ void build_session_cookie_header(const char *token, int ttl_seconds, char *heade
 // Builds a "Set-Cookie: ..." header line (including trailing "\r\n") that
 // clears the session cookie (Max-Age=0).
 void build_session_clear_cookie_header(char *header_out, size_t size);
+
+// Derives the CSRF token bound to `session_token` into token_out (>=
+// CSRF_TOKEN_BUF_SIZE bytes): a keyed BLAKE2b hash, so it is stable for the
+// session's lifetime, needs no storage, and cannot be computed without the
+// (HttpOnly) session cookie. Returns 1 on success, 0 if session_token is
+// NULL/empty.
+int derive_csrf_token(const char *session_token, char *token_out);
+
+// Constant-time check that `supplied` is the CSRF token of the session in
+// `cookie_header`. Returns 1 on match, 0 otherwise (missing cookie, missing
+// or malformed token, mismatch).
+int verify_csrf_token(const char *cookie_header, const char *supplied);
+
+// Creates the `sessions` indexes the code relies on - a unique index on
+// `token` and a TTL index on `expires_at` (expireAfterSeconds: 0) so MongoDB
+// purges expired sessions on its own - and deletes the sessions that are
+// already expired. Idempotent; failures are logged, not fatal. Call once at
+// startup after mongodb_manager_init().
+void session_manager_ensure_indexes(void);
 
 #endif // SESSION_MANAGER_H

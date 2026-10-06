@@ -74,6 +74,13 @@ The last two also take ownership of `category_menu_html` (may be `NULL`) and ins
   (redirect to `/login`); a `mongodb_manager_is_ready()` check before this handles the
   "DB never connected" case separately with a `503`.
 - `destroy_session(token)`: deletes the session document (`/logout`).
+- `derive_csrf_token(session_token, out)` / `verify_csrf_token(cookie_header, supplied)`: the
+  dashboard's CSRF token - keyed BLAKE2b of the session token, compared in constant time.
+  `require_dashboard_session()` calls `verify_csrf_token()` on every `POST`; the token reaches
+  the page through `request_csrf_token()` and `page_layout_wrap()` (meta tag +
+  `/assets/js/csrf.js`). See [security.md](security.md#csrf-protection).
+- `session_manager_ensure_indexes()`: run once at startup; unique index on `token`, TTL index on
+  `expires_at` (expired sessions purged by MongoDB), and an immediate purge of expired sessions.
 - `build_session_cookie_header(token, ttl_seconds, ...)` /
   `build_session_clear_cookie_header(...)`: build `Set-Cookie: session=<token>; HttpOnly;
   Path=/; Max-Age=<n>; SameSite=Lax` (+ `; Secure` when `ssl_enabled=1`), or the same with
@@ -132,7 +139,7 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/dashboard/entries/<id>/delete` | `POST` | `require_admin_session()` - Administrador only; an Autor can never delete entries, even their own. `cms_delete_entry()`, `302 /dashboard`. |
 | `/dashboard/api/entries/<id>/...` | `POST` | The editor's five AJAX endpoints (`meta`, `header`, `content`, `blocks`, `blocks/<block_id>/delete`). All share the same gate: `require_dashboard_session_role()`, `404 {"ok":false,"error":"not found"}` if `<id>` doesn't resolve, `403 {"ok":false,"error":"forbidden"}` if `!can_edit_entry()`. Payloads and responses in [entry-editor.md](entry-editor.md). |
 | `/dashboard/api/block-preview` | `POST` | `require_dashboard_session()` - any role. Renders one block as epoch 3 would, for the editor ([entry-editor.md](entry-editor.md#block-preview)). |
-| `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session()` - any role, no per-item ownership check. See [media-admin.md](media-admin.md). |
+| `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session()` - any role; writes also `require_dashboard_session_role()` + `media_can_manage()` (an `author` only touches their own directories/images). See [media-admin.md](media-admin.md). |
 | `/dashboard/settings`, `/dashboard/settings/themes*`, `/dashboard/settings/preview`, `/dashboard/settings/fonts*`, `/dashboard/api/theme-assets/*` | `GET`/`POST` | **`EPOCH_MODERN` only**, `require_admin_session()`. Site name, themes (activate, colors, banner, footer, logo, CSS), epoch preview, font library. See [themes.md](themes.md), [fonts.md](fonts.md) and the full list in [routes.md](routes.md#settings-themes-fonts-preview). |
 | `/dashboard/analytics` | `GET` | **`EPOCH_MODERN` only**, `require_admin_session()`. Visit report by period. See [analytics.md](analytics.md#the-report). |
 | `/dashboard/users` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()`. Renders `users_admin_list(epoch, NULL)`: every `users` document sorted by email, with its role label ("Administrador"/"Autor" - a missing `role` field reads as `"admin"`/"Administrador"). |
@@ -396,7 +403,7 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
 
 ### Media Admin (`/dashboard/media`, `src/db/cms_media.c`, `src/modules/media_admin/`)
 
-A media library for uploading and managing images used in entries. Requires a dashboard session (any role). Full documentation: [media-admin.md](media-admin.md).
+A media library for uploading and managing images used in entries. Requires a dashboard session (any role); an `author` can browse everything but only upload into, rename, delete and move their own directories and images (`media_can_manage()`). Uploads are limited to JPEG/PNG/GIF/WebP (extension and magic bytes). Full documentation: [media-admin.md](media-admin.md).
 
 **Collections**:
 - `media` - uploaded file metadata: `{ _id, name, date, format, author_id, dir_id }`.
@@ -414,8 +421,8 @@ A media library for uploading and managing images used in entries. Requires a da
 | `GET /dashboard/api/media/directory/item` | One directory tile (after creating it) |
 | `GET /dashboard/api/media/modal` | Media picker modal (for entry editor) |
 | `POST /dashboard/api/media/directory` | Create directory |
-| `POST /dashboard/api/media/directory/rename` | Rename directory + physical folder |
-| `POST /dashboard/api/media/directory/delete` | Delete (empty) directory |
+| `POST /dashboard/api/media/directory/rename` | Rename own directory + physical folder (`id`, `newname`) |
+| `POST /dashboard/api/media/directory/delete` | Delete own directory (`id`); refused while it has images |
 | `POST /dashboard/api/media/delete` | Delete items and every size variant |
 | `POST /dashboard/api/media/move` | Move items (files + DB) to another directory |
 | `POST /dashboard/api/media/upload` | Multipart upload → optimizer → DB insert; no directory → author's `default` |

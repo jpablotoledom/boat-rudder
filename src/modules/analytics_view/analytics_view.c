@@ -1,4 +1,5 @@
 #include "analytics_view.h"
+#include "analytics_charts.h"
 #include "country_continent.h"
 #include "../../db/mongodb_manager.h"
 #include "../../utils/generate_url_theme.h"
@@ -510,5 +511,312 @@ char *analytics_view(int epoch, const char *period, int year, int month, int wee
     kv_free(&d.oses);
     kv_free(&d.countries);
     kv_free(&d.routes);
+    return result;
+}
+
+
+// ---------------------------------------------------------------------------
+// Dashboard home summary (analytics_summary())
+// ---------------------------------------------------------------------------
+
+#define SUMMARY_TOP_N 5
+#define SUMMARY_DAYS  7
+
+static int kv_get(const KVList *list, const char *key) {
+    for (int i = 0; i < list->count; i++)
+        if (strcmp(list->items[i].key, key) == 0) return list->items[i].count;
+    return 0;
+}
+
+// Sums a browser list's versions per family ("Chrome/124" + "Chrome/125" ->
+// "Chrome"), the level a 5-row summary is readable at.
+static void kv_by_family(const KVList *src, KVList *out) {
+    for (int i = 0; i < src->count; i++) {
+        char family[sizeof(src->items[i].key)];
+        snprintf(family, sizeof(family), "%.*s",
+                 (int)family_len(src->items[i].key), src->items[i].key);
+        kv_increment(out, family, src->items[i].count);
+    }
+}
+
+static void free_analytics_data(AnalyticsData *d) {
+    kv_free(&d->browsers);
+    kv_free(&d->oses);
+    kv_free(&d->countries);
+    kv_free(&d->routes);
+}
+
+// A "<name> | Today | 7 days" table of `week`'s first `limit` rows (already
+// sorted by kv_sort()), today's count looked up in `today` by the same key.
+// `href_fmt`, if non-NULL, links each name: a format with one %s for the
+// URL-encoded key (top articles -> "/blog/%s").
+static char *build_compare_table(const char *name_header, const KVList *week,
+                                  const KVList *today, int limit, const char *href_fmt) {
+    if (week->count == 0) return strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+
+    char *rows = strdup("");
+    for (int i = 0; rows && i < week->count && i < limit; i++) {
+        const char *key = week->items[i].key;
+        char *key_enc = html_encode_dup(key, strlen(key));
+        if (!key_enc) { free(rows); rows = NULL; break; }
+
+        char *name;
+        if (href_fmt) {
+            char key_url[sizeof(week->items[i].key) * 3];
+            url_encode(key_url, key, sizeof(key_url));
+            char *href = render_template(href_fmt, key_url);
+            name = href ? render_template("<a href=\"%s\">%s</a>", href, key_enc) : NULL;
+            free(href);
+        } else {
+            name = strdup(key_enc);
+        }
+        free(key_enc);
+
+        char *row = name ? render_template("<tr><td>%s</td><td>%d</td><td>%d</td></tr>",
+                                            name, kv_get(today, key), week->items[i].count)
+                         : NULL;
+        free(name);
+        rows = row ? str_append(rows, row) : NULL;
+        free(row);
+    }
+    if (!rows) return strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+
+    char *table = render_template(
+        "<table class=\"boat-rudder__analytics__kv-table boat-rudder__analytics__kv-table--compare\">"
+        "<thead><tr><th>%s</th><th>Today</th><th>7 days</th></tr></thead><tbody>%s</tbody></table>",
+        name_header, rows);
+    free(rows);
+    return table ? table : strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+}
+
+// The five per-epoch counters as a compare table, in epoch order (not
+// ranked - every row is always shown, zero or not).
+static char *build_epoch_compare_table(const AnalyticsData *today, const AnalyticsData *week) {
+    const struct { const char *label; int today, week; } rows[] = {
+        { "WML (WAP)",        today->epochwml, week->epochwml },
+        { "0 (Pre-standard)", today->epoch0,   week->epoch0 },
+        { "1 (Early)",        today->epoch1,   week->epoch1 },
+        { "2 (Middle)",       today->epoch2,   week->epoch2 },
+        { "3 (Modern)",       today->epoch3,   week->epoch3 },
+    };
+
+    char *body = strdup("");
+    for (size_t i = 0; body && i < sizeof(rows) / sizeof(rows[0]); i++) {
+        char *row = render_template("<tr><td>%s</td><td>%d</td><td>%d</td></tr>",
+                                     rows[i].label, rows[i].today, rows[i].week);
+        body = row ? str_append(body, row) : NULL;
+        free(row);
+    }
+    if (!body) return NULL;
+
+    char *table = render_template(
+        "<table class=\"boat-rudder__analytics__kv-table boat-rudder__analytics__kv-table--compare\">"
+        "<thead><tr><th>Epoch</th><th>Today</th><th>7 days</th></tr></thead><tbody>%s</tbody></table>",
+        body);
+    free(body);
+    return table;
+}
+
+// Blog visits per slug from entry_visits_daily for `from`..`to`, merged
+// across days into `week`, and today's buckets alone into `today`.
+static void query_blog_visits(const char *from, const char *to, KVList *week, KVList *today) {
+    mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRY_VISITS_DAILY_COLLECTION);
+    if (!collection) return;
+
+    bson_t *filter = BCON_NEW("entry_type", BCON_UTF8("blog"),
+                              "date", "{", "$gte", BCON_UTF8(from), "$lte", BCON_UTF8(to), "}");
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, filter, NULL, NULL);
+
+    const bson_t *doc;
+    while (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        const char *slug = "", *date = "";
+        int total = 0;
+        if (bson_iter_init_find(&iter, doc, "slug") && BSON_ITER_HOLDS_UTF8(&iter))
+            slug = bson_iter_utf8(&iter, NULL);
+        if (bson_iter_init_find(&iter, doc, "date") && BSON_ITER_HOLDS_UTF8(&iter))
+            date = bson_iter_utf8(&iter, NULL);
+        if (bson_iter_init_find(&iter, doc, "total") && BSON_ITER_HOLDS_INT32(&iter))
+            total = bson_iter_int32(&iter);
+        if (!slug[0]) continue;
+
+        kv_increment(week, slug, total);
+        if (strcmp(date, to) == 0) kv_increment(today, slug, total);
+    }
+
+    bson_destroy(filter);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+}
+
+// The five per-epoch counters as a donut, always in epoch order with a fixed
+// color per epoch (series 1 = WML ... 5 = epoch 3), so a color means the same
+// epoch on every chart.
+static char *build_epoch_donut(const AnalyticsData *week) {
+    const ChartSlice slices[] = {
+        { "WML (WAP)",        week->epochwml, 1 },
+        { "0 (Pre-standard)", week->epoch0,   2 },
+        { "1 (Early)",        week->epoch1,   3 },
+        { "2 (Middle)",       week->epoch2,   4 },
+        { "3 (Modern)",       week->epoch3,   5 },
+    };
+    return analytics_chart_donut(slices, sizeof(slices) / sizeof(slices[0]),
+                                 "7 days", "Visits by epoch, last 7 days");
+}
+
+// `week`'s first `limit` rows (already sorted) as horizontal bars, with
+// today's count from `today` in each tooltip. `href_fmt` as in
+// build_compare_table().
+static char *build_summary_hbars(const KVList *week, const KVList *today, int limit,
+                                  const char *href_fmt, const char *aria_label) {
+    int n = week->count < limit ? week->count : limit;
+    if (n == 0) return analytics_chart_hbars(NULL, 0, aria_label);
+
+    ChartBar bars[SUMMARY_TOP_N];
+    char details[SUMMARY_TOP_N][32];
+    char *hrefs[SUMMARY_TOP_N] = {0};
+    for (int i = 0; i < n; i++) {
+        const char *key = week->items[i].key;
+        snprintf(details[i], sizeof(details[i]), "%d today", kv_get(today, key));
+        if (href_fmt) {
+            char key_url[sizeof(week->items[i].key) * 3];
+            url_encode(key_url, key, sizeof(key_url));
+            hrefs[i] = render_template(href_fmt, key_url);
+        }
+        bars[i] = (ChartBar){ key, week->items[i].count, hrefs[i], details[i] };
+    }
+
+    char *chart = analytics_chart_hbars(bars, (size_t)n, aria_label);
+    for (int i = 0; i < n; i++) free(hrefs[i]);
+    return chart;
+}
+
+// Visits per day for the SUMMARY_DAYS days ending today, as columns - today
+// highlighted, the rest muted. `dates[i]` is day i's "YYYY-MM-DD", oldest
+// first; `weekdays[i]` its "Mon 05" axis label.
+static char *build_daily_columns(char dates[][16], char weekdays[][16]) {
+    int totals[SUMMARY_DAYS] = {0};
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(VISITS_DAILY_COLLECTION);
+    if (collection) {
+        bson_t *filter = BCON_NEW("_id", "{", "$gte", BCON_UTF8(dates[0]),
+                                  "$lte", BCON_UTF8(dates[SUMMARY_DAYS - 1]), "}");
+        bson_t *opts = BCON_NEW("projection", "{", "total", BCON_INT32(1), "}");
+        mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, filter, opts, NULL);
+
+        const bson_t *doc;
+        while (mongoc_cursor_next(cursor, &doc)) {
+            bson_iter_t iter;
+            if (!bson_iter_init_find(&iter, doc, "_id") || !BSON_ITER_HOLDS_UTF8(&iter)) continue;
+            const char *id = bson_iter_utf8(&iter, NULL);
+            int total = 0;
+            if (bson_iter_init_find(&iter, doc, "total") && BSON_ITER_HOLDS_INT32(&iter))
+                total = bson_iter_int32(&iter);
+            for (int i = 0; i < SUMMARY_DAYS; i++)
+                if (strcmp(id, dates[i]) == 0) { totals[i] += total; break; }
+        }
+
+        mongoc_cursor_destroy(cursor);
+        bson_destroy(opts);
+        bson_destroy(filter);
+        mongoc_collection_destroy(collection);
+    }
+
+    ChartColumn columns[SUMMARY_DAYS];
+    char tooltips[SUMMARY_DAYS][48];
+    for (int i = 0; i < SUMMARY_DAYS; i++) {
+        int is_today = i == SUMMARY_DAYS - 1;
+        snprintf(tooltips[i], sizeof(tooltips[i]), "%s%s: %d visits",
+                 dates[i], is_today ? " (today)" : "", totals[i]);
+        columns[i] = (ChartColumn){ is_today ? "Today" : weekdays[i], tooltips[i],
+                                    totals[i], is_today };
+    }
+    return analytics_chart_columns(columns, SUMMARY_DAYS, "Visits per day, last 7 days");
+}
+
+char *analytics_summary(int epoch) {
+    time_t now = time(NULL);
+    time_t week_start = now - 6 * 24 * 60 * 60;
+    struct tm t_now, t_from;
+    gmtime_r(&now, &t_now);
+    gmtime_r(&week_start, &t_from);
+
+    char today_str[16], from_str[16];
+    strftime(today_str, sizeof(today_str), "%Y-%m-%d", &t_now);
+    strftime(from_str, sizeof(from_str), "%Y-%m-%d", &t_from);
+
+    char dates[SUMMARY_DAYS][16], weekdays[SUMMARY_DAYS][16];
+    for (int i = 0; i < SUMMARY_DAYS; i++) {
+        time_t day = now - (time_t)(SUMMARY_DAYS - 1 - i) * 24 * 60 * 60;
+        struct tm t_day;
+        gmtime_r(&day, &t_day);
+        strftime(dates[i], sizeof(dates[i]), "%Y-%m-%d", &t_day);
+        strftime(weekdays[i], sizeof(weekdays[i]), "%a %d", &t_day);
+    }
+
+    // Same period filters as the full report: "range" over the 7 day-buckets
+    // for the week column, "day" (today's bucket alone) for the today column.
+    AnalyticsData week = {0}, today = {0};
+    query_page_visits(&week, "range", 0, 0, 0, NULL, from_str, today_str);
+    query_page_visits(&today, "day", 0, 0, 0, today_str, NULL, NULL);
+
+    KVList browsers_week = {0}, browsers_today = {0};
+    kv_by_family(&week.browsers, &browsers_week);
+    kv_by_family(&today.browsers, &browsers_today);
+    kv_sort(&browsers_week);
+    kv_sort(&week.countries);
+
+    KVList blog_week = {0}, blog_today = {0};
+    query_blog_visits(from_str, today_str, &blog_week, &blog_today);
+    kv_sort(&blog_week);
+
+    char *tpl_path = generate_url_theme("dashboard/analytics/summary_epoch%d.html", epoch);
+    char *tpl = tpl_path ? read_file_to_string(tpl_path) : NULL;
+    free(tpl_path);
+
+    char *tbl_epochs    = build_epoch_compare_table(&today, &week);
+    char *tbl_countries = build_compare_table("Country", &week.countries, &today.countries,
+                                               SUMMARY_TOP_N, NULL);
+    char *tbl_browsers  = build_compare_table("Browser", &browsers_week, &browsers_today,
+                                               SUMMARY_TOP_N, NULL);
+    char *tbl_articles  = build_compare_table("Article", &blog_week, &blog_today,
+                                               SUMMARY_TOP_N, "/blog/%s");
+
+    char *chart_days      = build_daily_columns(dates, weekdays);
+    char *chart_epochs    = build_epoch_donut(&week);
+    char *chart_countries = build_summary_hbars(&week.countries, &today.countries, SUMMARY_TOP_N,
+                                                NULL, "Top 5 countries, last 7 days");
+    char *chart_browsers  = build_summary_hbars(&browsers_week, &browsers_today, SUMMARY_TOP_N,
+                                                NULL, "Top 5 browsers, last 7 days");
+    char *chart_articles  = build_summary_hbars(&blog_week, &blog_today, SUMMARY_TOP_N,
+                                                "/blog/%s", "Top 5 blog articles, last 7 days");
+
+    char *result = NULL;
+    if (tpl && tbl_epochs && tbl_countries && tbl_browsers && tbl_articles &&
+        chart_days && chart_epochs && chart_countries && chart_browsers && chart_articles) {
+        result = render_template(tpl, from_str, today_str,
+                                  today.total, week.total, chart_days,
+                                  chart_articles, tbl_articles,
+                                  chart_epochs, tbl_epochs,
+                                  chart_browsers, tbl_browsers,
+                                  chart_countries, tbl_countries);
+    }
+
+    free(chart_days);
+    free(chart_epochs);
+    free(chart_countries);
+    free(chart_browsers);
+    free(chart_articles);
+    free(tpl);
+    free(tbl_epochs);
+    free(tbl_countries);
+    free(tbl_browsers);
+    free(tbl_articles);
+    free_analytics_data(&week);
+    free_analytics_data(&today);
+    kv_free(&browsers_week);
+    kv_free(&browsers_today);
+    kv_free(&blog_week);
+    kv_free(&blog_today);
     return result;
 }

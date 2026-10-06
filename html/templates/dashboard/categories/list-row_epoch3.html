@@ -3,8 +3,9 @@
         <td>
           <div class="boat-rudder__dashboard__inline-form">
             <a class="boat-rudder__dashboard__button" href="/dashboard/categories/%s/edit">Edit</a>
-            <form method="POST" action="/dashboard/categories/%s/delete">
-              <button class="boat-rudder__dashboard__button" type="submit">Delete</button>
+            <form method="POST" action="/dashboard/categories/%s/delete"
+                  onsubmit="return confirm('Delete this category? Entries using it will lose it.');">
+              <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--danger" type="submit">Delete</button>
             </form>
           </div>
         </td>

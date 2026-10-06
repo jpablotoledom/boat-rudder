@@ -20,4 +20,15 @@
 char *analytics_view(int epoch, const char *period, int year, int month, int week,
                       const char *date, const char *from, const char *to);
 
+// Builds the /dashboard home's analytics summary (analytics/summary_epoch3.html):
+// visits today and over the last 7 days (today plus the 6 days before, UTC),
+// visits per epoch, and the top 5 countries, browser families and blog
+// articles, each ranked by its last-7-days count and shown with today's count
+// next to it - each drawn as an SVG chart (analytics_charts.h: visits per day
+// as columns, epochs as a donut, the top-5 lists as horizontal bars) with its
+// table folded underneath. Same data and gating as analytics_view(); epoch 3
+// only. Returns a malloc'd string, or NULL on a missing template or
+// allocation failure.
+char *analytics_summary(int epoch);
+
 #endif // ANALYTICS_VIEW_H

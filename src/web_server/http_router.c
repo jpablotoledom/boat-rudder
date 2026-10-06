@@ -1328,6 +1328,26 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
+            } else if (strcmp(decoded_url, "/dashboard/entries") == 0) {
+                // "View all" from the dashboard home, which itself lists only
+                // the entries pending publication.
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                        char *content  = dashboard_entries(epoch, content_lang, user_id, role);
+                        char *body     = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Entries", content) : NULL;
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
             } else if (strcmp(decoded_url, "/dashboard/categories") == 0) {
                 int epoch = resolve_epoch(&req);
 

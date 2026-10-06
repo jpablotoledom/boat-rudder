@@ -374,9 +374,12 @@ GET/HEAD "/dashboard"  (http_router.c)
         ├─ == 1?
         │     → role = cms_get_user_role(user_id)     ── "admin" | "author"
         │       content = dashboard(epoch, content_lang, user_id, role)  ── modules/dashboard
-        │         epoch 3: nav links (admin only) + entries table
-        │           admin  → entries_admin_rows(epoch, lang, NULL, NULL)     (every entry)
-        │           author → entries_admin_rows(epoch, lang, "blog", user_id) (own posts only)
+        │         epoch 3: "Menu" dropdown (nav-admin/nav-author) + analytics summary
+        │                  (admin only) + entries pending publication
+        │           admin  → entries_admin_rows(epoch, lang, NULL, NULL, true, true)
+        │                    (every unpublished entry, with Delete)
+        │           author → entries_admin_rows(epoch, lang, "blog", user_id, true, false)
+        │                    (own unpublished posts, no Delete)
         │         other epochs: static "Welcome to dashboard" fragment
         │       body = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content)
         │       200 OK

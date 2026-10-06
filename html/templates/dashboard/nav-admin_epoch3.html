@@ -1,9 +1,31 @@
-<ul>
-<li><a href="/dashboard/categories">Categories</a></li>
-<li><a href="/dashboard/languages">Languages</a></li>
-<li><a href="/dashboard/menu">Menu</a></li>
-<li><a href="/dashboard/users">Users</a></li>
-<li><a href="/dashboard/analytics">Analytics</a></li>
-<li><a href="/dashboard/settings">Site settings</a></li>
-<li><form class="boat-rudder__dashboard__logout" method="post" action="/logout"><button class="boat-rudder__dashboard__logout__btn" type="submit">Log out</button></form></li>
-</ul>
+<details class="boat-rudder__dashboard__menu">
+  <summary class="boat-rudder__dashboard__button">Menu</summary>
+  <nav class="boat-rudder__dashboard__options" aria-label="Dashboard options">
+    <div class="boat-rudder__dashboard__options-group">
+      <h2 class="boat-rudder__dashboard__options-title">Content</h2>
+      <ul>
+        <li><a href="/dashboard/entries">Entries</a></li>
+        <li><a href="/dashboard/categories">Categories</a></li>
+        <li><a href="/dashboard/media">Media library</a></li>
+        <li><a href="/dashboard/menu">Menu</a></li>
+      </ul>
+    </div>
+    <div class="boat-rudder__dashboard__options-group">
+      <h2 class="boat-rudder__dashboard__options-title">Site</h2>
+      <ul>
+        <li><a href="/dashboard/settings">General</a></li>
+        <li><a href="/dashboard/settings/themes">Themes</a></li>
+        <li><a href="/dashboard/settings/fonts">Fonts</a></li>
+        <li><a href="/dashboard/languages">Languages</a></li>
+        <li><a href="/dashboard/settings/preview">Epoch preview</a></li>
+      </ul>
+    </div>
+    <div class="boat-rudder__dashboard__options-group">
+      <h2 class="boat-rudder__dashboard__options-title">Administration</h2>
+      <ul>
+        <li><a href="/dashboard/users">Users</a></li>
+        <li><a href="/dashboard/analytics">Analytics report</a></li>
+      </ul>
+    </div>
+  </nav>
+</details>

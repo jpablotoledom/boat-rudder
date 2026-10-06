@@ -1,11 +1,13 @@
 <section class="boat-rudder__dashboard">
+  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/categories">Categories</a></li></ol>
+  </nav>
   <h1>Category</h1>
 %s
   <form class="boat-rudder__dashboard__form" method="POST" action="%s">
 %s
     <div class="boat-rudder__dashboard__button-container">
-      <button class="boat-rudder__dashboard__button" type="submit">Save</button>
+      <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">Save</button>
     </div>
   </form>
-  <p><a href="/dashboard/categories">Back to categories</a></p>
 </section>

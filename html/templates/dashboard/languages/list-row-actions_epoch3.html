@@ -7,8 +7,9 @@
             <form method="POST" action="/dashboard/languages/%s/default">
               <button class="boat-rudder__dashboard__button" type="submit">Make default</button>
             </form>
-            <form method="POST" action="/dashboard/languages/%s/remove">
-              <button class="boat-rudder__dashboard__button" type="submit">Remove</button>
+            <form method="POST" action="/dashboard/languages/%s/remove"
+                  onsubmit="return confirm('Remove this language? Content in it will no longer be shown on the site.');">
+              <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--danger" type="submit">Remove</button>
             </form>
           </div>
         </td>

@@ -71,6 +71,7 @@ typedef struct {
     char *id;   // entries._id as 24-char hex, for /dashboard/entries/<id>/edit and /delete
     char *link; // entries.link, for building /page/<link> or /blog/<link>
     char *type; // "page" | "blog" | ...
+    bool  enabled; // false = a draft, not published yet
 
     char *header_image_url;
     char *header_title;
@@ -102,11 +103,14 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
 // cms_get_entry_by_link), for the /dashboard/entries listing. `type_filter` (e.g. "blog")
 // and `created_by_hex` (a 24-char hex ObjectId), if non-NULL, are added to the query as
 // {type: type_filter} / {created_by: ObjectId(created_by_hex)} - used by Autor users to see
-// only their own blog entries. Pass NULL for both to list every entry (Administrador). On
+// only their own blog entries. Pass NULL for both to list every entry (Administrador).
+// `unpublished_only` adds {enabled: {$ne: true}} - the dashboard home's "Entries pending
+// publication" list; false lists published entries and drafts alike (/dashboard/entries). On
 // success, *out points to a malloc'd array of *out_count items (possibly 0) that must be
 // passed to cms_blog_list_free(). On a DB error or if mongodb is not ready, *out = NULL and
 // *out_count = 0.
 void cms_get_admin_entries(const char *lang, const char *type_filter, const char *created_by_hex,
+                            bool unpublished_only,
                             CmsBlogListItem **out, size_t *out_count);
 
 // Like cms_get_blog_entries() but filtered to entries whose categories[] array

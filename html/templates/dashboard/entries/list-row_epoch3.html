@@ -1,17 +1,15 @@
       <tr>
-        <td><img class="boat-rudder__dashboard__thumb" src="%s" alt=""></td>
-        <td><a href="%s">%s</a></td>
+        <td class="boat-rudder__dashboard__thumb-cell"><img class="boat-rudder__dashboard__thumb" src="%s" alt=""></td>
+        <td class="boat-rudder__dashboard__title-cell"><a href="/dashboard/entries/%s/edit">%s</a>%s <span class="boat-rudder__dashboard__badge boat-rudder__dashboard__badge--type">%s</span></td>
+        <td><div class="boat-rudder__dashboard__clamp">%s</div></td>
         <td>%s</td>
-        <td>%s</td>
-        <td>%s</td>
-        <td>%s</td>
+        <td class="boat-rudder__dashboard__nowrap">%s</td>
         <td class="boat-rudder__dashboard__categories">%s</td>
         <td>
           <div class="boat-rudder__dashboard__inline-form">
             <a class="boat-rudder__dashboard__button" href="/dashboard/entries/%s/edit">Edit</a>
-            <form method="POST" action="/dashboard/entries/%s/delete">
-              <button class="boat-rudder__dashboard__button" type="submit">Delete</button>
-            </form>
+            <a class="boat-rudder__dashboard__button" href="%s" target="_blank" rel="noopener">View</a>
+%s
           </div>
         </td>
       </tr>

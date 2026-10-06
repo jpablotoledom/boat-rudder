@@ -1,4 +1,7 @@
 <section class="boat-rudder__dashboard boat-rudder__dashboard--preview">
+  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/settings">Site settings</a></li></ol>
+  </nav>
   <h1>Site preview</h1>
   <p>Renders "/" as each epoch would see it. Epoch -1 (WAP/WML) is omitted - it is
      not HTML, so a modern browser's iframe cannot render it.</p>
@@ -35,7 +38,6 @@
     <iframe id="previewFrame" class="boat-rudder__preview__frame" title="Site preview"></iframe>
   </div>
 
-  <p><a href="/dashboard/settings">Back to site settings</a></p>
 </section>
 
 <style>

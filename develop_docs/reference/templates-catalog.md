@@ -126,15 +126,16 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 
 | Directory | Templates | Module |
 |---|---|---|
-| `.` | `dashboard` (all epochs; −1…2 are a bare welcome with no admin tools), `nav-admin`, `nav-author` (option list under "Welcome back", both ending in the **Log out** form) | `dashboard.c` |
-| `entries/` | `list-row`, `list-empty` | `entries_admin.c` |
+| `.` | `dashboard` (all epochs; −1…2 are a bare welcome with no admin tools), `nav-admin`, `nav-author` (option groups in a `<details>` "Menu" dropdown, next to the **Log out** form in `dashboard`'s header) | `dashboard.c` |
+| `entries/` | `list`, `list-row`, `list-row-delete` (the admin-only Delete form, one `%s`: the id), `list-empty` (one `%s`: the empty message, plus a "+ New entry" button), `list-draft` (the "Draft" badge) | `entries_admin.c` |
+| `entries/` | `list` (the `/dashboard/entries` page) | `dashboard.c` |
 | `entries/editor/` | `container`, `meta`, `header`, `header-lang-tab`, `lang-tab-button`, `category-option`, `blocks` | `entry_editor.c` ([entry-editor.md](entry-editor.md)) |
 | `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` | `entry_editor_blocks.c` |
 | `categories/`, `menu/`, `users/`, `languages/` | `list`, `list-row`, `list-empty`/`list-error`, `form`, `form-field`, `form-error`, `option`, `list-row-actions` | the matching `*_admin.c` |
 | `media/` | `media`, `media-directory-container`, `media-directory`, `item-photo`, `media-modal` | `media_admin.c` ([media-admin.md](media-admin.md)) |
 | `settings/` | `settings`, `settings-error`, `settings-themes`, `settings-themes-panel` (48 args), `settings-themes-activate`, `settings-asset`, `settings-asset-panel`, `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css`, `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |
 | `fonts/` | `list`, `list-row`, `list-error` | `fonts_admin.c` ([fonts.md](fonts.md)) |
-| `analytics/` | `analytics` (28 args) | `analytics_view.c` ([analytics.md](analytics.md)) |
+| `analytics/` | `analytics` (28 args), `summary` (13 args, dashboard home: charts plus their folded tables) | `analytics_view.c` ([analytics.md](analytics.md)) |
 
 ---
 

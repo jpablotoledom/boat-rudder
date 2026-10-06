@@ -103,7 +103,8 @@ title `{{SITE_NAME}} - Dashboard`.
 
 | Method | Path | Guard | Module | Notes |
 |---|---|---|---|---|
-| `GET` | `/dashboard` | S+R (no E3 redirect) | `dashboard()` | Entries table + role-based nav (epoch 3). Other epochs get a bare per-epoch welcome page with no admin tools |
+| `GET` | `/dashboard` | S+R (no E3 redirect) | `dashboard()` | Epoch 3: role-based option groups in a "Menu" dropdown, then, for an admin, the analytics summary (`analytics_summary()`), then "Entries pending publication" (unpublished only). Other epochs get a bare per-epoch welcome page with no admin tools |
+| `GET` | `/dashboard/entries` | E3, S+R | `dashboard_entries()` | "View all": every entry, published or not (an author: only their own blog entries); drafts carry a "Draft" badge |
 | `POST` | `/dashboard/entries/new` | E3, S+R | `cms_create_entry()` | Creates a draft (`page` for admin, `blog` for author), `302` to its editor |
 | `GET` | `/dashboard/entries/<id>/edit` | E3, S+R, Own | `entry_editor_page()` | `404` if unknown |
 | `POST` | `/dashboard/entries/<id>/delete` | E3, A | `cms_delete_entry()` | `302 /dashboard` |

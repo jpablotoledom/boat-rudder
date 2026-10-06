@@ -110,6 +110,7 @@ set(SOURCES
     src/modules/analytics/analytics.c
     src/modules/analytics/geoip.c
     src/modules/analytics_view/analytics_view.c
+    src/modules/analytics_view/analytics_charts.c
     src/modules/analytics_view/country_continent.c
 
     # Web server utilities (multipart)

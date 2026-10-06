@@ -11,9 +11,47 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 
 ## [Unreleased] - v0.0.1
 
+### 2026-10-06 - Dashboard usability
+
+**Added**
+- Charts in the dashboard's analytics summary, drawn as inline SVG on the server (no JavaScript,
+  no chart library - `analytics_charts.c`): visits per day over the last 7 days (columns, today
+  highlighted), visits by epoch (donut with legend), and horizontal bars for the top blog
+  articles, browsers and countries. Each block keeps its Today / 7 days table under a "Table"
+  toggle.
+
+**Changed**
+- Each epoch has one fixed chart color in both themes, also used on the analytics report's
+  epoch stat cards.
+- Delete/Remove in entries, categories, users, menu, fonts and languages now asks for
+  confirmation, and is styled as a destructive (red) button; create/save buttons are styled as
+  primary.
+- Entries tables: the title opens the editor (the public page moved to a **View** action),
+  the type is a badge next to the title instead of a column, the summary is clamped to two
+  lines, smaller thumbnails, and an empty table offers **+ New entry**.
+- Dashboard tables use horizontal separators, a header row and row hover instead of full cell
+  borders.
+- Maintainer pages show a breadcrumb above the title instead of "Back to ..." links at the
+  bottom; categories, users and menu put their "New ..." button next to the title.
+- The dashboard home's option groups (Content / Site / Administration) are now a **Menu**
+  dropdown in the header, next to **Log out** (moved there from an "Account" option group), and the
+  analytics summary now comes before **Entries pending publication**.
+
+**Fixed**
+- An `author` was shown a Delete button on their entries that the server always refused; it is
+  now only shown to admins.
+- Light theme: dashboard forms had a near-black background behind dark labels.
+- Menu list rows closed `</td>` before `</div>`.
+
 ### 2026-10-06 - Dashboard security fixes
 
 **Added**
+- New dashboard home: option groups (Content / Site / Administration / Account, with a link to the
+  media library that was missing), **Entries pending publication** (unpublished entries only, with
+  **+ New entry** and **View all**) and, for admins, an analytics summary - visits today and over
+  the last 7 days, per epoch, and the top 5 countries, browsers and blog articles.
+- `GET /dashboard/entries`: every entry, published or not, with a **Draft** badge on unpublished
+  ones.
 - **Log out** button in the dashboard's option list under "Welcome back", for both roles (an
   `author` gets a list of its own, `dashboard/nav-author_epoch3.html`); it posts to `/logout`.
 

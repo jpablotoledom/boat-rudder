@@ -17,7 +17,8 @@ Ported from the-retro-center-old's `analytics.c`, adapted to Boat Rudder's route
 | `src/modules/analytics/analytics.c/h` | `analytics_track_visit()`: filtering, classification, `$inc` upserts |
 | `src/modules/analytics/geoip.c/h` | Optional GeoLite2 country lookup (`HAVE_MAXMINDDB`) |
 | `src/utils/ua_parser.c/h` | User-Agent → browser and OS keys |
-| `src/modules/analytics_view/analytics_view.c/h` | `/dashboard/analytics` report |
+| `src/modules/analytics_view/analytics_view.c/h` | `/dashboard/analytics` report and the dashboard summary |
+| `src/modules/analytics_view/analytics_charts.c/h` | Server-side SVG charts (donut, horizontal bars, columns) |
 | `src/modules/analytics_view/country_continent.c/h` | Country name → continent, for grouping |
 | `html/templates/dashboard/analytics/analytics_epoch3.html` | Report template |
 | `scripts/migrations/2026-10-03-merge-analytics.js` | Imports buckets from another database by summing counters |
@@ -137,6 +138,51 @@ Implemented by `analytics_view()`; one template, `dashboard/analytics/analytics_
 
 Every key list grows on the heap without a cap (an "All Time" query easily sees hundreds of
 browser versions). All values are HTML-encoded before output.
+
+---
+
+## Dashboard summary
+
+`analytics_summary()` renders `dashboard/analytics/summary_epoch3.html` on the dashboard home,
+for an Administrador only (same gate as the report). Two windows, both UTC:
+
+- **Today**: the `day` filter on today's bucket.
+- **Last 7 days**: the `range` filter, today and the 6 days before - rolling, not the ISO week, so
+  it never shrinks to one day on a Monday.
+
+| Block | Source | Chart | Notes |
+|---|---|---|---|
+| Visits today / last 7 days | `total` | - | Two stat cards |
+| Visits per day | `total` of each of the 7 day buckets (`build_daily_columns()`) | Columns | Today in the accent color and labeled; the other days muted, the busiest one labeled too |
+| Top 5 blog articles | `entry_visits_daily`, `entry_type: "blog"` | Horizontal bars | Merged per slug, linked to `/blog/<slug>` |
+| Visits by epoch | `by_epoch` | Donut + legend | All five epochs, always shown (zero ones in the legend only) |
+| Top 5 browsers | `by_browser` | Horizontal bars | Versions summed per family (`Chrome/124` + `Chrome/125` → `Chrome`) |
+| Top 5 countries | `by_country` | Horizontal bars | Ranked by the 7-day count; `Unknown` included |
+
+The charts plot the 7-day figures; today's count is in each bar's tooltip, and every block keeps
+its **Today** / **7 days** table folded underneath (`<details>` "Table"), which is also the
+accessible view of the chart. **Full report** opens `/dashboard/analytics` with the same 7-day
+range.
+
+### Charts (`analytics_charts.c`)
+
+Inline SVG built in C - no JavaScript and no chart library; hover detail is each mark's native
+`<title>` tooltip. Labels are HTML-encoded inside the builders.
+
+| Builder | Geometry | Used for |
+|---|---|---|
+| `analytics_chart_donut()` | Fixed 120×120 `viewBox`; one dashed `<circle>` per slice (`pathLength="100"`, so dash = share), a ~1.5px gap between slices, total in the hole, HTML legend with value and share | Epochs |
+| `analytics_chart_hbars()` | No `viewBox`: `x`/`width` in `%` of the block, `y` in px, so bars stretch while text keeps its size. Label (cut at 26 characters, full text in the tooltip) and value on one line, bar below on a track | Ranked top-N lists |
+| `analytics_chart_columns()` | Same `%`/px scheme, shared zero baseline, at least 2px for any non-zero value | Visits per day |
+
+Colors live only in each theme's `styles_epoch3.css`, via classes on the marks:
+`boat-rudder__chart__series--1…5` (categorical, one per epoch: WML blue, 0 orange, 1 aqua,
+2 yellow, 3 magenta - the same colors now top the report's epoch stat cards), `--accent` (single
+-hue magnitude: bars, today's column) and `--muted` (context columns). The categorical steps
+differ per theme and were checked as a set against each theme's block surface (`#f4f4f6` light,
+`#0d0d0d` dark) for adjacent-pair colorblind separation, including the pair that meets where the
+ring closes. In the light theme four of the five are below 3:1 against the surface, which is why
+the donut always ships its legend with visible values.
 
 ---
 

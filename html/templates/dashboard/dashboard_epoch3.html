@@ -1,25 +1,59 @@
-<section class="boat-rudder__dashboard">
-<h1>Welcome back</h1>
+<section class="boat-rudder__dashboard boat-rudder__dashboard--home">
+<div class="boat-rudder__dashboard__panel-header">
+  <h1>Welcome back</h1>
+  <div class="boat-rudder__dashboard__panel-actions">
 %s
-<h2>Entries</h2>
-<form method="POST" action="/dashboard/entries/new">
-  <button class="boat-rudder__dashboard__button" type="submit">+ New entry</button>
-</form>
-<table class="boat-rudder__dashboard__table">
-  <thead>
-    <tr>
-      <th>Image</th>
-      <th>Title</th>
-      <th>Type</th>
-      <th>Summary</th>
-      <th>Author</th>
-      <th>Date</th>
-      <th>Categories</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
+    <form method="post" action="/logout">
+      <button class="boat-rudder__dashboard__button" type="submit">Log out</button>
+    </form>
+  </div>
+</div>
 %s
-  </tbody>
-</table>
+<section class="boat-rudder__dashboard__panel">
+  <div class="boat-rudder__dashboard__panel-header">
+    <h2>Entries pending publication</h2>
+    <div class="boat-rudder__dashboard__panel-actions">
+      <form method="POST" action="/dashboard/entries/new">
+        <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">+ New entry</button>
+      </form>
+      <a class="boat-rudder__dashboard__button" href="/dashboard/entries">View all</a>
+    </div>
+  </div>
+  <div class="boat-rudder__dashboard__table-scroll">
+  <table class="boat-rudder__dashboard__table">
+    <thead>
+      <tr>
+        <th>Image</th>
+        <th>Title</th>
+        <th>Summary</th>
+        <th>Author</th>
+        <th>Date</th>
+        <th>Categories</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+%s
+    </tbody>
+  </table>
+  </div>
 </section>
+</section>
+
+<script>
+// The options menu is a <details>: it opens and closes without JS. This only
+// closes it on a click outside it or on Escape.
+(function () {
+  var menu = document.querySelector('.boat-rudder__dashboard__menu');
+  if (!menu) return;
+  document.addEventListener('click', function (e) {
+    if (menu.open && !menu.contains(e.target)) menu.open = false;
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && menu.open) {
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    }
+  });
+})();
+</script>

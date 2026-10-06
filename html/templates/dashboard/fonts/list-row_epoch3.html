@@ -3,8 +3,9 @@
         <td>%s</td>
         <td>
           <div class="boat-rudder__dashboard__inline-form">
-            <form method="POST" action="/dashboard/settings/fonts/%s/delete">
-              <button class="boat-rudder__dashboard__button" type="submit">Delete</button>
+            <form method="POST" action="/dashboard/settings/fonts/%s/delete"
+                  onsubmit="return confirm('Delete this font? Themes using it fall back to the default font.');">
+              <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--danger" type="submit">Delete</button>
             </form>
           </div>
         </td>

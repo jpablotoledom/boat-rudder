@@ -292,12 +292,29 @@ h3 {
   margin: 20px 0;
 }
 
+/* Horizontal separators only: full cell borders made the wide entries
+   table read as a grid of boxes. */
 .boat-rudder__dashboard__table th,
 .boat-rudder__dashboard__table td {
   padding: 10px;
-  border: 1px solid #7b0a74;
+  border: none;
+  border-bottom: 1px solid #e2e2e4;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
+}
+
+.boat-rudder__dashboard__table thead th {
+  background: #f4f4f6;
+  color: #555;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  border-bottom: 2px solid #d0d0d4;
+}
+
+.boat-rudder__dashboard__table tbody tr:hover > td {
+  background: #fafafc;
 }
 
 .boat-rudder__dashboard__form {
@@ -305,8 +322,8 @@ h3 {
   flex-direction: column;
   gap: 15px;
   padding: 20px;
-  border: 1px solid #7b0a74;
-  background-color: #111111;
+  border: 1px solid #e2e2e4;
+  background-color: #f4f4f6;
   max-width: 400px;
 }
 
@@ -342,30 +359,182 @@ h3 {
   margin: 0;
 }
 
-/* "Log out" in the dashboard's option list (nav-admin/nav-author_epoch3.html):
-   a POST form, so the button is styled to read like the links around it. */
-.boat-rudder__dashboard__logout {
-  display: inline;
+/* Dashboard home (dashboard_epoch3.html): option groups, then panels - each
+   a heading with its action buttons on the right ("Welcome back" + Log out,
+   "Entries pending publication", the analytics summary). Maintainer lists
+   (entries, categories, users, menu) reuse the same panel-header. */
+.boat-rudder__dashboard__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+
+.boat-rudder__dashboard__options-group {
+  background: #f4f4f6;
+  border: 1px solid #e2e2e4;
+  padding: 14px 18px;
+}
+
+.boat-rudder__dashboard__options-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e2e4;
+}
+
+.boat-rudder__dashboard__options-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.boat-rudder__dashboard__options-group li {
+  padding: 4px 0;
+}
+
+/* The option groups above, as a "Menu" dropdown in the home header
+   (nav-admin/nav-author_epoch3.html wrap them in a <details>). */
+.boat-rudder__dashboard__menu {
+  position: relative;
+}
+
+.boat-rudder__dashboard__menu > summary {
+  list-style: none;
+  user-select: none;
+}
+
+.boat-rudder__dashboard__menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.boat-rudder__dashboard__menu > summary::after {
+  content: "\25BE";
+  margin-left: 6px;
+}
+
+.boat-rudder__dashboard__menu[open] > summary::after {
+  content: "\25B4";
+}
+
+.boat-rudder__dashboard__menu > .boat-rudder__dashboard__options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  gap: 0;
+  background: #ffffff;
+  border: 1px solid #e2e2e4;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+
+.boat-rudder__dashboard__menu .boat-rudder__dashboard__options-group {
+  flex: 0 0 180px;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+}
+
+.boat-rudder__dashboard__panel {
+  margin: 0 0 32px;
+}
+
+.boat-rudder__dashboard__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.boat-rudder__dashboard__panel-header h1,
+.boat-rudder__dashboard__panel-header h2 {
   margin: 0;
 }
 
-.boat-rudder__dashboard__logout__btn {
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-  color: var(--br-color-link-normal, #680072);
+.boat-rudder__dashboard__panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.boat-rudder__dashboard__logout__btn:hover {
-  color: var(--br-color-link-hover, #006d49);
+.boat-rudder__dashboard__panel-actions form {
+  margin: 0;
+}
+
+.boat-rudder__dashboard__panel .boat-rudder__analytics__totals {
+  margin-bottom: 12px;
+}
+
+/* Lets a wide entries table scroll inside itself on a phone instead of
+   pushing the whole page sideways. */
+.boat-rudder__dashboard__table-scroll {
+  overflow-x: auto;
+}
+
+/* "Draft" next to an unpublished entry's title (entries/list-draft_epoch3.html). */
+.boat-rudder__dashboard__badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  background: #680072;
+  color: #ffffff;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+/* Summary tables: name | Today | 7 days (analytics_summary()). */
+.boat-rudder__analytics__kv-table--compare th {
+  font-size: 10px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  text-align: right;
+  padding: 0 4px 6px 12px;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.boat-rudder__analytics__kv-table--compare th:first-child {
+  text-align: left;
+  padding-left: 4px;
+}
+
+/* Names wrap between words; break-all (the full report's default) split
+   "United States" mid-word in these narrow columns. */
+.boat-rudder__analytics__kv-table.boat-rudder__analytics__kv-table--compare td:first-child {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.boat-rudder__analytics__kv-table--compare td:nth-child(2) {
+  text-align: right;
+  color: #444;
+  white-space: nowrap;
+  padding-left: 12px;
 }
 
 .boat-rudder__dashboard__button {
+  display: inline-block;
   padding: 10px;
   cursor: pointer;
+  font-family: inherit;
   font-size: 14px;
+  line-height: 1.2;
   background-color: var(--br-color-navbar-background, #8dd3ff);
   border: 1px solid #004ef7;
   color: #1a1a1a;
@@ -375,6 +544,33 @@ h3 {
 .boat-rudder__dashboard__button:hover {
   background-color: #098000;
   border: 1px solid #00ff40;
+  color: #ffffff;
+}
+
+/* Create/save actions (+ New ..., Save, Upload, Add). */
+.boat-rudder__dashboard__button--primary {
+  background-color: #3800aa;
+  border-color: #3800aa;
+  color: #ffffff;
+}
+
+.boat-rudder__dashboard__button--primary:hover {
+  background-color: #2a0080;
+  border-color: #2a0080;
+  color: #ffffff;
+}
+
+/* Destructive actions (Delete, Remove) - always behind a confirm(). */
+.boat-rudder__dashboard__button--danger {
+  background-color: #ffffff;
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.boat-rudder__dashboard__button--danger:hover {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
 }
 
 .boat-rudder__dashboard__color-alpha {
@@ -478,9 +674,76 @@ h3 {
 }
 
 .boat-rudder__dashboard__thumb {
-  width: 80px;
+  width: 56px;
   height: auto;
   display: block;
+}
+
+/* Entries tables (entries/list-row_epoch3.html). */
+.boat-rudder__dashboard__thumb-cell {
+  width: 56px;
+}
+
+.boat-rudder__dashboard__title-cell {
+  font-weight: 600;
+  min-width: 160px;
+}
+
+/* "Page"/"Blog" next to the title - quieter than the "Draft" badge. */
+.boat-rudder__dashboard__badge.boat-rudder__dashboard__badge--type {
+  background: #e2e2e4;
+  color: #333;
+  font-weight: 600;
+}
+
+/* Summary capped at two lines so a long one doesn't stretch the row. */
+.boat-rudder__dashboard__clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 160px;
+}
+
+.boat-rudder__dashboard__nowrap {
+  white-space: nowrap;
+}
+
+/* "No entries ..." row (entries/list-empty_epoch3.html), with its own
+   "+ New entry" button. */
+.boat-rudder__dashboard__table td.boat-rudder__dashboard__empty-state {
+  padding: 32px 10px;
+  text-align: center;
+  color: #666;
+}
+
+.boat-rudder__dashboard__empty-state p {
+  margin: 0 0 12px;
+}
+
+.boat-rudder__dashboard__empty-state form {
+  margin: 0;
+}
+
+.boat-rudder__dashboard__table tbody tr:hover td.boat-rudder__dashboard__empty-state {
+  background: transparent;
+}
+
+/* "Dashboard / Site settings / Themes" above a maintainer page's <h1>:
+   the ancestors only, every one a link - the <h1> is the current page. */
+.boat-rudder__dashboard__breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 13px;
+}
+
+.boat-rudder__dashboard__breadcrumb li + li::before {
+  content: "/";
+  margin: 0 8px;
+  color: #999;
 }
 
 /* .boat-rudder__dashboard__categories {
@@ -1901,17 +2164,66 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 
 .boat-rudder__analytics__totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
 .boat-rudder__analytics__stat-card { background: #f4f4f6; border: 1px solid #e2e2e4; padding: 16px 20px; text-align: center; }
-.boat-rudder__analytics__stat-card--ewml { border-top: 2px solid #bbb; }
-.boat-rudder__analytics__stat-card--e0 { border-top: 2px solid #999; }
-.boat-rudder__analytics__stat-card--e1 { border-top: 2px solid #777; }
-.boat-rudder__analytics__stat-card--e2 { border-top: 2px solid #3800aa; }
-.boat-rudder__analytics__stat-card--e3 { border-top: 2px solid #680072; }
+.boat-rudder__analytics__stat-card--ewml { border-top: 2px solid #2a78d6; }
+.boat-rudder__analytics__stat-card--e0 { border-top: 2px solid #eb6834; }
+.boat-rudder__analytics__stat-card--e1 { border-top: 2px solid #1baf7a; }
+.boat-rudder__analytics__stat-card--e2 { border-top: 2px solid #eda100; }
+.boat-rudder__analytics__stat-card--e3 { border-top: 2px solid #e87ba4; }
 .boat-rudder__analytics__stat-value { font-size: 28px; font-weight: 700; color: #1a1a1a; line-height: 1; }
 .boat-rudder__analytics__stat-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .8px; margin-top: 6px; }
 
 .boat-rudder__analytics__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .boat-rudder__analytics__table-block { background: #f4f4f6; border: 1px solid #e2e2e4; padding: 16px 18px; }
 .boat-rudder__analytics__table-block--wide { grid-column: 1 / -1; }
+
+/* ============================================================
+   ANALYTICS CHARTS (server-side SVG, analytics_charts.c)
+   ============================================================ */
+/* Categorical: one fixed color per epoch (1 = WML ... 5 = epoch 3), the
+   same order the stat cards' top borders use. Validated as a set against
+   this theme's block surface (adjacent-pair CVD separation and
+   normal-vision floor). */
+.boat-rudder__chart__series--1 { color: #2a78d6; }
+.boat-rudder__chart__series--2 { color: #eb6834; }
+.boat-rudder__chart__series--3 { color: #1baf7a; }
+.boat-rudder__chart__series--4 { color: #eda100; }
+.boat-rudder__chart__series--5 { color: #e87ba4; }
+.boat-rudder__chart__series--accent { color: #3800aa; }
+.boat-rudder__chart__series--muted { color: #a3a3ad; }
+
+.boat-rudder__chart__svg { display: block; overflow: visible; }
+.boat-rudder__chart__svg text { font-family: inherit; font-variant-numeric: tabular-nums; }
+.boat-rudder__chart__bar { fill: currentColor; }
+.boat-rudder__chart__hit { fill: transparent; }
+.boat-rudder__chart__row:hover .boat-rudder__chart__bar { opacity: .8; }
+.boat-rudder__chart__label { font-size: 12px; fill: currentColor; }
+.boat-rudder__chart__svg a .boat-rudder__chart__label { fill: var(--br-color-link-normal, #680072); }
+.boat-rudder__chart__svg a:hover .boat-rudder__chart__label { text-decoration: underline; }
+.boat-rudder__chart__value { font-size: 12px; fill: #444444; }
+.boat-rudder__chart__track { fill: #e2e2e4; }
+.boat-rudder__chart__axis-label { font-size: 11px; fill: #666666; }
+.boat-rudder__chart__axis-label--strong { font-weight: 700; fill: currentColor; }
+.boat-rudder__chart__baseline { stroke: #bbbbbb; stroke-width: 1; }
+
+/* Donut + its legend, stacked so it fits a 220px grid block. */
+.boat-rudder__chart--donut { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.boat-rudder__chart__slice { stroke: currentColor; transition: stroke-width .1s; }
+.boat-rudder__chart__slice:hover { stroke-width: 22; }
+.boat-rudder__chart__center-value { font-size: 20px; font-weight: 700; fill: currentColor; }
+.boat-rudder__chart__center-label { font-size: 10px; fill: #666666; }
+.boat-rudder__chart__legend { list-style: none; margin: 0; padding: 0; width: 100%; font-size: 12px; }
+.boat-rudder__chart__legend li { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.boat-rudder__chart__swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
+.boat-rudder__chart__legend-label { flex: 1; }
+.boat-rudder__chart__legend-value { color: #444444; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* "Visits per day" spans the panel, between the totals and the grid. */
+.boat-rudder__analytics__table-block--chart { margin-bottom: 12px; }
+
+/* Each chart's numbers as a table (Today | 7 days), folded under it. */
+.boat-rudder__chart__table { margin-top: 10px; }
+.boat-rudder__chart__table > summary { font-size: 11px; color: #666666; cursor: pointer; }
+.boat-rudder__chart__table[open] > summary { margin-bottom: 6px; }
 .boat-rudder__analytics__table-title {
   font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase;
   letter-spacing: .8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e2e4;

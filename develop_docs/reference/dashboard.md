@@ -99,8 +99,9 @@ so the other epochs only ever show "this functionality is not available".
 ```c
 char *dashboard(int epoch, const char *lang, const char *user_id, const char *role);
 ```
-For `EPOCH_MODERN`, loads `dashboard_epoch<N>.html` and fills its nav-links and entries-table
-placeholders based on `role` (see "Roles and privileges" below). Other epochs return the static
+For `EPOCH_MODERN`, loads `dashboard_epoch<N>.html` and fills its placeholders in page order -
+the options menu, the analytics summary (admin only, `""` for an Autor) and the pending-entries
+rows - based on `role` (see "Roles and privileges" below). Other epochs return the static
 `dashboard_epoch<N>.html` fragment unchanged - `lang`/`user_id`/`role` are ignored.
 
 ### `src/modules/error/error.c`
@@ -117,7 +118,7 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
-| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN`, an Administrador (`role == "admin"`) sees the Categories/Languages/Menu/Users/Analytics/Site settings nav links (`dashboard/nav-admin_epoch3.html`) and a read-only table of every `entries` document (any `type`, up to `ENTRIES_LIST_LIMIT`, newest `header.date` first) via `entries_admin_rows(epoch, lang, NULL, NULL)`; an Autor sees only a **Log out** item (`dashboard/nav-author_epoch3.html`; the admin list ends with the same item) and only their own `type:"blog"` entries via `entries_admin_rows(epoch, lang, "blog", user_id)`. Rows have the same fields as the blog list plus `type` ("Page"/"Blog"). Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
+| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN` the page opens with "Welcome back" and, on its right, a **Menu** dropdown and a **Log out** button, then has two parts (three for an Administrador). (1) **Option groups**, inside the Menu dropdown (a `<details>`, so it works without JS; a small inline script in `dashboard_epoch3.html` closes it on an outside click or Escape) - an Administrador gets `dashboard/nav-admin_epoch3.html`: *Content* (Entries, Categories, Media library, Menu), *Site* (General, Themes, Fonts, Languages, Epoch preview), *Administration* (Users, Analytics report); an Autor gets `nav-author_epoch3.html`: *Content* (Entries, Media library). (2) For an Administrador only, the **analytics summary** (`analytics_summary()`, see [analytics.md](analytics.md#dashboard-summary)). (3) **Entries pending publication** - unpublished entries only (`enabled != true`), with **+ New entry** and **View all** (`/dashboard/entries`) next to the heading: every type for an Administrador (`entries_admin_rows(epoch, lang, NULL, NULL, true, true)`), only their own `type:"blog"` entries for an Autor (`entries_admin_rows(epoch, lang, "blog", user_id, true, false)` - no Delete button). Rows: see [Entries listing](#entries-listing-srcmodulesentries_admin-embedded-in-dashboard) below. Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
 | `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()` - Administrador only, an Autor session gets `302 /dashboard`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
 | `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
 | `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
@@ -148,7 +149,8 @@ Loads `error_epoch<N>.html` and fills its 2 `%s` placeholders (status code, mess
 | `/dashboard/users/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `users_admin_form()` pre-filled via `cms_get_user_values()` (password field always empty). |
 | `/dashboard/users/<id>/edit` | `POST` | Same guards. `parse_user_form()`; if `<id> == user_id` (editing yourself), the new role is not `"admin"` and `cms_count_admins() == 1`, re-renders the form with "No puedes quitarte el unico rol de administrador." Otherwise `cms_update_user(id, email, role, password)` (`$set`s `email`/`role`, and `password` only if non-empty - a blank password leaves the stored hash unchanged). On success, `302 /dashboard/users`; on failure, re-renders the form with "No se pudo actualizar el usuario. Verifica el email." |
 | `/dashboard/users/<id>/delete` | `POST` | Same guards. If `<id> == user_id`, `users_admin_list(epoch, "No puedes eliminar tu propia cuenta.")`. Else if the target user's role is `"admin"` and `cms_count_admins() == 1`, `users_admin_list(epoch, "No se puede eliminar el ultimo administrador.")`. Otherwise `cms_delete_user(id)`, `302 /dashboard/users`. |
-| `/logout` | `POST` | `POST` only (`GET` → `405`). When a session cookie is present the CSRF token must match it (`csrf_token` field or `X-CSRF-Token` header), else `403`; then `destroy_session()` (if MongoDB is up). Responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`) - also with no or an expired session. Posted by the **Log out** button at the end of the dashboard's option list (`dashboard/nav-admin_epoch3.html` / `nav-author_epoch3.html`). |
+| `/dashboard/entries` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`), `require_dashboard_session_role()`. `dashboard_entries()`: the full entries table (`dashboard/entries/list_epoch3.html`), published and unpublished, same role filter as `/dashboard`; an unpublished entry's title carries a **Draft** badge (`entries/list-draft_epoch3.html`). |
+| `/logout` | `POST` | `POST` only (`GET` → `405`). When a session cookie is present the CSRF token must match it (`csrf_token` field or `X-CSRF-Token` header), else `403`; then `destroy_session()` (if MongoDB is up). Responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`) - also with no or an expired session. Posted by the **Log out** button next to "Welcome back" on the dashboard home (`dashboard/dashboard_epoch3.html`). |
 
 ### Epoch restriction (security)
 
@@ -180,7 +182,8 @@ privileges" below).
 
 ### Entries listing (`src/modules/entries_admin/`, embedded in `/dashboard`)
 
-`entries_admin_rows(epoch, lang, type_filter, created_by_hex)` returns the `<tbody>` rows for
+`entries_admin_rows(epoch, lang, type_filter, created_by_hex, unpublished_only, can_delete)`
+returns the `<tbody>` rows for
 the table embedded in `dashboard_epoch<N>.html` (`EPOCH_MODERN` only - `dashboard()` passes them
 through `render_template()`; other epochs' static templates are returned unchanged). The table
 lists `entries` documents (`db.entries.find({})` - **no** `enabled` filter, so drafts are listed
@@ -190,13 +193,29 @@ and `created_by_hex`, if non-NULL, restrict the query to `{type: type_filter, cr
 ObjectId(created_by_hex)}` - `dashboard()` passes `(NULL, NULL)` for an Administrador (every
 entry, any `type`) and `("blog", user_id)` for an Autor (only their own `type:"blog"` entries).
 Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the same fields as the home/blog
-list - image, title (linked to `/page/<link>` or `/blog/<link>` depending on `type`), summary,
-author, date and category tags (`elements/category/category_epoch<N>.html`) - plus a `type`
-column ("Page"/"Blog") and an "Edit"/"Delete" actions cell (`/dashboard/entries/<id>/edit`,
-`POST /dashboard/entries/<id>/delete`). `cms_get_admin_entries()` shares its row population
+list - image, title (linked to the editor, `/dashboard/entries/<id>/edit`), summary (clamped to
+two lines), author, date and category tags (`elements/category/category_epoch<N>.html`). The
+title carries the "Draft" badge for an unpublished entry and a "Page"/"Blog" badge for its
+`type`. The actions cell has "Edit", "View" (the public `/page/<link>` or `/blog/<link>`, in a
+new tab - a draft is visible there to a signed-in user) and, only when `entries_admin_rows()` gets
+`can_delete` (Administrador), "Delete" (`entries/list-row-delete_epoch<N>.html`, a
+`POST /dashboard/entries/<id>/delete` form behind a `confirm()`). With no entries,
+`list-empty_epoch<N>.html` shows the message and its own "+ New entry" button. `cms_get_admin_entries()` shares its row population
 with `cms_get_blog_entries()` via the `CmsBlogListItem` struct, which now also carries `type`
 and `id` (hex ObjectId). `dashboard_epoch<N>.html` also has a static "+ New entry"
 `POST /dashboard/entries/new` button above the table.
+
+### Maintainer page conventions (epoch 3)
+
+- **Breadcrumb**: every maintainer page except the entry editor and the media library opens with
+  `<nav class="boat-rudder__dashboard__breadcrumb">` listing its ancestors as links
+  (`Dashboard / Site settings / Themes`); the `<h1>` below it is the current page. It replaces the
+  old "Back to ..." links at the bottom.
+- **Header**: lists with a "New ..." action (entries, categories, users, menu) put it on the right
+  of the `<h1>` in a `boat-rudder__dashboard__panel-header`, like the dashboard home's panels.
+- **Buttons**: `boat-rudder__dashboard__button` plus `--primary` for create/save actions and
+  `--danger` for destructive ones. Every Delete/Remove form asks first with
+  `onsubmit="return confirm(...)"`.
 
 ### Entry editor (`src/db/cms_entries_admin.c`, `src/modules/entry_editor/`)
 

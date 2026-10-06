@@ -917,8 +917,9 @@ The full request table:
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the session cookie is valid → `302 /dashboard`. Otherwise `login(epoch, NULL)` via `buildPageWebSite()`. `EPOCH_MODERN`: real form. Other epochs: "not available". |
 | `/login` | `POST` | `EPOCH_MODERN` only (other epochs re-render "not available", no DB access). `503` if MongoDB isn't ready. Otherwise `auth_login_user()` → success: new session + `Set-Cookie` + `302 /dashboard`; failure: `200` with the form + "Invalid email or password." |
-| `/dashboard` | `GET` | `503` if MongoDB isn't ready. Otherwise `validate_session_cookie()`: valid → `dashboard(epoch)` via `buildPageWebSite()`; invalid/missing/expired → `302 /login`. |
-| `/logout` | `POST` | CSRF-checked when a session cookie is present (`403` otherwise); destroys the session (if any) and responds `302 /` with a cleared `session` cookie (`Max-Age=0`). `GET` → `405`. Sent by the **Log out** button in the dashboard's option list. |
+| `/dashboard` | `GET` | `503` if MongoDB isn't ready. Otherwise `validate_session_cookie()`: valid → `dashboard(epoch)` via `buildPageWebSite()` (epoch 3: a "Menu" dropdown with the option groups, an analytics summary with SVG charts for admins, then entries pending publication); invalid/missing/expired → `302 /login`. |
+| `/dashboard/entries` | `GET` | Epoch 3, any role: every entry, published or not ("View all"). |
+| `/logout` | `POST` | CSRF-checked when a session cookie is present (`403` otherwise); destroys the session (if any) and responds `302 /` with a cleared `session` cookie (`Max-Age=0`). `GET` → `405`. Sent by the **Log out** button next to "Welcome back" on the dashboard home. |
 
 ### 5.4 Centralized epoch-aware error pages
 

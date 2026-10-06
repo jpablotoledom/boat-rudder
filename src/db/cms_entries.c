@@ -315,6 +315,8 @@ static void populate_entry_list_item(const bson_t *doc, const char *lang, CmsBlo
         ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
     item->type = (bson_iter_init_find(&iter, doc, "type") && BSON_ITER_HOLDS_UTF8(&iter))
         ? strdup(bson_iter_utf8(&iter, NULL)) : strdup("");
+    item->enabled = bson_iter_init_find(&iter, doc, "enabled") &&
+                    BSON_ITER_HOLDS_BOOL(&iter) && bson_iter_bool(&iter);
 
     resolve_header_fields(doc, lang, &item->header_image_url, &item->header_title,
                            &item->header_summary, &item->header_author, item->header_date,
@@ -365,6 +367,7 @@ void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out,
 }
 
 void cms_get_admin_entries(const char *lang, const char *type_filter, const char *created_by_hex,
+                            bool unpublished_only,
                             CmsBlogListItem **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
@@ -379,6 +382,9 @@ void cms_get_admin_entries(const char *lang, const char *type_filter, const char
         bson_oid_init_from_string(&created_by_oid, created_by_hex);
         bson_append_oid(query, "created_by", -1, &created_by_oid);
     }
+    // $ne rather than {enabled: false}: a document missing the field is not
+    // published either (cms_get_entry_by_link() only serves enabled: true).
+    if (unpublished_only) BCON_APPEND(query, "enabled", "{", "$ne", BCON_BOOL(true), "}");
 
     bson_t *opts = BCON_NEW(
         "sort", "{", "header.date", BCON_INT32(-1), "}",

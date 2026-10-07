@@ -1,13 +1,12 @@
-#define _XOPEN_SOURCE 700 // Define POSIX.1-2008 compliance level
+#include "mainbanner.h"
+#include "../../db/cms_themes.h"
+#include "../../utils/request_theme.h"
 
-#include "../../include/read_file.h"
-#include "../../include/generate_url_theme.h"
-#include <stdlib.h>
-
-const char *mainbanner(int epoch) {
-    char *filename_mainbanner_html = generate_url_theme("mainbanner/mainbanner_epoch%d.html", epoch);
-    const char *mainbanner_response =  read_file_to_string(filename_mainbanner_html);
-    free(filename_mainbanner_html);
-    
-    return mainbanner_response;
+char *mainbanner(int epoch) {
+    // cms_get_theme_banner() falls back to the active theme's own on-disk
+    // mainbanner/mainbanner_epoch<N>.html when the DB has no override, so
+    // a fresh install renders exactly as before this became DB-backed -
+    // and switching themes (request_theme(), per-visitor) switches the
+    // banner along with the theme's colors.
+    return cms_get_theme_banner(request_theme(), epoch);
 }

@@ -1,0 +1,120 @@
+@startuml site-settings-components
+
+title Boat Rudder - Site Settings, Themes and Fonts (as implemented) - Components
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+actor Admin
+actor Visitor
+
+package "web_server" {
+    [http_router\nrequire_admin_session()\ntheme_key_is_valid()] as ROUTER
+}
+
+package "modules/site_settings_admin" {
+    [site_settings_general_page()\nsite_settings_themes_page()\nsite_settings_banner_page()\nsite_settings_footer_page()\nsite_settings_logo_page()\nsite_settings_css_page()\nsite_settings_preview_page()] as SETADMIN
+}
+
+package "modules/fonts_admin" {
+    [fonts_admin_list()] as FONTADMIN
+}
+
+package "html_builder" {
+    [orchestrator] as ORCH
+    [page_layout_wrap()\nsplice_footer / splice_footer_logo\nsplice_retro_colors / splice_theme_colors\nsplice_site_name] as LAYOUT
+}
+
+package "modules" {
+    [mainbanner()] as MAINBANNER
+    [menu()\nlogo + theme_selector()] as MENU
+    [theme_page()\n/theme] as THEMEPAGE
+}
+
+package "db" {
+    [cms_site_settings\nsite_name, active_theme] as CMSSET
+    [cms_themes\ncolors (34), banner_html, footer_html,\nlogo (CmsLogoConfig), logo_html (legacy),\nlogo_font, css_epoch3,\ncss_admin_epoch3] as CMSTHEMES
+    [cms_fonts\nname, filename] as CMSFONTS
+    [mongodb_manager] as MONGO
+}
+
+package "utils" {
+    [request_theme\n?theme → cookie → active_theme → config] as REQTHEME
+    [theme_catalog\nlist_theme_keys()] as TCAT
+    [generate_url_theme\ntheme → html/templates fallback] as URLTHEME
+    [image_convert\n+ wbmp_writer] as IMGCONV
+}
+
+database "html/themes/<key>/\n(templates, assets/,\nstyles_epoch3.css, styles_admin_epoch3.css)" as THEMEFS
+database "html/templates/dashboard/settings/\nhtml/templates/dashboard/fonts/" as TPLFS
+database "html/assets/fonts/" as FONTFS
+database "MongoDB\nsite_settings (singleton)\nthemes (sparse, per key)\nfonts" as DB
+
+' Admin side
+Admin --> ROUTER : /dashboard/settings*\n/dashboard/api/theme-assets/*
+ROUTER --> SETADMIN : pages + POST saves
+ROUTER --> FONTADMIN : /dashboard/settings/fonts
+ROUTER --> CMSSET : site name, activate
+ROUTER --> CMSTHEMES : colors, banner, footer,\nlogo config, css, css/restore
+ROUTER --> CMSFONTS : upload / delete
+ROUTER --> FONTFS : write / remove font file
+ROUTER --> THEMEFS : theme-assets upload/list/delete\n(assets/<component>/epoch<N>/)
+ROUTER --> IMGCONV : epoch -1 logo:\nPNG/JPEG → 1-bit WBMP
+SETADMIN --> TCAT
+SETADMIN --> TPLFS
+FONTADMIN --> TPLFS
+
+' Visitor side
+Visitor --> ROUTER : any page\n/theme, /theme/set\n/themes/<key>/styles(_admin)_epoch3.css
+ROUTER --> REQTHEME : request_theme_set(Cookie, ?theme)
+REQTHEME --> TCAT : theme_key_is_valid()
+REQTHEME --> CMSSET : cms_get_active_theme_key()
+ROUTER --> ORCH
+ROUTER --> THEMEPAGE
+ROUTER --> CMSTHEMES : cms_get_theme_css(key)\n(DB override or file)
+ORCH --> MAINBANNER
+ORCH --> MENU
+ORCH --> LAYOUT
+MAINBANNER --> CMSTHEMES : cms_get_theme_banner()
+MENU --> CMSTHEMES : cms_get_theme_logo_config()
+MENU --> TCAT : theme_selector()
+LAYOUT --> CMSTHEMES : footer, logo, colors, logo font
+LAYOUT --> CMSFONTS : cms_get_font_filename_by_name()
+LAYOUT --> CMSSET : cms_get_site_name()
+URLTHEME --> REQTHEME
+URLTHEME --> THEMEFS
+
+CMSSET --> MONGO
+CMSTHEMES --> MONGO
+CMSFONTS --> MONGO
+MONGO --> DB
+
+note bottom of CMSTHEMES
+  A theme with no document renders exactly from
+  its files + THEME_DEFAULTS. Every empty
+  banner/footer/logo/css value falls back to the
+  theme's on-disk file.
+end note
+
+note right of LAYOUT
+  epoch 3: {{THEME_COLORS}} →
+    <style>:root{--br-color-*...}
+    + @font-face for the logo font
+  epoch 1/2: {{COLOR_*}} → hex attributes
+    (epoch 1 bgcolor = body_background_epoch1)
+  epoch 0/-1: no color model
+end note
+
+@enduml

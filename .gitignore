@@ -1,4 +1,7 @@
 build
+build2
 bin
 ssl
 configs
+*.
+!.gitignore

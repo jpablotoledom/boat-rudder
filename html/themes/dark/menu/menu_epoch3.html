@@ -1,0 +1,155 @@
+<div class="boat-rudder-navbar-space">
+  <div class="boat-rudder-navbar">
+    <!-- Pinned to the left edge, outside __content, mirroring the options
+         bar on the right - it must not shift when the centred menu grows. -->
+    <div class="boat-rudder-navbar__user-corner" id="userCorner">
+%s
+    </div>
+
+    <div class="boat-rudder-navbar__content">
+      <div class="boat-rudder-navbar__title boat-rudder-navbar__title--onslidelogo" id="navbarTitle">
+        <a href="/">%s</a>
+      </div>
+
+      <button class="boat-rudder-navbar__toggle" id="navbarToggle">
+        <span class="boat-rudder-navbar__toggle-bar"></span>
+        <span class="boat-rudder-navbar__toggle-bar"></span>
+        <span class="boat-rudder-navbar__toggle-bar"></span>
+      </button>
+
+      <div class="boat-rudder-navbar__menu boat-rudder-navbar__menu--onslidelogo" id="navbarMenu">
+%s
+      </div>
+    </div>
+
+    <!-- Pinned to the right edge, outside __content, like the previous site's
+         options bar - it must not shift when the centred menu grows. -->
+    <div class="boat-rudder-navbar__options" id="optionsMenu">
+%s
+%s
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const navbarTitle = document.getElementById('navbarTitle');
+  const navbarMenu = document.getElementById('navbarMenu');
+  const toggleBtn = document.getElementById('navbarToggle');
+  const isHome = window.location.pathname === '/';
+
+  if (isHome) {
+    const updateScroll = () => {
+      const threshold = window.innerWidth < 500 ? 20 : 100;
+      if (window.scrollY > threshold) {
+        navbarTitle.classList.remove('boat-rudder-navbar__title--onslidelogo');
+        navbarMenu.classList.remove('boat-rudder-navbar__menu--onslidelogo');
+      } else {
+        navbarTitle.classList.add('boat-rudder-navbar__title--onslidelogo');
+        navbarMenu.classList.add('boat-rudder-navbar__menu--onslidelogo');
+      }
+    };
+
+    function throttle(func, limit) {
+      let lastFunc;
+      let lastRan;
+      return function (...args) {
+        if (!lastRan) {
+          func.apply(this, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(() => {
+            if (Date.now() - lastRan >= limit) {
+              func.apply(this, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      };
+    }
+
+    updateScroll();
+    window.addEventListener('scroll', throttle(updateScroll, 50));
+  } else {
+    navbarTitle.classList.remove('boat-rudder-navbar__title--onslidelogo');
+    navbarMenu.classList.remove('boat-rudder-navbar__menu--onslidelogo');
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    navbarMenu.classList.toggle('boat-rudder-navbar__menu--open');
+  });
+
+  // Below 600px the options bar (theme + language) has no room next to the
+  // hamburger and title, so both selectors move inside the hamburger dropdown
+  // and go back to the bar on wider screens. The same nodes are moved, so
+  // their ids and the drop-down handlers below keep working.
+  const optionsBar = document.getElementById('optionsMenu');
+  const optionsMq = window.matchMedia('(max-width: 599px)');
+  let menuOptions = null;
+  const placeOptions = () => {
+    if (!optionsBar) return;
+    if (optionsMq.matches) {
+      if (!menuOptions) {
+        menuOptions = document.createElement('div');
+        menuOptions.className = 'boat-rudder-navbar__menu-options';
+      }
+      while (optionsBar.firstElementChild) menuOptions.appendChild(optionsBar.firstElementChild);
+      if (menuOptions.children.length) navbarMenu.appendChild(menuOptions);
+    } else if (menuOptions) {
+      while (menuOptions.firstElementChild) optionsBar.appendChild(menuOptions.firstElementChild);
+      menuOptions.remove();
+    }
+  };
+  placeOptions();
+  optionsMq.addEventListener('change', placeOptions);
+
+  // Language drop-down. Every entry is a plain link to /language/set, so this
+  // only toggles visibility - with JS off the same links live on /language.
+  const langBtn = document.getElementById('navbarLangBtn');
+  const langWrap = document.getElementById('navbarLang');
+  if (langBtn && langWrap) {
+    langBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = langWrap.classList.toggle('boat-rudder-navbar-lang--open');
+      langBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', (e) => {
+      if (!langWrap.contains(e.target)) {
+        langWrap.classList.remove('boat-rudder-navbar-lang--open');
+        langBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        langWrap.classList.remove('boat-rudder-navbar-lang--open');
+        langBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // Theme drop-down. Same mechanism as the language one above: every entry
+  // is a plain link to /theme/set, this only toggles visibility.
+  const themeBtn = document.getElementById('navbarThemeBtn');
+  const themeWrap = document.getElementById('navbarTheme');
+  if (themeBtn && themeWrap) {
+    themeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = themeWrap.classList.toggle('boat-rudder-navbar-theme--open');
+      themeBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', (e) => {
+      if (!themeWrap.contains(e.target)) {
+        themeWrap.classList.remove('boat-rudder-navbar-theme--open');
+        themeBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        themeWrap.classList.remove('boat-rudder-navbar-theme--open');
+        themeBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+})();
+</script>

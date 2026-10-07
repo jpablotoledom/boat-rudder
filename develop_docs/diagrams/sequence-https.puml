@@ -1,0 +1,91 @@
+@startuml sequence-https
+
+title Boat Rudder - HTTPS Request Sequence
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #FFF3E0
+    LifeLineBorderColor #E65100
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #FCE4EC
+    ParticipantBorderColor #880E4F
+}
+
+actor Client
+
+participant "server_listener\n(accept thread)" as SS
+participant "tls_context" as SSLM
+participant "connection_thread\n(pthread)" as CT
+participant "connection\n(I/O layer)" as CONN
+participant "http_router" as RH
+
+== Server Startup (once, in server_start) ==
+
+SS -> SSLM : tls_create_context(cert.pem, key.pem)
+activate SSLM
+SSLM -> SSLM : SSL_CTX_new(TLS_server_method())\nmin TLS 1.2, hardened ciphers
+SSLM -> SSLM : SSL_CTX_use_certificate_file()
+SSLM -> SSLM : SSL_CTX_use_PrivateKey_file()
+SSLM --> SS : ssl_ctx
+deactivate SSLM
+
+== TLS Connection Establishment ==
+
+Client -> SS : TCP SYN (https_port)
+SS -> SS : accept() → client_socket
+SS -> SS : too_many_connections(ip)?\ntry_register_connection()?
+
+alt rejected
+    SS -> Client : close() - no 429 and no handshake:\ncompleting TLS just to refuse would spend\nthe CPU the limit exists to save
+else accepted
+    SS -> SS : SSL_new(ssl_ctx) → ssl
+    SS -> SS : SSL_set_fd(ssl, client_socket)
+    SS -> CT : pthread_create(connection_thread,\n{socket, root_dir, ssl})
+
+    activate CT
+    CT -> CT : setsockopt SO_RCVTIMEO / SO_SNDTIMEO\n= connection_io_timeout_secs (5 s)
+
+    CT -> CONN : SSL_accept(ssl)
+    activate CONN
+    CONN <-> Client : TLS Handshake
+    CONN --> CT : ret > 0 (success) or error
+    deactivate CONN
+
+    alt SSL_accept failed
+        CT -> CT : goto cleanup
+    else TLS established
+
+== Encrypted Request / Response ==
+
+        CT -> RH : http_route(ssl_read, conn_ctx, root_dir)
+        activate RH
+        loop read headers (no 400 ms legacy wait on TLS)
+            RH -> CONN : ssl_read(ctx, buf, size)
+            CONN -> Client : SSL_read() [encrypted]
+            CONN --> RH : plaintext bytes
+        end
+
+        RH -> RH : body, parse, request_*_set(),\nanalytics, resolve_epoch(), route\n(identical to the HTTP sequence)
+
+        RH -> CONN : connection_write() [SSL_write → encrypted]
+        CONN -> Client : encrypted response
+
+        RH -> CONN : connection_close()
+        CONN -> Client : SSL_shutdown() + close(socket)
+        deactivate RH
+    end
+
+== Cleanup ==
+
+    CT -> CT : unregister_connection()
+    note right of CT
+      server_stop() waits (≤ 10 s) on conn_cond
+      for active connections before
+      tls_free_context(ssl_ctx)
+    end note
+    deactivate CT
+end
+
+@enduml

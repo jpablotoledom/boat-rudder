@@ -1,0 +1,1606 @@
+<article class="boat-rudder-entry-editor" id="entryEditor" data-entry-id="%s" data-langs='%s'>
+
+  <!-- Fixed top bar -->
+  <div class="boat-rudder-entry-editor__topbar">
+    <div class="boat-rudder-entry-editor__topbar-left">
+      <a href="/dashboard" class="boat-rudder-entry-editor__back boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm">&#8592; Dashboard</a>
+      <button class="boat-rudder-entry-editor__preview-btn boat-rudder-btn boat-rudder-btn--sm" onclick="openBlogPreview()">&#128065; View post</button>
+    </div>
+    <div class="boat-rudder-entry-editor__topbar-center">
+      <button class="boat-rudder-entry-editor__save-btn boat-rudder-btn boat-rudder-btn--primary" id="editor-save-btn" onclick="editorSaveAll()">Save all</button>
+      <span class="boat-rudder-entry-editor__save-status" id="editor-save-status"></span>
+      <div class="boat-rudder-entry-editor-autosave-toggle" onclick="toggleAutoSave()" title="Toggle auto-save">
+        <span class="boat-rudder-entry-editor-autosave-toggle__label" id="autosave-label">Manual</span>
+        <div class="boat-rudder-switch" id="autosave-switch">
+          <div class="boat-rudder-switch__knob"></div>
+        </div>
+      </div>
+    </div>
+    <div class="boat-rudder-entry-editor__topbar-right">
+      <div class="boat-rudder-entry-editor-publish-toggle" onclick="togglePublish()">
+        <span class="boat-rudder-entry-editor-publish-toggle__status" id="publish-status-label">Draft</span>
+        <div class="boat-rudder-switch" id="publish-switch">
+          <div class="boat-rudder-switch__knob"></div>
+        </div>
+      </div>
+      <div class="boat-rudder-entry-editor__lang-toggle">
+%s
+      </div>
+    </div>
+  </div>
+
+  <!-- Block type toolbar -->
+  <div class="boat-rudder-entry-editor-block-toolbar">
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('title')">&sect; Title</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('image')">&square; Image</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('gallery')">&#9632; Gallery</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('byline')">&#9998; Byline</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('separator')">&#9135; Separator</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('link')">&#128279; Link</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('list')">&#9776; List</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('generic')">&#9965; HTML</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('table')">&#9974; Table</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
+  </div>
+
+  <!-- Two-column body -->
+  <div class="boat-rudder-entry-editor__body">
+    <!-- Left sidebar -->
+    <div class="boat-rudder-entry-editor__sidebar">
+      <div class="boat-rudder-entry-editor__sidebar-inner">
+%s
+        <hr class="boat-rudder-entry-editor__sidebar-divider">
+%s
+      </div>
+    </div>
+    <!-- Right: content blocks -->
+    <div class="boat-rudder-entry-editor__main">
+%s
+    </div>
+  </div>
+</article>
+<div id="modalContainer"></div>
+
+<script>
+(function () {
+  var root = document.getElementById('entryEditor');
+  var entryId = root.dataset.entryId;
+  var langs = JSON.parse(root.dataset.langs);
+  var currentLang = langs[0];
+  var autoSaveTimer = null;
+  var autoSaveEnabled = false;
+  var dirty = false;
+  var activeEditBlock = null;
+
+  document.body.classList.add('boat-rudder-entry-editor-mode');
+
+  function apiUrl(suffix) {
+    return '/dashboard/api/entries/' + entryId + suffix;
+  }
+
+  function postForm(url, params) {
+    return fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    }).then(function (res) { return res.json(); });
+  }
+
+  function setStatus(text, cls) {
+    var el = document.getElementById('editor-save-status');
+    el.textContent = text;
+    el.className = 'boat-rudder-entry-editor__save-status' +
+      (cls ? ' boat-rudder-entry-editor__save-status--' + cls : '');
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /* ---- Publish toggle ---- */
+  function initPublishToggle() {
+    var cb = document.querySelector('#metaSidebar [name="enabled"]');
+    if (!cb) return;
+    var sw = document.getElementById('publish-switch');
+    var label = document.getElementById('publish-status-label');
+    if (cb.checked) {
+      sw.classList.add('boat-rudder-switch--on');
+      label.textContent = 'Published';
+      label.classList.add('boat-rudder-entry-editor-publish-toggle__status--published');
+    } else {
+      sw.classList.remove('boat-rudder-switch--on');
+      label.textContent = 'Draft';
+      label.classList.remove('boat-rudder-entry-editor-publish-toggle__status--published');
+    }
+  }
+
+  window.togglePublish = function () {
+    var cb = document.querySelector('#metaSidebar [name="enabled"]');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    initPublishToggle();
+    setContentChanged();
+  };
+
+  /* ---- Autosave toggle ---- */
+  window.toggleAutoSave = function () {
+    autoSaveEnabled = !autoSaveEnabled;
+    var sw = document.getElementById('autosave-switch');
+    var label = document.getElementById('autosave-label');
+    if (autoSaveEnabled) {
+      sw.classList.add('boat-rudder-switch--on');
+      label.textContent = 'Auto';
+      label.classList.add('boat-rudder-entry-editor-autosave-toggle__label--on');
+    } else {
+      sw.classList.remove('boat-rudder-switch--on');
+      label.textContent = 'Manual';
+      label.classList.remove('boat-rudder-entry-editor-autosave-toggle__label--on');
+    }
+    if (autoSaveEnabled && dirty) editorScheduleAutoSave();
+  };
+
+  /* ---- Language switching ---- */
+  function applyLangVisibility(scopeEl) {
+    var panels = scopeEl.querySelectorAll('.boat-rudder-entry-editor-block__lang-content');
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].classList.toggle('boat-rudder-entry-editor-block__lang-content--active', panels[i].dataset.lang === currentLang);
+    }
+  }
+
+  window.setLang = function (code) {
+    currentLang = code;
+    var tabs = root.querySelectorAll('.boat-rudder-entry-editor__lang-btn');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('boat-rudder-btn--active', tabs[i].dataset.lang === code);
+    }
+    applyLangVisibility(document);
+    refreshAllPreviews();
+  };
+
+  /* ---- Block preview/edit ---- */
+  window.activateBlock = function (el) {
+    if (!el) return;
+    var block = el.closest ? el.closest('.boat-rudder-entry-editor-block') : el;
+    if (!block || block.classList.contains('boat-rudder-entry-editor-block--editing')) return;
+    if (activeEditBlock && activeEditBlock !== block) {
+      deactivateBlock(activeEditBlock);
+    }
+    block.classList.add('boat-rudder-entry-editor-block--editing');
+    activeEditBlock = block;
+    initBlockEditors(block);
+  };
+
+  window.deactivateBlock = function (el) {
+    if (!el) return;
+    var block = el.closest ? el.closest('.boat-rudder-entry-editor-block') : el;
+    if (!block) return;
+    block.classList.remove('boat-rudder-entry-editor-block--editing');
+    if (activeEditBlock === block) activeEditBlock = null;
+    refreshBlockPreview(block);
+  };
+
+  // Escape, or a click anywhere outside the block being edited, closes it -
+  // except while the media picker or the image lightbox is open on top,
+  // which handle their own Escape and whose clicks belong to them.
+  function overlayOpen() {
+    var media = document.querySelector('#modalContainer .boat-rudder-modal');
+    if (media && getComputedStyle(media).display !== 'none') return true;
+    var lightbox = document.getElementById('imageModal');
+    return !!(lightbox && lightbox.classList.contains('boat-rudder-modal--active'));
+  }
+
+  function closeAddBlockMenu() {
+    var menu = document.getElementById('addBlockMenu');
+    if (!menu || !menu.classList.contains('boat-rudder-entry-editor-add-block__dropdown--open')) return false;
+    menu.classList.remove('boat-rudder-entry-editor-add-block__dropdown--open');
+    return true;
+  }
+
+  // Escape closes the topmost thing first: an open "+ Add block" menu, and
+  // only on a second press the block being edited.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || overlayOpen()) return;
+    if (closeAddBlockMenu()) return;
+    if (activeEditBlock) deactivateBlock(activeEditBlock);
+  });
+
+  // Judged by where the press started, not where the click lands: a text
+  // selection dragged out of the block still started inside it. Bubble
+  // phase, so a click on another block has already switched to that one,
+  // and a toolbar button's insertNewComponent() has already captured the
+  // open block as its insertion anchor before this closes it.
+  var pressTarget = null;
+  document.addEventListener('mousedown', function (e) { pressTarget = e.target; }, true);
+  document.addEventListener('click', function (e) {
+    var t = pressTarget || e.target;
+    pressTarget = null;
+    if (document.contains(t) && !t.closest('.boat-rudder-entry-editor-add-block')) closeAddBlockMenu();
+    if (!activeEditBlock || overlayOpen()) return;
+    if (!document.contains(t)) return; // removed by its own handler (a deleted table row...)
+    if (activeEditBlock.contains(t) || t.closest('#modalContainer, #imageModal')) return;
+    // "+ Add block" keeps the open block: the new one is inserted right after
+    // it (insertNewComponent() anchors on activeEditBlock), and closing it
+    // here would also shrink the layout under the menu as it opens.
+    if (t.closest('.boat-rudder-entry-editor-add-block')) return;
+    // The top bar's controls act on the whole entry (language, save,
+    // publish...): switching language or saving mid-edit keeps the block open.
+    if (t.closest('.boat-rudder-entry-editor__topbar')) return;
+    deactivateBlock(activeEditBlock);
+  });
+
+  function initBlockEditors(block) {
+    var type = block.dataset.type;
+    if (type === 'paragraph') { initParagraphEditors(block); updateMergeButton(block); }
+    if (type === 'title') initBlockHeadingBtns(block);
+    if (type === 'gallery') initGalleryBlock(block);
+    if (type === 'image') initImageBlock(block);
+    if (type === 'link') initLinkBlock(block);
+    if (type === 'list') initListBlock(block);
+    if (type === 'youtube-embed') initYouTubeBlock(block);
+    if (type === 'code-text') initCodeBlock(block);
+    if (type === 'table') initTableBlock(block);
+    if (type === 'social-networks') initSocialBlock(block);
+    applyLangVisibility(block);
+  }
+
+  /* ---- Block preview rendering ---- */
+
+  // Block types whose public rendering is made server-side (code-text's
+  // highlighting, gallery's thumbnails/tiles, table's rows, image's size/align
+  // classes, paragraph's style variant) get previewed with that exact
+  // epoch 3 output from /dashboard/api/block-preview, so the editor can't
+  // drift from what readers see. `fallbackHtml` only fills the gap before the
+  // first response (or if it fails); a per-block token drops a slower, older
+  // response that lands after a newer one.
+  //
+  // An unchanged block keeps its current preview: the editor refreshes every
+  // preview often (language switch, closing a block), and replacing the
+  // markup would reload a YouTube iframe or every gallery image each time.
+  function fetchServerPreview(blockEl, preview, type, text, extra, fallbackHtml, done) {
+    var key = type + '\u0000' + text + '\u0000' + extra;
+    // The node check catches another branch having replaced the preview
+    // since (e.g. "Empty table"), which makes the cached key stale.
+    if (blockEl._previewKey === key && blockEl._previewNode &&
+        blockEl._previewNode.parentNode === preview) return;
+    if (!preview.innerHTML) preview.innerHTML = fallbackHtml;
+    var token = (blockEl._previewToken || 0) + 1;
+    blockEl._previewToken = token;
+    var params = new URLSearchParams();
+    params.set('type', type);
+    params.set('text', text);
+    params.set('extra', extra);
+    fetch('/dashboard/api/block-preview', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    })
+      .then(function (r) { if (!r.ok) throw new Error('Failed'); return r.text(); })
+      .then(function (html) {
+        if (blockEl._previewToken !== token) return;
+        preview.innerHTML = html;
+        blockEl._previewKey = key;
+        blockEl._previewNode = preview.firstElementChild;
+        if (done) done();
+      })
+      .catch(function () { if (blockEl._previewToken === token) preview.innerHTML = fallbackHtml; });
+  }
+
+  window.refreshBlockPreview = function (blockEl) {
+    if (!blockEl) return;
+    var type = blockEl.dataset.type;
+    var preview = blockEl.querySelector('.boat-rudder-entry-editor-block__preview');
+    if (!preview) return;
+
+    var panel = blockEl.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
+    var textField = panel ? (panel.querySelector('.boat-rudder-entry-editor__richtext') || panel.querySelector('[name="text"]')) : null;
+    var text = '';
+    if (textField) {
+      text = textField.classList && textField.classList.contains('boat-rudder-entry-editor__richtext')
+        ? textField.innerHTML
+        : textField.value;
+    }
+    var extraField = blockEl.querySelector('[name="extra_data"]');
+    var extra = extraField ? extraField.value : '';
+
+    if (type === 'title') {
+      var level = parseInt(extra) || 2;
+      preview.innerHTML = text.trim()
+        ? '<h' + level + ' class="boat-rudder-entry-editor-preview__title">' + escapeHtml(text) + '</h' + level + '>'
+        : '<span class="boat-rudder-empty">Empty title</span>';
+    } else if (type === 'paragraph') {
+      if (text) {
+        fetchServerPreview(blockEl, preview, 'paragraph', text, extra,
+          '<div class="boat-rudder-entry-editor-preview__paragraph">' + text + '</div>');
+      } else {
+        preview.innerHTML = '<div class="boat-rudder-entry-editor-preview__paragraph"><span class="boat-rudder-empty">Empty paragraph</span></div>';
+      }
+    } else if (type === 'image') {
+      if (text) {
+        // The stored path has no size suffix; only the generated variants exist
+        // on disk, so the fallback asks for the thumbnail like galleries do.
+        var imgThumb = text.trim().replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+        // extra_data is "caption|width|align": only the first field is text.
+        var imgCaption = extra.split('|')[0];
+        fetchServerPreview(blockEl, preview, 'image', text, extra,
+          '<figure class="boat-rudder-entry-editor-preview__image"><img src="' + escapeHtml(imgThumb) + '" alt="' + escapeHtml(imgCaption) + '"><figcaption>' + escapeHtml(imgCaption) + '</figcaption></figure>');
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">No image URL</span>';
+      }
+    } else if (type === 'byline') {
+      preview.innerHTML = (text.trim() || extra.trim())
+        ? '<div class="boat-rudder-entry-editor-preview__byline"><span class="boat-rudder-entry-editor-preview__byline-author">' + escapeHtml(text) + '</span><span class="boat-rudder-entry-editor-preview__byline-date">' + escapeHtml(extra) + '</span></div>'
+        : '<span class="boat-rudder-empty">Empty byline</span>';
+    } else if (type === 'gallery') {
+      if (text && text.split(';').some(function (u) { return u.trim(); })) {
+        var urls = text.split(';').filter(function (u) { return u.trim(); });
+        var thumbs = urls.map(function (u) {
+          var t = u.trim().replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+          return '<img class="boat-rudder-entry-editor-preview__thumb" src="' + escapeHtml(t) + '" alt="">';
+        }).join('');
+        // buildGalleries (lightbox_epoch3.html) folds a gallery behind its
+        // "+N" tile; it only runs on page load, so rerun it for the new one.
+        fetchServerPreview(blockEl, preview, 'gallery', text, extra, thumbs, function () {
+          if (window.buildGalleries) window.buildGalleries();
+        });
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty gallery</span>';
+      }
+    } else if (type === 'separator') {
+      preview.innerHTML = '<hr style="border:none;border-top:2px solid #555;margin:8px 0;">';
+    } else if (type === 'link') {
+      preview.innerHTML = extra
+        ? '<a href="#" class="boat-rudder-entry-editor-preview__link">' + escapeHtml(text || extra) + '</a>'
+        : '<span class="boat-rudder-empty">No URL</span>';
+    } else if (type === 'list') {
+      if (text) {
+        var items = text.split('\n').filter(function (l) { return l.trim(); });
+        var tag = extra === 'ol' ? 'ol' : 'ul';
+        preview.innerHTML = '<' + tag + ' class="boat-rudder-entry-editor-preview__list">' +
+          items.map(function (l) { return '<li>' + escapeHtml(l.trim()) + '</li>'; }).join('') +
+          '</' + tag + '>';
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty list</span>';
+      }
+    } else if (type === 'youtube-embed') {
+      if (extra) {
+        fetchServerPreview(blockEl, preview, 'youtube-embed', text, extra,
+          '<div class="boat-rudder-entry-editor-preview__youtube">&#9654; ' + escapeHtml(extra) + '</div>');
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">No YouTube URL</span>';
+      }
+    } else if (type === 'code-text') {
+      if (text) {
+        fetchServerPreview(blockEl, preview, 'code-text', text, extra,
+          '<pre class="boat-rudder-entry-editor-preview__code"><code>' + escapeHtml(text) + '</code></pre>');
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty code block</span>';
+      }
+    } else if (type === 'generic') {
+      if (text) {
+        preview.innerHTML = '<div class="boat-rudder-entry-editor-preview__generic">' + text.substring(0, 300) + '</div>';
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty HTML block</span>';
+      }
+    } else if (type === 'table') {
+      if (text) {
+        var tRows = text.split('\n').filter(function (l) { return l.trim(); }).map(function (l) { return l.split('|'); });
+        var tHasHeader = extra === 'header';
+        var tHtml = '<table class="boat-rudder-entry-editor-preview__table">' +
+          tRows.map(function (cells, rowIdx) {
+            var tag = tHasHeader && rowIdx === 0 ? 'th' : 'td';
+            return '<tr>' + cells.map(function (c) { return '<' + tag + '>' + escapeHtml(c) + '</' + tag + '>'; }).join('') + '</tr>';
+          }).join('') +
+          '</table>';
+        fetchServerPreview(blockEl, preview, 'table', text, extra, tHtml);
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty table</span>';
+      }
+    } else if (type === 'social-networks') {
+      if (extra) {
+        var parts = extra.split('|');
+        preview.innerHTML = '<div class="boat-rudder-entry-editor-preview__social">' + escapeHtml(parts[0]) + (parts[1] ? ': ' + escapeHtml(parts[1]) : '') + '</div>';
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">No social link</span>';
+      }
+    } else {
+      preview.innerHTML = '<span class="boat-rudder-empty">[' + escapeHtml(type) + ']</span>';
+    }
+  };
+
+  function refreshAllPreviews() {
+    var blocks = document.querySelectorAll('.boat-rudder-entry-editor-block');
+    for (var i = 0; i < blocks.length; i++) {
+      if (!blocks[i].classList.contains('boat-rudder-entry-editor-block--editing')) refreshBlockPreview(blocks[i]);
+    }
+  }
+
+  // Image and gallery previews are their published markup, whose pictures
+  // (and a gallery's "+N" tile) open the lightbox - but in the editor a click
+  // there should select the block, and the pictures are most of what there
+  // is to click (a floated image leaves its block with almost no height of
+  // its own). Capture phase, so it runs before their own handlers and can
+  // stop them.
+  document.getElementById('entryBlocks').addEventListener('click', function (e) {
+    var hit = e.target.closest(
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-entry-image img,' +
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-gallery-item');
+    if (!hit) return;
+    e.stopPropagation();
+    e.preventDefault();
+    activateBlock(hit.closest('.boat-rudder-entry-editor-block'));
+  }, true);
+
+  /* ---- Rich text (paragraph) ---- */
+  var _savedRichRange = null;
+  function saveRichSelection() {
+    var sel = window.getSelection();
+    _savedRichRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+  }
+  function restoreRichSelection() {
+    if (!_savedRichRange) return;
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(_savedRichRange);
+  }
+
+  window.applyRichLink = function () {
+    var url = prompt('URL:');
+    if (!url) return;
+    document.execCommand('createLink', false, url);
+
+    // execCommand has no way to set a class on the anchor it creates, so tag
+    // whichever link in the active editor is still missing it - since every
+    // link already there from a previous use of this button already carries
+    // it, that classless one is the one just made.
+    var editor = document.activeElement;
+    if (editor && editor.classList && editor.classList.contains('boat-rudder-entry-editor__richtext')) {
+      editor.querySelectorAll('a[href]:not(.boat-rudder-link__a)').forEach(function (a) {
+        a.className = 'boat-rudder-link__a';
+      });
+      syncRichtext(editor);
+    }
+  };
+
+  window.toggleSource = function (btn) {
+    var lc = btn.closest('.boat-rudder-entry-editor-block__lang-content');
+    if (!lc) return;
+    var richDiv = lc.querySelector('.boat-rudder-entry-editor__richtext');
+    var sourceTA = lc.querySelector('.boat-rudder-entry-editor__source-editor');
+    if (!richDiv || !sourceTA) return;
+    var isSource = btn.classList.contains('boat-rudder-btn--active');
+    if (isSource) {
+      richDiv.innerHTML = sourceTA.value;
+      syncRichtext(richDiv);
+      richDiv.style.display = '';
+      sourceTA.style.display = 'none';
+      btn.classList.remove('boat-rudder-btn--active');
+    } else {
+      sourceTA.value = richDiv.innerHTML;
+      richDiv.style.display = 'none';
+      sourceTA.style.display = '';
+      btn.classList.add('boat-rudder-btn--active');
+      if (!sourceTA.dataset.srcInit) {
+        sourceTA.dataset.srcInit = '1';
+        sourceTA.addEventListener('input', function () {
+          richDiv.innerHTML = sourceTA.value;
+          syncRichtext(richDiv);
+        });
+      }
+    }
+  };
+
+  function syncRichtext(div) {
+    var block = div.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var lang = div.dataset.for;
+    var ta = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"] [name="text"]');
+    if (!ta) return;
+    ta.value = div.innerHTML;
+    setContentChanged();
+  }
+
+  function initParagraphEditors(block) {
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
+      if (lc.querySelector('.boat-rudder-entry-editor__richtext')) return;
+      var ta = lc.querySelector('[name="text"]');
+      if (!ta) return;
+      var lang = lc.dataset.lang;
+
+      var toolbarHtml =
+        '<div class="boat-rudder-entry-editor-toolbar">' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Bold" onmousedown="event.preventDefault();document.execCommand(\'bold\')"><b>B</b></button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Italic" onmousedown="event.preventDefault();document.execCommand(\'italic\')"><i>I</i></button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Underline" onmousedown="event.preventDefault();document.execCommand(\'underline\')"><u>U</u></button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Strikethrough" onmousedown="event.preventDefault();document.execCommand(\'strikeThrough\')"><s>S</s></button>' +
+        '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Link" onmousedown="event.preventDefault();applyRichLink()">&#128279;</button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Remove format" onmousedown="event.preventDefault();document.execCommand(\'removeFormat\')">&#10005;</button>' +
+        '</div>' +
+        '<div class="boat-rudder-entry-editor-toolbar">' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Align left" onmousedown="event.preventDefault();document.execCommand(\'justifyLeft\')">&#8592;&#9644;</button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Align center" onmousedown="event.preventDefault();document.execCommand(\'justifyCenter\')">&#9644;&#9644;</button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Align right" onmousedown="event.preventDefault();document.execCommand(\'justifyRight\')">&#9644;&#8594;</button>' +
+        '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Bullet list" onmousedown="event.preventDefault();document.execCommand(\'insertUnorderedList\')">&#8226;</button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Numbered list" onmousedown="event.preventDefault();document.execCommand(\'insertOrderedList\')">1.</button>' +
+        '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Blockquote" onmousedown="event.preventDefault();document.execCommand(\'formatBlock\',false,\'blockquote\')">&#10077;</button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Code block" onmousedown="event.preventDefault();document.execCommand(\'formatBlock\',false,\'pre\')">&lt;/&gt;</button>' +
+        '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Undo" onmousedown="event.preventDefault();document.execCommand(\'undo\')">&#8617;</button>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Redo" onmousedown="event.preventDefault();document.execCommand(\'redo\')">&#8618;</button>' +
+        '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
+        '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="HTML source" onclick="toggleSource(this)">HTML</button>' +
+        '</div>';
+
+      lc.insertAdjacentHTML('afterbegin', toolbarHtml);
+
+      var div = document.createElement('div');
+      div.className = 'boat-rudder-entry-editor__richtext';
+      div.contentEditable = 'true';
+      div.spellcheck = true;
+      div.dataset.for = lang;
+      div.innerHTML = ta.value;
+
+      ta.style.display = 'none';
+      lc.insertBefore(div, ta);
+
+      var sourceTA = document.createElement('textarea');
+      sourceTA.className = 'boat-rudder-entry-editor__source-editor';
+      sourceTA.style.display = 'none';
+      lc.insertBefore(sourceTA, ta);
+
+      div.addEventListener('input', function () { syncRichtext(div); });
+      div.addEventListener('mouseup', saveRichSelection);
+      div.addEventListener('keyup', saveRichSelection);
+      div.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var html = e.clipboardData.getData('text/html');
+        var text = e.clipboardData.getData('text/plain');
+        if (html) {
+          var tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          tmp.querySelectorAll('[style],[class]').forEach(function (el) {
+            el.removeAttribute('style');
+            el.removeAttribute('class');
+          });
+          document.execCommand('insertHTML', false, tmp.innerHTML);
+        } else {
+          document.execCommand('insertText', false, text);
+        }
+      });
+    });
+  }
+
+  /* ---- Paragraph split / merge ---- */
+
+  var PARA_BLOCK_TAGS = /^(P|DIV|UL|OL|BLOCKQUOTE|PRE|H[1-6]|TABLE|FIGURE|HR)$/;
+
+  function htmlBox(html) {
+    var d = document.createElement('div');
+    d.innerHTML = html || '';
+    return d;
+  }
+
+  // Whitespace, a <br>, or an element with no text and no picture in it.
+  function isEmptyNode(n) {
+    if (n.nodeType === 3) return !n.textContent.replace(/[\s ]/g, '');
+    if (n.nodeType !== 1) return true;
+    if (n.tagName === 'BR') return true;
+    if (/^(IMG|HR|IFRAME|VIDEO)$/.test(n.tagName) || n.querySelector('img,hr,iframe,video')) return false;
+    return !n.textContent.replace(/[\s ]/g, '');
+  }
+
+  // Drops the empty leftovers a cut leaves at either edge (a dangling <br>,
+  // an emptied <p>, the &#160; between <br>s).
+  function trimEdges(box) {
+    while (box.firstChild && isEmptyNode(box.firstChild)) box.removeChild(box.firstChild);
+    while (box.lastChild && isEmptyNode(box.lastChild)) box.removeChild(box.lastChild);
+  }
+
+  // Where each of a paragraph block's own "paragraphs" begins, as indexes
+  // into box.childNodes: runs of top-level content separated by <br>, or a
+  // block element (<p>, <ul>...) on its own - how the stored HTML marks them
+  // (most of it is plain text with <br>&#160;<br> between paragraphs).
+  function segmentStarts(box) {
+    var starts = [], inRun = false;
+    Array.from(box.childNodes).forEach(function (n, i) {
+      if (n.nodeType === 1 && n.tagName === 'BR') { inRun = false; return; }
+      if (n.nodeType !== 1 && isEmptyNode(n)) return;
+      if (n.nodeType === 1 && PARA_BLOCK_TAGS.test(n.tagName)) { starts.push(i); inRun = false; return; }
+      if (!inRun) { starts.push(i); inRun = true; }
+    });
+    return starts;
+  }
+
+  // Splits `html` after its first `keep` paragraphs: [head, tail]. With no
+  // more than `keep` of them, everything stays in the head.
+  function splitAfterSegments(html, keep) {
+    var box = htmlBox(html);
+    var starts = segmentStarts(box);
+    if (keep >= starts.length) return [html || '', ''];
+    var tail = document.createElement('div');
+    Array.from(box.childNodes).slice(starts[keep]).forEach(function (n) { tail.appendChild(n); });
+    trimEdges(box);
+    trimEdges(tail);
+    return [box.innerHTML, tail.innerHTML];
+  }
+
+  // Two blocks' HTML as one: kept apart as separate paragraphs, with a blank
+  // line unless a block element (<p>...) already separates them.
+  function joinParagraphHtml(a, b) {
+    if (!a.replace(/[\s ]/g, '')) return b;
+    if (!b.replace(/[\s ]/g, '')) return a;
+    var aEndsBlock = /<\/(p|div|ul|ol|blockquote|pre|h[1-6]|table|figure)>\s*$/i.test(a);
+    var bStartsBlock = /^\s*<(p|div|ul|ol|blockquote|pre|h[1-6]|table|figure|hr)[\s>]/i.test(b);
+    return a + (aEndsBlock || bStartsBlock ? '' : '<br><br>') + b;
+  }
+
+  // A paragraph block's text for `lang`, in its stored textarea and - once
+  // the block has been opened - its rich-text editor.
+  function setParagraphText(block, lang, html) {
+    var lc = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"]');
+    if (!lc) return;
+    var ta = lc.querySelector('[name="text"]');
+    if (ta) ta.value = html;
+    var rich = lc.querySelector('.boat-rudder-entry-editor__richtext');
+    if (rich) rich.innerHTML = html;
+  }
+
+  // Merge is only possible from the second paragraph of a run onward.
+  function updateMergeButton(block) {
+    var btn = block && block.querySelector('.boat-rudder-entry-editor__merge-btn');
+    if (!btn) return;
+    var prev = block.previousElementSibling;
+    btn.disabled = !(prev && prev.dataset.type === 'paragraph');
+  }
+  new MutationObserver(function () {
+    if (activeEditBlock) updateMergeButton(activeEditBlock);
+  }).observe(document.getElementById('entryBlocks'), { childList: true });
+
+  // Moves everything after the cursor into a new paragraph block right
+  // below. The cursor sits in one language's text; every other language is
+  // cut after the same number of paragraphs (see segmentStarts()) - the
+  // paragraph the cursor is in stays above, whole, in the others.
+  window.splitParagraph = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
+    var div = panel && panel.querySelector('.boat-rudder-entry-editor__richtext');
+    var sel = window.getSelection();
+    var range = null;
+    if (div && div.style.display !== 'none') {
+      if (sel.rangeCount && div.contains(sel.getRangeAt(0).startContainer)) range = sel.getRangeAt(0);
+      else if (_savedRichRange && div.contains(_savedRichRange.startContainer)) range = _savedRichRange;
+    }
+    if (!range) {
+      setStatus('Place the cursor in the text where it should split', 'error');
+      return;
+    }
+
+    var before = document.createRange();
+    before.setStart(div, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    var after = document.createRange();
+    after.setStart(range.startContainer, range.startOffset);
+    after.setEnd(div, div.childNodes.length);
+
+    var head = document.createElement('div');
+    head.appendChild(before.cloneContents());
+    trimEdges(head);
+    var tail = document.createElement('div');
+    tail.appendChild(after.cloneContents());
+    trimEdges(tail);
+    if (!head.innerHTML || !tail.innerHTML) {
+      setStatus('Place the cursor between text: there must be text before and after it', 'error');
+      return;
+    }
+
+    var keep = segmentStarts(head).length;
+    var parts = {};
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
+      var lang = lc.dataset.lang;
+      var ta = lc.querySelector('[name="text"]');
+      parts[lang] = lang === currentLang ? [head.innerHTML, tail.innerHTML]
+                                         : splitAfterSegments(ta ? ta.value : '', keep);
+    });
+
+    createBlockAfter(block, 'paragraph').then(function (newBlock) {
+      if (!newBlock) return;
+      Object.keys(parts).forEach(function (lang) {
+        setParagraphText(block, lang, parts[lang][0]);
+        setParagraphText(newBlock, lang, parts[lang][1]);
+      });
+      var style = block.querySelector('[name="extra_data"]');
+      var newStyle = newBlock.querySelector('[name="extra_data"]');
+      if (style && newStyle) newStyle.value = style.value;
+
+      activateBlock(newBlock);
+      var rich = newBlock.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"] .boat-rudder-entry-editor__richtext');
+      if (rich) {
+        rich.focus();
+        var caret = document.createRange();
+        caret.setStart(rich, 0);
+        caret.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(caret);
+      }
+      newBlock.scrollIntoView({ block: 'nearest' });
+      setContentChanged();
+    });
+  };
+
+  // Appends this paragraph block's text, in every language, to the end of
+  // the paragraph block right above it, and removes this one.
+  window.mergeParagraphUp = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    var prev = block.previousElementSibling;
+    if (!prev || prev.dataset.type !== 'paragraph') return;
+
+    var joined = {};
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
+      var lang = lc.dataset.lang;
+      var ta = lc.querySelector('[name="text"]');
+      var prevTa = prev.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"] [name="text"]');
+      joined[lang] = joinParagraphHtml(prevTa ? prevTa.value : '', ta ? ta.value : '');
+    });
+
+    postForm(apiUrl('/blocks/' + block.dataset.blockId + '/delete'), new URLSearchParams()).then(function (data) {
+      if (!data.ok) {
+        setStatus('Error: ' + data.error, 'error');
+        return;
+      }
+      Object.keys(joined).forEach(function (lang) { setParagraphText(prev, lang, joined[lang]); });
+      if (activeEditBlock === block) activeEditBlock = null;
+      block.remove();
+      activateBlock(prev);
+      setContentChanged();
+      // The merged block is already deleted server-side, but its text lives
+      // only in this page (in the block above) until saved - save right away
+      // so leaving without saving can't lose it.
+      saveContent();
+    });
+  };
+
+  /* ---- Heading level ---- */
+  window.setHeadingLevel = function (btn, level) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) { hidden.value = level; }
+    block.querySelectorAll('.boat-rudder-entry-editor__heading-btn').forEach(function (b) {
+      b.classList.toggle('boat-rudder-btn--active', parseInt(b.dataset.level) === level);
+    });
+    setContentChanged();
+  };
+
+  function initBlockHeadingBtns(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (!hidden) return;
+    var level = parseInt(hidden.value) || 2;
+    block.querySelectorAll('.boat-rudder-entry-editor__heading-btn').forEach(function (b) {
+      b.classList.toggle('boat-rudder-btn--active', parseInt(b.dataset.level) === level);
+    });
+  }
+
+  /* ---- Advanced panel ---- */
+  window.toggleAdvanced = function (btn) {
+    var panel = btn.nextElementSibling;
+    if (!panel) return;
+    var isOpen = panel.classList.contains('boat-rudder-entry-editor-advanced__panel--open');
+    panel.classList.toggle('boat-rudder-entry-editor-advanced__panel--open', !isOpen);
+    btn.innerHTML = isOpen ? '&#9881; Advanced &#9656;' : '&#9881; Advanced &#9662;';
+    if (!isOpen) {
+      var block = btn.closest('.boat-rudder-entry-editor-block');
+      var hidden = block && block.querySelector('[name="extra_data"]');
+      var visible = panel.querySelector('.boat-rudder-entry-editor-advanced__input');
+      if (hidden && visible) visible.value = hidden.value;
+      var typeHidden = block && block.querySelector('[name="block_type"]');
+      var typeVisible = panel.querySelector('.boat-rudder-entry-editor-advanced__type-input');
+      if (typeHidden && typeVisible) typeVisible.value = typeHidden.value;
+    }
+  };
+
+  window.syncAdvancedInput = function (input) {
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = input.value;
+    setContentChanged();
+  };
+
+  /* ---- Content changed / autosave ---- */
+  window.setContentChanged = function () {
+    dirty = true;
+    if (autoSaveEnabled) editorScheduleAutoSave();
+  };
+
+  function editorScheduleAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(function () { editorSaveAll(); }, 3000);
+  }
+
+  window.onBlockInput = function (el) {
+    var block = el.closest('.boat-rudder-entry-editor-block');
+    if (block) refreshBlockPreview(block);
+    setContentChanged();
+  };
+
+  /* ---- Save functions ---- */
+  window.saveMeta = function () {
+    var sidebar = document.getElementById('metaSidebar');
+    var params = new URLSearchParams();
+    params.set('link', sidebar.querySelector('[name="link"]').value);
+    params.set('type', sidebar.querySelector('[name="type"]').value);
+    if (sidebar.querySelector('[name="enabled"]').checked) params.set('enabled', 'true');
+    var selected = sidebar.querySelector('[name="categories"]').selectedOptions;
+    for (var i = 0; i < selected.length; i++) params.append('categories', selected[i].value);
+    return postForm(apiUrl('/meta'), params).then(function (data) {
+      setStatus(data.ok ? 'Settings saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
+      return data;
+    });
+  };
+
+  window.saveHeader = function () {
+    var sidebar = document.getElementById('headerSidebar');
+    var params = new URLSearchParams();
+    params.set('image_url', sidebar.querySelector('[name="image_url"]').value);
+    params.set('date', sidebar.querySelector('[name="date"]').value);
+    // Sent explicitly as 1/0: an unchecked checkbox submits nothing on its own,
+    // so the server could not tell "unchecked" from "field absent".
+    var hideAuthor = sidebar.querySelector('[name="hide_author"]');
+    params.set('hide_author', hideAuthor && hideAuthor.checked ? '1' : '0');
+    for (var i = 0; i < langs.length; i++) {
+      var code = langs[i];
+      var panel = sidebar.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + code + '"]');
+      if (!panel) continue;
+      params.set('title_' + code, panel.querySelector('[name="title"]').value);
+      params.set('summary_' + code, panel.querySelector('[name="summary"]').value);
+    }
+    return postForm(apiUrl('/header'), params).then(function (data) {
+      setStatus(data.ok ? 'Header saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
+      return data;
+    });
+  };
+
+  window.saveContent = function () {
+    var blocks = document.querySelectorAll('#entryBlocks .boat-rudder-entry-editor-block');
+    var params = new URLSearchParams();
+    params.set('content_count', blocks.length);
+    for (var i = 0; i < blocks.length; i++) {
+      var blockEl = blocks[i];
+      params.set('content_' + i + '_id', blockEl.dataset.blockId);
+      params.set('content_' + i + '_type', blockEl.dataset.type);
+      params.set('content_' + i + '_order', i);
+      var extraField = blockEl.querySelector('[name="extra_data"]');
+      params.set('content_' + i + '_extra_data', extraField ? extraField.value : '');
+      for (var j = 0; j < langs.length; j++) {
+        var code = langs[j];
+        var panel = blockEl.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + code + '"]');
+        var textField = panel ? panel.querySelector('[name="text"]') : null;
+        params.set('content_' + i + '_text_' + code, textField ? textField.value : '');
+      }
+    }
+    return postForm(apiUrl('/content'), params).then(function (data) {
+      // Blocks stored before content[]._id existed come back with a server-minted
+      // id; adopt it so per-block delete and gallery edits target the right block.
+      if (data.ok && data.ids) {
+        for (var k = 0; k < blocks.length && k < data.ids.length; k++) {
+          if (data.ids[k]) blocks[k].dataset.blockId = data.ids[k];
+        }
+      }
+      setStatus(data.ok ? 'Content saved' : 'Error: ' + data.error, data.ok ? 'saved' : 'error');
+      return data;
+    });
+  };
+
+  window.editorSaveAll = function () {
+    setStatus('Saving...');
+    return Promise.all([saveMeta(), saveHeader(), saveContent()]).then(function (results) {
+      dirty = results.some(function (data) { return !data.ok; });
+      setStatus(dirty ? 'Save failed' : 'Saved', dirty ? 'error' : 'saved');
+    });
+  };
+
+  /* ---- Add / remove blocks ---- */
+  window.toggleAddBlockDropdown = function () {
+    var menu = document.getElementById('addBlockMenu');
+    var opening = !menu.classList.contains('boat-rudder-entry-editor-add-block__dropdown--open');
+    menu.classList.toggle('boat-rudder-entry-editor-add-block__dropdown--open', opening);
+    if (!opening) return;
+
+    // The menu opens upward, since the button sits under the last block. The
+    // editor area scrolls (overflow-y: auto), so with little or nothing above
+    // the button - an entry with no blocks yet - an upward menu is clipped
+    // out of sight: open it downward then, scrolled into view.
+    var down = 'boat-rudder-entry-editor-add-block__dropdown--down';
+    menu.classList.remove(down);
+    var btn = menu.previousElementSibling;
+    var scroller = menu.closest('.boat-rudder-entry-editor__main');
+    var roomAbove = btn.getBoundingClientRect().top -
+                    (scroller ? scroller.getBoundingClientRect().top : 0);
+    if (menu.offsetHeight + 4 > roomAbove) {
+      menu.classList.add(down);
+      menu.scrollIntoView({ block: 'nearest' });
+    }
+  };
+
+  // Creates a block of `type` server-side right after `anchor` (or at the
+  // end when there's none), puts it on the page and resolves with its
+  // element, or null on failure - shared by the add-block buttons and
+  // splitParagraph().
+  function createBlockAfter(anchor, type) {
+    var blocksEl = document.getElementById('entryBlocks');
+    var order = anchor ? Array.from(blocksEl.children).indexOf(anchor) + 1 : blocksEl.children.length;
+    var params = new URLSearchParams();
+    params.set('type', type);
+    params.set('order', order);
+
+    return postForm(apiUrl('/blocks'), params).then(function (data) {
+      if (!data.ok) {
+        setStatus('Error: ' + data.error, 'error');
+        return null;
+      }
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = data.html;
+      var blockEl = wrapper.firstElementChild;
+      if (anchor && anchor.parentNode === blocksEl) {
+        anchor.after(blockEl);
+      } else {
+        blocksEl.appendChild(blockEl);
+      }
+      applyLangVisibility(blockEl);
+      setupDragHandles();
+      setContentChanged();
+      return blockEl;
+    });
+  }
+
+  window.insertNewComponent = function (type) {
+    // New blocks land right after whichever one is currently selected, not
+    // always at the end - captured now, since activateBlock() below will
+    // clear activeEditBlock once the new block takes its place.
+    var anchor = activeEditBlock;
+    createBlockAfter(anchor, type).then(function (blockEl) {
+      if (!blockEl) return;
+      refreshBlockPreview(blockEl);
+      var menu = document.getElementById('addBlockMenu');
+      if (menu) menu.classList.remove('boat-rudder-entry-editor-add-block__dropdown--open');
+      activateBlock(blockEl);
+      blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
+  window.removeComponent = function (btn) {
+    var blockEl = btn.closest('.boat-rudder-entry-editor-block');
+    var blockId = blockEl.dataset.blockId;
+    postForm(apiUrl('/blocks/' + blockId + '/delete'), new URLSearchParams()).then(function (data) {
+      if (data.ok) {
+        if (activeEditBlock === blockEl) activeEditBlock = null;
+        blockEl.remove();
+        setContentChanged();
+      } else {
+        setStatus('Error: ' + data.error, 'error');
+      }
+    });
+  };
+
+  /* ---- Move blocks ---- */
+  window.moveBlockUp = function (btn) {
+    var blockEl = btn.closest('.boat-rudder-entry-editor-block');
+    var prev = blockEl.previousElementSibling;
+    if (prev) blockEl.parentNode.insertBefore(blockEl, prev);
+    setContentChanged();
+  };
+
+  window.moveBlockDown = function (btn) {
+    var blockEl = btn.closest('.boat-rudder-entry-editor-block');
+    var next = blockEl.nextElementSibling;
+    if (next) blockEl.parentNode.insertBefore(next, blockEl);
+    setContentChanged();
+  };
+
+  /* ---- Drag and drop ---- */
+  var dragging = null, clone = null, placeholder = null, dragOffsetY = 0;
+
+  function getBlockRows() {
+    return Array.from(document.querySelectorAll('#entryBlocks > .boat-rudder-entry-editor-block'));
+  }
+
+  function setupDragHandles() {
+    getBlockRows().forEach(function (row) {
+      // The open block's whole header bar drags too, from any spot that
+      // isn't one of its own controls (trash, Split/Merge, move, close...).
+      var grips = [row.querySelector('.boat-rudder-entry-editor-block__grip'),
+                   row.querySelector('.boat-rudder-entry-editor-block__header')].filter(Boolean);
+      grips.forEach(function (grip) {
+        if (grip.dataset.dragInit) return;
+        grip.dataset.dragInit = '1';
+        grip.addEventListener('mousedown', function (e) {
+          if (e.button !== 0) return;
+          if (e.target.closest('button, input, select, textarea, a, label')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          dragging = row;
+          var rect = row.getBoundingClientRect();
+          dragOffsetY = e.clientY - rect.top;
+
+          placeholder = document.createElement('div');
+          placeholder.style.cssText = 'height:4px;background:rgba(37,99,235,0.6);border-radius:2px;margin:2px 0;pointer-events:none;';
+
+          clone = row.cloneNode(true);
+          clone.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;opacity:0.88;pointer-events:none;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#222;border:1px solid #2563eb;border-radius:5px;box-sizing:border-box';
+
+          document.body.appendChild(clone);
+          row.after(placeholder);
+          row.style.cssText += ';visibility:hidden;height:4px;overflow:hidden;margin:0;padding:0;';
+          document.body.classList.add('boat-rudder-entry-editor-mode--dragging');
+        });
+      });
+    });
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    if (!dragging || !clone) return;
+    e.preventDefault();
+    clone.style.top = (e.clientY - dragOffsetY) + 'px';
+    var rows = getBlockRows().filter(function (r) { return r !== dragging; });
+    var inserted = false;
+    for (var i = 0; i < rows.length; i++) {
+      var rect = rows[i].getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        rows[i].before(placeholder);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted && placeholder.parentNode) {
+      document.getElementById('entryBlocks').appendChild(placeholder);
+    }
+  });
+
+  document.addEventListener('mouseup', function () {
+    if (!dragging) return;
+    if (placeholder && placeholder.parentNode) {
+      placeholder.parentNode.insertBefore(dragging, placeholder);
+    }
+    dragging.style.cssText = dragging.style.cssText
+      .replace(/visibility:[^;]+;?/g, '')
+      .replace(/height:[^;]+;?/g, '')
+      .replace(/overflow:[^;]+;?/g, '')
+      .replace(/margin:[^;]+;?/g, '')
+      .replace(/padding:[^;]+;?/g, '');
+    if (clone) clone.remove();
+    if (placeholder) placeholder.remove();
+    document.body.classList.remove('boat-rudder-entry-editor-mode--dragging');
+    dragging = null; clone = null; placeholder = null;
+    setContentChanged();
+  });
+
+  /* ---- Preview post ---- */
+  // Opens the entry's public URL - drafts included, since the server shows
+  // unpublished entries to anyone signed in to the dashboard (marked
+  // "[Draft]" in the title). Pages live under /page/, posts under /blog/.
+  window.openBlogPreview = function () {
+    var linkInput = document.querySelector('#metaSidebar [name="link"]');
+    var typeInput = document.querySelector('#metaSidebar [name="type"]');
+    if (linkInput && linkInput.value) {
+      var section = (typeInput && typeInput.value === 'page') ? '/page/' : '/blog/';
+      window.open(section + encodeURIComponent(linkInput.value), '_blank');
+    } else {
+      window.open('/dashboard', '_blank');
+    }
+  };
+
+  /* ---- Link block ---- */
+  function initLinkBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var input = block.querySelector('.boat-rudder-entry-editor__link-url-input');
+    if (input && hidden) input.value = hidden.value;
+  }
+
+  window.syncLinkUrl = function (input) {
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = input.value;
+    setContentChanged();
+  };
+
+  /* ---- List block ---- */
+  function initListBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var sel = block.querySelector('.boat-rudder-entry-editor__list-type-select');
+    if (sel && hidden) sel.value = hidden.value || 'ul';
+  }
+
+  window.setListType = function (sel) {
+    var block = sel.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = sel.value;
+    setContentChanged();
+  };
+
+  /* ---- YouTube block ---- */
+  function initYouTubeBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var input = block.querySelector('.boat-rudder-entry-editor__youtube-url-input');
+    if (input && hidden) input.value = hidden.value;
+    updateYouTubePreview(block);
+  }
+
+  window.syncYouTubeUrl = function (input) {
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = input.value;
+    updateYouTubePreview(block);
+    setContentChanged();
+  };
+
+  function youtubeToEmbed(url) {
+    if (!url) return '';
+    if (url.indexOf('youtube.com/embed/') !== -1) return url;
+    var m = url.match(/[?&]v=([^&]{11})/);
+    if (m) return 'https://www.youtube.com/embed/' + m[1];
+    var m2 = url.match(/youtu\.be\/([^?]{11})/);
+    if (m2) return 'https://www.youtube.com/embed/' + m2[1];
+    return url;
+  }
+
+  function updateYouTubePreview(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var preview = block.querySelector('.boat-rudder-entry-editor__youtube-preview');
+    if (!preview) return;
+    var url = hidden ? hidden.value : '';
+    if (!url) { preview.innerHTML = ''; return; }
+    var embed = youtubeToEmbed(url);
+    preview.innerHTML = '<iframe width="100%%" height="180" src="' + escapeHtml(embed) + '" frameborder="0" allowfullscreen></iframe>';
+  }
+
+  /* ---- Code-text block ---- */
+  function initCodeBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var sel = block.querySelector('.boat-rudder-entry-editor__code-lang-select');
+    if (sel && hidden) sel.value = hidden.value || '';
+  }
+
+  window.syncCodeLang = function (sel) {
+    var block = sel.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = sel.value;
+    setContentChanged();
+  };
+
+  /* ---- Table block ----
+     The raw textarea (rows on lines, cells separated by '|') stays the
+     source of truth the server reads; a visual grid is built over it per
+     language panel, mirroring the richtext swap-in above, and every edit
+     to the grid is serialized straight back into that textarea. */
+  function parseTableRows(text) {
+    if (!text || !text.trim())
+      return [['Column 1', 'Column 2', 'Column 3'], ['', '', ''], ['', '', '']];
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+      .filter(function (r) { return r.length > 0; })
+      .map(function (row) { return row.split('|'); });
+  }
+
+  function makeTableCell(value, isHeader, ta) {
+    var cell = document.createElement('input');
+    cell.type = 'text';
+    cell.className = 'boat-rudder-entry-editor__table-cell' +
+      (isHeader ? ' boat-rudder-entry-editor__table-cell--header' : '');
+    cell.value = value || '';
+    cell.addEventListener('click', function (e) { e.stopPropagation(); });
+    cell.addEventListener('input', function () { syncTableEditor(ta); });
+    return cell;
+  }
+
+  function buildTableGrid(editor, rows, hasHeader, ta) {
+    editor.innerHTML = '';
+    rows.forEach(function (cells, rowIdx) {
+      var rowDiv = document.createElement('div');
+      rowDiv.className = 'boat-rudder-entry-editor__table-row';
+      cells.forEach(function (val) {
+        rowDiv.appendChild(makeTableCell(val, hasHeader && rowIdx === 0, ta));
+      });
+      editor.appendChild(rowDiv);
+    });
+  }
+
+  function tableHasHeader(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    return !!hidden && hidden.value === 'header';
+  }
+
+  function syncTableEditor(ta) {
+    var lc = ta.closest('.boat-rudder-entry-editor-block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder-entry-editor__table-editor');
+    if (!editor) return;
+    var rows = Array.from(editor.querySelectorAll('.boat-rudder-entry-editor__table-row')).map(function (row) {
+      return Array.from(row.querySelectorAll('.boat-rudder-entry-editor__table-cell'))
+        .map(function (c) { return c.value; }).join('|');
+    });
+    ta.value = rows.join('\n');
+    onBlockInput(ta);
+  }
+
+  function initTableBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var cb = block.querySelector('.boat-rudder-entry-editor__table-header-toggle');
+    var hasHeader = hidden ? hidden.value === 'header' : false;
+    if (cb) cb.checked = hasHeader;
+
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
+      var ta = lc.querySelector('[name="text"]');
+      if (!ta || lc.querySelector('.boat-rudder-entry-editor__table-editor')) return;
+
+      var toolbar = document.createElement('div');
+      toolbar.className = 'boat-rudder-entry-editor-toolbar';
+      toolbar.innerHTML =
+        '<button type="button" class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Add row" onclick="event.stopPropagation();addTableRow(this)">+&#8594; Row</button>' +
+        '<button type="button" class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Add column" onclick="event.stopPropagation();addTableCol(this)">+&#8595; Col</button>' +
+        '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
+        '<button type="button" class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Delete last row" onclick="event.stopPropagation();delTableRow(this)">&#8722; Row</button>' +
+        '<button type="button" class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Delete last column" onclick="event.stopPropagation();delTableCol(this)">&#8722; Col</button>';
+
+      var editor = document.createElement('div');
+      editor.className = 'boat-rudder-entry-editor__table-editor';
+
+      lc.insertBefore(toolbar, ta);
+      lc.insertBefore(editor, ta);
+      ta.style.display = 'none';
+
+      buildTableGrid(editor, parseTableRows(ta.value), hasHeader, ta);
+      syncTableEditor(ta);
+    });
+  }
+
+  window.setTableHeader = function (cb) {
+    var block = cb.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (hidden) hidden.value = cb.checked ? 'header' : '';
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
+      var editor = lc.querySelector('.boat-rudder-entry-editor__table-editor');
+      var firstRow = editor && editor.querySelector('.boat-rudder-entry-editor__table-row');
+      if (!firstRow) return;
+      firstRow.querySelectorAll('.boat-rudder-entry-editor__table-cell').forEach(function (c) {
+        c.classList.toggle('boat-rudder-entry-editor__table-cell--header', cb.checked);
+      });
+    });
+    refreshBlockPreview(block);
+    setContentChanged();
+  };
+
+  window.addTableRow = function (btn) {
+    var lc = btn.closest('.boat-rudder-entry-editor-block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder-entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var firstRow = editor.querySelector('.boat-rudder-entry-editor__table-row');
+    var colCount = firstRow ? firstRow.querySelectorAll('.boat-rudder-entry-editor__table-cell').length : 3;
+    var rowDiv = document.createElement('div');
+    rowDiv.className = 'boat-rudder-entry-editor__table-row';
+    for (var i = 0; i < colCount; i++) rowDiv.appendChild(makeTableCell('', false, ta));
+    editor.appendChild(rowDiv);
+    syncTableEditor(ta);
+  };
+
+  // Epoch 0/1 render tables as fixed-width ASCII art sized for an 80-column
+  // text terminal (see entry_page.c's render_table_ascii()); each column
+  // costs at least 3 border/padding characters plus a 6-character content
+  // floor once the row is too wide to fit and has to shrink, so a 9th
+  // column can never fit even at that floor (1 + 9*3 + 9*6 = 82 > 80).
+  // Capping the editor at 8 keeps every table on that renderer's readable
+  // side instead of letting it degrade quietly at render time.
+  var MAX_TABLE_COLS = 8;
+
+  window.addTableCol = function (btn) {
+    var lc = btn.closest('.boat-rudder-entry-editor-block__lang-content');
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    var editor = lc && lc.querySelector('.boat-rudder-entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var firstRow = editor.querySelector('.boat-rudder-entry-editor__table-row');
+    var colCount = firstRow ? firstRow.querySelectorAll('.boat-rudder-entry-editor__table-cell').length : 0;
+    if (colCount >= MAX_TABLE_COLS) {
+      alert('Tables are limited to ' + MAX_TABLE_COLS + ' columns, so they still fit an 80-column text browser.');
+      return;
+    }
+    var hasHeader = tableHasHeader(block);
+    editor.querySelectorAll('.boat-rudder-entry-editor__table-row').forEach(function (row, rowIdx) {
+      row.appendChild(makeTableCell('', hasHeader && rowIdx === 0, ta));
+    });
+    syncTableEditor(ta);
+  };
+
+  window.delTableRow = function (btn) {
+    var lc = btn.closest('.boat-rudder-entry-editor-block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder-entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var rows = editor.querySelectorAll('.boat-rudder-entry-editor__table-row');
+    if (rows.length > 1) { rows[rows.length - 1].remove(); syncTableEditor(ta); }
+  };
+
+  window.delTableCol = function (btn) {
+    var lc = btn.closest('.boat-rudder-entry-editor-block__lang-content');
+    var editor = lc && lc.querySelector('.boat-rudder-entry-editor__table-editor');
+    var ta = lc && lc.querySelector('[name="text"]');
+    if (!editor || !ta) return;
+    var firstRow = editor.querySelector('.boat-rudder-entry-editor__table-row');
+    if (!firstRow || firstRow.querySelectorAll('.boat-rudder-entry-editor__table-cell').length <= 1) return;
+    editor.querySelectorAll('.boat-rudder-entry-editor__table-row').forEach(function (row) {
+      var cells = row.querySelectorAll('.boat-rudder-entry-editor__table-cell');
+      if (cells.length > 0) cells[cells.length - 1].remove();
+    });
+    syncTableEditor(ta);
+  };
+
+  /* ---- Social-networks block ---- */
+  function initSocialBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (!hidden) return;
+    var parts = hidden.value.split('|');
+    var iconSel = block.querySelector('.boat-rudder-entry-editor__social-icon-select');
+    var urlInput = block.querySelector('.boat-rudder-entry-editor__social-url-input');
+    if (iconSel) iconSel.value = parts[0] || '';
+    if (urlInput) urlInput.value = parts[1] || '';
+  }
+
+  function syncSocialExtraData(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var iconSel = block.querySelector('.boat-rudder-entry-editor__social-icon-select');
+    var urlInput = block.querySelector('.boat-rudder-entry-editor__social-url-input');
+    if (hidden) hidden.value = (iconSel ? iconSel.value : '') + '|' + (urlInput ? urlInput.value : '');
+  }
+
+  window.syncSocialIcon = function (sel) {
+    var block = sel.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var preview = block.querySelector('.boat-rudder-entry-editor__social-icon-preview');
+    if (preview) preview.src = '/themes/dark/assets/social-networks/' + sel.value + '.svg';
+    syncSocialExtraData(block);
+    setContentChanged();
+  };
+
+  window.syncSocialUrl = function (input) {
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    syncSocialExtraData(block);
+    setContentChanged();
+  };
+
+  /* ---- Image block ---- */
+  // Opening a block hides its preview and shows the body, so the body needs its
+  // own picture: otherwise editing an image would show only the path textareas.
+  window.renderImagePreview = function (block) {
+    var container = block.querySelector('.boat-rudder-entry-editor__image-preview');
+    if (!container) return;
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
+    var field = panel ? panel.querySelector('[name="text"]') : null;
+    var url = field && field.value ? field.value.trim() : '';
+
+    container.innerHTML = '';
+    if (!url) {
+      container.innerHTML = '<span class="boat-rudder-entry-editor__gallery-empty">No image selected</span>';
+      return;
+    }
+    var img = document.createElement('img');
+    // Paths are stored bare; only the generated variants exist on disk.
+    img.src = url.replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+    img.className = 'boat-rudder-entry-editor__image-thumb';
+    img.alt = '';
+
+    // Mirror the chosen size and alignment so the controls show their effect.
+    var opts = (block.querySelector('[name="extra_data"]') || {}).value || '';
+    var parts = opts.split('|');
+    var width = ['100', '50', '30'].indexOf(parts[1]) >= 0 ? parts[1] : '100';
+    var align = ['left', 'center', 'right', 'float-left', 'float-right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
+    img.style.width = width + '%%';
+    container.style.justifyContent =
+      /left$/.test(align) ? 'flex-start' : /right$/.test(align) ? 'flex-end' : 'center';
+
+    container.appendChild(img);
+  };
+
+  // extra_data packs "caption|width|align"; the three controls read from and
+  // write back to that single hidden field. A value with no '|' is all caption,
+  // which is how blocks written before these options look.
+  function initImageBlock(block) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    var parts = hidden ? hidden.value.split('|') : [];
+    var caption = block.querySelector('.boat-rudder-entry-editor__image-caption');
+    var size = block.querySelector('.boat-rudder-entry-editor__image-size');
+    var align = block.querySelector('.boat-rudder-entry-editor__image-align');
+    if (caption) caption.value = parts[0] || '';
+    if (size) size.value = ['100', '50', '30'].indexOf(parts[1]) >= 0 ? parts[1] : '100';
+    if (align) align.value = ['left', 'center', 'right', 'float-left', 'float-right'].indexOf(parts[2]) >= 0 ? parts[2] : 'center';
+    renderImagePreview(block);
+  }
+
+  window.syncImageOptions = function (el) {
+    var block = el.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var hidden = block.querySelector('[name="extra_data"]');
+    var caption = block.querySelector('.boat-rudder-entry-editor__image-caption');
+    var size = block.querySelector('.boat-rudder-entry-editor__image-size');
+    var align = block.querySelector('.boat-rudder-entry-editor__image-align');
+    if (hidden) {
+      hidden.value = (caption ? caption.value : '') + '|' +
+                     (size ? size.value : '100') + '|' +
+                     (align ? align.value : 'center');
+    }
+    renderImagePreview(block);
+    refreshBlockPreview(block);
+    setContentChanged();
+  };
+
+  /* ---- Gallery block ---- */
+  function initGalleryBlock(block) {
+    var gp = block.querySelector('.boat-rudder-entry-editor__gallery-preview');
+    if (!gp) return;
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
+    var tf = panel ? panel.querySelector('[name="text"]') : null;
+    if (tf && tf.value) renderGalleryThumbs(gp, tf.value);
+  }
+
+  window.renderGalleryThumbs = function (container, value) {
+    container.innerHTML = '';
+    if (!value || !value.trim()) {
+      container.innerHTML = '<span class="boat-rudder-entry-editor__gallery-empty">No images selected</span>';
+      return;
+    }
+    value.split(';').forEach(function (url) {
+      url = url.trim();
+      if (!url) return;
+      var img = document.createElement('img');
+      img.src = url.replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+      img.className = 'boat-rudder-entry-editor__gallery-thumb';
+      img.alt = '';
+      img.draggable = true;
+      img.dataset.url = url;
+      container.appendChild(img);
+    });
+    initGalleryThumbDragDrop(container);
+  };
+
+  function initGalleryThumbDragDrop(container) {
+    var draggingThumb = null;
+    container.addEventListener('dragstart', function (e) {
+      draggingThumb = e.target.closest('.boat-rudder-entry-editor__gallery-thumb');
+      if (!draggingThumb) return;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(function () { if (draggingThumb) draggingThumb.classList.add('boat-rudder-entry-editor__gallery-thumb--dragging'); }, 0);
+    });
+    container.addEventListener('dragend', function () {
+      if (draggingThumb) draggingThumb.classList.remove('boat-rudder-entry-editor__gallery-thumb--dragging');
+      container.querySelectorAll('.boat-rudder-entry-editor__gallery-thumb').forEach(function (img) { img.classList.remove('boat-rudder-entry-editor__gallery-thumb--drag-over'); });
+      draggingThumb = null;
+    });
+    container.addEventListener('dragenter', function (e) { e.preventDefault(); });
+    container.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (!draggingThumb) return;
+      var target = e.target.closest('.boat-rudder-entry-editor__gallery-thumb');
+      if (!target || target === draggingThumb) return;
+      container.querySelectorAll('.boat-rudder-entry-editor__gallery-thumb').forEach(function (img) { img.classList.remove('boat-rudder-entry-editor__gallery-thumb--drag-over'); });
+      target.classList.add('boat-rudder-entry-editor__gallery-thumb--drag-over');
+      var imgs = Array.from(container.querySelectorAll('.boat-rudder-entry-editor__gallery-thumb'));
+      if (imgs.indexOf(draggingThumb) < imgs.indexOf(target)) target.after(draggingThumb);
+      else target.before(draggingThumb);
+    });
+    container.addEventListener('drop', function (e) {
+      e.preventDefault();
+      syncGalleryInput(container);
+    });
+  }
+
+  function syncGalleryInput(container) {
+    var block = container.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var urls = Array.from(container.querySelectorAll('.boat-rudder-entry-editor__gallery-thumb'))
+      .map(function (img) { return img.dataset.url; })
+      .filter(Boolean).join(';');
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content [name="text"]').forEach(function (tf) {
+      tf.value = urls;
+    });
+    setContentChanged();
+  }
+
+  window.openGalleryForBlock = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    window._galleryTargetBlock = block;
+    window.contentEditorGalleryType = 'gallery-block';
+    window.contentEditorGalleryId = block.dataset.blockId;
+    window.galleryElementsToUpdate = [];
+    loadMediaModal();
+  };
+
+  /* ---- Gallery modal ---- */
+  function activateScripts(container) {
+    container.querySelectorAll('script').forEach(function (old) {
+      var s = document.createElement('script');
+      s.textContent = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+  }
+
+  function loadMediaModal(callback) {
+    fetch('/dashboard/api/media/modal')
+      .then(function (r) { if (!r.ok) throw new Error('Failed'); return r.text(); })
+      .then(function (html) {
+        var container = document.getElementById('modalContainer');
+        container.innerHTML = html;
+        activateScripts(container);
+        var modal = container.querySelector('.boat-rudder-modal');
+        if (modal) modal.style.display = 'flex';
+        if (callback) callback();
+      })
+      .catch(function (err) { console.error(err); });
+  }
+
+  window.openImageGallery = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    window._galleryTargetBlock = block;
+    window.contentEditorGalleryType = 'image-block';
+    window.contentEditorGalleryId = block.dataset.blockId;
+    window.galleryElementsToUpdate = [];
+    loadMediaModal();
+  };
+
+  window.openGallery = function (elements, id, type) {
+    window.galleryElementsToUpdate = elements;
+    window.contentEditorGalleryType = type;
+    window.contentEditorGalleryId = id;
+    loadMediaModal();
+  };
+
+  /* ---- Header image preview ---- */
+  function updateHeaderImagePreview() {
+    var input = document.querySelector('#headerSidebar [name="image_url"]');
+    var preview = document.getElementById('header-img-preview');
+    if (!input || !preview) return;
+    var url = input.value.trim();
+    if (url) {
+      var thumb = url.replace(/(\.jpg|\.jpeg|\.gif|\.png)$/i, '_small$1');
+      preview.innerHTML = '<img src="' + thumb + '" alt="Cover">';
+    } else {
+      preview.innerHTML = '<span class="boat-rudder-entry-editor-img-preview__placeholder">No image</span>';
+    }
+  }
+
+
+  /* ---- Initialize ---- */
+  function init() {
+    initPublishToggle();
+    setLang(currentLang);
+    refreshAllPreviews();
+    setupDragHandles();
+    updateHeaderImagePreview();
+
+    var imgInput = document.querySelector('#headerSidebar [name="image_url"]');
+    if (imgInput) imgInput.addEventListener('input', updateHeaderImagePreview);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>

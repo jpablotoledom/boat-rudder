@@ -1,82 +1,122 @@
-#define _XOPEN_SOURCE 700 // Define POSIX.1-2008 compliance level
+#define _XOPEN_SOURCE 700
 
-#include "../include/config_loader.h"
+#include "config_loader.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// Define global variables
-int verbose_level = 0;          // Default is disabled
-int http_port = 0;            // Default value for the port
-int https_port = 0;               // Default value for the port
-char spreadsheet_id[128] = {0}; // Initialize as an empty string
-char api_key[128] = {0};        // Initialize as an empty string
-char theme[16] = {0};           // Initialize as an empty string
-char lang[16] = {0};            // Initialize as an empty string
-bool ssl_enabled = false;       // Default disabled ssl
-char ssl_cert[256] = {0};       // Initialize as an empty string
-char ssl_key[256] = {0};        // Initialize as an empty string
+int  verbose_level    = 3;
+int  http_port        = 8080;
+int  https_port       = 8443;
+bool ssl_enabled      = false;
+char ssl_cert[256]    = {0};
+char ssl_key[256]     = {0};
+char trusted_proxies[512] = {0};
+char theme[64]            = "dark";
+char lang[16]             = "Eng";
+char public_url[256]      = {0};
+int  force_epoch          = -2;
+char mongodb_uri[256]     = "mongodb://localhost:27017";
+char mongodb_db[64]       = "boat_rudder";
+int  session_ttl_seconds  = 86400;
 
-// Implementation of load_config
+int  ddos_max_connections       = 200;
+int  ddos_rate_window_secs      = 5;
+int  ddos_rate_limit            = 500;
+int  ddos_max_ips               = 1024;
+int  ddos_cleanup_interval_secs = 60;
+int  ddos_ip_stale_secs         = 300;
+int  connection_io_timeout_secs = 5;
+bool wap_gateway_enabled    = false;
+char wap_gateway_ips[256]   = {0};
+int  wap_gateway_rover_port = 49300;
+int  wap_gateway_wsp_port   = 9200;
+int  wap_gateway_rate_limit = 60;
+
 int load_config(const char *filename) {
-  FILE *file = fopen(filename, "r");
-  if (file == NULL) {
-    perror("Failed to open config file");
-    return -1; // Error opening the file
-  }
-
-  char line[256];
-  while (fgets(line, sizeof(line), file)) {
-    // Ignore empty lines or comments
-    if (line[0] == '\n' || line[0] == '#') {
-      continue;
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Failed to open config file");
+        return -1;
     }
 
-    // Look for '=' to split key and value
-    char *delimiter = strchr(line, '=');
-    if (delimiter == NULL) {
-      continue; // If there is no '=', it's not a valid line
+    char line[512];
+    while (fgets(line, sizeof(line), file)) {
+        if (line[0] == '\n' || line[0] == '#') continue;
+
+        char *delim = strchr(line, '=');
+        if (!delim) continue;
+
+        *delim = '\0';
+        char *key   = line;
+        char *value = delim + 1;
+        value[strcspn(value, "\n")] = '\0';
+
+        if (strcmp(key, "verbose_level") == 0) {
+            verbose_level = atoi(value);
+        } else if (strcmp(key, "http_port") == 0) {
+            http_port = atoi(value);
+        } else if (strcmp(key, "https_port") == 0) {
+            https_port = atoi(value);
+        } else if (strcmp(key, "ssl_enabled") == 0) {
+            ssl_enabled = atoi(value) != 0;
+        } else if (strcmp(key, "ssl_cert") == 0) {
+            strncpy(ssl_cert, value, sizeof(ssl_cert) - 1);
+            ssl_cert[sizeof(ssl_cert) - 1] = '\0';
+        } else if (strcmp(key, "ssl_key") == 0) {
+            strncpy(ssl_key, value, sizeof(ssl_key) - 1);
+            ssl_key[sizeof(ssl_key) - 1] = '\0';
+        } else if (strcmp(key, "trusted_proxies") == 0) {
+            strncpy(trusted_proxies, value, sizeof(trusted_proxies) - 1);
+            trusted_proxies[sizeof(trusted_proxies) - 1] = '\0';
+        } else if (strcmp(key, "theme") == 0) {
+            strncpy(theme, value, sizeof(theme) - 1);
+            theme[sizeof(theme) - 1] = '\0';
+        } else if (strcmp(key, "lang") == 0) {
+            strncpy(lang, value, sizeof(lang) - 1);
+            lang[sizeof(lang) - 1] = '\0';
+        } else if (strcmp(key, "public_url") == 0) {
+            strncpy(public_url, value, sizeof(public_url) - 1);
+            public_url[sizeof(public_url) - 1] = '\0';
+        } else if (strcmp(key, "force_epoch") == 0) {
+            force_epoch = atoi(value);
+        } else if (strcmp(key, "mongodb_uri") == 0) {
+            strncpy(mongodb_uri, value, sizeof(mongodb_uri) - 1);
+            mongodb_uri[sizeof(mongodb_uri) - 1] = '\0';
+        } else if (strcmp(key, "mongodb_db") == 0) {
+            strncpy(mongodb_db, value, sizeof(mongodb_db) - 1);
+            mongodb_db[sizeof(mongodb_db) - 1] = '\0';
+        } else if (strcmp(key, "session_ttl_seconds") == 0) {
+            session_ttl_seconds = atoi(value);
+        } else if (strcmp(key, "ddos_max_connections") == 0) {
+            ddos_max_connections = atoi(value);
+        } else if (strcmp(key, "ddos_rate_window_secs") == 0) {
+            ddos_rate_window_secs = atoi(value);
+        } else if (strcmp(key, "ddos_rate_limit") == 0) {
+            ddos_rate_limit = atoi(value);
+        } else if (strcmp(key, "ddos_max_ips") == 0) {
+            ddos_max_ips = atoi(value);
+        } else if (strcmp(key, "ddos_cleanup_interval_secs") == 0) {
+            ddos_cleanup_interval_secs = atoi(value);
+        } else if (strcmp(key, "ddos_ip_stale_secs") == 0) {
+            ddos_ip_stale_secs = atoi(value);
+        } else if (strcmp(key, "connection_io_timeout_secs") == 0) {
+            connection_io_timeout_secs = atoi(value);
+        } else if (strcmp(key, "wap_gateway_enabled") == 0) {
+            wap_gateway_enabled = atoi(value) != 0;
+        } else if (strcmp(key, "wap_gateway_ips") == 0) {
+            strncpy(wap_gateway_ips, value, sizeof(wap_gateway_ips) - 1);
+            wap_gateway_ips[sizeof(wap_gateway_ips) - 1] = '\0';
+        } else if (strcmp(key, "wap_gateway_rover_port") == 0) {
+            wap_gateway_rover_port = atoi(value);
+        } else if (strcmp(key, "wap_gateway_wsp_port") == 0) {
+            wap_gateway_wsp_port = atoi(value);
+        } else if (strcmp(key, "wap_gateway_rate_limit") == 0) {
+            wap_gateway_rate_limit = atoi(value);
+        }
     }
 
-    *delimiter = '\0'; // Replace '=' with the null terminator
-    char *key = line;
-    char *value = delimiter + 1;
-
-    // Remove newline characters from the value
-    value[strcspn(value, "\n")] = '\0';
-
-    // Assign values based on the key
-    if (strcmp(key, "verbose_level") == 0) {
-      verbose_level = atoi(value); // Convert to integer
-    } else if (strcmp(key, "http_port") == 0) {
-      http_port = atoi(value); // Convert to integer
-    } else if (strcmp(key, "spreadsheet_id") == 0) {
-      strncpy(spreadsheet_id, value, sizeof(spreadsheet_id) - 1);
-      spreadsheet_id[sizeof(spreadsheet_id) - 1] =
-          '\0'; // Ensure null terminator
-    } else if (strcmp(key, "api_key") == 0) {
-      strncpy(api_key, value, sizeof(api_key) - 1);
-      api_key[sizeof(api_key) - 1] = '\0'; // Ensure null terminator
-    } else if (strcmp(key, "theme") == 0) {
-      strncpy(theme, value, sizeof(theme) - 1);
-      theme[sizeof(theme) - 1] = '\0'; // Ensure null terminator
-    } else if (strcmp(key, "lang") == 0) {
-      strncpy(lang, value, sizeof(lang) - 1);
-      lang[sizeof(lang) - 1] = '\0'; // Ensure null terminator
-    } else if (strcmp(key, "ssl_enabled") == 0) {
-      ssl_enabled = atoi(value); // 0 = disabled, 1 = enabled
-    } else if (strcmp(key, "ssl_cert") == 0) {
-      strncpy(ssl_cert, value, sizeof(ssl_cert) - 1);
-      ssl_cert[sizeof(ssl_cert) - 1] = '\0'; // Ensures null termination
-    } else if (strcmp(key, "ssl_key") == 0) {
-      strncpy(ssl_key, value, sizeof(ssl_key) - 1);
-      ssl_key[sizeof(ssl_key) - 1] = '\0'; // Ensures null termination
-    } else if (strcmp(key, "https_port") == 0) {
-      https_port = atoi(value);
-    }
-  }
-
-  fclose(file);
-  return 0;
+    fclose(file);
+    return 0;
 }

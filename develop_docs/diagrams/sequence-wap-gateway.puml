@@ -1,0 +1,72 @@
+@startuml sequence-wap-gateway
+
+title Boat Rudder - WAP 1.x Gateway Request (UDP → loopback HTTP → WBXML)
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #E0F2F1
+    LifeLineBorderColor #00695C
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor "WAP phone / PDA\n(browser hardwired to a\ndead operator gateway IP)" as PHONE
+participant "trc-wap-relay\n(PC the device\nconnects through)" as RELAY
+participant "wap_gateway\n(gateway thread)" as GW
+participant "rate_allow()" as RATE
+participant "HTTP listener\n127.0.0.1:http_port\n(accept + connection thread)" as HTTP
+participant "http_router\n(epoch -1 rendering)" as ROUTER
+participant "wbxml" as WBXML
+
+PHONE -> RELAY : UDP datagram to <dead gateway IP>\n(WTP Invoke + WSP Get "http://any.host/blog/x?__page=1")
+RELAY -> GW : same datagram, forwarded to\nwap_gateway_ips : 49300 (rover) / 9200 (wsp)
+
+GW -> GW : framing check\nrover: WTP Invoke (PDU type 1), 4-byte header\nwsp: 1-byte TID
+GW -> GW : PDU type 0x40..0x44 (GET family)?\nURI = read_uintvar length, ≤ 1000 bytes
+alt malformed / not a GET
+    GW -> GW : ignore (client retries / times out)
+else
+    GW -> RATE : rate_allow(source ip)
+    alt over wap_gateway_rate_limit this minute
+        RATE --> GW : 0
+        GW -> GW : drop silently (log the first drop)
+    else allowed
+        RATE --> GW : 1
+        GW -> GW : page = __page from URI, then remove it\nlocal_path(): drop scheme://host and #fragment
+
+        loop up to 3 redirects
+            GW -> HTTP : GET /blog/x?preview_epoch=-1&wml_pages=all HTTP/1.0\nUser-Agent: BoatRudder-WAP-Gateway\nX-Forwarded-For: <phone ip>\n(10 s timeout, ≤ 1 MiB)
+            HTTP -> ROUTER : normal request path (anti-DDoS,\nanalytics, request_*_set, routing)
+            note right of ROUTER
+              preview_epoch=-1 → WML templates
+              wml_pages=all → response layer
+              skips its own pagination
+              X-Forwarded-For honored only if
+              127.0.0.1 ∈ trusted_proxies
+            end note
+            ROUTER --> HTTP : 200 text/vnd.wap.wml (whole deck, Latin-1)\nor 3xx Location / 404 / ...
+            HTTP --> GW : response
+        end
+
+        alt 200 text/vnd.wap.wml
+            GW -> WBXML : wbxml_compile_page(deck, latin1, uri, page,\nWAP_PAGE_BYTES = 860)
+            WBXML -> WBXML : parse WML tree, split first card\ninto ≤ 860-byte one-card decks,\nadd "<< Prev" / "Next >>" (__page=N),\nprefix site-relative links with scheme://host
+            WBXML --> GW : WbxmlBuf (page N)
+            GW -> GW : WSP Reply 0x04, 200 (0x20),\nContent-Type 0x94 (wmlc)
+        else 200 image/vnd.wap.wbmp
+            GW -> GW : WSP Reply, Content-Type 0xA1 (wbmp), body as-is
+        else 404 / unreachable / other
+            GW -> WBXML : wbxml_message_card("Not found" | "Error" |\n"Unavailable", text)
+            WBXML --> GW : one-card deck
+        end
+
+        GW -> GW : prepend framing\nrover: Invoke header mirrored, PDU type → Result (2)\nwsp: echo TID
+        GW -> RELAY : sendto() from the socket the request hit
+        RELAY -> PHONE : UDP reply (single packet)
+    end
+end
+
+@enduml

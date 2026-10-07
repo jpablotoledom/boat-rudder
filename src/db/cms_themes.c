@@ -1,0 +1,711 @@
+#include "cms_themes.h"
+#include "mongodb_manager.h"
+#include "../utils/config_loader.h"
+#include "../utils/read_file.h"
+#include "../utils/log.h"
+#include <bson/bson.h>
+#include <mongoc/mongoc.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define THEMES_COLLECTION "themes"
+
+// Every theme's own hardcoded styles_epoch3.css values, used as the
+// fallback when that theme has no saved `themes.<key>.colors` document.
+// This is keyed by theme, not a single global default: a theme with no
+// entry here (or no document in Mongo) still needs *some* fallback for
+// epoch 1/2's plain hex substitution (unlike epoch 3, which can lean on
+// its own CSS var(--x, <fallback>) without any value from here at all -
+// see splice_theme_colors() in page_layout.c), so dark's palette is the
+// catch-all for a theme this table doesn't know about. Adding a theme's
+// own entry here is optional - its own styles_epoch3.css hardcoded
+// defaults already cover epoch 3; this table only matters for epoch 1/2
+// looking right before anyone visits /dashboard/settings/themes.
+typedef struct {
+    const char *key;
+    CmsThemeColors colors;
+} ThemeDefaultEntry;
+
+static const ThemeDefaultEntry THEME_DEFAULTS[] = {
+    // Values from the project's Figma file, "Color palette Dark" variable
+    // collection.
+    {
+        "dark",
+        {
+            .navbar_background         = "#241144",
+            .navbar_menu_normal        = "#ffffff",
+            .navbar_menu_hover         = "#98ffdd",
+            .navbar_menu_active        = "#00ffab",
+            .navbar_logo               = "#ffffff",
+            .body_background           = "#241144",
+            .home_content_background   = "#170c29",
+            .home_content_text         = "#ffffff",
+            .blog_list_item_background = "#000000",
+            .blog_list_item_border     = "#00ffab",
+            .blog_list_item_author     = "#dfd106",
+            .blog_list_item_categories = "#98ffdd",
+            .blog_list_item_categories_hover = "#ffffff",
+            .blog_list_item_date       = "#e68e4e",
+            .footer_logo               = "#ffffff",
+            .footer_logo_background    = "#000000",
+            .body_background_epoch1    = "#241144",
+            .page_content_background   = "#00000000",
+            .body_text                 = "#e0e0e0",
+            .body_text_muted           = "#999999",
+            .body_surface              = "#0d0d0d",
+            .body_surface_raised       = "#1a1a1a",
+            .body_border               = "#3a3a3a",
+            .link_normal               = "#ffffff",
+            .link_hover                = "#98ffdd",
+            .link_visited              = "#ffffff",
+            .link_active               = "#ffffff",
+            .table_header              = "#1e2d3d",
+            .table_border              = "#444444",
+            .table_row_a               = "#1a1a1a",
+            .table_row_b               = "#141414",
+            .code_background           = "#000080",
+            .code_text                 = "#ffffff",
+            .code_keyword              = "#ffff55",
+            .code_string               = "#55ffff",
+            .code_comment              = "#aaaaaa",
+            .code_number               = "#ff55ff",
+            .code_variable             = "#ffaa55",
+            .code_tag                  = "#ff5555",
+            .code_line_number          = "#8080c0",
+        },
+    },
+    // Values from the project's Figma file, "Color palette Light" variable
+    // collection.
+    {
+        "light",
+        {
+            .navbar_background         = "#8dd3ff",
+            .navbar_menu_normal        = "#680072",
+            .navbar_menu_hover         = "#006d49",
+            .navbar_menu_active        = "#3800aa",
+            .navbar_logo               = "#680072",
+            .body_background           = "#8dd3ff",
+            .home_content_background   = "#cbebff",
+            .home_content_text         = "#000000",
+            .blog_list_item_background = "#ffffff",
+            .blog_list_item_border     = "#0009ac",
+            .blog_list_item_author     = "#cb5600",
+            .blog_list_item_categories = "#0076c0",
+            .blog_list_item_categories_hover = "#000000",
+            .blog_list_item_date       = "#00636a",
+            .footer_logo               = "#ffffff",
+            .footer_logo_background    = "#000000",
+            .body_background_epoch1    = "#8dd3ff",
+            .page_content_background   = "#00000000",
+            .body_text                 = "#1a1a1a",
+            .body_text_muted           = "#666666",
+            .body_surface              = "#f4f4f6",
+            .body_surface_raised       = "#ffffff",
+            .body_border               = "#d6d6d8",
+            .link_normal               = "#680072",
+            .link_hover                = "#006d49",
+            .link_visited              = "#680072",
+            .link_active               = "#680072",
+            .table_header              = "#cbebff",
+            .table_border              = "#b0b0b0",
+            .table_row_a               = "#ffffff",
+            .table_row_b               = "#f0f0f0",
+            .code_background           = "#000080",
+            .code_text                 = "#ffffff",
+            .code_keyword              = "#ffff55",
+            .code_string               = "#55ffff",
+            .code_comment              = "#aaaaaa",
+            .code_number               = "#ff55ff",
+            .code_variable             = "#ffaa55",
+            .code_tag                  = "#ff5555",
+            .code_line_number          = "#8080c0",
+        },
+    },
+};
+
+#define THEME_DEFAULTS_COUNT (sizeof(THEME_DEFAULTS) / sizeof(THEME_DEFAULTS[0]))
+
+static const CmsThemeColors *default_colors_for(const char *key) {
+    for (size_t i = 0; i < THEME_DEFAULTS_COUNT; i++) {
+        if (key && strcmp(THEME_DEFAULTS[i].key, key) == 0) return &THEME_DEFAULTS[i].colors;
+    }
+    return &THEME_DEFAULTS[0].colors; // dark - the catch-all, see comment above
+}
+
+// BSON can't hold a field starting with '-', so epoch -1 gets a spelled-out
+// key; every other epoch's key mirrors its on-disk filename suffix.
+// Ported from cms_site_settings.c (cms_get_site_banner()/cms_get_site_footer())
+// when banner/footer moved here - see theme-scoped-personalization-plan.md.
+static const char *epoch_field_name(int epoch) {
+    switch (epoch) {
+        case -1: return "epoch_neg1";
+        case 0:  return "epoch0";
+        case 1:  return "epoch1";
+        case 2:  return "epoch2";
+        case 3:  return "epoch3";
+        default: return NULL;
+    }
+}
+
+// Like bson_lang.c's resolve_lang_map(), but for a plain map<string,string>
+// with no language fallback: returns `parent.field.key`, or "" if any of
+// `field`, `key`, or `parent` itself is absent/not a string.
+static char *nested_string_field(const bson_t *parent, const char *field, const char *key) {
+    bson_iter_t iter, sub_iter;
+
+    if (!bson_iter_init_find(&iter, parent, field) || !BSON_ITER_HOLDS_DOCUMENT(&iter))
+        return strdup("");
+
+    uint32_t len;
+    const uint8_t *data;
+    bson_iter_document(&iter, &len, &data);
+
+    bson_t sub;
+    bson_init_static(&sub, data, len);
+
+    if (bson_iter_init_find(&sub_iter, &sub, key) && BSON_ITER_HOLDS_UTF8(&sub_iter))
+        return strdup(bson_iter_utf8(&sub_iter, NULL));
+
+    return strdup("");
+}
+
+// Reads html/themes/<key>/<subpath_fmt % epoch> directly, keyed by the
+// `key` this function was given - deliberately NOT generate_url_theme(),
+// which resolves against request_theme() (the *active* request's theme)
+// regardless of any key passed elsewhere. That distinction only matters
+// when a caller's `key` might differ from request_theme() (an admin
+// editing a theme that isn't their own session's active one); reading the
+// path straight from `key` keeps cms_get_theme_banner()/_footer() correct
+// under that call too, not just the render path's key = request_theme()
+// case. No templates/ fallback needed here: mainbanner/ and layout/ are
+// always theme-owned (theme-system-plan.md §2), never shared.
+static char *load_theme_owned_file(const char *key, const char *subpath_fmt, int epoch) {
+    char subpath[128];
+    if (snprintf(subpath, sizeof(subpath), subpath_fmt, epoch) < 0) return strdup("");
+
+    char path[256];
+    if (snprintf(path, sizeof(path), "./html/themes/%s/%s", key, subpath) < 0) return strdup("");
+
+    char *body = read_file_to_string(path);
+    return body ? body : strdup("");
+}
+
+static void copy_field(const bson_t *doc, const char *field, char *out, size_t out_size) {
+    bson_iter_t iter;
+    if (bson_iter_init_find(&iter, doc, field) && BSON_ITER_HOLDS_UTF8(&iter)) {
+        strncpy(out, bson_iter_utf8(&iter, NULL), out_size - 1);
+        out[out_size - 1] = '\0';
+    }
+}
+
+int cms_get_theme_colors(const char *key, CmsThemeColors *out) {
+    *out = *default_colors_for(key);
+    if (!key || !key[0]) return 1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return 1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        if (bson_iter_init_find(&iter, doc, "colors") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
+            uint32_t len;
+            const uint8_t *data;
+            bson_iter_document(&iter, &len, &data);
+
+            bson_t colors;
+            bson_init_static(&colors, data, len);
+
+            copy_field(&colors, "navbar-background", out->navbar_background, sizeof(out->navbar_background));
+            copy_field(&colors, "navbar-menu-normal", out->navbar_menu_normal, sizeof(out->navbar_menu_normal));
+            copy_field(&colors, "navbar-menu-hover", out->navbar_menu_hover, sizeof(out->navbar_menu_hover));
+            copy_field(&colors, "navbar-menu-active", out->navbar_menu_active, sizeof(out->navbar_menu_active));
+            copy_field(&colors, "navbar-logo", out->navbar_logo, sizeof(out->navbar_logo));
+            copy_field(&colors, "body-background", out->body_background, sizeof(out->body_background));
+            copy_field(&colors, "home-content-background", out->home_content_background, sizeof(out->home_content_background));
+            copy_field(&colors, "home-content-text", out->home_content_text, sizeof(out->home_content_text));
+            copy_field(&colors, "blog-list-item-background", out->blog_list_item_background, sizeof(out->blog_list_item_background));
+            copy_field(&colors, "blog-list-item-border", out->blog_list_item_border, sizeof(out->blog_list_item_border));
+            copy_field(&colors, "blog-list-item-author", out->blog_list_item_author, sizeof(out->blog_list_item_author));
+            copy_field(&colors, "blog-list-item-categories", out->blog_list_item_categories, sizeof(out->blog_list_item_categories));
+            copy_field(&colors, "blog-list-item-categories-hover", out->blog_list_item_categories_hover, sizeof(out->blog_list_item_categories_hover));
+            copy_field(&colors, "blog-list-item-date", out->blog_list_item_date, sizeof(out->blog_list_item_date));
+            copy_field(&colors, "footer-logo", out->footer_logo, sizeof(out->footer_logo));
+            copy_field(&colors, "footer-logo-background", out->footer_logo_background, sizeof(out->footer_logo_background));
+            copy_field(&colors, "body-background-epoch1", out->body_background_epoch1, sizeof(out->body_background_epoch1));
+            copy_field(&colors, "page-content-background", out->page_content_background, sizeof(out->page_content_background));
+            copy_field(&colors, "body-text", out->body_text, sizeof(out->body_text));
+            copy_field(&colors, "body-text-muted", out->body_text_muted, sizeof(out->body_text_muted));
+            copy_field(&colors, "body-surface", out->body_surface, sizeof(out->body_surface));
+            copy_field(&colors, "body-surface-raised", out->body_surface_raised, sizeof(out->body_surface_raised));
+            copy_field(&colors, "body-border", out->body_border, sizeof(out->body_border));
+            copy_field(&colors, "link-normal", out->link_normal, sizeof(out->link_normal));
+            copy_field(&colors, "link-hover", out->link_hover, sizeof(out->link_hover));
+            copy_field(&colors, "link-visited", out->link_visited, sizeof(out->link_visited));
+            copy_field(&colors, "link-active", out->link_active, sizeof(out->link_active));
+            copy_field(&colors, "table-header", out->table_header, sizeof(out->table_header));
+            copy_field(&colors, "table-border", out->table_border, sizeof(out->table_border));
+            copy_field(&colors, "table-row-a", out->table_row_a, sizeof(out->table_row_a));
+            copy_field(&colors, "table-row-b", out->table_row_b, sizeof(out->table_row_b));
+            copy_field(&colors, "code-background", out->code_background, sizeof(out->code_background));
+            copy_field(&colors, "code-text", out->code_text, sizeof(out->code_text));
+            copy_field(&colors, "code-keyword", out->code_keyword, sizeof(out->code_keyword));
+            copy_field(&colors, "code-string", out->code_string, sizeof(out->code_string));
+            copy_field(&colors, "code-comment", out->code_comment, sizeof(out->code_comment));
+            copy_field(&colors, "code-number", out->code_number, sizeof(out->code_number));
+            copy_field(&colors, "code-variable", out->code_variable, sizeof(out->code_variable));
+            copy_field(&colors, "code-tag", out->code_tag, sizeof(out->code_tag));
+            copy_field(&colors, "code-line-number", out->code_line_number, sizeof(out->code_line_number));
+        }
+    }
+
+    bson_error_t error;
+    if (mongoc_cursor_error(cursor, &error))
+        LOG_ERROR("cms_get_theme_colors: cursor error: %s", error.message);
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return 1;
+}
+
+int cms_update_theme_colors(const char *key, const CmsThemeColors *colors) {
+    if (!key || !key[0]) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = BCON_NEW(
+        "$set", "{",
+            "key", BCON_UTF8(key),
+            "colors", "{",
+                "navbar-background", BCON_UTF8(colors->navbar_background),
+                "navbar-menu-normal", BCON_UTF8(colors->navbar_menu_normal),
+                "navbar-menu-hover", BCON_UTF8(colors->navbar_menu_hover),
+                "navbar-menu-active", BCON_UTF8(colors->navbar_menu_active),
+                "navbar-logo", BCON_UTF8(colors->navbar_logo),
+                "body-background", BCON_UTF8(colors->body_background),
+                "home-content-background", BCON_UTF8(colors->home_content_background),
+                "home-content-text", BCON_UTF8(colors->home_content_text),
+                "blog-list-item-background", BCON_UTF8(colors->blog_list_item_background),
+                "blog-list-item-border", BCON_UTF8(colors->blog_list_item_border),
+                "blog-list-item-author", BCON_UTF8(colors->blog_list_item_author),
+                "blog-list-item-categories", BCON_UTF8(colors->blog_list_item_categories),
+                "blog-list-item-categories-hover", BCON_UTF8(colors->blog_list_item_categories_hover),
+                "blog-list-item-date", BCON_UTF8(colors->blog_list_item_date),
+                "footer-logo", BCON_UTF8(colors->footer_logo),
+                "footer-logo-background", BCON_UTF8(colors->footer_logo_background),
+                "body-background-epoch1", BCON_UTF8(colors->body_background_epoch1),
+                "page-content-background", BCON_UTF8(colors->page_content_background),
+                "body-text", BCON_UTF8(colors->body_text),
+                "body-text-muted", BCON_UTF8(colors->body_text_muted),
+                "body-surface", BCON_UTF8(colors->body_surface),
+                "body-surface-raised", BCON_UTF8(colors->body_surface_raised),
+                "body-border", BCON_UTF8(colors->body_border),
+                "link-normal", BCON_UTF8(colors->link_normal),
+                "link-hover", BCON_UTF8(colors->link_hover),
+                "link-visited", BCON_UTF8(colors->link_visited),
+                "link-active", BCON_UTF8(colors->link_active),
+                "table-header", BCON_UTF8(colors->table_header),
+                "table-border", BCON_UTF8(colors->table_border),
+                "table-row-a", BCON_UTF8(colors->table_row_a),
+                "table-row-b", BCON_UTF8(colors->table_row_b),
+                "code-background", BCON_UTF8(colors->code_background),
+                "code-text", BCON_UTF8(colors->code_text),
+                "code-keyword", BCON_UTF8(colors->code_keyword),
+                "code-string", BCON_UTF8(colors->code_string),
+                "code-comment", BCON_UTF8(colors->code_comment),
+                "code-number", BCON_UTF8(colors->code_number),
+                "code-variable", BCON_UTF8(colors->code_variable),
+                "code-tag", BCON_UTF8(colors->code_tag),
+                "code-line-number", BCON_UTF8(colors->code_line_number),
+            "}",
+        "}"
+    );
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_colors: update failed: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+// Shared by cms_get_theme_banner()/cms_get_theme_footer(): the stored
+// value for `key`.`top_field`.<epoch field>, or "" if unset/unreachable -
+// the *stored* value only, no file fallback (callers add that themselves).
+static char *stored_epoch_field(const char *key, const char *top_field, int epoch) {
+    const char *field = epoch_field_name(epoch);
+    if (!key || !key[0] || !field) return strdup("");
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return strdup("");
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    char *result = NULL;
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc))
+        result = nested_string_field(doc, top_field, field);
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return result ? result : strdup("");
+}
+
+char *cms_get_theme_banner(const char *key, int epoch) {
+    if (epoch_to_index(epoch) < 0) return strdup("");
+
+    char *db_value = stored_epoch_field(key, "banner_html", epoch);
+    if (db_value[0]) return db_value;
+    free(db_value);
+    return load_theme_owned_file(key, "mainbanner/mainbanner_epoch%d.html", epoch);
+}
+
+char *cms_get_theme_footer(const char *key, int epoch) {
+    if (epoch_to_index(epoch) < 0) return strdup("");
+
+    char *db_value = stored_epoch_field(key, "footer_html", epoch);
+    if (db_value[0]) return db_value;
+    free(db_value);
+    return load_theme_owned_file(key, "layout/footer_epoch%d.html", epoch);
+}
+
+char *cms_get_theme_logo(const char *key, int epoch) {
+    if (epoch_to_index(epoch) < 0) return strdup("");
+
+    char *db_value = stored_epoch_field(key, "logo_html", epoch);
+    if (db_value[0]) return db_value;
+    free(db_value);
+    return load_theme_owned_file(key, "menu/menu-logo_epoch%d.html", epoch);
+}
+
+static void get_stored_values(const char *key, const char *top_field, char *out_values[EPOCH_COUNT]) {
+    for (int epoch = -1; epoch <= 3; epoch++)
+        out_values[epoch_to_index(epoch)] = stored_epoch_field(key, top_field, epoch);
+}
+
+void cms_get_theme_banner_values(const char *key, char *out_values[EPOCH_COUNT]) {
+    get_stored_values(key, "banner_html", out_values);
+}
+
+void cms_get_theme_footer_values(const char *key, char *out_values[EPOCH_COUNT]) {
+    get_stored_values(key, "footer_html", out_values);
+}
+
+// Shared by cms_update_theme_banner()/cms_update_theme_footer(): $set
+// themes.<key>.<top_field>.<epoch field> = html.
+static int update_theme_epoch_field(const char *key, const char *top_field, int epoch,
+                                     const char *html) {
+    const char *field = epoch_field_name(epoch);
+    if (!key || !key[0] || !field) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    char dotted[64];
+    snprintf(dotted, sizeof(dotted), "%s.%s", top_field, field);
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = bson_new();
+    bson_t set_doc;
+    bson_append_document_begin(update, "$set", -1, &set_doc);
+    bson_append_utf8(&set_doc, "key", -1, key, -1);
+    bson_append_utf8(&set_doc, dotted, -1, html, -1);
+    bson_append_document_end(update, &set_doc);
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_%s: update failed: %s", top_field, error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+int cms_update_theme_banner(const char *key, int epoch, const char *html) {
+    return update_theme_epoch_field(key, "banner_html", epoch, html);
+}
+
+int cms_update_theme_footer(const char *key, int epoch, const char *html) {
+    return update_theme_epoch_field(key, "footer_html", epoch, html);
+}
+
+int cms_update_theme_logo(const char *key, int epoch, const char *html) {
+    return update_theme_epoch_field(key, "logo_html", epoch, html);
+}
+
+char *cms_get_theme_logo_font(const char *key) {
+    if (!key || !key[0]) return strdup("");
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return strdup("");
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    char *result = NULL;
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        if (bson_iter_init_find(&iter, doc, "logo_font") && BSON_ITER_HOLDS_UTF8(&iter))
+            result = strdup(bson_iter_utf8(&iter, NULL));
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return result ? result : strdup("");
+}
+
+int cms_update_theme_logo_font(const char *key, const char *font_name) {
+    if (!key || !key[0]) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = BCON_NEW(
+        "$set", "{",
+            "key", BCON_UTF8(key),
+            "logo_font", BCON_UTF8(font_name ? font_name : ""),
+        "}"
+    );
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_logo_font: update failed: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+int cms_get_theme_logo_config(const char *key, int epoch, CmsLogoConfig *out) {
+    memset(out, 0, sizeof(*out));
+    out->mode = LOGO_MODE_UNSET;
+
+    const char *field = epoch_field_name(epoch);
+    if (!field) return 0;
+    if (!key || !key[0]) return 1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return 1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter, sub_iter;
+        if (bson_iter_init_find(&iter, doc, "logo") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
+            uint32_t len;
+            const uint8_t *data;
+            bson_iter_document(&iter, &len, &data);
+
+            bson_t logo_doc;
+            bson_init_static(&logo_doc, data, len);
+
+            if (bson_iter_init_find(&sub_iter, &logo_doc, field) && BSON_ITER_HOLDS_DOCUMENT(&sub_iter)) {
+                uint32_t elen;
+                const uint8_t *edata;
+                bson_iter_document(&sub_iter, &elen, &edata);
+
+                bson_t econf;
+                bson_init_static(&econf, edata, elen);
+
+                bson_iter_t mi;
+                if (bson_iter_init_find(&mi, &econf, "mode") && BSON_ITER_HOLDS_INT32(&mi))
+                    out->mode = (CmsLogoMode)bson_iter_int32(&mi);
+
+                copy_field(&econf, "text", out->text, sizeof(out->text));
+                copy_field(&econf, "font", out->font, sizeof(out->font));
+                copy_field(&econf, "navbar_image", out->navbar_image, sizeof(out->navbar_image));
+                copy_field(&econf, "footer_image", out->footer_image, sizeof(out->footer_image));
+            }
+        }
+    }
+
+    bson_error_t error;
+    if (mongoc_cursor_error(cursor, &error))
+        LOG_ERROR("cms_get_theme_logo_config: cursor error: %s", error.message);
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return 1;
+}
+
+int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig *cfg) {
+    const char *field = epoch_field_name(epoch);
+    if (!key || !key[0] || !field) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    char dotted[80];
+    snprintf(dotted, sizeof(dotted), "logo.%s", field);
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = bson_new();
+    bson_t set_doc, logo_entry;
+    bson_append_document_begin(update, "$set", -1, &set_doc);
+    bson_append_utf8(&set_doc, "key", -1, key, -1);
+    bson_append_document_begin(&set_doc, dotted, -1, &logo_entry);
+    bson_append_int32(&logo_entry, "mode", -1, (int32_t)cfg->mode);
+    bson_append_utf8(&logo_entry, "text", -1, cfg->text, -1);
+    bson_append_utf8(&logo_entry, "font", -1, cfg->font, -1);
+    bson_append_utf8(&logo_entry, "navbar_image", -1, cfg->navbar_image, -1);
+    bson_append_utf8(&logo_entry, "footer_image", -1, cfg->footer_image, -1);
+    bson_append_document_end(&set_doc, &logo_entry);
+    bson_append_document_end(update, &set_doc);
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_logo_config: update failed: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+static const char *css_field(ThemeCssSheet sheet) {
+    return sheet == THEME_CSS_ADMIN ? "css_admin_epoch3" : "css_epoch3";
+}
+
+const char *cms_theme_css_file(ThemeCssSheet sheet) {
+    return sheet == THEME_CSS_ADMIN ? "styles_admin_epoch3.css" : "styles_epoch3.css";
+}
+
+static char *read_theme_css_file(const char *key, ThemeCssSheet sheet) {
+    char path[256];
+    snprintf(path, sizeof(path), "./html/themes/%s/%s", key, cms_theme_css_file(sheet));
+    return read_file_to_string(path);
+}
+
+char *cms_get_theme_css_value(const char *key, ThemeCssSheet sheet) {
+    if (!key || !key[0]) return strdup("");
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return strdup("");
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    char *result = NULL;
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        if (bson_iter_init_find(&iter, doc, css_field(sheet)) && BSON_ITER_HOLDS_UTF8(&iter))
+            result = strdup(bson_iter_utf8(&iter, NULL));
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return result ? result : strdup("");
+}
+
+char *cms_get_theme_css(const char *key, ThemeCssSheet sheet) {
+    char *db_value = cms_get_theme_css_value(key, sheet);
+    if (db_value[0]) return db_value;
+    free(db_value);
+
+    char *body = read_theme_css_file(key ? key : "", sheet);
+    if (!body && sheet == THEME_CSS_ADMIN && strcmp(key ? key : "", theme) != 0)
+        body = read_theme_css_file(theme, sheet);
+    return body ? body : strdup("");
+}
+
+int cms_update_theme_css(const char *key, ThemeCssSheet sheet, const char *css) {
+    if (!key || !key[0]) return -1;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
+    if (!collection) return -1;
+
+    bson_t *query = BCON_NEW("key", BCON_UTF8(key));
+    bson_t *update = BCON_NEW(
+        "$set", "{",
+            "key", BCON_UTF8(key),
+            css_field(sheet), BCON_UTF8(css ? css : ""),
+        "}"
+    );
+    bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
+
+    bson_error_t error;
+    bool ok = mongoc_collection_update_one(collection, query, update, opts, NULL, &error);
+    if (!ok) LOG_ERROR("cms_update_theme_css: update failed: %s", error.message);
+
+    bson_destroy(query);
+    bson_destroy(update);
+    bson_destroy(opts);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
+static int is_hex_digit(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+void cms_split_hex_alpha(const char *stored, char *rgb_out, int *alpha_pct_out) {
+    size_t len = stored ? strlen(stored) : 0;
+    bool valid_rgb = len >= 7 && stored[0] == '#';
+    for (size_t i = 1; valid_rgb && i < 7; i++)
+        if (!is_hex_digit(stored[i])) valid_rgb = false;
+
+    if (!valid_rgb) {
+        strcpy(rgb_out, "#000000");
+        *alpha_pct_out = 100;
+        return;
+    }
+
+    memcpy(rgb_out, stored, 7);
+    rgb_out[7] = '\0';
+
+    bool valid_alpha = len == 9 && is_hex_digit(stored[7]) && is_hex_digit(stored[8]);
+    if (!valid_alpha) {
+        *alpha_pct_out = 100;
+        return;
+    }
+
+    unsigned int alpha_byte = (unsigned int)strtoul(stored + 7, NULL, 16);
+    *alpha_pct_out = (int)((alpha_byte * 100 + 127) / 255);
+}
+
+void cms_join_hex_alpha(const char *rgb_hex, int alpha_pct, char *out, size_t out_size) {
+    if (alpha_pct < 0) alpha_pct = 0;
+    if (alpha_pct > 100) alpha_pct = 100;
+
+    size_t len = rgb_hex ? strlen(rgb_hex) : 0;
+    bool valid_rgb = len == 7 && rgb_hex[0] == '#';
+    for (size_t i = 1; valid_rgb && i < 7; i++)
+        if (!is_hex_digit(rgb_hex[i])) valid_rgb = false;
+    if (!valid_rgb) rgb_hex = "#000000";
+
+    if (alpha_pct >= 100) {
+        snprintf(out, out_size, "%s", rgb_hex);
+    } else {
+        unsigned int alpha_byte = (alpha_pct * 255 + 50) / 100;
+        snprintf(out, out_size, "%s%02x", rgb_hex, alpha_byte);
+    }
+}

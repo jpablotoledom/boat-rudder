@@ -1,46 +1,36 @@
-#define _XOPEN_SOURCE 700 // Define POSIX.1-2008 compliance level
-
-#include "../include/read_file.h"
+#include "read_file.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
-// Function to read a text file and load its content into a dynamically
-// allocated string
 char *read_file_to_string(const char *filename) {
-  // Open the file in read mode
-  FILE *file = fopen(filename, "r");
+    FILE *file = fopen(filename, "rb");
+    if (!file) return NULL;
 
-  char error_msg[256];
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return NULL;
+    }
 
-  // Generar el string con el mensaje que deseas
-  snprintf(error_msg, sizeof(error_msg), "\nFailed to open file: %s", filename);
+    long size = ftell(file);
+    if (size < 0 || fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        return NULL;
+    }
 
-  if (file == NULL) {
-    perror(error_msg);
-    return NULL;
-  }
+    char *buffer = malloc((size_t)size + 1);
+    if (!buffer) {
+        fclose(file);
+        return NULL;
+    }
 
-  // Move the file pointer to the end to determine the file size
-  fseek(file, 0, SEEK_END);
-  long file_size = ftell(file);
-  rewind(file); // Move back to the start
-
-  // Allocate memory for the file contents (+1 for the null terminator)
-  char *buffer = malloc(file_size + 1);
-
-  if (buffer == NULL) {
-    perror("Failed to allocate memory");
+    size_t read_bytes = fread(buffer, 1, (size_t)size, file);
     fclose(file);
-    return NULL;
-  }
 
-  // Read the file into the buffer
-  size_t read_size = fread(buffer, 1, file_size, file);
-  buffer[read_size] = '\0'; // Null-terminate the string
+    if (read_bytes != (size_t)size) {
+        free(buffer);
+        return NULL;
+    }
 
-  // Close the file
-  fclose(file);
-
-  return buffer; // The caller is responsible for freeing the buffer
+    buffer[size] = '\0';
+    return buffer;
 }

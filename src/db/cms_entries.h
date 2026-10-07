@@ -1,0 +1,126 @@
+#ifndef CMS_ENTRIES_H
+#define CMS_ENTRIES_H
+
+#include <stdbool.h>
+#include <stddef.h>
+
+// Maximum number of "entries" documents (type == "blog", enabled == true) returned by
+// cms_get_blog_entries() for the home blog list, newest header.date first.
+#define HOME_BLOG_LIMIT 10
+
+// Maximum number of "entries" documents (type == "blog", enabled == true) returned by
+// cms_get_blog_entries() for the "/blogs" listing page, newest header.date first.
+#define BLOG_LIST_LIMIT 50
+
+// Maximum number of "entries" documents (any type, enabled == true) returned by
+// cms_get_admin_entries() for the /dashboard/entries listing, newest header.date first.
+#define ENTRIES_LIST_LIMIT 100
+
+// One ordered, typed content block from `entries.content[]` (see
+// develop_docs/plans/cms-entry-model-plan.md). `text` is the block's
+// `map<lang,string>` resolved to the requested language (falling back to
+// "en", then ""). `extra_data` is untranslated, type-specific configuration.
+typedef struct {
+    char *type;
+    int   order;
+    char *text;
+    char *extra_data;
+} CmsContentBlock;
+
+// One self-contained `entries` document, with `header` and `content[]`
+// already resolved to the requested language.
+typedef struct {
+    char *link;
+    char *type; // "page" | "blog" | ...
+    bool  enabled; // false = a draft (only ever returned with include_drafts)
+
+    char *header_image_url;
+    char *header_title;
+    char *header_summary;
+    char *header_author;
+    char  header_date[16]; // "YYYY-MM-DD", empty if absent
+    bool  header_hide_author; // header.hide_author: public views omit the byline
+
+    // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
+    // for the requested lang. NULL/0 if the entry has no categories.
+    char  **category_names; // display name
+    char  **category_links; // URL slug: "/blog/category/<slug>"
+    size_t  category_count;
+
+    CmsContentBlock *content;
+    size_t content_count; // sorted by content[].order
+} CmsEntry;
+
+// Looks up db.entries.findOne({link, enabled: true}) - or just {link} when
+// include_drafts is set (a signed-in dashboard user previewing a draft) - and
+// fills *out with the document's header and content blocks, with all
+// map<lang,string> fields resolved to `lang` (Boat Rudder's
+// configs/settings.conf "Eng"/"Esp" convention, mapped internally to ISO
+// 639-1 "en"/"es", falling back to "en"). Returns 1 and fills *out on
+// success, 0 if not found, mongodb is not ready, or on a DB error. *out is
+// zero-initialized on failure and must be passed to cms_entry_free() in
+// either case.
+int cms_get_entry_by_link(const char *link, const char *lang, int include_drafts, CmsEntry *out);
+
+// Frees every malloc'd field of *entry and zeroes it.
+void cms_entry_free(CmsEntry *entry);
+
+// One "entries" document, for blog/admin list views. Lighter than CmsEntry:
+// no content[] (not needed for a list view).
+typedef struct {
+    char *id;   // entries._id as 24-char hex, for /dashboard/entries/<id>/edit and /delete
+    char *link; // entries.link, for building /page/<link> or /blog/<link>
+    char *type; // "page" | "blog" | ...
+    bool  enabled; // false = a draft, not published yet
+
+    char *header_image_url;
+    char *header_title;
+    char *header_summary;
+    char *header_author;
+    char  header_date[16]; // "YYYY-MM-DD", empty if absent
+    bool  header_hide_author; // header.hide_author: public views omit the byline
+
+    // entries.categories[] (ObjectId[]) resolved to entry_categories.name,
+    // for the requested lang. NULL/0 if the entry has no categories.
+    char  **category_names; // display name
+    char  **category_links; // URL slug: "/blog/category/<slug>"
+    size_t  category_count;
+} CmsBlogListItem;
+
+// Looks up db.entries.find({type: "blog", enabled: true})
+//   .sort({"header.date": -1}).limit(limit),
+// resolving header.* and categories[] to `lang` for each match (same lang convention as
+// cms_get_entry_by_link). `limit` is HOME_BLOG_LIMIT for the home blog list or
+// BLOG_LIST_LIMIT for the "/blogs" listing page. On success, *out points to a malloc'd
+// array of *out_count items (possibly 0) that must be passed to cms_blog_list_free(). On a
+// DB error or if mongodb is not ready, *out = NULL and *out_count = 0 - both callers are
+// decorative and must never fail the page.
+void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count);
+
+// Looks up db.entries.find({}).sort({"header.date": -1}).limit(ENTRIES_LIST_LIMIT) - no
+// `enabled` filter, so admins can find and edit disabled/draft entries too - resolving
+// header.*, categories[], type and id for each match (same lang convention as
+// cms_get_entry_by_link), for the /dashboard/entries listing. `type_filter` (e.g. "blog")
+// and `created_by_hex` (a 24-char hex ObjectId), if non-NULL, are added to the query as
+// {type: type_filter} / {created_by: ObjectId(created_by_hex)} - used by Autor users to see
+// only their own blog entries. Pass NULL for both to list every entry (Administrador).
+// `unpublished_only` adds {enabled: {$ne: true}} - the dashboard home's "Entries pending
+// publication" list; false lists published entries and drafts alike (/dashboard/entries). On
+// success, *out points to a malloc'd array of *out_count items (possibly 0) that must be
+// passed to cms_blog_list_free(). On a DB error or if mongodb is not ready, *out = NULL and
+// *out_count = 0.
+void cms_get_admin_entries(const char *lang, const char *type_filter, const char *created_by_hex,
+                            bool unpublished_only,
+                            CmsBlogListItem **out, size_t *out_count);
+
+// Like cms_get_blog_entries() but filtered to entries whose categories[] array
+// contains `category_id_hex` (a 24-char hex ObjectId). Pass BLOG_LIST_LIMIT
+// as `limit`. Same lang convention and allocation contract.
+void cms_get_blog_entries_by_category(const char *lang, size_t limit,
+                                       const char *category_id_hex,
+                                       CmsBlogListItem **out, size_t *out_count);
+
+// Frees every item's fields and the array itself. Safe to call with items == NULL.
+void cms_blog_list_free(CmsBlogListItem *items, size_t count);
+
+#endif // CMS_ENTRIES_H

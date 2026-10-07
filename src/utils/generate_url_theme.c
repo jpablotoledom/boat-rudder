@@ -1,36 +1,41 @@
-#include "../include/generate_url_theme.h"
-#include "../include/config_loader.h"
+#include "generate_url_theme.h"
+#include "request_theme.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <unistd.h>
 
-// Function to generate the complete URL
-char *generate_url_theme(const char *subpath, int epoch) {
-  // Template for the base path
-  const char *base_path = "./html/themes/%s/";
+// snprintf(fmt, dir_arg, subpath) into a malloc'd, exactly-sized buffer.
+// `fmt` takes exactly two "%s" - a directory piece, then subpath.
+static char *build_path(const char *fmt, const char *dir_arg, const char *subpath) {
+    int total = snprintf(NULL, 0, fmt, dir_arg, subpath);
+    if (total < 0) return NULL;
 
-  // Calculate the necessary size for the base path with the theme
-  int size_base_path = snprintf(NULL, 0, base_path, theme);
+    char *result = malloc((size_t)total + 1);
+    if (!result) return NULL;
 
-  // Calculate the necessary size for the subpath with the epoch
-  int size_subpath = snprintf(NULL, 0, subpath, epoch);
+    snprintf(result, (size_t)total + 1, fmt, dir_arg, subpath);
+    return result;
+}
 
-  // Calculate the total size needed for the complete URL, including null terminator
-  int needed_size = size_base_path + size_subpath + 1;
+char *generate_url_theme(const char *subpath_fmt, int epoch) {
+    char subpath[256];
+    int n = snprintf(subpath, sizeof(subpath), subpath_fmt, epoch);
+    if (n < 0 || (size_t)n >= sizeof(subpath)) return NULL;
 
-  // Allocate dynamic memory for the complete URL
-  char *full_url = (char *)malloc(needed_size);
+    char *theme_path = build_path("./html/themes/%s/%s", request_theme(), subpath);
+    if (theme_path && access(theme_path, F_OK) == 0) return theme_path;
+    free(theme_path);
 
-  if (full_url == NULL) {
-    printf("Error: Could not allocate memory\n");
-    return NULL;
-  }
+    // Not overridden by the active theme - shared, theme-agnostic template.
+    // No existence check here: a genuinely missing template already means
+    // read_file_to_string() returns NULL and every caller already treats
+    // that as "template missing" (see e.g. mainbanner()/menu()'s NULL handling).
+    int total = snprintf(NULL, 0, "./html/templates/%s", subpath);
+    if (total < 0) return NULL;
 
-  // Build the complete URL: first the base path
-  snprintf(full_url, size_base_path + 1, base_path, theme);
+    char *result = malloc((size_t)total + 1);
+    if (!result) return NULL;
 
-  // Append the subpath with epoch
-  snprintf(full_url + size_base_path, size_subpath + 1, subpath, epoch);
-
-  return full_url; // Return the generated URL
+    snprintf(result, (size_t)total + 1, "./html/templates/%s", subpath);
+    return result;
 }

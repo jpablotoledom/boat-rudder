@@ -1,0 +1,38 @@
+    <div class="boat-rudder-entry-editor-block" data-block-id="%s" data-type="gallery" onclick="activateBlock(this)">
+      <span class="boat-rudder-entry-editor-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="boat-rudder-entry-editor-block__header">
+        <button class="boat-rudder-entry-editor-block__trash-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="boat-rudder-entry-editor-block__type-label boat-rudder-entry-editor-block__type-label--gallery">&#9632; Gallery</span>
+        <div class="boat-rudder-entry-editor-block__header-actions">
+          <button class="boat-rudder-entry-editor__meta-btn boat-rudder-btn boat-rudder-btn--sm"
+                  onclick="event.stopPropagation();openGalleryForBlock(this)">Select photos</button>
+          <button class="boat-rudder-entry-editor-block__move-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="boat-rudder-entry-editor-block__move-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="boat-rudder-entry-editor-block__drag">&#8942;</span>
+          <button class="boat-rudder-entry-editor-block__close-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="boat-rudder-entry-editor-block__preview"></div>
+
+      <div class="boat-rudder-entry-editor-block__body">
+        <div class="boat-rudder-entry-editor__gallery-preview">
+          <span class="boat-rudder-entry-editor__gallery-empty">No images selected</span>
+        </div>
+
+        <div style="display:none">
+%s
+        </div>
+
+        <div class="boat-rudder-entry-editor-advanced">
+          <button class="boat-rudder-entry-editor-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="boat-rudder-entry-editor-advanced__panel">
+            <label class="boat-rudder-entry-editor-advanced__label">extra_data</label>
+            <input class="boat-rudder-entry-editor-advanced__input boat-rudder-input boat-rudder-input--sm" type="text" oninput="syncAdvancedInput(this)">
+          </div>
+        </div>
+      </div>
+
+      <input name="extra_data" type="hidden" value="%s">
+    </div>

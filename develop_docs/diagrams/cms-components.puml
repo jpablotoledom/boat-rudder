@@ -1,0 +1,133 @@
+@startuml cms-components
+
+title Boat Rudder - Retro-Compatible CMS Components (public pages)
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FAFAFA
+skinparam component {
+    BackgroundColor #E8F4FD
+    BorderColor #2196F3
+    FontColor #1A1A1A
+}
+skinparam package {
+    BackgroundColor #F5F5F5
+    BorderColor #9E9E9E
+}
+skinparam arrow {
+    Color #555555
+}
+
+package "web_server" {
+    [http_router\nresolve_epoch()\nserve_cms_entry()\n/gallery, /qr, /youtube-qr, /image-qr] as ROUTER
+    [serve_static_file] as STATIC
+}
+
+package "html_builder" {
+    [orchestrator\nbuildHomeWebSite()\nbuildPageWebSite(AtUrl)()\nbuildBlogListWebSiteAtUrl()\nbuildEntryWebSiteAtUrl()] as ORCH
+    [page_layout\npage_layout_wrap()] as LAYOUT
+}
+
+package "modules" {
+    [menu\n(WML: compact "Menu" link)] as MENU
+    [mainbanner] as MAINBANNER
+    [home_content] as HOME
+    [blog_list] as BLOG
+    [category_menu\n(WML: compact "Categories" link)] as CATMENU
+    [entry_page\nrender_block() per type] as ENTRY
+    [language_page / theme_page] as PICKERS
+}
+
+package "utils" {
+    [detect_epoch] as EPOCH
+    [request_* state\nlang / theme / user /\ncharset / code_lines / wml] as REQ
+    [generate_url_theme] as URLTHEME
+    [read_file] as READFILE
+    [template_utils\n(render_template, str_append,\nstr_replace_first/_all)] as TPL
+    [category_tags] as TAGS
+    [code_highlight] as CODEHL
+    [qr_generator\nGIF / WBMP / half-block / ASCII-block] as QR
+    [build_epoch_response\nlink re-tagging, WML pagination,\nLatin-1, headers] as RESP
+}
+
+package "db" {
+    [cms_entries\n(include_drafts)] as CMSENTRIES
+    [cms_menu / cms_categories /\ncms_languages] as CMSNAV
+    [cms_media_galleries] as GALLERIES
+    [short_links] as SHORT
+    [cms_themes / cms_site_settings /\ncms_fonts] as THEMEDB
+}
+
+package "wap_gateway" {
+    [wbxml\nwml_paginate()] as WBXML
+}
+
+database "html/templates/ + html/themes/<theme>/\n(templates)" as TPLFS
+database "html/ (static assets,\ncontent/posts, content/qr)" as FS
+
+ROUTER --> EPOCH : resolve_epoch():\nforce_epoch → ?preview_epoch → UA
+ROUTER --> REQ : request_*_set()
+ROUTER --> ORCH : home, blog, entries, pages
+ROUTER --> ENTRY : serve_cms_entry()\n(draft → "[Draft]", no-store)
+ROUTER --> GALLERIES : /gallery/<id>
+ROUTER --> SHORT : get_or_create / resolve
+ROUTER --> QR : gallery & image QR pages
+ROUTER --> PICKERS : /language, /theme
+ROUTER --> RESP : build_epoch_response(body, extra, epoch)
+ROUTER --> STATIC : anything else
+STATIC --> FS : open() / read()
+
+ORCH --> MENU
+ORCH --> MAINBANNER
+ORCH --> HOME
+ORCH --> BLOG
+ORCH --> LAYOUT : footer, footer logo, colors,\nfonts, site name, title
+
+HOME --> ENTRY : "/" entry's blocks\n(else built-in UPDATES[])
+BLOG --> CMSENTRIES
+BLOG --> TAGS
+ENTRY --> CMSENTRIES
+ENTRY --> TAGS
+ENTRY --> CODEHL : code-text
+ENTRY --> QR : youtube-embed (epochs -1..2)
+ENTRY --> SHORT : image QR (epochs -1/0)
+MENU --> CMSNAV
+CATMENU --> CMSNAV
+MAINBANNER --> THEMEDB : per-theme banner
+MENU --> THEMEDB : per-theme logo
+LAYOUT --> THEMEDB
+
+MENU --> URLTHEME
+MAINBANNER --> URLTHEME
+HOME --> URLTHEME
+BLOG --> URLTHEME
+CATMENU --> URLTHEME
+ENTRY --> URLTHEME
+LAYOUT --> URLTHEME
+URLTHEME --> REQ : request_theme()
+URLTHEME --> TPLFS : themes/<theme>/<sub>\nelse templates/<sub>
+READFILE --> TPLFS
+
+MENU --> TPL
+HOME --> TPL
+BLOG --> TPL
+ENTRY --> TPL
+
+RESP --> REQ : lang, theme, charset, wml target
+RESP --> WBXML : WML → 860-byte pages
+
+note right of EPOCH
+  epoch in {-1, 0, 1, 2, 3}
+  see epoch-decision.puml
+end note
+
+note right of RESP
+  Content-Type by epoch:
+  -1     -> text/vnd.wap.wml
+  0      -> text/html; charset=UTF-8
+            (bare text/html for Cello)
+  1      -> text/html
+  2, 3   -> text/html; charset=UTF-8
+  + SECURITY_HEADERS
+end note
+
+@enduml

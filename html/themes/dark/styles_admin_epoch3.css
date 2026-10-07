@@ -1,0 +1,1447 @@
+/* Boat Rudder - dark theme, admin stylesheet (epoch 3).
+   Login and dashboard pages only (/login, /dashboard*), loaded after
+   styles_epoch3.css, which they also use (navbar, footer, and the public
+   block markup the entry editor previews). Editable per theme from
+   /dashboard/settings/themes/dark/admin-css. Class names: style-guide.md, section 15.
+
+   1. Tokens       every color, size and radius the rules below use
+   2. Components   generic blocks any admin page can reuse (btn, input, card, ...)
+   3. Pages        login, dashboard, entry editor, media library, analytics -
+                   layout only; their colors come from the tokens */
+
+/* ============================================================
+   1. TOKENS
+   Colors come from the theme's palette (/dashboard/settings/themes,
+   group "Body"; the accent is "Menu, active"), so the admin follows the
+   theme. Fallbacks are this theme's defaults (THEME_DEFAULTS in
+   cms_themes.c). States and effects are fixed per theme.
+   ============================================================ */
+:root {
+  --br-admin-text:           var(--br-color-body-text, #e0e0e0);
+  --br-admin-text-muted:     var(--br-color-body-text-muted, #999999);
+  --br-admin-surface:        var(--br-color-body-surface, #0d0d0d);
+  --br-admin-surface-raised: var(--br-color-body-surface-raised, #1a1a1a);
+  --br-admin-border:         var(--br-color-body-border, #3a3a3a);
+  --br-admin-hover:          var(--br-color-body-border, #3a3a3a);
+  --br-admin-accent:         var(--br-color-navbar-menu-active, #00ffab);
+  --br-admin-on-accent:      var(--br-color-body-surface, #0d0d0d);
+
+  --br-admin-success:        #10b981;
+  --br-admin-danger:         #f87171;
+  --br-admin-on-danger:      #0d0d0d;
+  --br-admin-overlay:        rgba(72, 72, 72, 0.84);
+  --br-admin-hover-overlay:  rgba(141, 141, 141, 0.24);
+  --br-admin-shadow:         0 8px 24px rgba(0, 0, 0, 0.6);
+  --br-admin-thumb-filter:   grayscale(60%) brightness(75%);
+
+  /* Categorical palettes - fixed per theme, validated against its surfaces:
+     one color per epoch (charts, stat cards) and per block type (editor). */
+  --br-admin-series-1:        #3987e5;
+  --br-admin-series-2:        #d95926;
+  --br-admin-series-3:        #199e70;
+  --br-admin-series-4:        #c98500;
+  --br-admin-series-5:        #d55181;
+  --br-admin-block-title:            #a78bfa;
+  --br-admin-block-paragraph:        #60a5fa;
+  --br-admin-block-image:            #34d399;
+  --br-admin-block-byline:           #f59e0b;
+  --br-admin-block-gallery:          #f472b6;
+  --br-admin-block-separator:        #9ca3af;
+  --br-admin-block-link:             #38bdf8;
+  --br-admin-block-list:             #4ade80;
+  --br-admin-block-youtube-embed:    #f87171;
+  --br-admin-block-code-text:        #fbbf24;
+  --br-admin-block-generic:          #c084fc;
+  --br-admin-block-table:            #a3e635;
+  --br-admin-block-social-networks:  #fb923c;
+
+  --br-admin-radius:         3px;
+  --br-admin-radius-lg:      6px;
+  --br-admin-font-xs:        11px;
+  --br-admin-font-sm:        12px;
+  --br-admin-font-md:        13px;
+  --br-admin-pad-sm:         3px 10px;
+  --br-admin-pad-md:         6px 14px;
+  --br-admin-pad-card:       16px 18px;
+}
+
+/* ============================================================
+   2. COMPONENTS
+   Mix them with a page's own element class, which keeps only its layout:
+   class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-entry-editor__save-btn"
+   ============================================================ */
+
+/* Button - <button>, <a> or <input type="submit">. The :link/:visited
+   forms outrank the public sheet's a:link color on <a> buttons. */
+.boat-rudder-btn,
+.boat-rudder-btn:is(:link, :visited) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: var(--br-admin-pad-md);
+  font: inherit;
+  font-size: var(--br-admin-font-md);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--br-admin-text);
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, filter 0.15s;
+}
+
+.boat-rudder-btn:hover {
+  color: var(--br-admin-text);
+  border-color: var(--br-admin-accent);
+}
+
+.boat-rudder-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.boat-rudder-btn--sm,
+.boat-rudder-btn--sm:is(:link, :visited) {
+  padding: var(--br-admin-pad-sm);
+  font-size: var(--br-admin-font-sm);
+}
+
+/* Create/save actions (+ New ..., Save, Upload, Add). */
+.boat-rudder-btn--primary,
+.boat-rudder-btn--primary:is(:link, :visited, :hover) {
+  color: var(--br-admin-on-accent);
+  background: var(--br-admin-accent);
+  border-color: var(--br-admin-accent);
+}
+
+.boat-rudder-btn--primary:hover {
+  filter: brightness(1.12);
+}
+
+/* Destructive actions (Delete, Remove) - always behind a confirm(). */
+.boat-rudder-btn--danger,
+.boat-rudder-btn--danger:is(:link, :visited) {
+  color: var(--br-admin-danger);
+  background: transparent;
+  border-color: var(--br-admin-danger);
+}
+
+.boat-rudder-btn--danger:hover:not(:disabled) {
+  color: var(--br-admin-on-danger);
+  background: var(--br-admin-danger);
+  border-color: var(--br-admin-danger);
+}
+
+/* No box until hovered: icon buttons, segmented toggles, back links. */
+.boat-rudder-btn--ghost,
+.boat-rudder-btn--ghost:is(:link, :visited) {
+  color: var(--br-admin-text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.boat-rudder-btn--ghost:hover {
+  color: var(--br-admin-text);
+  background: var(--br-admin-hover);
+  border-color: transparent;
+}
+
+.boat-rudder-btn--icon {
+  padding: 2px 5px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* The selected one of a group (toolbar formats, heading level, language,
+   analytics period). */
+.boat-rudder-btn--active,
+.boat-rudder-btn--active:is(:link, :visited, :hover) {
+  color: var(--br-admin-on-accent);
+  background: var(--br-admin-accent);
+  border-color: var(--br-admin-accent);
+}
+
+/* Field - also every bare input the entry editor's templates render. */
+.boat-rudder-input,
+.boat-rudder-entry-editor__meta-group :is(input[type="text"], input[type="number"], input[type="date"], input[type="datetime-local"], select, textarea),
+.boat-rudder-entry-editor-block textarea,
+.boat-rudder-entry-editor__image-options select {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: var(--br-admin-font-md);
+  color: var(--br-admin-text);
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-input:focus,
+.boat-rudder-entry-editor__meta-group :is(input, select, textarea):focus,
+.boat-rudder-entry-editor-block textarea:focus,
+.boat-rudder-entry-editor__image-options select:focus {
+  border-color: var(--br-admin-accent);
+  outline: none;
+}
+
+.boat-rudder-input--sm {
+  padding: 4px 8px;
+  font-size: var(--br-admin-font-sm);
+}
+
+/* Panel: forms, option groups, stat cards, report blocks. */
+.boat-rudder-card {
+  box-sizing: border-box;
+  padding: var(--br-admin-pad-card);
+  background: var(--br-admin-surface);
+  border: 1px solid var(--br-admin-border);
+}
+
+/* Small uppercase heading over a group, a column or a value. */
+.boat-rudder-caption {
+  font-size: var(--br-admin-font-xs);
+  font-weight: 700;
+  color: var(--br-admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+/* "Draft", "Page"/"Blog", "Theme: dark". */
+.boat-rudder-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--br-admin-text);
+  background: var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+  vertical-align: middle;
+}
+
+.boat-rudder-badge--accent {
+  color: var(--br-admin-on-accent);
+  background: var(--br-admin-accent);
+}
+
+/* Form and page messages. */
+.boat-rudder-alert {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  color: var(--br-admin-text);
+  background: var(--br-admin-surface);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-alert--error {
+  color: var(--br-admin-danger);
+  border-color: var(--br-admin-danger);
+}
+
+/* "No entries", "No data", "No other directories". */
+.boat-rudder-empty {
+  font-size: var(--br-admin-font-sm);
+  font-style: italic;
+  color: var(--br-admin-text-muted);
+}
+
+/* On/off switch: .boat-rudder-switch > .boat-rudder-switch__knob. */
+.boat-rudder-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--br-admin-border);
+  transition: background 0.2s;
+}
+
+.boat-rudder-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--br-admin-text);
+  transition: left 0.2s;
+}
+
+.boat-rudder-switch--on {
+  background: var(--br-admin-accent);
+}
+
+.boat-rudder-switch--on .boat-rudder-switch__knob {
+  left: 18px;
+  background: var(--br-admin-on-accent);
+}
+
+/* Tabs: .boat-rudder-tabs > a.boat-rudder-tabs__tab. */
+.boat-rudder-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-tabs__tab,
+.boat-rudder-tabs__tab:is(:link, :visited) {
+  padding: 8px 14px;
+  margin-bottom: -1px;
+  font-weight: 600;
+  color: var(--br-admin-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.boat-rudder-tabs__tab:hover {
+  color: var(--br-admin-text);
+}
+
+.boat-rudder-tabs__tab--active,
+.boat-rudder-tabs__tab--active:is(:link, :visited, :hover) {
+  color: var(--br-admin-text);
+  border-bottom-color: var(--br-admin-accent);
+}
+
+/* ============================================================
+   3. PAGES
+   ============================================================ */
+
+/* LOGIN */
+.boat-rudder-login__container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.boat-rudder-login__header {
+  text-align: center;
+}
+
+.boat-rudder-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-width: 400px;
+  width: 90%;
+}
+
+.boat-rudder-login__input {
+  margin: 5px 0;
+}
+
+.boat-rudder-login__button-container,
+.boat-rudder-dashboard__button-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.boat-rudder-login__button {
+  width: 100%;
+}
+
+.boat-rudder-login__error {
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+}
+
+/* DASHBOARD MAINTAINERS */
+.boat-rudder-dashboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+/* Horizontal separators only: full cell borders made the wide entries
+   table read as a grid of boxes. */
+.boat-rudder-dashboard__table th,
+.boat-rudder-dashboard__table td {
+  padding: 10px;
+  border: none;
+  border-bottom: 1px solid var(--br-admin-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.boat-rudder-dashboard__table thead th {
+  font-size: var(--br-admin-font-xs);
+  font-weight: 700;
+  color: var(--br-admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--br-admin-surface);
+  border-bottom-width: 2px;
+}
+
+.boat-rudder-dashboard__table tbody tr:hover > td {
+  background: var(--br-admin-surface);
+}
+
+.boat-rudder-dashboard__form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-width: 400px;
+}
+
+.boat-rudder-dashboard__form-row {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A row of controls: forms and buttons side by side. */
+.boat-rudder-dashboard__inline-form,
+.boat-rudder-dashboard__panel-actions,
+.boat-rudder-entry-editor__topbar-left,
+.boat-rudder-entry-editor__topbar-center,
+.boat-rudder-entry-editor__topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.boat-rudder-dashboard__inline-form form,
+.boat-rudder-dashboard__panel-actions form {
+  margin: 0;
+}
+
+/* Dashboard home (dashboard_epoch3.html): option groups, then panels - each
+   a heading with its action buttons on the right ("Welcome back" + Log out,
+   "Entries pending publication", the analytics summary). Maintainer lists
+   (entries, categories, users, menu) reuse the same panel-header. */
+.boat-rudder-dashboard__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+
+.boat-rudder-dashboard__options-title {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-dashboard__options-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.boat-rudder-dashboard__options-group li {
+  padding: 4px 0;
+}
+
+/* The option groups above, as a "Menu" dropdown in the home header
+   (nav-admin/nav-author_epoch3.html wrap them in a <details>). */
+.boat-rudder-dashboard__menu {
+  position: relative;
+}
+
+.boat-rudder-dashboard__menu > summary {
+  list-style: none;
+  user-select: none;
+}
+
+.boat-rudder-dashboard__menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.boat-rudder-dashboard__menu > summary::after {
+  content: "\25BE";
+  margin-left: 6px;
+}
+
+.boat-rudder-dashboard__menu[open] > summary::after {
+  content: "\25B4";
+}
+
+.boat-rudder-dashboard__menu > .boat-rudder-dashboard__options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  gap: 0;
+  background: var(--br-admin-surface);
+  border: 1px solid var(--br-admin-border);
+  box-shadow: var(--br-admin-shadow);
+}
+
+.boat-rudder-dashboard__menu .boat-rudder-dashboard__options-group {
+  flex: 0 0 180px;
+  background: transparent;
+  border: none;
+}
+
+.boat-rudder-dashboard__panel {
+  margin: 0 0 32px;
+}
+
+.boat-rudder-dashboard__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.boat-rudder-dashboard__panel-header h1,
+.boat-rudder-dashboard__panel-header h2 {
+  margin: 0;
+}
+
+.boat-rudder-dashboard__panel .boat-rudder-analytics__totals {
+  margin-bottom: 12px;
+}
+
+/* Lets a wide entries table scroll inside itself on a phone instead of
+   pushing the whole page sideways. */
+.boat-rudder-dashboard__table-scroll {
+  overflow-x: auto;
+}
+
+/* "Draft" next to an unpublished entry's title (entries/list-draft_epoch3.html). */
+.boat-rudder-dashboard__badge {
+  margin-left: 6px;
+}
+
+/* Summary tables: name | Today | 7 days (analytics_summary()). */
+.boat-rudder-analytics__kv-table--compare th {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--br-admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: right;
+  padding: 0 4px 6px 12px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-analytics__kv-table--compare th:first-child {
+  text-align: left;
+  padding-left: 4px;
+}
+
+/* Names wrap between words; break-all (the full report's default) split
+   "United States" mid-word in these narrow columns. */
+.boat-rudder-analytics__kv-table.boat-rudder-analytics__kv-table--compare td:first-child {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.boat-rudder-analytics__kv-table--compare td:nth-child(2) {
+  text-align: right;
+  color: var(--br-admin-text);
+  white-space: nowrap;
+  padding-left: 12px;
+}
+
+.boat-rudder-dashboard-color-alpha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* One self-contained color picker: a swatch button that opens a popover
+   holding the native <input type="color">, the VGA 16-color palette and
+   (for backgrounds) the opacity slider - see settings-themes_epoch3.html's
+   buildColorField(). */
+.boat-rudder-dashboard__color-field {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* The checkerboard behind the swatch shows a translucent color's opacity. */
+.boat-rudder-dashboard__color-trigger {
+  --boat-rudder-preview-color: transparent;
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+  cursor: pointer;
+  background-image: linear-gradient(var(--boat-rudder-preview-color), var(--boat-rudder-preview-color)),
+                    repeating-conic-gradient(var(--br-admin-text-muted) 0% 25%, var(--br-admin-surface-raised) 0% 50%);
+  background-size: 100% 100%, 8px 8px;
+}
+
+.boat-rudder-dashboard__color-trigger:hover {
+  border-color: var(--br-admin-accent);
+}
+
+.boat-rudder-dashboard-color-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+  padding: 10px;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+  box-shadow: var(--br-admin-shadow);
+}
+
+.boat-rudder-dashboard-color-popover[hidden] {
+  display: none;
+}
+
+.boat-rudder-dashboard-color-popover__opacity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--br-admin-font-md);
+}
+
+.boat-rudder-dashboard-color-popover__opacity input[type="range"] {
+  flex: 1;
+}
+
+.boat-rudder-dashboard-vga-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 160px;
+}
+
+.boat-rudder-dashboard-vga-palette__swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--br-admin-border);
+  cursor: pointer;
+}
+
+.boat-rudder-dashboard-vga-palette__swatch--active {
+  outline: 2px solid var(--br-admin-accent);
+  outline-offset: 1px;
+}
+
+.boat-rudder-dashboard__theme-badge {
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  font-size: var(--br-admin-font-sm);
+}
+
+.boat-rudder-dashboard__thumb {
+  width: 56px;
+  height: auto;
+  display: block;
+}
+
+/* Entries tables (entries/list-row_epoch3.html). */
+.boat-rudder-dashboard__thumb-cell {
+  width: 56px;
+}
+
+.boat-rudder-dashboard__title-cell {
+  font-weight: 600;
+  min-width: 160px;
+}
+
+/* Summary capped at two lines so a long one doesn't stretch the row. */
+.boat-rudder-dashboard__clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 160px;
+}
+
+.boat-rudder-dashboard__nowrap {
+  white-space: nowrap;
+}
+
+/* "No entries ..." row (entries/list-empty_epoch3.html), with its own
+   "+ New entry" button. */
+.boat-rudder-dashboard__table td.boat-rudder-dashboard__empty-state {
+  padding: 32px 10px;
+  text-align: center;
+}
+
+.boat-rudder-dashboard__empty-state p {
+  margin: 0 0 12px;
+}
+
+.boat-rudder-dashboard__empty-state form {
+  margin: 0;
+}
+
+.boat-rudder-dashboard__table tbody tr:hover td.boat-rudder-dashboard__empty-state {
+  background: transparent;
+}
+
+/* "Dashboard / Site settings / Themes" above a maintainer page's <h1>:
+   the ancestors only, every one a link - the <h1> is the current page. */
+.boat-rudder-dashboard__breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: var(--br-admin-font-md);
+}
+
+.boat-rudder-dashboard__breadcrumb li + li::before {
+  content: "/";
+  margin: 0 8px;
+  color: var(--br-admin-text-muted);
+}
+
+/* ============================================================
+   ENTRY EDITOR (boat-rudder-entry-editor)
+   ============================================================ */
+
+body.boat-rudder-entry-editor-mode { overflow: hidden; height: 100%; }
+body.boat-rudder-entry-editor-mode .boat-rudder-main-container { height: 100%; overflow: hidden; }
+body.boat-rudder-entry-editor-mode nav,
+body.boat-rudder-entry-editor-mode .boat-rudder-navbar-space,
+body.boat-rudder-entry-editor-mode .boat-rudder-footer { display: none; }
+body.boat-rudder-entry-editor-mode .boat-rudder-page-content { width: 100%; max-width: 100%; padding: 0; margin: 0; }
+body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user-select: none; }
+
+/* Top bar (its three groups share .boat-rudder-dashboard__inline-form's rule) */
+.boat-rudder-entry-editor__topbar {
+  position: fixed; top: 0; left: 0; width: 100%; height: 44px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; z-index: 200; box-sizing: border-box;
+  background: var(--br-admin-surface);
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-entry-editor__save-btn { padding-left: 18px; padding-right: 18px; }
+
+.boat-rudder-entry-editor__save-status { font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted); }
+.boat-rudder-entry-editor__save-status--saved { color: var(--br-admin-success); }
+.boat-rudder-entry-editor__save-status--error { color: var(--br-admin-danger); }
+
+/* Publish and autosave toggles: a label and a .boat-rudder-switch */
+.boat-rudder-entry-editor-publish-toggle,
+.boat-rudder-entry-editor-autosave-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.boat-rudder-entry-editor-publish-toggle__status,
+.boat-rudder-entry-editor-autosave-toggle__label { font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted); }
+.boat-rudder-entry-editor-publish-toggle__status { min-width: 54px; }
+.boat-rudder-entry-editor-publish-toggle__status--published { color: var(--br-admin-success); }
+.boat-rudder-entry-editor-autosave-toggle__label--on { color: var(--br-admin-accent); }
+
+/* Language toggle: a segmented group of ghost buttons */
+.boat-rudder-entry-editor__lang-toggle {
+  display: flex; overflow: hidden;
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor__lang-btn { border-radius: 0; letter-spacing: 0.5px; }
+
+/* Block type toolbar (second fixed bar) */
+.boat-rudder-entry-editor-block-toolbar {
+  position: fixed; top: 44px; left: 0; width: 100%; height: 36px;
+  display: flex; align-items: center; gap: 3px;
+  padding: 0 10px; overflow-x: auto; z-index: 199;
+  scrollbar-width: none; box-sizing: border-box;
+  background: var(--br-admin-surface);
+  border-bottom: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor-block-toolbar::-webkit-scrollbar { display: none; }
+.boat-rudder-entry-editor-block-toolbar__btn { flex-shrink: 0; }
+
+/* Body layout */
+.boat-rudder-entry-editor { padding-top: 80px; }
+.boat-rudder-entry-editor__body {
+  display: flex; height: calc(100vh - 80px); overflow: hidden;
+}
+
+/* Sidebar */
+.boat-rudder-entry-editor__sidebar {
+  width: 290px; min-width: 290px; overflow-y: auto; flex-shrink: 0;
+  background: var(--br-admin-surface);
+  border-right: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor__sidebar-inner { padding: 12px; }
+
+/* Main content area */
+.boat-rudder-entry-editor__main {
+  flex: 1; overflow-y: auto; padding: 16px 20px;
+}
+
+/* Metadata form (its fields are .boat-rudder-input's) */
+.boat-rudder-entry-editor-meta-section { margin-bottom: 6px; }
+.boat-rudder-entry-editor-meta-section__title {
+  margin-bottom: 8px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor__meta-group { margin-bottom: 8px; }
+.boat-rudder-entry-editor__meta-group > label {
+  display: block; margin-bottom: 3px;
+  font-size: var(--br-admin-font-xs); color: var(--br-admin-text-muted);
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.boat-rudder-entry-editor__meta-group textarea { resize: vertical; min-height: 54px; }
+.boat-rudder-entry-editor__meta-group select[multiple] { height: 100px; }
+.boat-rudder-entry-editor__meta-group input[type="checkbox"] { width: auto; margin: 0 5px 0 0; }
+.boat-rudder-entry-editor__meta-readonly {
+  display: block; padding: 4px 0;
+  font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted);
+}
+
+/* Checkbox row inside a meta group (e.g. "Hide author on the public page").
+   The group's own `label` rule is block-level and uppercase; this one sits
+   inline next to its control instead. */
+.boat-rudder-entry-editor__meta-group > label.boat-rudder-entry-editor__meta-check {
+  display: flex; align-items: center; gap: 6px;
+  margin: 4px 0 0 0; cursor: pointer;
+  font-size: var(--br-admin-font-sm); font-weight: normal;
+  color: var(--br-admin-text); text-transform: none; letter-spacing: normal;
+}
+.boat-rudder-entry-editor__meta-check input[type="checkbox"] {
+  width: auto; margin: 0; cursor: pointer;
+}
+
+.boat-rudder-entry-editor__meta-btn { width: 100%; }
+
+.boat-rudder-entry-editor__sidebar-divider {
+  margin: 12px 0; border: none;
+  border-top: 1px solid var(--br-admin-border);
+}
+
+/* Image preview */
+.boat-rudder-entry-editor-img-preview {
+  width: 100%; height: 110px; margin-bottom: 6px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-img-preview img { width: 100%; height: 100%; object-fit: cover; }
+.boat-rudder-entry-editor-img-preview__placeholder { font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted); }
+
+/* ---- Content blocks ---- */
+
+/* Default (preview mode): document-like appearance */
+.boat-rudder-entry-editor-block {
+  cursor: pointer; position: relative;
+  background: transparent; border: 1px solid transparent;
+  border-left: 2px solid transparent; border-radius: 0;
+  margin-bottom: 0; overflow: visible;
+}
+.boat-rudder-entry-editor-block__header { display: none; }
+.boat-rudder-entry-editor-block__body { display: none; }
+.boat-rudder-entry-editor-block__preview { padding: 4px 14px; min-height: 10px; }
+/* A floated image's preview deliberately escapes its own block, so the
+   following blocks' previews wrap around it as the published page does; the
+   block list contains it at the end, and a block being edited clears it so
+   its form never wraps around a picture. */
+#entryBlocks { display: flow-root; }
+/* Every block is position: relative, and positioned boxes paint over floats -
+   so the next block's (transparent, full-width) box would sit on top of the
+   floated picture and take its clicks. Lift the figure above it; wrapping is
+   unaffected. */
+.boat-rudder-entry-editor-block__preview .boat-rudder-entry-image--float-left,
+.boat-rudder-entry-editor-block__preview .boat-rudder-entry-image--float-right {
+  position: relative; z-index: 1;
+  /* The page's 4px, plus the 6px the editor adds between this figure and
+     the wrapped text that the page doesn't have: this block's bottom border
+     (1px), the next block's top border (1px) and its preview padding (4px). */
+  margin-top: 10px;
+}
+/* On the page a floated figure's block takes no height of its own; here its
+   preview's padding and min-height would push the next block (and its text)
+   down while the picture stays up. */
+.boat-rudder-entry-editor-block__preview:has(> .boat-rudder-entry-image--float-left),
+.boat-rudder-entry-editor-block__preview:has(> .boat-rudder-entry-image--float-right) {
+  padding-top: 0; padding-bottom: 0; min-height: 0;
+}
+
+/* Hover: subtle left accent */
+.boat-rudder-entry-editor-block:not(.boat-rudder-entry-editor-block--editing):hover {
+  background: var(--br-admin-hover-overlay);
+  border-left: 2px solid var(--br-admin-text-muted);
+}
+
+/* Edit mode: full block appearance */
+.boat-rudder-entry-editor-block--editing {
+  clear: both;
+  cursor: default;
+  margin-bottom: 10px;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-accent);
+  border-radius: var(--br-admin-radius-lg);
+}
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__header { display: flex; }
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__body { display: block; }
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__preview { display: none; }
+
+/* Block header bar - display controlled by .boat-rudder-entry-editor-block--editing above.
+   It drags the block from any empty spot (setupDragHandles()); its own
+   controls keep their normal pointer. */
+.boat-rudder-entry-editor-block__header {
+  align-items: center; justify-content: space-between;
+  padding: 5px 10px; user-select: none; cursor: grab;
+  background: var(--br-admin-surface);
+  border-bottom: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius-lg) var(--br-admin-radius-lg) 0 0;
+}
+.boat-rudder-entry-editor-block__header :is(button, input, select, a, label) { cursor: pointer; }
+
+/* Block type labels: one color per block type (--br-admin-block-*). */
+.boat-rudder-entry-editor-block__type-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor-block__type-label--title           { color: var(--br-admin-block-title); }
+.boat-rudder-entry-editor-block__type-label--paragraph       { color: var(--br-admin-block-paragraph); }
+.boat-rudder-entry-editor-block__type-label--image           { color: var(--br-admin-block-image); }
+.boat-rudder-entry-editor-block__type-label--byline          { color: var(--br-admin-block-byline); }
+.boat-rudder-entry-editor-block__type-label--gallery         { color: var(--br-admin-block-gallery); }
+.boat-rudder-entry-editor-block__type-label--separator       { color: var(--br-admin-block-separator); }
+.boat-rudder-entry-editor-block__type-label--link            { color: var(--br-admin-block-link); }
+.boat-rudder-entry-editor-block__type-label--list            { color: var(--br-admin-block-list); }
+.boat-rudder-entry-editor-block__type-label--youtube-embed   { color: var(--br-admin-block-youtube-embed); }
+.boat-rudder-entry-editor-block__type-label--code-text       { color: var(--br-admin-block-code-text); }
+.boat-rudder-entry-editor-block__type-label--generic         { color: var(--br-admin-block-generic); }
+.boat-rudder-entry-editor-block__type-label--table           { color: var(--br-admin-block-table); }
+.boat-rudder-entry-editor-block__type-label--social-networks { color: var(--br-admin-block-social-networks); }
+
+.boat-rudder-entry-editor-block__header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* Grip overlay in preview mode */
+.boat-rudder-entry-editor-block__grip {
+  position: absolute; top: 4px; right: 6px;
+  color: transparent; font-size: 15px; cursor: grab;
+  user-select: none; z-index: 2; line-height: 1;
+  transition: color 0.15s;
+}
+.boat-rudder-entry-editor-block:not(.boat-rudder-entry-editor-block--editing):hover .boat-rudder-entry-editor-block__grip { color: var(--br-admin-text-muted); }
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__grip { display: none; }
+
+/* Trash button (a ghost icon button): shown while editing, red on hover */
+.boat-rudder-entry-editor-block__trash-btn { opacity: 0; transition: opacity 0.15s, color 0.15s; }
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__trash-btn { opacity: 1; }
+.boat-rudder-entry-editor-block__trash-btn:hover { color: var(--br-admin-danger); opacity: 1; }
+
+/* Drag handle in header */
+.boat-rudder-entry-editor-block__drag {
+  padding: 0 4px; font-size: 16px; cursor: grab; user-select: none;
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-entry-editor-block__body { padding: 10px 12px; }
+
+.boat-rudder-entry-editor-block__lang-content { display: none; }
+.boat-rudder-entry-editor-block__lang-content--active { display: block; }
+
+/* Block textareas (styled by .boat-rudder-input's rule) */
+.boat-rudder-entry-editor-block textarea {
+  padding: 8px 10px; font-size: 14px; line-height: 1.65;
+  min-height: 72px;
+  /* Scrollable and user-resizable: with overflow hidden and resize none,
+     content past the visible rows could not be reached at all. */
+  overflow: auto; resize: vertical;
+}
+
+/* Rich text editor (contenteditable): the entry's content, so it shows in
+   the public site's colors. */
+.boat-rudder-entry-editor__richtext {
+  width: 100%; box-sizing: border-box; min-height: 80px;
+  padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.7;
+  outline: none; cursor: text;
+  color: var(--br-color-home-content-text, #ffffff);
+  background-color: var(--br-color-body-background, #241144);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor__richtext:focus { border-color: var(--br-admin-accent); }
+.boat-rudder-entry-editor__richtext i, .boat-rudder-entry-editor__richtext em { font-style: italic; }
+.boat-rudder-entry-editor__richtext a { color: var(--br-color-link-normal, #ffffff); text-decoration: underline; }
+.boat-rudder-entry-editor__richtext p { margin: 0 0 8px; }
+.boat-rudder-entry-editor__richtext p:last-child { margin-bottom: 0; }
+.boat-rudder-entry-editor__richtext ul, .boat-rudder-entry-editor__richtext ol { margin: 4px 0 8px 20px; }
+.boat-rudder-entry-editor__richtext blockquote {
+  margin: 6px 0; padding: 4px 12px; font-style: italic;
+  color: var(--br-admin-text-muted);
+  border-left: 3px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor__richtext pre,
+.boat-rudder-entry-editor-block .boat-rudder-entry-editor__source-editor {
+  font-family: 'Courier New', Courier, monospace; font-size: var(--br-admin-font-sm);
+  color: var(--br-color-code-text, #ffffff);
+  background: var(--br-color-code-background, #000080);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor__richtext pre { margin: 6px 0; padding: 8px; overflow-x: auto; }
+
+/* Source editor (HTML view) - the block textarea rule's colors, overridden
+   with the code-text block's own, so the HTML reads as code */
+.boat-rudder-entry-editor-block .boat-rudder-entry-editor__source-editor {
+  min-height: 120px; padding: 8px 10px; line-height: 1.5;
+  border-color: var(--br-admin-accent);
+}
+
+/* Formatting toolbar (its buttons are .boat-rudder-btn--sm) */
+.boat-rudder-entry-editor-toolbar {
+  display: flex; align-items: center; gap: 2px;
+  margin-bottom: 4px; flex-wrap: wrap;
+}
+.boat-rudder-entry-editor-toolbar__btn { min-width: 26px; height: 24px; padding: 0 4px; line-height: 1; }
+.boat-rudder-entry-editor-toolbar__sep {
+  display: inline-block; flex-shrink: 0;
+  width: 1px; height: 18px; margin: 0 2px;
+  background: var(--br-admin-border);
+}
+
+/* Table block editor */
+.boat-rudder-entry-editor__table-editor { overflow-x: auto; }
+.boat-rudder-entry-editor__table-row {
+  display: flex; align-items: stretch; min-width: max-content;
+}
+.boat-rudder-entry-editor__table-row + .boat-rudder-entry-editor__table-row {
+  border-top: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor__table-cell {
+  min-width: 80px; flex: 1; margin: 0; box-sizing: border-box; outline: none;
+  padding: 6px 8px; font-size: var(--br-admin-font-md);
+  color: var(--br-admin-text);
+  background: var(--br-admin-surface-raised);
+  border: none; border-right: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor__table-cell:last-child { border-right: none; }
+.boat-rudder-entry-editor__table-cell:focus { box-shadow: inset 0 0 0 1px var(--br-admin-accent); }
+.boat-rudder-entry-editor__table-cell--header {
+  font-weight: 600;
+  background: var(--br-color-table-header, #1e2d3d);
+  border-bottom: 2px solid var(--br-admin-accent);
+}
+
+/* Heading level buttons (.boat-rudder-btn--sm) */
+.boat-rudder-entry-editor__heading-btns {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor__heading-label {
+  margin-right: 4px; font-size: 10px; text-transform: uppercase;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor__heading-btn { width: 28px; height: 24px; padding: 0; }
+
+/* Advanced section */
+.boat-rudder-entry-editor-advanced {
+  margin-top: 8px; padding-top: 6px;
+  border-top: 1px solid var(--br-admin-border);
+}
+.boat-rudder-entry-editor-advanced__toggle {
+  padding: 2px 0; font-size: var(--br-admin-font-xs); cursor: pointer;
+  color: var(--br-admin-text-muted); background: none; border: none;
+}
+.boat-rudder-entry-editor-advanced__toggle:hover { color: var(--br-admin-text); }
+.boat-rudder-entry-editor-advanced__panel { display: none; margin-top: 6px; }
+.boat-rudder-entry-editor-advanced__panel--open { display: block; }
+.boat-rudder-entry-editor-advanced__label {
+  display: block; margin-bottom: 3px; font-size: 10px;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor-advanced__input,
+.boat-rudder-entry-editor-advanced__type-input { margin: 0 0 6px; font-family: monospace; }
+/* Path fields inside Advanced: compact, monospace, full width */
+.boat-rudder-entry-editor-advanced__panel .boat-rudder-entry-editor-block__lang-content textarea {
+  font-family: monospace; font-size: var(--br-admin-font-xs);
+  min-height: 0; height: auto; resize: vertical;
+}
+
+/* Block vertical rhythm */
+.boat-rudder-entry-editor-block + .boat-rudder-entry-editor-block { margin-top: 0; }
+.boat-rudder-entry-editor-block--editing + .boat-rudder-entry-editor-block { margin-top: 10px; }
+.boat-rudder-entry-editor-block + .boat-rudder-entry-editor-block--editing { margin-top: 10px; }
+
+/* Preview content typography: the entry as the public site shows it */
+.boat-rudder-entry-editor-preview__title {
+  margin: 12px 0 4px; font-size: 22px; font-weight: 700; line-height: 1.3;
+  color: var(--br-color-home-content-text, #ffffff);
+}
+h1.boat-rudder-entry-editor-preview__title { font-size: 28px; }
+h2.boat-rudder-entry-editor-preview__title { font-size: 22px; }
+h3.boat-rudder-entry-editor-preview__title { font-size: 18px; }
+h4.boat-rudder-entry-editor-preview__title { font-size: 16px; font-weight: 600; }
+h5.boat-rudder-entry-editor-preview__title { font-size: 14px; font-weight: 600; }
+h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; }
+
+.boat-rudder-entry-editor-preview__paragraph {
+  margin: 6px 0; font-size: 15px; line-height: 1.75;
+  color: var(--br-color-home-content-text, #ffffff);
+}
+.boat-rudder-entry-editor-preview__paragraph a { color: var(--br-color-link-normal, #ffffff); }
+.boat-rudder-entry-editor-preview__image { text-align: center; margin: 8px 0; }
+.boat-rudder-entry-editor-preview__image img { max-width: 100%; height: auto; border-radius: var(--br-admin-radius); }
+.boat-rudder-entry-editor-preview__image figcaption {
+  margin-top: 4px; font-size: var(--br-admin-font-md); font-style: italic;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor-preview__byline {
+  display: flex; justify-content: space-between; margin: 4px 0;
+  font-size: var(--br-admin-font-md); color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor-preview__byline-author { color: var(--br-color-blog-list-item-author, #dfd106); }
+.boat-rudder-entry-editor-preview__byline-date { color: var(--br-color-blog-list-item-date, #e68e4e); margin-left: 12px; }
+.boat-rudder-entry-editor-preview__table { border-collapse: collapse; width: 100%; font-size: var(--br-admin-font-md); }
+.boat-rudder-entry-editor-preview__table td,
+.boat-rudder-entry-editor-preview__table th {
+  padding: 5px 8px; text-align: left;
+  color: var(--br-color-home-content-text, #ffffff);
+  border: 1px solid var(--br-color-table-border, #444444);
+}
+.boat-rudder-entry-editor-preview__table th {
+  font-weight: 600;
+  background: var(--br-color-table-header, #1e2d3d);
+}
+
+/* + Add block (a ghost button with a dashed outline) */
+.boat-rudder-entry-editor-add-block { position: relative; margin-top: 6px; }
+.boat-rudder-entry-editor-add-block__btn,
+.boat-rudder-entry-editor-add-block__btn:hover {
+  width: 100%; padding: 8px;
+  border: 1px dashed var(--br-admin-border);
+}
+.boat-rudder-entry-editor-add-block__btn:hover { border-color: var(--br-admin-accent); }
+.boat-rudder-entry-editor-add-block__dropdown {
+  display: none; position: absolute; bottom: calc(100% + 4px); left: 0; right: 0;
+  padding: 5px; z-index: 100;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius-lg);
+  box-shadow: var(--br-admin-shadow);
+}
+.boat-rudder-entry-editor-add-block__dropdown--open { display: block; }
+/* Opened downward when there's no room above the button (see toggleAddBlockDropdown()). */
+.boat-rudder-entry-editor-add-block__dropdown--down { bottom: auto; top: calc(100% + 4px); }
+.boat-rudder-entry-editor-add-block__option {
+  display: block; width: 100%; padding: 7px 10px; cursor: pointer;
+  font-size: var(--br-admin-font-md); text-align: left;
+  color: var(--br-admin-text); background: none;
+  border: none; border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-add-block__option:hover { background: var(--br-admin-hover); }
+
+/* Media library modal (the editor's image picker) */
+.boat-rudder-modal-overlay {
+  position: absolute; inset: 0; background: var(--br-admin-overlay);
+}
+.boat-rudder-modal-content {
+  position: relative; z-index: 1; box-sizing: border-box;
+  display: flex; flex-direction: column; overflow: hidden;
+  width: 90vw; height: 90vh; max-width: 1150px; max-height: 850px; margin: auto;
+  color: var(--br-admin-text);
+  background: var(--br-admin-surface);
+  border-radius: 12px; box-shadow: var(--br-admin-shadow);
+}
+.boat-rudder-modal-close {
+  position: absolute; right: 10px; top: 2px; z-index: 2;
+  font-size: 30px; cursor: pointer;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-modal-close:hover { color: var(--br-admin-text); }
+
+/* ============================================================
+   ADMIN BACK LINK
+   ============================================================ */
+.boat-rudder-admin__back-btn,
+.boat-rudder-admin__back-btn:is(:link, :visited) {
+  display: inline-block; margin-bottom: 12px;
+  font-size: var(--br-admin-font-sm); font-weight: 600; text-decoration: none;
+  color: var(--br-admin-text-muted);
+  transition: color 0.15s;
+}
+.boat-rudder-admin__back-btn:hover { color: var(--br-admin-accent); }
+
+/* ============================================================
+   MEDIA ADMIN
+   ============================================================ */
+.boat-rudder-media {
+  display: flex; height: calc(100vh - 80px); max-height: 900px;
+  background: var(--br-admin-surface);
+  border: 1px solid var(--br-admin-border);
+}
+.boat-rudder-media__sidebar {
+  width: 220px; min-width: 180px;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--br-admin-border);
+}
+.boat-rudder-media__sidebar-header {
+  padding: 12px 14px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+.boat-rudder-media__dir-actions { display: flex; gap: 4px; }
+.boat-rudder-media__dir-btn { flex: 1; }
+.boat-rudder-media__dir-list { padding: 0; margin: 0; list-style: none; flex: 1; overflow-y: auto; }
+.boat-rudder-media__dir-item {
+  display: block; padding: 8px 14px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: var(--br-admin-font-md);
+  color: var(--br-admin-text);
+  border-bottom: 1px solid var(--br-admin-border);
+  transition: background 0.1s, color 0.1s;
+}
+.boat-rudder-media__dir-item:hover { background: var(--br-admin-hover); }
+.boat-rudder-media__dir-item--selected {
+  padding-left: 12px;
+  color: var(--br-admin-accent);
+  background: var(--br-admin-surface-raised);
+  border-left: 2px solid var(--br-admin-accent);
+}
+.boat-rudder-media__dir-new-input { display: block; padding: 8px 14px; border-radius: 0; }
+
+.boat-rudder-media__main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.boat-rudder-media__upload-zone {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--br-admin-border);
+  transition: background 0.15s, border-color 0.15s;
+}
+.boat-rudder-media__upload-zone--drag-over {
+  background: var(--br-admin-surface-raised);
+  border-bottom-color: var(--br-admin-success);
+}
+.boat-rudder-media__upload-label { font-size: var(--br-admin-font-md); color: var(--br-admin-text-muted); }
+.boat-rudder-media__upload-browse { color: var(--br-admin-accent); cursor: pointer; text-decoration: underline; }
+.boat-rudder-media__file-input { display: none; }
+
+.boat-rudder-media__upload-feedback { padding: 0 16px; }
+.boat-rudder-media__progress-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; font-size: var(--br-admin-font-sm);
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-media__progress-name {
+  max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.boat-rudder-media__progress-bar-wrap {
+  flex: 1; height: 3px; overflow: hidden; border-radius: 2px;
+  background: var(--br-admin-border);
+}
+.boat-rudder-media__progress-bar { height: 100%; width: 0%; background: var(--br-admin-accent); transition: width 0.2s; }
+.boat-rudder-media__progress-item--done .boat-rudder-media__progress-bar { background: var(--br-admin-success); }
+.boat-rudder-media__progress-item--error .boat-rudder-media__progress-bar { background: var(--br-admin-danger); width: 100%; }
+
+.boat-rudder-media__grid-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-media__move-picker { margin: 0 12px 10px; padding: 10px 12px; border-radius: var(--br-admin-radius); }
+.boat-rudder-media__move-picker-title {
+  margin-bottom: 6px; font-size: var(--br-admin-font-sm); font-weight: 700;
+  color: var(--br-admin-accent);
+}
+.boat-rudder-media__move-picker-list {
+  list-style: none; margin: 0 0 8px; padding: 0;
+  max-height: 160px; overflow-y: auto;
+}
+.boat-rudder-media__move-picker-item { padding: 4px 0; font-size: var(--br-admin-font-md); }
+.boat-rudder-media__move-picker-item label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.boat-rudder-media__move-picker-actions { display: flex; gap: 6px; }
+
+.boat-rudder-media__grid-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.boat-rudder-media__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px; padding: 12px; align-content: start;
+}
+.boat-rudder-media__photo {
+  position: relative; overflow: hidden; user-select: none;
+  cursor: zoom-in; /* clicking the photo views it; only the checkbox selects */
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+  transition: border-color 0.15s, background 0.15s;
+}
+.boat-rudder-media__photo:hover,
+.boat-rudder-media__photo--selected { border-color: var(--br-admin-accent); }
+.boat-rudder-media__photo-thumb {
+  width: 100%; height: 110px;
+  background-position: center; background-repeat: no-repeat; background-size: cover;
+  filter: var(--br-admin-thumb-filter);
+  transition: filter 0.2s;
+}
+.boat-rudder-media__photo:hover .boat-rudder-media__photo-thumb,
+.boat-rudder-media__photo--selected .boat-rudder-media__photo-thumb { filter: none; }
+.boat-rudder-media__photo-name {
+  padding: 5px 7px 6px; font-size: var(--br-admin-font-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-media__photo--selected .boat-rudder-media__photo-name { color: var(--br-admin-accent); }
+.boat-rudder-media__photo input[type="checkbox"] {
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  width: 18px; height: 18px; margin: 0; cursor: pointer;
+  opacity: 0.6; transition: opacity 0.15s;
+  accent-color: var(--br-admin-accent);
+}
+.boat-rudder-media__photo:hover input[type="checkbox"],
+.boat-rudder-media__photo--selected input[type="checkbox"] { opacity: 1; }
+
+/* Image block: the body shows the picture itself, since opening a block hides
+   its preview. The path inputs move into the Advanced panel. */
+.boat-rudder-entry-editor__image-preview {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60px; padding: 8px;
+  background-color: var(--br-color-body-background, #241144);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor__gallery-preview {
+  background-color: var(--br-color-body-background, #241144);
+}
+.boat-rudder-entry-editor__image-thumb {
+  max-width: 100%; max-height: 260px;
+  object-fit: contain; border-radius: 2px;
+}
+/* Size + alignment controls sit side by side under the caption */
+.boat-rudder-entry-editor__image-options {
+  display: flex; gap: 10px;
+}
+.boat-rudder-entry-editor__image-options .boat-rudder-entry-editor__meta-group {
+  flex: 1; margin-bottom: 0;
+}
+.boat-rudder-entry-editor__image-options select { padding: 4px; height: 28px; }
+
+/* ============================================================
+   ANALYTICS (/dashboard/analytics)
+   ============================================================ */
+.boat-rudder-analytics__period-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 16px;
+}
+.boat-rudder-analytics__period-label { margin-right: 4px; }
+.boat-rudder-analytics__range-form {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0; padding: 0; background: transparent; border: none;
+}
+.boat-rudder-analytics__range-form--active .boat-rudder-analytics__date-input { border-color: var(--br-admin-accent); }
+.boat-rudder-analytics__date-input { width: 120px; }
+.boat-rudder-analytics__range-sep { font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted); }
+.boat-rudder-analytics__period-current {
+  margin-left: auto; font-size: var(--br-admin-font-sm); font-style: italic;
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-analytics__totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.boat-rudder-analytics__stat-card { text-align: center; }
+/* One color per epoch - the charts' categorical palette (--br-admin-series-*). */
+.boat-rudder-analytics__stat-card--ewml { border-top: 2px solid var(--br-admin-series-1); }
+.boat-rudder-analytics__stat-card--e0 { border-top: 2px solid var(--br-admin-series-2); }
+.boat-rudder-analytics__stat-card--e1 { border-top: 2px solid var(--br-admin-series-3); }
+.boat-rudder-analytics__stat-card--e2 { border-top: 2px solid var(--br-admin-series-4); }
+.boat-rudder-analytics__stat-card--e3 { border-top: 2px solid var(--br-admin-series-5); }
+.boat-rudder-analytics__stat-value { font-size: 28px; font-weight: 700; line-height: 1; color: var(--br-admin-text); }
+.boat-rudder-analytics__stat-label { margin-top: 6px; }
+
+.boat-rudder-analytics__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.boat-rudder-analytics__table-block--wide { grid-column: 1 / -1; }
+
+/* ============================================================
+   ANALYTICS CHARTS (server-side SVG, analytics_charts.c)
+   ============================================================ */
+/* Categorical: one color per epoch (1 = WML ... 5 = epoch 3,
+   --br-admin-series-*), the same order the stat cards' top borders use. */
+.boat-rudder-chart__series--1 { color: var(--br-admin-series-1); }
+.boat-rudder-chart__series--2 { color: var(--br-admin-series-2); }
+.boat-rudder-chart__series--3 { color: var(--br-admin-series-3); }
+.boat-rudder-chart__series--4 { color: var(--br-admin-series-4); }
+.boat-rudder-chart__series--5 { color: var(--br-admin-series-5); }
+.boat-rudder-chart__series--accent { color: var(--br-admin-accent); }
+.boat-rudder-chart__series--muted { color: var(--br-admin-text-muted); }
+
+.boat-rudder-chart__svg { display: block; overflow: visible; }
+.boat-rudder-chart__svg text { font-family: inherit; font-variant-numeric: tabular-nums; }
+.boat-rudder-chart__bar { fill: currentColor; }
+.boat-rudder-chart__hit { fill: transparent; }
+.boat-rudder-chart__row:hover .boat-rudder-chart__bar { opacity: .8; }
+.boat-rudder-chart__label { font-size: var(--br-admin-font-sm); fill: currentColor; }
+.boat-rudder-chart__svg a .boat-rudder-chart__label { fill: var(--br-color-link-normal, #ffffff); }
+.boat-rudder-chart__svg a:hover .boat-rudder-chart__label { text-decoration: underline; }
+.boat-rudder-chart__value { font-size: var(--br-admin-font-sm); fill: var(--br-admin-text); }
+.boat-rudder-chart__track { fill: var(--br-admin-border); }
+.boat-rudder-chart__axis-label { font-size: var(--br-admin-font-xs); fill: var(--br-admin-text-muted); }
+.boat-rudder-chart__axis-label--strong { font-weight: 700; fill: currentColor; }
+.boat-rudder-chart__baseline { stroke: var(--br-admin-border); stroke-width: 1; }
+
+/* Donut + its legend, stacked so it fits a 220px grid block. */
+.boat-rudder-chart--donut { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.boat-rudder-chart__slice { stroke: currentColor; transition: stroke-width .1s; }
+.boat-rudder-chart__slice:hover { stroke-width: 22; }
+.boat-rudder-chart__center-value { font-size: 20px; font-weight: 700; fill: currentColor; }
+.boat-rudder-chart__center-label { font-size: 10px; fill: var(--br-admin-text-muted); }
+.boat-rudder-chart__legend { list-style: none; margin: 0; padding: 0; width: 100%; font-size: var(--br-admin-font-sm); }
+.boat-rudder-chart__legend li { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.boat-rudder-chart__swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
+.boat-rudder-chart__legend-label { flex: 1; }
+.boat-rudder-chart__legend-value { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--br-admin-text); }
+
+/* "Visits per day" spans the panel, between the totals and the grid. */
+.boat-rudder-analytics__table-block--chart { margin-bottom: 12px; }
+
+/* Each chart's numbers as a table (Today | 7 days), folded under it. */
+.boat-rudder-chart__table { margin-top: 10px; }
+.boat-rudder-chart__table > summary { font-size: var(--br-admin-font-xs); color: var(--br-admin-text-muted); cursor: pointer; }
+.boat-rudder-chart__table[open] > summary { margin-bottom: 6px; }
+.boat-rudder-analytics__table-title {
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+.boat-rudder-analytics__kv-table { width: 100%; border-collapse: collapse; font-size: var(--br-admin-font-md); }
+.boat-rudder-analytics__kv-table td {
+  padding: 5px 4px; vertical-align: middle;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+.boat-rudder-analytics__kv-table td:first-child { word-break: break-all; color: var(--br-admin-text); }
+.boat-rudder-analytics__kv-table td:last-child {
+  min-width: 40px; padding-left: 12px; text-align: right; white-space: nowrap;
+  font-weight: 700; color: var(--br-admin-accent);
+}
+.boat-rudder-analytics__kv-table tr:last-child td { border-bottom: none; }
+.boat-rudder-analytics__bar {
+  display: inline-block; height: 6px; min-width: 2px; margin-left: 8px; vertical-align: middle;
+  border-radius: 1px; background: var(--br-admin-accent);
+}
+.boat-rudder-analytics__pct { font-size: var(--br-admin-font-xs); color: var(--br-admin-text-muted); }
+/* Browsers/OSes breakdown tree: one expandable <details> per family (Chrome,
+   Firefox, ...) whose children are that family's versions. */
+.boat-rudder-analytics__tree { font-size: var(--br-admin-font-md); }
+.boat-rudder-analytics__tree-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--br-admin-border);
+}
+.boat-rudder-analytics__tree-node > summary { cursor: pointer; list-style: none; }
+.boat-rudder-analytics__tree-node > summary::-webkit-details-marker { display: none; }
+.boat-rudder-analytics__tree-node > summary:hover { background: var(--br-admin-hover); }
+.boat-rudder-analytics__tree-node > summary .boat-rudder-analytics__tree-name::before {
+  content: "\25B8"; display: inline-block; width: 14px;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-analytics__tree-node[open] > summary .boat-rudder-analytics__tree-name::before { content: "\25BE"; }
+.boat-rudder-analytics__tree-row--leaf .boat-rudder-analytics__tree-name { padding-left: 14px; }
+.boat-rudder-analytics__tree-name { word-break: break-all; color: var(--br-admin-text); }
+.boat-rudder-analytics__tree-versions { font-size: var(--br-admin-font-xs); color: var(--br-admin-text-muted); }
+.boat-rudder-analytics__tree-count { padding-left: 12px; white-space: nowrap; font-weight: 700; color: var(--br-admin-accent); }
+.boat-rudder-analytics__tree-children { background: var(--br-admin-surface-raised); }
+.boat-rudder-analytics__tree-children td:first-child { padding-left: 28px; }

@@ -1,0 +1,13 @@
+# Installed to /etc/logrotate.d/boat-rudder by scripts/install.sh.
+# copytruncate: systemd keeps the log open in append mode (StandardOutput=
+# append:...), so the file is truncated in place rather than moved.
+/var/log/boat-rudder.log {
+    weekly
+    maxsize 20M
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

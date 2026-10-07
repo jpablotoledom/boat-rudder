@@ -1,0 +1,288 @@
+<!-- Gallery lightbox: modal viewer with loading spinner, slide animation,
+     keyboard, and touch (swipe, pinch zoom, pan, double-tap reset). Also
+     folds each gallery down to 5 tiles (4 under 500px) with a "+N" overlay. -->
+<style>
+.boat-rudder-modal {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0); transition: background 0.3s ease;
+  justify-content: space-between; align-items: center; z-index: 1000;
+}
+.boat-rudder-modal--active { display: flex; background: rgba(0, 0, 0, 0.8); }
+.boat-rudder-modal img {
+  max-width: 90%; max-height: 90%; border-radius: 8px; z-index: 1; touch-action: none;
+}
+.boat-rudder-modal__close {
+  position: absolute; top: 0; right: 0; font-size: 40px; line-height: 24px;
+  color: white; cursor: pointer; padding: 10px; background-color: #7b0a74; z-index: 1000;
+}
+.boat-rudder-modal__prev, .boat-rudder-modal__next {
+  font-size: 40px; padding: 10px; background-color: #7b0a74; color: white;
+  cursor: pointer; user-select: none; z-index: 1000;
+}
+.boat-rudder-modal__prev--disabled, .boat-rudder-modal__next--disabled {
+  opacity: 0.3; cursor: default; pointer-events: none;
+}
+.boat-rudder-modal__spinner {
+  display: none; position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
+  border: 4px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%;
+  animation: boat-rudder-spin 0.7s linear infinite; z-index: 10;
+}
+@keyframes boat-rudder-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.boat-rudder-gallery-overlay {
+  position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; border-radius: inherit;
+  color: white; font-size: 3rem; font-weight: bold;
+}
+@media (max-width: 900px) { .boat-rudder-modal img { max-width: 80%; } }
+@media (max-width: 500px) {
+  .boat-rudder-modal { justify-content: center; }
+  .boat-rudder-modal img { max-width: 100%; }
+  .boat-rudder-modal__prev, .boat-rudder-modal__next { position: absolute; bottom: 0; }
+  .boat-rudder-modal__prev { left: 0; }
+  .boat-rudder-modal__next { right: 0; }
+}
+</style>
+
+<div class="boat-rudder-modal" id="imageModal">
+  <span class="boat-rudder-modal__close" id="closeModal">&times;</span>
+  <div class="boat-rudder-modal__prev" id="prevImage">&lt;</div>
+  <img id="modalImage" src="" alt="">
+  <div class="boat-rudder-modal__next" id="nextImage">&gt;</div>
+  <div class="boat-rudder-modal__spinner" id="modalSpinner"></div>
+</div>
+
+<script>
+(function() {
+  var modal = document.getElementById('imageModal');
+  var modalImage = document.getElementById('modalImage');
+  var spinner = document.getElementById('modalSpinner');
+  var prevBtn = document.getElementById('prevImage');
+  var nextBtn = document.getElementById('nextImage');
+  var group = [];   // images navigable from the one that was opened
+  var idx = 0;
+  var loadToken = 0;
+
+  function fullUrl(img) { return img.getAttribute('data-full') || img.src; }
+
+  function updateNav() {
+    prevBtn.classList.toggle('boat-rudder-modal__prev--disabled', idx === 0);
+    nextBtn.classList.toggle('boat-rudder-modal__next--disabled', idx === group.length - 1);
+  }
+
+  // Preload so the spinner shows until the full-size file is ready. A newer
+  // request supersedes an older one still in flight.
+  function loadImage(src, done) {
+    var token = ++loadToken;
+    spinner.style.display = 'block';
+    modalImage.style.opacity = '0';
+    var probe = new Image();
+    function finish() {
+      if (token !== loadToken) return;
+      spinner.style.display = 'none';
+      modalImage.src = src;
+      if (done) done();
+    }
+    probe.onload = finish;
+    probe.onerror = finish;
+    probe.src = src;
+  }
+
+  function fadeIn(transform, ms) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        modalImage.style.transition = 'transform ' + ms + 's ease, opacity ' + ms + 's ease';
+        modalImage.style.transform = transform;
+        modalImage.style.opacity = '1';
+      });
+    });
+  }
+
+  window.openGalleryLightbox = function(img) {
+    var container = img.closest('.boat-rudder-gallery-container');
+    var imgs = container ? Array.from(container.querySelectorAll('.boat-rudder-gallery-item img')) : [img];
+    openGroup(imgs, Math.max(0, imgs.indexOf(img)));
+  };
+
+  // Same viewer over a plain list of full-size URLs - for pictures that
+  // aren't <img> elements in a gallery container (the dashboard's media
+  // picker shows CSS-background thumbnails). Detached <img>s carrying only
+  // data-full stand in for them, so nothing loads until it's viewed.
+  window.openLightboxUrls = function(urls, index) {
+    var imgs = urls.map(function(u) {
+      var i = document.createElement('img');
+      i.setAttribute('data-full', u);
+      return i;
+    });
+    openGroup(imgs, Math.min(Math.max(0, index || 0), imgs.length - 1));
+  };
+
+  function openGroup(imgs, startIdx) {
+    group = imgs;
+    idx = startIdx;
+    modalImage.src = '';
+    modalImage.style.transition = 'none';
+    modalImage.style.transform = 'scale(0.85)';
+    modalImage.style.opacity = '0';
+    modal.classList.add('boat-rudder-modal--active');
+    document.body.style.overflow = 'hidden';
+    updateNav();
+    loadImage(fullUrl(group[idx]), function() { fadeIn('scale(1)', 0.3); });
+  }
+
+  function close() {
+    modal.classList.remove('boat-rudder-modal--active');
+    document.body.style.overflow = '';
+    loadToken++;
+    modalImage.style.transition = 'none';
+    modalImage.style.transform = 'translateX(0)';
+    modalImage.style.opacity = '1';
+    spinner.style.display = 'none';
+  }
+  window.closeGalleryLightbox = close;
+
+  function navigate(dir) {
+    var target = idx + (dir === 'next' ? 1 : -1);
+    if (target < 0 || target >= group.length) {
+      modalImage.style.transition = 'transform 0.3s ease';
+      modalImage.style.transform = 'translateX(0)';
+      return;
+    }
+    modalImage.style.transition = 'transform 0.25s ease';
+    modalImage.style.transform = 'translateX(' + (dir === 'next' ? '-120%' : '120%') + ')';
+    setTimeout(function() {
+      modalImage.style.transition = 'none';
+      modalImage.style.transform = 'translateX(' + (dir === 'next' ? '120%' : '-120%') + ')';
+      modalImage.style.opacity = '0';
+      idx = target;
+      updateNav();
+      loadImage(fullUrl(group[idx]), function() { fadeIn('translateX(0)', 0.25); });
+    }, 250);
+  }
+
+  document.getElementById('closeModal').addEventListener('click', close);
+  modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+  prevBtn.addEventListener('click', function() { navigate('prev'); });
+  nextBtn.addEventListener('click', function() { navigate('next'); });
+  document.addEventListener('keydown', function(e) {
+    if (!modal.classList.contains('boat-rudder-modal--active')) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowLeft') navigate('prev');
+    if (e.key === 'ArrowRight') navigate('next');
+  });
+
+  // Pinch zoom + pan + swipe
+  (function() {
+    var scale = 1, startDist = 0, startScale = 1, lastTap = 0;
+    var tx = 0, ty = 0, panX = 0, panY = 0, panning = false;
+    var swipeX = 0, swipeY = 0, swiping = false;
+
+    function dist(t) {
+      var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    function apply(animated) {
+      modalImage.style.transition = animated ? 'transform 0.3s ease' : 'none';
+      modalImage.style.transform = 'scale(' + scale + ') translate(' + tx + 'px, ' + ty + 'px)';
+    }
+    function reset() { scale = 1; tx = 0; ty = 0; apply(true); }
+
+    modalImage.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        panning = swiping = false;
+        startDist = dist(e.touches);
+        startScale = scale;
+      }
+      if (e.touches.length === 1) {
+        var t = e.touches[0];
+        if (scale > 1) {
+          e.preventDefault();
+          panning = true; swiping = false;
+          panX = t.clientX - tx * scale;
+          panY = t.clientY - ty * scale;
+        } else {
+          swiping = true; panning = false;
+          swipeX = t.clientX; swipeY = t.clientY;
+        }
+        var now = Date.now();
+        if (now - lastTap < 300) reset();
+        lastTap = now;
+      }
+    }, { passive: false });
+
+    modalImage.addEventListener('touchmove', function(e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        scale = Math.min(Math.max(startScale * (dist(e.touches) / startDist), 1), 4);
+        apply(false);
+      }
+      if (e.touches.length === 1 && panning && scale > 1) {
+        e.preventDefault();
+        tx = (e.touches[0].clientX - panX) / scale;
+        ty = (e.touches[0].clientY - panY) / scale;
+        apply(false);
+      }
+      if (e.touches.length === 1 && swiping && scale === 1) {
+        e.preventDefault();
+        modalImage.style.transition = 'none';
+        modalImage.style.transform = 'translateX(' + (e.touches[0].clientX - swipeX) + 'px)';
+      }
+    }, { passive: false });
+
+    modalImage.addEventListener('touchend', function(e) {
+      panning = false;
+      if (swiping && scale === 1) {
+        swiping = false;
+        var dx = e.changedTouches[0].clientX - swipeX;
+        var dy = Math.abs(e.changedTouches[0].clientY - swipeY);
+        if (Math.abs(dx) > 50 && dy < 80) {
+          navigate(dx < 0 ? 'next' : 'prev');
+        } else {
+          modalImage.style.transition = 'transform 0.3s ease';
+          modalImage.style.transform = 'translateX(0)';
+        }
+        return;
+      }
+      if (scale <= 1) reset();
+    });
+  })();
+
+  // Fold every gallery to 5 tiles (4 on narrow screens); the last visible
+  // tile carries a "+N" overlay that opens the viewer at that image.
+  function buildGalleries() {
+    var maxVisible = window.innerWidth < 500 ? 4 : 5;
+    document.querySelectorAll('.boat-rudder-gallery-container').forEach(function(container) {
+      var items = container.querySelectorAll('.boat-rudder-gallery-item');
+      items.forEach(function(item) {
+        item.style.display = '';
+        var old = item.querySelector('.boat-rudder-gallery-overlay');
+        if (old) old.remove();
+      });
+      if (items.length <= maxVisible) return;
+      items.forEach(function(item, i) { if (i >= maxVisible) item.style.display = 'none'; });
+      var last = items[maxVisible - 1];
+      var overlay = document.createElement('div');
+      overlay.className = 'boat-rudder-gallery-overlay';
+      overlay.textContent = '+' + (items.length - maxVisible + 1);
+      overlay.addEventListener('click', function(e) {
+        e.stopPropagation();
+        window.openGalleryLightbox(last.querySelector('img'));
+      });
+      last.appendChild(overlay);
+    });
+  }
+  // Exposed for content inserted after load - the entry editor's server-
+  // rendered gallery previews (container_epoch3.html) call it again.
+  window.buildGalleries = buildGalleries;
+  buildGalleries();
+  var resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(buildGalleries, 200);
+  });
+})();
+</script>

@@ -1,0 +1,65 @@
+    <div class="boat-rudder-entry-editor-block" data-block-id="%s" data-type="image" onclick="activateBlock(this)">
+      <span class="boat-rudder-entry-editor-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="boat-rudder-entry-editor-block__header">
+        <button class="boat-rudder-entry-editor-block__trash-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="removeComponent(this)" title="Delete block">&#128465;</button>
+        <span class="boat-rudder-entry-editor-block__type-label boat-rudder-entry-editor-block__type-label--image">&square; Image</span>
+        <div class="boat-rudder-entry-editor-block__header-actions">
+          <button class="boat-rudder-entry-editor__meta-btn boat-rudder-btn boat-rudder-btn--sm"
+                  onclick="event.stopPropagation();openImageGallery(this)">Select photo</button>
+          <button class="boat-rudder-entry-editor-block__move-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="moveBlockUp(this)" title="Move up">&#8679;</button>
+          <button class="boat-rudder-entry-editor-block__move-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="moveBlockDown(this)" title="Move down">&#8681;</button>
+          <span class="boat-rudder-entry-editor-block__drag">&#8942;</span>
+          <button class="boat-rudder-entry-editor-block__close-btn boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" onclick="event.stopPropagation();deactivateBlock(this)" title="Close">&times;</button>
+        </div>
+      </div>
+
+      <div class="boat-rudder-entry-editor-block__preview"></div>
+
+      <div class="boat-rudder-entry-editor-block__body">
+        <div class="boat-rudder-entry-editor__image-preview">
+          <span class="boat-rudder-entry-editor__gallery-empty">No image selected</span>
+        </div>
+
+        <div class="boat-rudder-entry-editor__meta-group" style="margin-top:8px">
+          <label>Caption / alt text</label>
+          <input class="boat-rudder-entry-editor__image-caption" type="text"
+                 onclick="event.stopPropagation()" oninput="syncImageOptions(this)">
+        </div>
+
+        <div class="boat-rudder-entry-editor__image-options">
+          <div class="boat-rudder-entry-editor__meta-group">
+            <label>Size</label>
+            <select class="boat-rudder-entry-editor__image-size"
+                    onclick="event.stopPropagation()" onchange="syncImageOptions(this)">
+              <option value="100">100%%</option>
+              <option value="50">50%%</option>
+              <option value="30">30%%</option>
+            </select>
+          </div>
+          <div class="boat-rudder-entry-editor__meta-group">
+            <label>Alignment</label>
+            <select class="boat-rudder-entry-editor__image-align"
+                    onclick="event.stopPropagation()" onchange="syncImageOptions(this)">
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+              <option value="float-left">Float left (text wraps on the right)</option>
+              <option value="float-right">Float right (text wraps on the left)</option>
+            </select>
+          </div>
+        </div>
+
+        <input name="extra_data" type="hidden" value="%s">
+
+        <div class="boat-rudder-entry-editor-advanced">
+          <button class="boat-rudder-entry-editor-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>
+          <div class="boat-rudder-entry-editor-advanced__panel">
+            <label class="boat-rudder-entry-editor-advanced__label">Image path</label>
+%s
+            <label class="boat-rudder-entry-editor-advanced__label">extra_data</label>
+            <input class="boat-rudder-entry-editor-advanced__input boat-rudder-input boat-rudder-input--sm" type="text" oninput="syncAdvancedInput(this)">
+          </div>
+        </div>
+      </div>
+    </div>

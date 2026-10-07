@@ -1,0 +1,204 @@
+@startuml class-structures
+
+title Boat Rudder - Data Structures
+
+skinparam backgroundColor #FAFAFA
+skinparam class {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    HeaderBackgroundColor #1565C0
+    HeaderFontColor #FFFFFF
+    FontColor #1A1A1A
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #F9A825
+}
+
+package "web_server" {
+    class connection_ctx_t << (S,#90CAF9) struct >> {
+        + int client_socket
+        + SSL *ssl
+        --
+        ' ssl == NULL → plain TCP
+        ' ssl != NULL → TLS session
+    }
+
+    class thread_args << (S,#90CAF9) struct >> {
+        + int client_socket
+        + const char *root_directory
+        + SSL *ssl
+    }
+
+    class HttpHeader << (S,#A5D6A7) struct >> {
+        + char key[MAX_HEADER_KEY = 64]
+        + char value[MAX_HEADER_VALUE = 512]
+    }
+
+    class HttpRequest << (S,#A5D6A7) struct >> {
+        + char method[16]
+        + char url[2048]
+        + char protocol[16]
+        + HttpHeader headers[MAX_HEADERS = 64]
+        + int header_count
+        + char *body
+        + int body_length
+    }
+
+    class QueryParam << (S,#FFCC80) struct >> {
+        + char key[MAX_PARAM_LENGTH]
+        + char value[MAX_PARAM_LENGTH]
+    }
+
+    class ip_entry_t << (S,#EF9A9A) struct >> {
+        + in_addr_t ip
+        + time_t last_conn
+        + time_t last_rejected
+        + int count
+        + int blocked
+    }
+
+    class "read_func_t" << (T,#B0BEC5) typedef >> {
+        ssize_t (*read_func_t)(void *ctx,\n  char *buf, size_t count)
+        --
+        plain_read()  → plain TCP
+        ssl_read()    → TLS
+    }
+
+    class "http_constants.h" << (C,#CE93D8) >> {
+        + RAW_REQUEST_SIZE = 32 768
+        + MAX_BODY_SIZE = 10 485 760
+        + MAX_PATH_LENGTH = PATH_MAX + 256
+        + MAX_PARAMS = 16
+        + MAX_PARAM_LENGTH = 256
+        + THEME_ASSET_HTML_MAX = 131 072
+    }
+}
+
+note right of ip_entry_t
+  calloc'd array of ddos_max_ips (1024)
+  in server_start(); every access under
+  ip_table_mutex (accept thread +
+  ip_table_cleanup_thread).
+  Window ddos_rate_window_secs (5 s),
+  limit ddos_rate_limit (500),
+  ban 2 × window; LRU when full;
+  stale after ddos_ip_stale_secs (300 s)
+end note
+
+package "wap_gateway" {
+    class WbxmlBuf << (S,#80CBC4) struct >> {
+        + unsigned char *data
+        + size_t len
+    }
+
+    class RateEntry << (S,#EF9A9A) struct >> {
+        + uint32_t ip
+        + time_t window_start
+        + int count
+        + int warned
+    }
+
+    class GatewaySocket << (S,#80CBC4) struct >> {
+        + int fd
+        + Framing framing  (ROVER | WSP)
+        + char label[64]
+    }
+}
+
+note bottom of RateEntry
+  256 entries, 60 s window,
+  wap_gateway_rate_limit per IP;
+  gateway thread only (no lock)
+end note
+
+package "db" {
+    class CmsThemeColors << (S,#FFE082) struct >> {
+        .. navbar ..
+        + navbar_background[10]  #rrggbb[aa]
+        + navbar_menu_normal / hover / active, navbar_logo
+        .. page ..
+        + body_background[10], body_background_epoch1
+        + home_content_background[10], home_content_text
+        .. blog list ..
+        + blog_list_item_background[10], _border, _author,
+          _categories, _categories_hover, _date
+        .. footer (epoch 3) ..
+        + footer_logo, footer_logo_background[10]
+        .. links ..
+        + link_normal / hover / visited / active
+        .. table block ..
+        + table_header / border / row_a / row_b
+        .. code-text block ..
+        + code_background / text / keyword / string /
+          comment / number / variable / tag / line_number
+        --
+        34 tokens; 5 backgrounds accept alpha
+    }
+
+    enum CmsLogoMode {
+        LOGO_MODE_UNSET = 0
+        LOGO_MODE_TEXT
+        LOGO_MODE_IMAGE
+    }
+
+    class CmsLogoConfig << (S,#FFE082) struct >> {
+        + CmsLogoMode mode
+        + char text[256]
+        + char font[128]   "system:<n>" | "uploaded:<n>"
+        + char navbar_image[256]
+        + char footer_image[256]
+    }
+
+    class CmsFont << (S,#FFE082) struct >> {
+        + char *id
+        + char *name
+        + char *filename
+    }
+
+    class CmsEntry << (S,#FFE082) struct >> {
+        + char *link, *type
+        + bool enabled   (false = draft)
+        + header_* (title, summary, image, author, date, hide_author)
+        + category_names[], category_links[]
+        + CmsContentBlock *content
+    }
+
+    class CmsContentBlock << (S,#FFE082) struct >> {
+        + char *type
+        + int order
+        + char *text        (resolved language)
+        + char *extra_data
+    }
+}
+
+package "utils" {
+    class CodeHighlightPalette << (S,#B39DDB) struct >> {
+        + keyword, string, comment, number,
+          variable, tag, line_number
+        + int numbers
+        + int no_color      (epoch 0)
+        + int br_newlines   (epoch 1)
+    }
+
+    class "per-request state" << (T,#B0BEC5) __thread >> {
+        request_lang() / request_path()
+        request_theme()
+        request_user_name()
+        request_needs_legacy_charset()
+        request_code_lines_hidden()
+        request_wml_target() / request_wml_unpaged()
+    }
+}
+
+' Relationships
+HttpRequest "1" *-- "0..64" HttpHeader : headers
+thread_args ..> connection_ctx_t : spawned into\nconnection_thread
+connection_ctx_t ..> "read_func_t" : selects plain_read\nor ssl_read
+HttpRequest ..> QueryParam : url_parse() produces\nQueryParam[MAX_PARAMS]
+CmsLogoConfig --> CmsLogoMode
+CmsLogoConfig ..> CmsFont : font = "uploaded:<name>"
+CmsEntry "1" *-- "0..*" CmsContentBlock
+CodeHighlightPalette ..> CmsThemeColors : filled from code_*
+
+@enduml

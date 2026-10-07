@@ -1,0 +1,30 @@
+    <div class="boat-rudder-entry-editor-meta-section" id="headerSidebar">
+      <div class="boat-rudder-entry-editor-meta-section__title boat-rudder-caption">Post Header</div>
+
+      <div class="boat-rudder-entry-editor__meta-group">
+        <label>Cover image</label>
+        <div class="boat-rudder-entry-editor-img-preview" id="header-img-preview">
+          <span class="boat-rudder-entry-editor-img-preview__placeholder">No image</span>
+        </div>
+        <button class="boat-rudder-entry-editor__meta-btn boat-rudder-btn boat-rudder-btn--sm" type="button" onclick="openGallery(['headerImageUrl'], '', 'header')">Select image</button>
+        <input name="image_url" id="headerImageUrl" type="text" value="%s" oninput="setContentChanged()" placeholder="Image URL" style="display:none">
+      </div>
+
+      <div class="boat-rudder-entry-editor__meta-group">
+        <label for="headerDate">Date</label>
+        <input name="date" id="headerDate" type="date" value="%s" oninput="setContentChanged()">
+      </div>
+
+      <div class="boat-rudder-entry-editor__meta-group">
+        <label>Author</label>
+        <span class="boat-rudder-entry-editor__meta-readonly">%s</span>
+        <label class="boat-rudder-entry-editor__meta-check">
+          <input name="hide_author" id="headerHideAuthor" type="checkbox" %s onchange="setContentChanged()">
+          Hide author on the public page
+        </label>
+      </div>
+
+      <div id="headerLangPanels">
+%s
+      </div>
+    </div>

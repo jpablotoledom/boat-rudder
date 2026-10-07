@@ -1,0 +1,27 @@
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li></ol>
+  </nav>
+  <h1>Languages</h1>
+%s
+  <table class="boat-rudder-dashboard__table">
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Name</th>
+        <th>Default</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+%s
+    </tbody>
+  </table>
+  <form class="boat-rudder-dashboard__inline-form" method="POST" action="/dashboard/languages/add">
+    <label for="code">Add language</label>
+    <select class="boat-rudder-input" id="code" name="code">
+%s
+    </select>
+    <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Add</button>
+  </form>
+</section>

@@ -1,0 +1,13 @@
+      <tr>
+        <td>%s</td>
+        <td>%s</td>
+        <td>
+          <div class="boat-rudder-dashboard__inline-form">
+            <a class="boat-rudder-btn" href="/dashboard/users/%s/edit">Edit</a>
+            <form method="POST" action="/dashboard/users/%s/delete"
+                  onsubmit="return confirm('Delete this user? This cannot be undone.');">
+              <button class="boat-rudder-btn boat-rudder-btn--danger" type="submit">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>

@@ -1,0 +1,136 @@
+  <section class="boat-rudder-dashboard__settings-panel">
+    <p>The 13 color variables from the project's Figma file, plus a separate "Generic links"
+       trio added later. Applies to every epoch with a color model (1, 2 and 3) - epoch 3 gets
+       these as CSS variables; epoch 1/2 (no CSS custom properties there) get a subset
+       substituted straight into HTML attributes. Epoch -1/0 have no color model, nothing to
+       apply here. Background colors also carry an opacity slider next
+       to the picker (100%% = opaque) - browsers' native color picker has no alpha channel of its
+       own, so this pairs a slider with a live preview swatch instead; opacity only has any
+       visible effect in epoch 3, since epoch 1/2 have no alpha-transparency concept. Every
+       color picker also offers the 16-color VGA palette alongside the free picker - on a
+       real indexed-color (e.g. 8-bit) display, a color outside those 16 renders dithered
+       (a pixel pattern) rather than solid; the "Body background (epoch 1 override)" field
+       lets that one value differ from the shared Background above for exactly that
+       reason.</p>
+    <form method="POST" action="/dashboard/settings/themes/%s/colors">
+      <fieldset>
+        <legend>Navbar</legend>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="navbar-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="navbar-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+        <label>Menu, normal <input type="color" name="navbar-menu-normal" value="%s"></label>
+        <label>Menu, hover <input type="color" name="navbar-menu-hover" value="%s"></label>
+        <label>Menu, active <input type="color" name="navbar-menu-active" value="%s"></label>
+        <label>Logo <input type="color" name="navbar-logo" value="%s"></label>
+        <label>Logo font (default site name; the Logo editor's own font picker
+          overrides this when an epoch 3 logo is set to "Logo en fuente")
+          <select name="logo-font">
+            <option value="">Default (Milonga)</option>
+%s
+          </select>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Generic links color</legend>
+        <p>Ordinary links inside page content - a paragraph, an image caption, anything that
+           isn't the nav bar or a dedicated "link"/"gallery" block (those keep their own
+           color). Separate from the menu colors above, so one can change without moving
+           the other. Link/Visited/Active apply to epoch 1/2/3 - HTML's link/vlink/alink
+           body attributes predate CSS and every epoch-1-era browser honors them too; Hover
+           applies to epoch 2/3 (CSS1's a:hover, which epoch 2's real browsers - Netscape 4
+           and up - already support), but not epoch 1, which predates CSS entirely.</p>
+        <label>Link <input type="color" name="link-normal" value="%s"></label>
+        <label>Hover <input type="color" name="link-hover" value="%s"></label>
+        <label>Visited <input type="color" name="link-visited" value="%s"></label>
+        <label>Active <input type="color" name="link-active" value="%s"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Body</legend>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="body-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="body-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+        <label>Background (epoch 1 override) <input type="color" name="body-background-epoch1" value="%s"></label>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Page content background <input type="color" name="page-content-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="page-content-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+        <p>Login and dashboard (epoch 3): the accent is "Menu, active" above.</p>
+        <label>Text <input type="color" name="body-text" value="%s"></label>
+        <label>Secondary text <input type="color" name="body-text-muted" value="%s"></label>
+        <label>Panel background <input type="color" name="body-surface" value="%s"></label>
+        <label>Field background <input type="color" name="body-surface-raised" value="%s"></label>
+        <label>Borders <input type="color" name="body-border" value="%s"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Home content</legend>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="home-content-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="home-content-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+        <label>Text <input type="color" name="home-content-text" value="%s"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Blog list item</legend>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="blog-list-item-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="blog-list-item-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+        <label>Border <input type="color" name="blog-list-item-border" value="%s"></label>
+        <label>Author <input type="color" name="blog-list-item-author" value="%s"></label>
+        <label>Categories <input type="color" name="blog-list-item-categories" value="%s"></label>
+        <label>Categories hover <input type="color" name="blog-list-item-categories-hover" value="%s"></label>
+        <label>Date <input type="color" name="blog-list-item-date" value="%s"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Table colors</legend>
+        <p>The "table" content block's own colors, independent of every other section here -
+           Header/Line/Row 1/Row 2 apply to epoch 2 and 3. Row 1 and Row 2 alternate by each
+           content row's own position (the header row, if any, isn't counted), giving a striped
+           look with no per-row choice to make; Line is the border between cells (epoch 3) /
+           the table's outer background, which shows through as the grid line since cells sit
+           1px apart (epoch 2).</p>
+        <label>Header <input type="color" name="table-header" value="%s"></label>
+        <label>Line <input type="color" name="table-border" value="%s"></label>
+        <label>Row 1 <input type="color" name="table-row-a" value="%s"></label>
+        <label>Row 2 <input type="color" name="table-row-b" value="%s"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Code colors</legend>
+        <p>The "code" content block's syntax highlighting (epoch 2 and 3). Keyword also colors
+           function calls; Tag also colors HTML attributes and CSS property names, and covers
+           C's #include-style directives and PHP's &lt;?php markers.</p>
+        <label>Background <input type="color" name="code-background" value="%s"></label>
+        <label>Text <input type="color" name="code-text" value="%s"></label>
+        <label>Keyword <input type="color" name="code-keyword" value="%s"></label>
+        <label>String <input type="color" name="code-string" value="%s"></label>
+        <label>Comment <input type="color" name="code-comment" value="%s"></label>
+        <label>Number <input type="color" name="code-number" value="%s"></label>
+        <label>Variable <input type="color" name="code-variable" value="%s"></label>
+        <label>Tag <input type="color" name="code-tag" value="%s"></label>
+        <label>Line numbers <input type="color" name="code-line-number" value="%s"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Footer</legend>
+        <label>Logo <input type="color" name="footer-logo" value="%s"></label>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Logo background <input type="color" name="footer-logo-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="footer-logo-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+      </fieldset>
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save colors</button>
+    </form>
+    <ul>
+      <li><a href="/dashboard/settings/themes/%s/banner">Edit banner</a></li>
+      <li><a href="/dashboard/settings/themes/%s/footer">Edit footer</a></li>
+      <li><a href="/dashboard/settings/themes/%s/logo">Edit logo</a> (every epoch, -1 to 3)</li>
+      <li><a href="/dashboard/settings/themes/%s/css">Edit CSS</a> (epoch 3 stylesheet, restorable)</li>
+    </ul>
+  </section>

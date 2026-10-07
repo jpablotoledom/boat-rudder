@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gallery</title>
+  <link rel="stylesheet" href="/themes/dark/styles_epoch3.css">
+  <style>
+    body { background: #000; margin: 0; }
+    .boat-rudder-gallery-page { padding: 20px; max-width: 1000px; margin: 0 auto; }
+    .boat-rudder-gallery-page__back { color: #888; text-decoration: none; display: inline-block; margin-bottom: 16px; }
+    .boat-rudder-gallery-page__back:hover { color: #fff; }
+    .boat-rudder-gallery-page__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .boat-rudder-gallery-page__item img { width: 100%%; height: 150px; object-fit: cover; cursor: pointer; border-radius: 4px; display: block; }
+    .boat-rudder-gallery-page__item img:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="boat-rudder-gallery-page">
+    <a href="%1$s" class="boat-rudder-gallery-page__back">&larr; %2$s</a>
+    <div class="boat-rudder-gallery-page__grid">%3$s</div>
+  </div>
+</body>
+</html>

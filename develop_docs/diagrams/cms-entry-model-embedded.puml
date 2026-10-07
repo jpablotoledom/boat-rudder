@@ -1,0 +1,98 @@
+@startuml cms-entry-model-embedded
+
+title Boat Rudder - "Entry" Document Model (embedded, as implemented)
+
+skinparam backgroundColor #FAFAFA
+skinparam linetype ortho
+skinparam entity {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    FontColor #1A1A1A
+}
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #F9A825
+}
+
+entity "entries" as ENTRIES {
+    * _id : ObjectId
+    --
+    link : string <<slug, unique by convention>>
+    type : string ("blog" | "page")
+    enabled : bool  <<false = draft>>
+    created_by : ObjectId --> users  <<ownership for role "author">>
+    categories : ObjectId[] --> entry_categories
+    --
+    .. header (embedded) ..
+    header.image_url : string  <<bare path, no size suffix>>
+    header.title   : map<lang, string>
+    header.summary : map<lang, string>
+    header.author_id : ObjectId --> users
+    header.date : datetime
+    header.hide_author : bool
+    --
+    .. content[] (embedded array) ..
+    content[]._id : ObjectId
+    content[].type : string <<13 block types>>
+    content[].order : int
+    content[].text : map<lang, string>
+    content[].extra_data : string <<untranslated, per type>>
+}
+
+entity "entry_categories" as ENTRYCAT {
+    * _id : ObjectId
+    --
+    name : map<lang, string>
+}
+
+entity "users" as USERS {
+    * _id : ObjectId
+    --
+    name, email, password (Argon2id), role
+}
+
+entity "media_galleries" as GALLERIES {
+    * _id : ObjectId
+    --
+    content : string[]  <<image paths>>
+    entry_id : ObjectId --> entries
+}
+
+entity "media / media_directories" as MEDIA {
+    * _id : ObjectId
+    --
+    "(standalone; entries reference
+    images by path, not by id)"
+}
+
+ENTRIES }o--o{ ENTRYCAT : categories[]
+ENTRIES }o--|| USERS : created_by,\nheader.author_id
+GALLERIES }o--|| ENTRIES : entry_id
+ENTRIES ..> GALLERIES : content[].extra_data\n(type == "gallery")
+ENTRIES ..> MEDIA : header.image_url,\nimage / gallery paths
+
+note right of ENTRIES
+  One document per page, fully self-contained:
+  reading a page is a single
+  findOne({link, enabled: true}) - or {link}
+  for a signed-in user previewing a draft.
+  Block types: title, paragraph, byline, image,
+  gallery, separator, link, list, table,
+  code-text, youtube-embed, social-networks,
+  generic. "image" supports left/center/right
+  and float-left/float-right alignment.
+end note
+
+note right of ENTRYCAT
+  Own collection because categories are
+  shared many-to-many. The public slug is
+  derived with slugify(name), never stored.
+end note
+
+note left of ENTRIES
+  map<lang, string> = open object keyed by
+  ISO 639-1 codes, e.g. { "en": "...", "es": "..." }
+  Adding a language = adding a key, no schema change.
+end note
+
+@enduml

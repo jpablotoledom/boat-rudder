@@ -1,0 +1,24 @@
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li></ol>
+  </nav>
+  <div class="boat-rudder-dashboard__panel-header">
+    <h1>Users</h1>
+    <div class="boat-rudder-dashboard__panel-actions">
+      <a class="boat-rudder-btn boat-rudder-btn--primary" href="/dashboard/users/new">+ New user</a>
+    </div>
+  </div>
+%s
+  <table class="boat-rudder-dashboard__table">
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+%s
+    </tbody>
+  </table>
+</section>

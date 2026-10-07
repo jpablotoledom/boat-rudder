@@ -1,0 +1,12 @@
+<div class="boat-rudder-code-text">
+  <div class="boat-rudder-code-text-container">
+    <div class="boat-rudder-code-text-header">
+      <span class="boat-rudder-code-text-lang">Language: %3$s</span>
+      <span class="boat-rudder-code-text-actions">
+        <button type="button" class="boat-rudder-code-text-copy" onclick="var c=this.closest('.boat-rudder-code-text-container'),e=c.classList.toggle('boat-rudder-code-text-container--expanded');this.textContent=e?'Collapse':'Expand'">Expand</button>
+        <button type="button" class="boat-rudder-code-text-copy" onclick="var b=this,t=b.closest('.boat-rudder-code-text').querySelector('code').innerText,d=function(){b.textContent='Copied!';setTimeout(function(){b.textContent='Copy'},1500)};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(d)}else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();d()}">Copy</button>
+      </span>
+    </div>
+    <pre><code class="%1$s">%2$s</code></pre>
+  </div>
+</div>

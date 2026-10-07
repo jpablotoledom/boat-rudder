@@ -1,0 +1,77 @@
+@startuml analytics-flow
+
+title Boat Rudder - Analytics: recording a visit and building the report
+
+skinparam backgroundColor #FAFAFA
+skinparam activity {
+    BackgroundColor #E8F4FD
+    BorderColor #1565C0
+    DiamondBackgroundColor #FFF9C4
+    DiamondBorderColor #F9A825
+}
+
+|http_router|
+start
+:Request parsed, client_ip resolved\n(proxy headers only from trusted_proxies);
+:request_*_set() (lang, theme, ...);
+:analytics_track_visit(method, decoded_url,\nUser-Agent, client_ip, resolve_epoch());
+
+|analytics.c|
+if (method == GET?) then (no)
+  :not counted;
+  detach
+endif
+if (URL starts with /dashboard\nor ends in a static extension\n(.css .js .png .jpg .gif .wbmp .woff ...)?) then (yes)
+  :not counted;
+  detach
+endif
+if (User-Agent contains a bot token\n(bot, crawl, spider, curl/, wget/, ...)?) then (yes)
+  :not counted;
+  detach
+endif
+
+:day = gmtime() → "YYYY-MM-DD", year, month, ISO week;
+:browser = ua_parse_browser(UA)  e.g. "Chrome/124"\nos = ua_parse_os(UA)  e.g. "Windows/10";
+
+|geoip.c|
+if (HAVE_MAXMINDDB and database open?) then (yes)
+  :MMDB_lookup_string(client_ip)\n→ country.names.en | iso_code | "Unknown";
+else (no)
+  :"Unknown";
+endif
+note right
+  The IP is used only here, in memory.
+  It is never written to MongoDB.
+end note
+
+|analytics.c|
+:mongo_key_sanitize() every key ('.' and '$' → '_');
+:classify_url() → by_route group\n(home, blog, page, gallery, login, other)\n+ entry_type/slug when the URL names one;
+
+|MongoDB|
+:page_visits_daily.updateOne({_id: day},\n{$setOnInsert: {date, year, month, week},\n $inc: {total, by_epoch.X, by_browser.X,\n        by_os.X, by_country.X, by_route.X}},\n{upsert: true});
+if (URL names an entry/category?) then (yes)
+  :entry_visits_daily.updateOne(\n{_id: "<type>__<slug>__<day>"},\n{$setOnInsert: {..., entry_type, slug},\n $inc: {total, by_epoch.X}}, {upsert: true});
+endif
+
+|http_router|
+:route the request as usual;
+stop
+
+|analytics_view.c|
+start
+:GET /dashboard/analytics\n(epoch 3, admin only)\nperiod = day | week | month | year | all | range;
+:build_period_filter()\nday → {_id: date}; week → {year, week};\nmonth → {year, month}; year → {year};\nall → {}; range → {_id: {$gte, $lte}};
+
+|MongoDB|
+:find(page_visits_daily, filter);
+:find(entry_visits_daily, same filter on "date");
+
+|analytics_view.c|
+:merge_daily_doc() per day: totals, epochs,\nbrowsers, OSes, countries, routes (heap lists);
+:browsers/OS → grouped by family (<details>)\ncountries → grouped by continent (country_continent());
+:top 20 entries by total;
+:render analytics_epoch3.html;
+stop
+
+@enduml

@@ -148,7 +148,7 @@ static void sb_putn(Sb *sb, const char *s, size_t n) {
 
 static void sb_puts(Sb *sb, const char *s) { sb_putn(sb, s, strlen(s)); }
 
-#define LINE_OPEN  "<span class=\"boat-rudder__code-line\">"
+#define LINE_OPEN  "<span class=\"boat-rudder-code-line\">"
 #define LINE_CLOSE "</span>"
 
 // Output target: CSS classes and per-line spans (pal == NULL, epoch 3), or
@@ -197,7 +197,7 @@ static void line_end(Out *o) {
 
 static void token_open(Out *o, const char *cls) {
     if (!o->pal) {
-        sb_puts(&o->sb, "<span class=\"boat-rudder__code-token--");
+        sb_puts(&o->sb, "<span class=\"boat-rudder-code-token--");
         sb_puts(&o->sb, cls);
         sb_puts(&o->sb, "\">");
         return;

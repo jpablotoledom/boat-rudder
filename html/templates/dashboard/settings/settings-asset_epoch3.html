@@ -1,13 +1,13 @@
-<section class="boat-rudder__dashboard">
-  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
-    <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/settings">Site settings</a></li><li><a href="/dashboard/settings/themes">Themes</a></li></ol>
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/settings">Site settings</a></li><li><a href="/dashboard/settings/themes">Themes</a></li><li><a href="/dashboard/settings/themes/%2$s">%2$s</a></li></ol>
   </nav>
-  <h1>%s</h1>
-  <p class="boat-rudder__dashboard__theme-badge">Theme: <strong>%s</strong></p>
+  <h1>%1$s</h1>
+  <p class="boat-rudder-dashboard__theme-badge boat-rudder-badge">Theme: <strong>%2$s</strong></p>
   <p>Raw markup, one field per epoch. Leave a field empty to fall back to the theme's
      default for that epoch. Upload an image below a field, then paste its path into
      the markup yourself (e.g. inside an <code>&lt;img src="..."&gt;</code>).</p>
-%s
+%3$s
 </section>
 
 <script>
@@ -23,7 +23,7 @@
     const theme = panel.dataset.theme;
     const component = panel.dataset.component;
     const epoch = panel.dataset.epoch;
-    const list = qs('.boat-rudder__dashboard__asset-list', panel);
+    const list = qs('.boat-rudder-dashboard__asset-list', panel);
     list.innerHTML = '<li>Loading...</li>';
 
     fetch('/dashboard/api/theme-assets/list?theme=' + encodeURIComponent(theme) +
@@ -52,7 +52,7 @@
           const del = document.createElement('button');
           del.type = 'button';
           del.textContent = 'Delete';
-          del.className = 'boat-rudder__dashboard__button';
+          del.className = 'boat-rudder-btn';
           del.addEventListener('click', function () {
             if (!confirm('Delete ' + name + '?')) return;
             fetch('/dashboard/api/theme-assets/delete?theme=' + encodeURIComponent(theme) +
@@ -69,10 +69,10 @@
       .catch(function () { list.innerHTML = '<li>Could not load files.</li>'; });
   }
 
-  qsa('.boat-rudder__dashboard__settings-panel').forEach(function (panel) {
+  qsa('.boat-rudder-dashboard__settings-panel').forEach(function (panel) {
     loadAssets(panel);
 
-    const input = qs('.boat-rudder__dashboard__asset-upload', panel);
+    const input = qs('.boat-rudder-dashboard__asset-upload', panel);
     input.addEventListener('change', function () {
       const file = input.files[0];
       if (!file) return;

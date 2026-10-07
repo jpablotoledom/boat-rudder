@@ -8,9 +8,9 @@
 // language to the editor means adding a LangDef in code_highlight.c too.
 //
 // Returns malloc'd HTML (caller frees), NULL only on allocation failure:
-// every source line wrapped in <span class="boat-rudder__code-line">,
+// every source line wrapped in <span class="boat-rudder-code-line">,
 // joined by '\n', and every recognized token in
-// <span class="boat-rudder__code-token--{kw,str,com,num,fn,var,pre,tag,attr}">.
+// <span class="boat-rudder-code-token--{kw,str,com,num,fn,var,pre,tag,attr}">.
 // All code text is HTML-escaped. An unknown or empty `lang` still gets the
 // line wrapping and escaping, just no token spans.
 char *code_highlight_html(const char *code, const char *lang);

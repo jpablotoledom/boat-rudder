@@ -65,7 +65,7 @@ properties (`padding`, `margin`, `border`, `display`) on inline elements - it pa
 advancing the text cursor, printing one element on top of the next - and can drop a whole rule
 block it fails to parse. Keeping the styling in attributes takes that class of bug off the table
 and makes the page look the same in a browser that ignores CSS entirely. The
-`class="boat-rudder__..."` attributes still present in the epoch-2 templates are inert leftovers
+`class="boat-rudder-..."` attributes still present in the epoch-2 templates are inert leftovers
 from the epoch-3 templates they were derived from; nothing styles them.
 
 ### Page assembly (`layout/` + fragments)
@@ -87,10 +87,9 @@ Everything around it is identical for every page of an epoch, so it lives once p
 | `layout/layout_epoch<N>.html` | doctype, head, `<body>`, `{{PAGE_TITLE}}`, `{{CONTENT}}` |
 | `layout/footer_epoch<N>.html` | the site footer |
 | `layout/lightbox_epoch3.html` | epoch 3 gallery viewer |
-| `layout/home-modal_epoch3.html` | epoch 3 home thumbnail modal |
 
 `page_layout_wrap()` (`src/html_builder/page_layout.c`) does the assembly. A fragment opts into a
-part by carrying its marker - `{{FOOTER}}`, `{{LIGHTBOX}}`, `{{HOME-MODAL}}` - and a part with no
+part by carrying its marker - `{{FOOTER}}`, `{{LIGHTBOX}}` - and a part with no
 file for that epoch resolves to nothing, so the retro epochs drop the epoch-3 viewers without
 needing an empty file each. `{{BODY_BACKGROUND}}` fills the one attribute that differs between
 epoch-2 pages: home and the blog listing carry the tiled backdrop, content pages do not.
@@ -125,8 +124,8 @@ Each visual component has one HTML template per epoch, named `<component>_epoch<
   `page-home_epoch<N>.html` (4 `%s`: menu, mainbanner, home content, home blog - home is the only
   page with four regions), `page_epoch<N>.html` (2 `%s`: nav, content), and the wider
   `page-entry_epoch{2,3}.html` and `page-blog_epoch{2,3}.html` variants, which the epochs below
-  2 fall back out of into `page_epoch<N>.html`. Each carries `{{FOOTER}}`, and on epoch 3
-  `{{LIGHTBOX}}` or `{{HOME-MODAL}}`.
+  2 fall back out of into `page_epoch<N>.html`. Each carries `{{FOOTER}}`, and the epoch 3 content
+  pages also `{{LIGHTBOX}}`.
 - `menu/` (per theme) - `menu_epoch<N>.html` (the container: logo/title, items, language and
   theme controls, user), `menu-item_epoch<N>.html` / `menu-item-selected_epoch<N>.html` (the
   selected one adds the `--selected` modifier for the active nav item),
@@ -427,7 +426,7 @@ default and never reaches the page.
 `social-networks` uses. `width` is one of `100`/`50`/`30` and `align` one of
 `left`/`center`/`right`/`float-left`/`float-right`, defaulting to `100`/`center`. A value with no
 `|` is all caption, which is how blocks written before these options look. Epoch 3 turns them
-into modifier classes (`boat-rudder__entry-image--w50`, `--float-left`); epochs 1-2 have no
+into modifier classes (`boat-rudder-entry-image--w50`, `--float-left`); epochs 1-2 have no
 stylesheet, so they carry the values as attributes - `align` on the wrapping element and `width`
 on the `<img>` - and a floated image uses its own `image-float_epoch{1,2}.html` (HTML `align` on
 the image/table, so following text wraps around it). Epochs −1/0 can't show the picture: they
@@ -856,7 +855,7 @@ Besides the items, `menu()` assembles:
 
 `menu` documents are `{ _id, link, name: <map<lang,string>>, order, enabled }`. `MENU_ITEM_LIMIT` (`src/db/cms_menu.h`, currently 20) bounds the result size. If `cms_get_menu_items()` returns 0 items (DB not ready, empty collection, or a DB error), `menu()` falls back to a single built-in `{"/", "Home"}` item so the nav bar is never empty.
 
-`menu-item-selected_epoch<N>.html` adds the CSS class `boat-rudder__navbar__menu_item--selected` (epoch 3) or equivalent styling for older epochs. The active item is determined by `strcmp(current_url, item.link)`:
+`menu-item-selected_epoch<N>.html` adds the CSS class `boat-rudder-navbar__menu-item--selected` (epoch 3) or equivalent styling for older epochs. The active item is determined by `strcmp(current_url, item.link)`:
 - Home page (`/`) always passes `"/"`.
 - Blog list (`/blog`) and all blog entries pass `"/blog"` - entries use the section URL so the Blog item stays highlighted.
 - Pages pass `"/page/<link>"` - matches menu items that point to that specific page.

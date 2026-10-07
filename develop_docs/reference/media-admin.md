@@ -132,7 +132,7 @@ Riemersma dithering + gifsicle optimization). Photos generate `_full/_half/_smal
 - `media_admin_render_directories(dirs, count, epoch)` - renders each directory item via `media-directory_epoch3.html`, wrapped in `media-directory-container_epoch3.html`.
 - `media_admin_render_items(items, count, epoch)` - renders each photo card via `item-photo_epoch3.html`, constructing the thumbnail URL as `posts/<author>/<dir>/<basename>_small<ext>` and the full URL as `posts/<author>/<dir>/<basename><ext>`.
 - `media_admin_render_directory_item(dir, epoch)` - renders a single directory item (returned by the AJAX create/rename endpoints).
-- `media_admin_modal(epoch, dirs, dir_count, items, item_count)` - wraps `media_admin_page()` output inside `media-modal_epoch3.html` (`.boat-rudder__modal` overlay) for the entry editor picker.
+- `media_admin_modal(epoch, dirs, dir_count, items, item_count)` - wraps `media_admin_page()` output inside `media-modal_epoch3.html` (`.boat-rudder-modal` overlay) for the entry editor picker.
 
 ---
 
@@ -184,7 +184,7 @@ All functions are declared on `window` so they remain available after `activateS
   directory list; POSTs `ids` + `dest_dir` to `/dashboard/api/media/move`.
 
 **Selection** (for the entry editor picker):
-- Click toggles `.selected` + checkbox; Shift+click for range selection.
+- Click toggles `boat-rudder-media__photo--selected` + checkbox; Shift+click for range selection.
 - `getSelectedMediaIds()` - collects selected URLs in selection order; writes to:
   - `header` type: `#headerImageUrl` input + header image preview
   - `image-block` type: all lang text fields of `window._galleryTargetBlock`

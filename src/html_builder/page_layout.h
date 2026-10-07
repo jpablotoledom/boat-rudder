@@ -20,7 +20,6 @@
 // when present and dropped when the file is missing:
 //   {{FOOTER}}      the site footer
 //   {{LIGHTBOX}}    epoch 3 gallery viewer (page, page-entry)
-//   {{HOME-MODAL}}  epoch 3 home thumbnail modal (container)
 //
 // `body_background` fills {{BODY_BACKGROUND}} in the epoch-2 layout, where
 // home and the blog listing carry the tiled backdrop and content pages do

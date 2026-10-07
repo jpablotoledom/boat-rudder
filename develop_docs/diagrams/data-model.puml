@@ -101,7 +101,7 @@ package "Personalization" {
           { epoch_neg1 .. epoch3 }
         logo { epochN: {mode, text, font,
                navbar_image, footer_image} }
-        logo_font, css_epoch3
+        logo_font, css_epoch3, css_admin_epoch3
     }
     entity fonts {
         * _id : ObjectId

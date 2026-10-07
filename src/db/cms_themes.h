@@ -6,7 +6,7 @@
 
 // A theme's DB-editable color tokens - the 13 variables defined in the
 // project's Figma file ("Color palette Dark"/"Color palette Light"), plus
-// footer_logo/footer_logo_background (epoch 3 only - the ".boat-rudder__
+// footer_logo/footer_logo_background (epoch 3 only - the ".boat-rudder-
 // footer-title" bar has no epoch 1/2 equivalent to substitute into, those
 // epochs render the footer as plain images), one
 // shared palette for every epoch that has a concept of color at all (1, 2
@@ -49,6 +49,13 @@ typedef struct {
     char footer_logo[8];                // footer bar "Boat Rudder" text color (epoch 3 only)
     char footer_logo_background[10];    // "#rrggbb[aa]" - footer bar background behind that text (epoch 3 only)
     char body_background_epoch1[8];     // page body background, epoch 1 only - see below
+    char page_content_background[10];   // "#rrggbb[aa]" - .boat-rudder-page-content (login, dashboard,
+                                         // error, language/theme pages), epoch 3; transparent by default
+    char body_text[8];                  // body_*: the admin pages' (styles_admin_epoch3.css) palette,
+    char body_text_muted[8];            //   epoch 3 only - see below. Text, secondary text
+    char body_surface[8];               //   (labels, hints), panel/card background, field
+    char body_surface_raised[8];        //   (input, popover, menu) background, and every
+    char body_border[8];                //   border/separator
     char link_normal[8];                // generic (non-menu) link color, unvisited - see below
     char link_hover[8];                 // generic (non-menu) link color, :hover (epoch 2/3)
     char link_visited[8];               // generic (non-menu) link color, visited
@@ -68,6 +75,11 @@ typedef struct {
     char code_tag[8];                   // code-text block: #directives, <?php, HTML tags, attributes
     char code_line_number[8];           // code-text block: line-number gutter
 } CmsThemeColors;
+
+// body_text/_text_muted/_surface/_surface_raised/_border: the dashboard and
+// login's own palette, read by styles_admin_epoch3.css through its
+// --br-admin-* tokens (the accent is navbar_menu_active). Plain "#rrggbb".
+// Each groups what used to be a dozen near-identical literals per role.
 
 // code_*: the code-text block's syntax-highlighting palette (tokens come
 // from code_highlight.c), plain "#rrggbb" for the same reason as the table
@@ -118,7 +130,7 @@ typedef struct {
 // reasoning as link_hover above - category tags already carry their own
 // color independent of ordinary links (blog_list_item_categories), so
 // their hover state needs its own selector rather than inheriting
-// link_hover's. Epoch 3 gets a real `.boat-rudder__entry-category:hover`
+// link_hover's. Epoch 3 gets a real `.boat-rudder-entry-category:hover`
 // class rule; epoch 2's category tags get an id instead
 // (#boat-rudder-entry-category, see category_epoch2.html) and no inline
 // color attribute at all, since real-browser testing (IE5/Windows 3.11)
@@ -266,24 +278,36 @@ int cms_get_theme_logo_config(const char *key, int epoch, CmsLogoConfig *out);
 // DB error, or if mongodb is not ready.
 int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig *cfg);
 
-// The theme's epoch 3 stylesheet (styles_epoch3.css) - "" (DB unset) falls
-// back to that theme's own on-disk html/themes/<key>/styles_epoch3.css, the
-// file every theme ships with. Lets an admin fully rewrite a theme's CSS
-// from /dashboard/settings/themes/<key>/css while the shipped file stays
-// the one-click "Restore original" target (see cms_update_theme_css()).
-// Returns a malloc'd string, never NULL unless allocation fails.
-char *cms_get_theme_css(const char *key);
+// A theme's two epoch 3 stylesheets:
+//   THEME_CSS_PUBLIC  styles_epoch3.css, db.themes.css_epoch3 - every page;
+//   THEME_CSS_ADMIN   styles_admin_epoch3.css, db.themes.css_admin_epoch3 -
+//                     /login and /dashboard* only, loaded after the public one.
+typedef enum { THEME_CSS_PUBLIC, THEME_CSS_ADMIN } ThemeCssSheet;
+
+// The on-disk file name of `sheet` ("styles_epoch3.css", ...).
+const char *cms_theme_css_file(ThemeCssSheet sheet);
+
+// One of the theme's epoch 3 stylesheets - "" (DB unset) falls back to that
+// theme's own on-disk html/themes/<key>/<file>, the file every theme ships
+// with. Lets an admin fully rewrite a theme's CSS from
+// /dashboard/settings/themes/<key>/css (or /admin-css) while the shipped
+// file stays the one-click "Restore original" target (see
+// cms_update_theme_css()). A theme that ships no admin stylesheet uses the
+// one of configs/settings.conf's `theme`, so a new theme with only public
+// CSS still gets a styled dashboard. Returns a malloc'd string, never NULL
+// unless allocation fails.
+char *cms_get_theme_css(const char *key, ThemeCssSheet sheet);
 
 // The *stored* override only ("" if unset - not file-resolved), for the
 // editor form: tells "nothing saved" apart from "saved text matching the
 // file".
-char *cms_get_theme_css_value(const char *key);
+char *cms_get_theme_css_value(const char *key, ThemeCssSheet sheet);
 
-// db.themes.updateOne({key}, {$set: {css_epoch3: css}}, {upsert: true}). An
+// db.themes.updateOne({key}, {$set: {<field>: css}}, {upsert: true}). An
 // empty `css` clears the override back to the on-disk original - this is
 // what the editor's "Restore original" button submits. Returns 0 on
 // success, -1 on a DB error or if mongodb is not ready.
-int cms_update_theme_css(const char *key, const char *css);
+int cms_update_theme_css(const char *key, ThemeCssSheet sheet, const char *css);
 
 // Splits a stored "#rrggbb" or "#rrggbbaa" background value into its opaque
 // 7-char hex ("#rrggbb", for an <input type="color"> value - that control

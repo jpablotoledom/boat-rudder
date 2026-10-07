@@ -41,7 +41,7 @@ An unknown key behaves like plain text and is labeled "Plain text".
 
 | Token | Epoch 3 class | Theme color (`themes.colors`) |
 |---|---|---|
-| keyword | `boat-rudder__code-token--kw` (bold) | `code-keyword` |
+| keyword | `boat-rudder-code-token--kw` (bold) | `code-keyword` |
 | function call | `--fn` | `code-keyword` |
 | string | `--str` | `code-string` |
 | comment | `--com` (italic) | `code-comment` |
@@ -52,7 +52,7 @@ An unknown key behaves like plain text and is labeled "Plain text".
 | attribute | `--attr` | `code-tag` |
 | untokenized text | - | `code-text` |
 | box background | - | `code-background` |
-| line-number gutter | `boat-rudder__code-line::before` | `code-line-number` |
+| line-number gutter | `boat-rudder-code-line::before` | `code-line-number` |
 
 Nine colors rather than one per token type keeps the theme panel short; defaults are the
 CGA/Turbo C palette on navy. See [themes.md](themes.md#41-the-palette).
@@ -63,7 +63,7 @@ CGA/Turbo C palette on navy. See [themes.md](themes.md#41-the-palette).
 
 | Epoch | Function | Output |
 |---|---|---|
-| 3 | `code_highlight_html(code, lang)` | Each line in `<span class="boat-rudder__code-line">`, tokens in classed `<span>`s; colors from `--br-color-code-*` CSS variables; line numbers drawn by a CSS counter |
+| 3 | `code_highlight_html(code, lang)` | Each line in `<span class="boat-rudder-code-line">`, tokens in classed `<span>`s; colors from `--br-color-code-*` CSS variables; line numbers drawn by a CSS counter |
 | 2 | `code_highlight_html_fonts(code, lang, &palette)` | Tokens as `<font color="#…">` from the theme palette (Netscape 4/IE 5 can't be trusted with class rules); each line prefixed with its right-aligned number; joined by `\n` inside `<pre>` |
 | 1 | same, `br_newlines = 1` | As epoch 2 but lines end in `<br>` (some Mosaic builds collapse `<pre>` newlines); NCSA Mosaic ignores `<font color>` and simply shows plain text |
 | 0 | same, `no_color = 1` | Plain escaped text with line numbers in `<pre>` - no markup at all |

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define NO_DATA "<p class=\"boat-rudder__dashboard__empty\">No data</p>"
+#define NO_DATA "<p class=\"boat-rudder-empty\">No data</p>"
 
 // Ring geometry, in the donut's own 120x120 viewBox. pathLength="100" on each
 // circle lets the dash lengths below be plain percentages of the total.
@@ -82,8 +82,8 @@ char *analytics_chart_donut(const ChartSlice *slices, size_t count,
 
     char *aria_enc = encode(aria_label), *center_enc = encode(center_label);
     char *out = (aria_enc && center_enc) ? render_template(
-        "<div class=\"boat-rudder__chart boat-rudder__chart--donut\">"
-        "<svg class=\"boat-rudder__chart__svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\" "
+        "<div class=\"boat-rudder-chart boat-rudder-chart--donut\">"
+        "<svg class=\"boat-rudder-chart__svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\" "
         "role=\"img\" aria-label=\"%s\">",
         DONUT_SIZE, DONUT_SIZE, DONUT_SIZE, DONUT_SIZE, aria_enc) : NULL;
     free(aria_enc);
@@ -99,7 +99,7 @@ char *analytics_chart_donut(const ChartSlice *slices, size_t count,
         format_share(pct, sizeof(pct), slices[i].value, total);
         char *label_enc = encode(slices[i].label);
         append_owned(&out, label_enc ? render_template(
-            "<circle class=\"boat-rudder__chart__slice boat-rudder__chart__series--%d\" "
+            "<circle class=\"boat-rudder-chart__slice boat-rudder-chart__series--%d\" "
             "cx=\"%d\" cy=\"%d\" r=\"%d\" fill=\"none\" stroke-width=\"%d\" pathLength=\"100\" "
             "stroke-dasharray=\"%.2f %.2f\" stroke-dashoffset=\"%.2f\" "
             "transform=\"rotate(-90 %d %d)\"><title>%s: %d (%s)</title></circle>",
@@ -111,9 +111,9 @@ char *analytics_chart_donut(const ChartSlice *slices, size_t count,
     }
 
     append_owned(&out, center_enc ? render_template(
-        "<text class=\"boat-rudder__chart__center-value\" x=\"%d\" y=\"%d\" text-anchor=\"middle\">%d</text>"
-        "<text class=\"boat-rudder__chart__center-label\" x=\"%d\" y=\"%d\" text-anchor=\"middle\">%s</text>"
-        "</svg><ul class=\"boat-rudder__chart__legend\">",
+        "<text class=\"boat-rudder-chart__center-value\" x=\"%d\" y=\"%d\" text-anchor=\"middle\">%d</text>"
+        "<text class=\"boat-rudder-chart__center-label\" x=\"%d\" y=\"%d\" text-anchor=\"middle\">%s</text>"
+        "</svg><ul class=\"boat-rudder-chart__legend\">",
         DONUT_SIZE / 2, DONUT_SIZE / 2 + 2, total, DONUT_SIZE / 2, DONUT_SIZE / 2 + 17, center_enc) : NULL);
     free(center_enc);
 
@@ -122,9 +122,9 @@ char *analytics_chart_donut(const ChartSlice *slices, size_t count,
         format_share(pct, sizeof(pct), slices[i].value, total);
         char *label_enc = encode(slices[i].label);
         append_owned(&out, label_enc ? render_template(
-            "<li><span class=\"boat-rudder__chart__swatch boat-rudder__chart__series--%d\"></span>"
-            "<span class=\"boat-rudder__chart__legend-label\">%s</span>"
-            "<span class=\"boat-rudder__chart__legend-value\">%d &middot; %s</span></li>",
+            "<li><span class=\"boat-rudder-chart__swatch boat-rudder-chart__series--%d\"></span>"
+            "<span class=\"boat-rudder-chart__legend-label\">%s</span>"
+            "<span class=\"boat-rudder-chart__legend-value\">%d &middot; %s</span></li>",
             slices[i].series, label_enc, slices[i].value, pct) : NULL);
         free(label_enc);
     }
@@ -142,7 +142,7 @@ char *analytics_chart_hbars(const ChartBar *bars, size_t count, const char *aria
     // stretch with the block while the text keeps its real font size.
     char *aria_enc = encode(aria_label);
     char *out = aria_enc ? render_template(
-        "<svg class=\"boat-rudder__chart__svg boat-rudder__chart--hbars\" width=\"100%%\" height=\"%d\" "
+        "<svg class=\"boat-rudder-chart__svg boat-rudder-chart--hbars\" width=\"100%%\" height=\"%d\" "
         "role=\"img\" aria-label=\"%s\">",
         (int)count * HBAR_ROW_HEIGHT, aria_enc) : NULL;
     free(aria_enc);
@@ -164,19 +164,19 @@ char *analytics_chart_hbars(const ChartBar *bars, size_t count, const char *aria
             : NULL;
         char *text = (short_enc && href_enc)
             ? (href_enc[0]
-                ? render_template("<a href=\"%s\"><text class=\"boat-rudder__chart__label\" x=\"0\" y=\"%d\">%s</text></a>",
+                ? render_template("<a href=\"%s\"><text class=\"boat-rudder-chart__label\" x=\"0\" y=\"%d\">%s</text></a>",
                                   href_enc, y + HBAR_TEXT_Y, short_enc)
-                : render_template("<text class=\"boat-rudder__chart__label\" x=\"0\" y=\"%d\">%s</text>",
+                : render_template("<text class=\"boat-rudder-chart__label\" x=\"0\" y=\"%d\">%s</text>",
                                   y + HBAR_TEXT_Y, short_enc))
             : NULL;
 
         append_owned(&out, (title && text) ? render_template(
-            "<g class=\"boat-rudder__chart__row\">%s"
-            "<rect class=\"boat-rudder__chart__hit\" x=\"0\" y=\"%d\" width=\"100%%\" height=\"%d\"></rect>"
+            "<g class=\"boat-rudder-chart__row\">%s"
+            "<rect class=\"boat-rudder-chart__hit\" x=\"0\" y=\"%d\" width=\"100%%\" height=\"%d\"></rect>"
             "%s"
-            "<text class=\"boat-rudder__chart__value\" x=\"100%%\" y=\"%d\" text-anchor=\"end\">%d</text>"
-            "<rect class=\"boat-rudder__chart__track\" x=\"0\" y=\"%d\" width=\"100%%\" height=\"%d\" rx=\"2\"></rect>"
-            "<rect class=\"boat-rudder__chart__bar boat-rudder__chart__series--accent\" x=\"0\" y=\"%d\" "
+            "<text class=\"boat-rudder-chart__value\" x=\"100%%\" y=\"%d\" text-anchor=\"end\">%d</text>"
+            "<rect class=\"boat-rudder-chart__track\" x=\"0\" y=\"%d\" width=\"100%%\" height=\"%d\" rx=\"2\"></rect>"
+            "<rect class=\"boat-rudder-chart__bar boat-rudder-chart__series--accent\" x=\"0\" y=\"%d\" "
             "width=\"%.2f%%\" height=\"%d\" rx=\"2\"></rect></g>",
             title, y, HBAR_ROW_HEIGHT, text, y + HBAR_TEXT_Y, bars[i].value,
             y + HBAR_BAR_Y, HBAR_BAR_HEIGHT, y + HBAR_BAR_Y, width, HBAR_BAR_HEIGHT) : NULL);
@@ -203,7 +203,7 @@ char *analytics_chart_columns(const ChartColumn *columns, size_t count, const ch
     int baseline = COL_TOP + COL_PLOT_HEIGHT;
     char *aria_enc = encode(aria_label);
     char *out = aria_enc ? render_template(
-        "<svg class=\"boat-rudder__chart__svg boat-rudder__chart--columns\" width=\"100%%\" height=\"%d\" "
+        "<svg class=\"boat-rudder-chart__svg boat-rudder-chart--columns\" width=\"100%%\" height=\"%d\" "
         "role=\"img\" aria-label=\"%s\">",
         COL_HEIGHT, aria_enc) : NULL;
     free(aria_enc);
@@ -221,19 +221,19 @@ char *analytics_chart_columns(const ChartColumn *columns, size_t count, const ch
         char *tooltip_enc = encode(c->tooltip);
         char *label_enc   = encode(c->label);
         char *value_label = (c->highlight || i == max_i)
-            ? render_template("<text class=\"boat-rudder__chart__value\" x=\"%.2f%%\" y=\"%d\" "
+            ? render_template("<text class=\"boat-rudder-chart__value\" x=\"%.2f%%\" y=\"%d\" "
                               "text-anchor=\"middle\">%d</text>", center, baseline - h - 5, c->value)
             : strdup("");
 
         append_owned(&out, (tooltip_enc && label_enc && value_label) ? render_template(
-            "<g class=\"boat-rudder__chart__row\"><title>%s</title>"
-            "<rect class=\"boat-rudder__chart__hit\" x=\"%.2f%%\" y=\"0\" width=\"%.2f%%\" height=\"%d\"></rect>"
-            "<rect class=\"boat-rudder__chart__bar boat-rudder__chart__series--%s\" x=\"%.2f%%\" y=\"%d\" "
+            "<g class=\"boat-rudder-chart__row\"><title>%s</title>"
+            "<rect class=\"boat-rudder-chart__hit\" x=\"%.2f%%\" y=\"0\" width=\"%.2f%%\" height=\"%d\"></rect>"
+            "<rect class=\"boat-rudder-chart__bar boat-rudder-chart__series--%s\" x=\"%.2f%%\" y=\"%d\" "
             "width=\"%.2f%%\" height=\"%d\" rx=\"2\"></rect>%s"
-            "<text class=\"boat-rudder__chart__axis-label%s\" x=\"%.2f%%\" y=\"%d\" text-anchor=\"middle\">%s</text></g>",
+            "<text class=\"boat-rudder-chart__axis-label%s\" x=\"%.2f%%\" y=\"%d\" text-anchor=\"middle\">%s</text></g>",
             tooltip_enc, slot * i, slot, COL_HEIGHT,
             c->highlight ? "accent" : "muted", x, baseline - h, w, h, value_label,
-            c->highlight ? " boat-rudder__chart__axis-label--strong" : "",
+            c->highlight ? " boat-rudder-chart__axis-label--strong" : "",
             center, baseline + 16, label_enc) : NULL);
 
         free(tooltip_enc);
@@ -242,7 +242,7 @@ char *analytics_chart_columns(const ChartColumn *columns, size_t count, const ch
     }
 
     append_owned(&out, render_template(
-        "<line class=\"boat-rudder__chart__baseline\" x1=\"0\" y1=\"%d\" x2=\"100%%\" y2=\"%d\"></line></svg>",
+        "<line class=\"boat-rudder-chart__baseline\" x1=\"0\" y1=\"%d\" x2=\"100%%\" y2=\"%d\"></line></svg>",
         baseline, baseline));
     return out;
 }

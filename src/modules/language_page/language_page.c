@@ -86,11 +86,10 @@ char *language_page(int epoch, const char *return_url) {
         if (!langs[i].code) continue;
 
         int is_active = strcmp(langs[i].code, active) == 0;
-        // Epoch 3 marks the current language with a class; the older templates
-        // have no stylesheet to hang it on, so they get an inert attribute slot.
-        const char *active_attr = epoch >= EPOCH_MODERN
-            ? (is_active ? " boat-rudder__language__item--active" : "")
-            : (is_active ? " class=\"br-language__item--active\"" : "");
+        // Epoch 3 marks the current language with a modifier class; the older
+        // templates have no stylesheet, so their attribute slot stays empty.
+        const char *active_attr = (epoch >= EPOCH_MODERN && is_active)
+            ? " boat-rudder-language__item--active" : "";
 
         // Each language named in its own language, so it is recognisable to
         // the reader who is looking for it.

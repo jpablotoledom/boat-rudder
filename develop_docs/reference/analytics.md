@@ -175,8 +175,8 @@ Inline SVG built in C - no JavaScript and no chart library; hover detail is each
 | `analytics_chart_hbars()` | No `viewBox`: `x`/`width` in `%` of the block, `y` in px, so bars stretch while text keeps its size. Label (cut at 26 characters, full text in the tooltip) and value on one line, bar below on a track | Ranked top-N lists |
 | `analytics_chart_columns()` | Same `%`/px scheme, shared zero baseline, at least 2px for any non-zero value | Visits per day |
 
-Colors live only in each theme's `styles_epoch3.css`, via classes on the marks:
-`boat-rudder__chart__series--1…5` (categorical, one per epoch: WML blue, 0 orange, 1 aqua,
+Colors live only in each theme's `styles_admin_epoch3.css`, via classes on the marks:
+`boat-rudder-chart__series--1…5` (categorical, one per epoch: WML blue, 0 orange, 1 aqua,
 2 yellow, 3 magenta - the same colors now top the report's epoch stat cards), `--accent` (single
 -hue magnitude: bars, today's column) and `--muted` (context columns). The categorical steps
 differ per theme and were checked as a set against each theme's block surface (`#f4f4f6` light,

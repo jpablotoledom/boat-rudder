@@ -1,15 +1,15 @@
-<section class="boat-rudder__dashboard boat-rudder__dashboard--preview">
-  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+<section class="boat-rudder-dashboard boat-rudder-dashboard--preview">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
     <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/settings">Site settings</a></li></ol>
   </nav>
   <h1>Site preview</h1>
   <p>Renders "/" as each epoch would see it. Epoch -1 (WAP/WML) is omitted - it is
      not HTML, so a modern browser's iframe cannot render it.</p>
 
-  <div class="boat-rudder__preview__bar">
+  <div class="boat-rudder-preview__bar">
     <label>
       Epoch
-      <select id="previewEpoch" class="boat-rudder__dashboard__input">
+      <select id="previewEpoch" class="boat-rudder-input">
         <option value="0">0 - Pre-standard (text browsers)</option>
         <option value="1">1 - Early (tables, no CSS)</option>
         <option value="2">2 - Middle (HTML 3.2 tables)</option>
@@ -18,7 +18,7 @@
     </label>
     <label>
       Screen size
-      <select id="previewSize" class="boat-rudder__dashboard__input">
+      <select id="previewSize" class="boat-rudder-input">
         <option value="375x667">Mobile (375x667)</option>
         <option value="414x896">Mobile large (414x896)</option>
         <option value="640x480">VGA (640x480)</option>
@@ -31,37 +31,37 @@
         <option value="full" selected>Full width</option>
       </select>
     </label>
-    <button type="button" class="boat-rudder__dashboard__button" id="previewReload">Reload</button>
+    <button type="button" class="boat-rudder-btn" id="previewReload">Reload</button>
   </div>
 
-  <div class="boat-rudder__preview__stage" id="previewStage">
-    <iframe id="previewFrame" class="boat-rudder__preview__frame" title="Site preview"></iframe>
+  <div class="boat-rudder-preview__stage" id="previewStage">
+    <iframe id="previewFrame" class="boat-rudder-preview__frame" title="Site preview"></iframe>
   </div>
 
 </section>
 
 <style>
-  .boat-rudder__preview__bar {
+  .boat-rudder-preview__bar {
     display: flex;
     gap: 20px;
     align-items: flex-end;
     flex-wrap: wrap;
     margin: 16px 0;
   }
-  .boat-rudder__preview__bar label {
+  .boat-rudder-preview__bar label {
     display: flex;
     flex-direction: column;
     gap: 4px;
     font-size: 0.85em;
   }
-  .boat-rudder__preview__stage {
+  .boat-rudder-preview__stage {
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: #111;
     padding: 16px;
     overflow: auto;
     max-height: 80vh;
   }
-  .boat-rudder__preview__frame {
+  .boat-rudder-preview__frame {
     display: block;
     border: 0;
     background: #fff;

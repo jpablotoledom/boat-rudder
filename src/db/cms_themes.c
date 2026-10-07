@@ -1,5 +1,6 @@
 #include "cms_themes.h"
 #include "mongodb_manager.h"
+#include "../utils/config_loader.h"
 #include "../utils/read_file.h"
 #include "../utils/log.h"
 #include <bson/bson.h>
@@ -49,6 +50,12 @@ static const ThemeDefaultEntry THEME_DEFAULTS[] = {
             .footer_logo               = "#ffffff",
             .footer_logo_background    = "#000000",
             .body_background_epoch1    = "#241144",
+            .page_content_background   = "#00000000",
+            .body_text                 = "#e0e0e0",
+            .body_text_muted           = "#999999",
+            .body_surface              = "#0d0d0d",
+            .body_surface_raised       = "#1a1a1a",
+            .body_border               = "#3a3a3a",
             .link_normal               = "#ffffff",
             .link_hover                = "#98ffdd",
             .link_visited              = "#ffffff",
@@ -90,6 +97,12 @@ static const ThemeDefaultEntry THEME_DEFAULTS[] = {
             .footer_logo               = "#ffffff",
             .footer_logo_background    = "#000000",
             .body_background_epoch1    = "#8dd3ff",
+            .page_content_background   = "#00000000",
+            .body_text                 = "#1a1a1a",
+            .body_text_muted           = "#666666",
+            .body_surface              = "#f4f4f6",
+            .body_surface_raised       = "#ffffff",
+            .body_border               = "#d6d6d8",
             .link_normal               = "#680072",
             .link_hover                = "#006d49",
             .link_visited              = "#680072",
@@ -224,6 +237,12 @@ int cms_get_theme_colors(const char *key, CmsThemeColors *out) {
             copy_field(&colors, "footer-logo", out->footer_logo, sizeof(out->footer_logo));
             copy_field(&colors, "footer-logo-background", out->footer_logo_background, sizeof(out->footer_logo_background));
             copy_field(&colors, "body-background-epoch1", out->body_background_epoch1, sizeof(out->body_background_epoch1));
+            copy_field(&colors, "page-content-background", out->page_content_background, sizeof(out->page_content_background));
+            copy_field(&colors, "body-text", out->body_text, sizeof(out->body_text));
+            copy_field(&colors, "body-text-muted", out->body_text_muted, sizeof(out->body_text_muted));
+            copy_field(&colors, "body-surface", out->body_surface, sizeof(out->body_surface));
+            copy_field(&colors, "body-surface-raised", out->body_surface_raised, sizeof(out->body_surface_raised));
+            copy_field(&colors, "body-border", out->body_border, sizeof(out->body_border));
             copy_field(&colors, "link-normal", out->link_normal, sizeof(out->link_normal));
             copy_field(&colors, "link-hover", out->link_hover, sizeof(out->link_hover));
             copy_field(&colors, "link-visited", out->link_visited, sizeof(out->link_visited));
@@ -282,6 +301,12 @@ int cms_update_theme_colors(const char *key, const CmsThemeColors *colors) {
                 "footer-logo", BCON_UTF8(colors->footer_logo),
                 "footer-logo-background", BCON_UTF8(colors->footer_logo_background),
                 "body-background-epoch1", BCON_UTF8(colors->body_background_epoch1),
+                "page-content-background", BCON_UTF8(colors->page_content_background),
+                "body-text", BCON_UTF8(colors->body_text),
+                "body-text-muted", BCON_UTF8(colors->body_text_muted),
+                "body-surface", BCON_UTF8(colors->body_surface),
+                "body-surface-raised", BCON_UTF8(colors->body_surface_raised),
+                "body-border", BCON_UTF8(colors->body_border),
                 "link-normal", BCON_UTF8(colors->link_normal),
                 "link-hover", BCON_UTF8(colors->link_hover),
                 "link-visited", BCON_UTF8(colors->link_visited),
@@ -564,7 +589,21 @@ int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig
     return ok ? 0 : -1;
 }
 
-char *cms_get_theme_css_value(const char *key) {
+static const char *css_field(ThemeCssSheet sheet) {
+    return sheet == THEME_CSS_ADMIN ? "css_admin_epoch3" : "css_epoch3";
+}
+
+const char *cms_theme_css_file(ThemeCssSheet sheet) {
+    return sheet == THEME_CSS_ADMIN ? "styles_admin_epoch3.css" : "styles_epoch3.css";
+}
+
+static char *read_theme_css_file(const char *key, ThemeCssSheet sheet) {
+    char path[256];
+    snprintf(path, sizeof(path), "./html/themes/%s/%s", key, cms_theme_css_file(sheet));
+    return read_file_to_string(path);
+}
+
+char *cms_get_theme_css_value(const char *key, ThemeCssSheet sheet) {
     if (!key || !key[0]) return strdup("");
 
     mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
@@ -577,7 +616,7 @@ char *cms_get_theme_css_value(const char *key) {
     const bson_t *doc;
     if (mongoc_cursor_next(cursor, &doc)) {
         bson_iter_t iter;
-        if (bson_iter_init_find(&iter, doc, "css_epoch3") && BSON_ITER_HOLDS_UTF8(&iter))
+        if (bson_iter_init_find(&iter, doc, css_field(sheet)) && BSON_ITER_HOLDS_UTF8(&iter))
             result = strdup(bson_iter_utf8(&iter, NULL));
     }
 
@@ -587,18 +626,18 @@ char *cms_get_theme_css_value(const char *key) {
     return result ? result : strdup("");
 }
 
-char *cms_get_theme_css(const char *key) {
-    char *db_value = cms_get_theme_css_value(key);
+char *cms_get_theme_css(const char *key, ThemeCssSheet sheet) {
+    char *db_value = cms_get_theme_css_value(key, sheet);
     if (db_value[0]) return db_value;
     free(db_value);
 
-    char path[256];
-    snprintf(path, sizeof(path), "./html/themes/%s/styles_epoch3.css", key ? key : "");
-    char *body = read_file_to_string(path);
+    char *body = read_theme_css_file(key ? key : "", sheet);
+    if (!body && sheet == THEME_CSS_ADMIN && strcmp(key ? key : "", theme) != 0)
+        body = read_theme_css_file(theme, sheet);
     return body ? body : strdup("");
 }
 
-int cms_update_theme_css(const char *key, const char *css) {
+int cms_update_theme_css(const char *key, ThemeCssSheet sheet, const char *css) {
     if (!key || !key[0]) return -1;
 
     mongoc_collection_t *collection = mongodb_manager_get_collection(THEMES_COLLECTION);
@@ -608,7 +647,7 @@ int cms_update_theme_css(const char *key, const char *css) {
     bson_t *update = BCON_NEW(
         "$set", "{",
             "key", BCON_UTF8(key),
-            "css_epoch3", BCON_UTF8(css ? css : ""),
+            css_field(sheet), BCON_UTF8(css ? css : ""),
         "}"
     );
     bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));

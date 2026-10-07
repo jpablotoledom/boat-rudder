@@ -1,75 +1,75 @@
-<section class="boat-rudder__dashboard">
-  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
     <ol><li><a href="/dashboard">Dashboard</a></li></ol>
   </nav>
   <h1>Analytics</h1>
 
-  <div class="boat-rudder__analytics__period-bar">
-    <span class="boat-rudder__analytics__period-label">Period:</span>
-    <a href="/dashboard/analytics?period=day&amp;date=%s" class="boat-rudder__analytics__period-btn %s">Day</a>
-    <a href="/dashboard/analytics?period=week&amp;year=%d&amp;week=%d" class="boat-rudder__analytics__period-btn %s">Week</a>
-    <a href="/dashboard/analytics?period=month&amp;year=%d&amp;month=%d" class="boat-rudder__analytics__period-btn %s">Month</a>
-    <a href="/dashboard/analytics?period=year&amp;year=%d" class="boat-rudder__analytics__period-btn %s">Year</a>
-    <a href="/dashboard/analytics?period=year&amp;year=%d" class="boat-rudder__analytics__period-btn %s">Last Year</a>
-    <a href="/dashboard/analytics?period=all" class="boat-rudder__analytics__period-btn %s">All Time</a>
-    <form method="get" action="/dashboard/analytics" class="boat-rudder__analytics__range-form %s">
+  <div class="boat-rudder-analytics__period-bar boat-rudder-card">
+    <span class="boat-rudder-analytics__period-label boat-rudder-caption">Period:</span>
+    <a href="/dashboard/analytics?period=day&amp;date=%s" class="boat-rudder-analytics__period-btn %s boat-rudder-btn boat-rudder-btn--sm">Day</a>
+    <a href="/dashboard/analytics?period=week&amp;year=%d&amp;week=%d" class="boat-rudder-analytics__period-btn %s boat-rudder-btn boat-rudder-btn--sm">Week</a>
+    <a href="/dashboard/analytics?period=month&amp;year=%d&amp;month=%d" class="boat-rudder-analytics__period-btn %s boat-rudder-btn boat-rudder-btn--sm">Month</a>
+    <a href="/dashboard/analytics?period=year&amp;year=%d" class="boat-rudder-analytics__period-btn %s boat-rudder-btn boat-rudder-btn--sm">Year</a>
+    <a href="/dashboard/analytics?period=year&amp;year=%d" class="boat-rudder-analytics__period-btn %s boat-rudder-btn boat-rudder-btn--sm">Last Year</a>
+    <a href="/dashboard/analytics?period=all" class="boat-rudder-analytics__period-btn %s boat-rudder-btn boat-rudder-btn--sm">All Time</a>
+    <form method="get" action="/dashboard/analytics" class="boat-rudder-analytics__range-form %s">
       <input type="hidden" name="period" value="range">
-      <input type="date" name="from" class="boat-rudder__analytics__date-input" value="%s">
-      <span class="boat-rudder__analytics__range-sep">&#8594;</span>
-      <input type="date" name="to" class="boat-rudder__analytics__date-input" value="%s">
-      <button type="submit" class="boat-rudder__analytics__period-btn">Go</button>
+      <input type="date" name="from" class="boat-rudder-analytics__date-input boat-rudder-input boat-rudder-input--sm" value="%s">
+      <span class="boat-rudder-analytics__range-sep">&#8594;</span>
+      <input type="date" name="to" class="boat-rudder-analytics__date-input boat-rudder-input boat-rudder-input--sm" value="%s">
+      <button type="submit" class="boat-rudder-analytics__period-btn boat-rudder-btn boat-rudder-btn--sm">Go</button>
     </form>
-    <span class="boat-rudder__analytics__period-current">%s</span>
+    <span class="boat-rudder-analytics__period-current">%s</span>
   </div>
 
-  <div class="boat-rudder__analytics__totals">
-    <div class="boat-rudder__analytics__stat-card">
-      <div class="boat-rudder__analytics__stat-value">%d</div>
-      <div class="boat-rudder__analytics__stat-label">Total Visits</div>
+  <div class="boat-rudder-analytics__totals">
+    <div class="boat-rudder-analytics__stat-card boat-rudder-card">
+      <div class="boat-rudder-analytics__stat-value">%d</div>
+      <div class="boat-rudder-analytics__stat-label boat-rudder-caption">Total Visits</div>
     </div>
-    <div class="boat-rudder__analytics__stat-card boat-rudder__analytics__stat-card--ewml">
-      <div class="boat-rudder__analytics__stat-value">%d</div>
-      <div class="boat-rudder__analytics__stat-label">Epoch WML (WAP)</div>
+    <div class="boat-rudder-analytics__stat-card boat-rudder-analytics__stat-card--ewml boat-rudder-card">
+      <div class="boat-rudder-analytics__stat-value">%d</div>
+      <div class="boat-rudder-analytics__stat-label boat-rudder-caption">Epoch WML (WAP)</div>
     </div>
-    <div class="boat-rudder__analytics__stat-card boat-rudder__analytics__stat-card--e0">
-      <div class="boat-rudder__analytics__stat-value">%d</div>
-      <div class="boat-rudder__analytics__stat-label">Epoch 0 (Pre-standard)</div>
+    <div class="boat-rudder-analytics__stat-card boat-rudder-analytics__stat-card--e0 boat-rudder-card">
+      <div class="boat-rudder-analytics__stat-value">%d</div>
+      <div class="boat-rudder-analytics__stat-label boat-rudder-caption">Epoch 0 (Pre-standard)</div>
     </div>
-    <div class="boat-rudder__analytics__stat-card boat-rudder__analytics__stat-card--e1">
-      <div class="boat-rudder__analytics__stat-value">%d</div>
-      <div class="boat-rudder__analytics__stat-label">Epoch 1 (Early)</div>
+    <div class="boat-rudder-analytics__stat-card boat-rudder-analytics__stat-card--e1 boat-rudder-card">
+      <div class="boat-rudder-analytics__stat-value">%d</div>
+      <div class="boat-rudder-analytics__stat-label boat-rudder-caption">Epoch 1 (Early)</div>
     </div>
-    <div class="boat-rudder__analytics__stat-card boat-rudder__analytics__stat-card--e2">
-      <div class="boat-rudder__analytics__stat-value">%d</div>
-      <div class="boat-rudder__analytics__stat-label">Epoch 2 (Middle)</div>
+    <div class="boat-rudder-analytics__stat-card boat-rudder-analytics__stat-card--e2 boat-rudder-card">
+      <div class="boat-rudder-analytics__stat-value">%d</div>
+      <div class="boat-rudder-analytics__stat-label boat-rudder-caption">Epoch 2 (Middle)</div>
     </div>
-    <div class="boat-rudder__analytics__stat-card boat-rudder__analytics__stat-card--e3">
-      <div class="boat-rudder__analytics__stat-value">%d</div>
-      <div class="boat-rudder__analytics__stat-label">Epoch 3 (Modern)</div>
-    </div>
-  </div>
-
-  <div class="boat-rudder__analytics__grid">
-    <div class="boat-rudder__analytics__table-block">
-      <div class="boat-rudder__analytics__table-title">Routes</div>
-      %s
-    </div>
-    <div class="boat-rudder__analytics__table-block">
-      <div class="boat-rudder__analytics__table-title">Browsers</div>
-      %s
-    </div>
-    <div class="boat-rudder__analytics__table-block">
-      <div class="boat-rudder__analytics__table-title">Operating Systems</div>
-      %s
-    </div>
-    <div class="boat-rudder__analytics__table-block">
-      <div class="boat-rudder__analytics__table-title">Countries</div>
-      %s
+    <div class="boat-rudder-analytics__stat-card boat-rudder-analytics__stat-card--e3 boat-rudder-card">
+      <div class="boat-rudder-analytics__stat-value">%d</div>
+      <div class="boat-rudder-analytics__stat-label boat-rudder-caption">Epoch 3 (Modern)</div>
     </div>
   </div>
 
-  <div class="boat-rudder__analytics__table-block boat-rudder__analytics__table-block--wide">
-    <div class="boat-rudder__analytics__table-title">Top Articles &amp; Categories</div>
+  <div class="boat-rudder-analytics__grid">
+    <div class="boat-rudder-analytics__table-block boat-rudder-card">
+      <div class="boat-rudder-analytics__table-title boat-rudder-caption">Routes</div>
+      %s
+    </div>
+    <div class="boat-rudder-analytics__table-block boat-rudder-card">
+      <div class="boat-rudder-analytics__table-title boat-rudder-caption">Browsers</div>
+      %s
+    </div>
+    <div class="boat-rudder-analytics__table-block boat-rudder-card">
+      <div class="boat-rudder-analytics__table-title boat-rudder-caption">Operating Systems</div>
+      %s
+    </div>
+    <div class="boat-rudder-analytics__table-block boat-rudder-card">
+      <div class="boat-rudder-analytics__table-title boat-rudder-caption">Countries</div>
+      %s
+    </div>
+  </div>
+
+  <div class="boat-rudder-analytics__table-block boat-rudder-analytics__table-block--wide boat-rudder-card">
+    <div class="boat-rudder-analytics__table-title boat-rudder-caption">Top Articles &amp; Categories</div>
     %s
   </div>
 

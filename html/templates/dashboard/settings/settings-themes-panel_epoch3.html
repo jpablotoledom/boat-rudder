@@ -1,6 +1,4 @@
-  <section class="boat-rudder__dashboard__settings-panel">
-    <h2>%s%s</h2>
-    %s
+  <section class="boat-rudder-dashboard__settings-panel">
     <p>The 13 color variables from the project's Figma file, plus a separate "Generic links"
        trio added later. Applies to every epoch with a color model (1, 2 and 3) - epoch 3 gets
        these as CSS variables; epoch 1/2 (no CSS custom properties there) get a subset
@@ -17,10 +15,10 @@
     <form method="POST" action="/dashboard/settings/themes/%s/colors">
       <fieldset>
         <legend>Navbar</legend>
-        <div class="boat-rudder__dashboard__color-alpha">
-          <label>Background <input type="color" name="navbar-background" value="%s" class="boat-rudder__dashboard__color-alpha__color"></label>
-          <label>Opacity %% <input type="range" name="navbar-background-alpha" min="0" max="100" value="%s" class="boat-rudder__dashboard__color-alpha__range"></label>
-          <span class="boat-rudder__dashboard__color-alpha__preview"></span>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="navbar-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="navbar-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
         </div>
         <label>Menu, normal <input type="color" name="navbar-menu-normal" value="%s"></label>
         <label>Menu, hover <input type="color" name="navbar-menu-hover" value="%s"></label>
@@ -50,28 +48,39 @@
       </fieldset>
       <fieldset>
         <legend>Body</legend>
-        <div class="boat-rudder__dashboard__color-alpha">
-          <label>Background <input type="color" name="body-background" value="%s" class="boat-rudder__dashboard__color-alpha__color"></label>
-          <label>Opacity %% <input type="range" name="body-background-alpha" min="0" max="100" value="%s" class="boat-rudder__dashboard__color-alpha__range"></label>
-          <span class="boat-rudder__dashboard__color-alpha__preview"></span>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="body-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="body-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
         </div>
         <label>Background (epoch 1 override) <input type="color" name="body-background-epoch1" value="%s"></label>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Page content background <input type="color" name="page-content-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="page-content-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
+        </div>
+        <p>Login and dashboard (epoch 3): the accent is "Menu, active" above.</p>
+        <label>Text <input type="color" name="body-text" value="%s"></label>
+        <label>Secondary text <input type="color" name="body-text-muted" value="%s"></label>
+        <label>Panel background <input type="color" name="body-surface" value="%s"></label>
+        <label>Field background <input type="color" name="body-surface-raised" value="%s"></label>
+        <label>Borders <input type="color" name="body-border" value="%s"></label>
       </fieldset>
       <fieldset>
         <legend>Home content</legend>
-        <div class="boat-rudder__dashboard__color-alpha">
-          <label>Background <input type="color" name="home-content-background" value="%s" class="boat-rudder__dashboard__color-alpha__color"></label>
-          <label>Opacity %% <input type="range" name="home-content-background-alpha" min="0" max="100" value="%s" class="boat-rudder__dashboard__color-alpha__range"></label>
-          <span class="boat-rudder__dashboard__color-alpha__preview"></span>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="home-content-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="home-content-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
         </div>
         <label>Text <input type="color" name="home-content-text" value="%s"></label>
       </fieldset>
       <fieldset>
         <legend>Blog list item</legend>
-        <div class="boat-rudder__dashboard__color-alpha">
-          <label>Background <input type="color" name="blog-list-item-background" value="%s" class="boat-rudder__dashboard__color-alpha__color"></label>
-          <label>Opacity %% <input type="range" name="blog-list-item-background-alpha" min="0" max="100" value="%s" class="boat-rudder__dashboard__color-alpha__range"></label>
-          <span class="boat-rudder__dashboard__color-alpha__preview"></span>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Background <input type="color" name="blog-list-item-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="blog-list-item-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
         </div>
         <label>Border <input type="color" name="blog-list-item-border" value="%s"></label>
         <label>Author <input type="color" name="blog-list-item-author" value="%s"></label>
@@ -110,13 +119,13 @@
       <fieldset>
         <legend>Footer</legend>
         <label>Logo <input type="color" name="footer-logo" value="%s"></label>
-        <div class="boat-rudder__dashboard__color-alpha">
-          <label>Logo background <input type="color" name="footer-logo-background" value="%s" class="boat-rudder__dashboard__color-alpha__color"></label>
-          <label>Opacity %% <input type="range" name="footer-logo-background-alpha" min="0" max="100" value="%s" class="boat-rudder__dashboard__color-alpha__range"></label>
-          <span class="boat-rudder__dashboard__color-alpha__preview"></span>
+        <div class="boat-rudder-dashboard-color-alpha">
+          <label>Logo background <input type="color" name="footer-logo-background" value="%s" class="boat-rudder-dashboard-color-alpha__color"></label>
+          <label>Opacity %% <input type="range" name="footer-logo-background-alpha" min="0" max="100" value="%s" class="boat-rudder-dashboard-color-alpha__range"></label>
+          <span class="boat-rudder-dashboard-color-alpha__preview"></span>
         </div>
       </fieldset>
-      <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">Save colors</button>
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save colors</button>
     </form>
     <ul>
       <li><a href="/dashboard/settings/themes/%s/banner">Edit banner</a></li>

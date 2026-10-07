@@ -69,6 +69,38 @@ are created.
 
 ---
 
+### `2026-10-06-bem-class-names.js`
+
+**Why:** the CSS classes were renamed to BEM (`boat-rudder__navbar__menu_item` →
+`boat-rudder-navbar__menu-item`, states such as `.active` → `--active` modifiers; see
+[style-guide.md](style-guide.md#15-css-class-names-bem)). Markup and CSS stored in the database
+still carry the old names.
+
+**Steps:**
+
+```bash
+./scripts/mongodb_dump.sh
+mongosh "mongodb://localhost:27017/<mongodb_db>" scripts/migrations/2026-10-06-bem-class-names.js
+```
+
+**What:** rewrites every `boat-rudder__…` name in every string field of `themes` (the saved
+`css_epoch3` override and the banner/footer/logo markup), `site_settings` and `entries` (a
+"generic" block's HTML, and prose that mentions the old namespace). In `css_*` fields it also
+converts the state selectors the same way the shipped stylesheets were (`.x.active` →
+`.x--active`, `body.is-dragging` → `body.boat-rudder-entry-editor-mode--dragging`, ...). The
+conversion is an algorithm, not a fixed table, so an override saved from an older version of the
+stylesheet is converted too. An override saved from the previous stylesheet comes out
+byte-identical to the new file.
+
+**Re-running:** a no-op - converted names contain no `boat-rudder__`, and the state conversions
+only match the old `.x.state` form. Prints how many documents and fields it rewrote per
+collection.
+
+**Without it:** a theme with a saved CSS override renders unstyled on epoch 3, because the
+override targets class names the templates no longer emit.
+
+---
+
 ## Writing a new migration
 
 1. Name it `scripts/migrations/<today>-<verb>-<thing>.js`.

@@ -12,7 +12,7 @@ Built with **CMake**, concurrency via **POSIX threads**. Full list:
 [develop_docs/reference/third-party.md](develop_docs/reference/third-party.md).
 
 Boat Rudder is the software - the `boat-rudder` binary and systemd service, the source tree, the
-`boat-rudder__*` CSS namespace, and every document under `develop_docs/`. It descends from
+`boat-rudder-*` CSS namespace, and every document under `develop_docs/`. It descends from
 `base-http-server`, a minimal standalone static file server, which survives only as the shape of
 the web-server half. A **site** built with Boat Rudder is a separate thing: its own MongoDB
 database, theme and content. Nothing site-specific belongs in the source tree - the site name,
@@ -143,7 +143,7 @@ boat-rudder/
 │   └── third_party/           # Vendored code (stb_image.h)
 ├── html/                      # Static content root (CLI root directory)
 │   ├── templates/             # Shared templates
-│   ├── themes/<theme>/        # Per-theme templates, assets, styles_epoch3.css
+│   ├── themes/<theme>/        # Per-theme templates, assets, public + admin epoch 3 CSS
 │   ├── assets/                # Site-wide assets (fonts, ...)
 │   └── content/               # Uploaded media, QR cache
 ├── configs/settings.conf      # Runtime configuration
@@ -188,7 +188,7 @@ Reference (`develop_docs/reference/`):
 | [security.md](develop_docs/reference/security.md) | Every defense and the known gaps |
 | [scripts.md](develop_docs/reference/scripts.md) / [migrations.md](develop_docs/reference/migrations.md) | Build/deploy scripts; data migrations |
 | [third-party.md](develop_docs/reference/third-party.md) | Vendored, ported and linked code and data |
-| [style-guide.md](develop_docs/reference/style-guide.md) | C coding style and security rules (Google C++ Style Guide + SEI CERT C) |
+| [style-guide.md](develop_docs/reference/style-guide.md) | C coding style and security rules (Google C++ Style Guide + SEI CERT C), and BEM CSS class names |
 
 - [develop_docs/plans/](develop_docs/plans/) - per-feature implementation plans (CMS entry
   model, home blog list, login, site settings/personalization, theme system) and a retroactive

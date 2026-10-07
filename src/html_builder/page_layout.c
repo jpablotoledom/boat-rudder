@@ -6,6 +6,7 @@
 #include "../utils/generate_url_theme.h"
 #include "../utils/http_utils.h"
 #include "../utils/read_file.h"
+#include "../utils/request_lang.h"
 #include "../utils/request_theme.h"
 #include "../utils/request_user.h"
 #include "../db/session_manager.h"
@@ -58,7 +59,7 @@ static char *splice_footer(char *html, int epoch) {
         // the site name here too, same as the navbar (menu.c) - so the
         // footer title matches whatever the admin configured as "Logo en
         // fuente" (text + font, see the --br-font-navbar-logo var this
-        // shares with the navbar via .boat-rudder__footer-title's own
+        // shares with the navbar via .boat-rudder-footer-title's own
         // font-family rule), not just the site's own name.
         CmsLogoConfig logo_cfg;
         cms_get_theme_logo_config(request_theme(), epoch, &logo_cfg);
@@ -202,6 +203,10 @@ static char *splice_theme_colors(char *html) {
         "--br-color-navbar-background:%s;--br-color-navbar-menu-normal:%s;"
         "--br-color-navbar-menu-hover:%s;--br-color-navbar-menu-active:%s;"
         "--br-color-navbar-logo:%s;--br-color-body-background:%s;"
+        "--br-color-page-content-background:%s;"
+        "--br-color-body-text:%s;--br-color-body-text-muted:%s;"
+        "--br-color-body-surface:%s;--br-color-body-surface-raised:%s;"
+        "--br-color-body-border:%s;"
         "--br-color-home-content-background:%s;--br-color-home-content-text:%s;"
         "--br-color-blog-list-item-background:%s;--br-color-blog-list-item-border:%s;"
         "--br-color-blog-list-item-author:%s;--br-color-blog-list-item-categories:%s;"
@@ -221,6 +226,10 @@ static char *splice_theme_colors(char *html) {
         colors.navbar_background, colors.navbar_menu_normal,
         colors.navbar_menu_hover, colors.navbar_menu_active,
         colors.navbar_logo, colors.body_background,
+        colors.page_content_background,
+        colors.body_text, colors.body_text_muted,
+        colors.body_surface, colors.body_surface_raised,
+        colors.body_border,
         colors.home_content_background, colors.home_content_text,
         colors.blog_list_item_background, colors.blog_list_item_border,
         colors.blog_list_item_author, colors.blog_list_item_categories,
@@ -262,8 +271,8 @@ static char *splice_theme_colors(char *html) {
 // browsers still honor them), and the menu's own colors go straight into a
 // <font color> attribute per item instead (see menu.c). Epoch 2's range
 // (Netscape 4 through IE10/Firefox 3/Chrome 9) does have CSS1, so its
-// layout carries real `a:hover`/`#boat-rudder-navbar-menu-item(-selected)`/
-// `.boat-rudder__menu__item:hover` rules instead of an inline attribute -
+// layout carries real `a:hover`/`#boat-rudder-navbar-menu-item(-selected)`
+// (+ `:hover`) rules instead of an inline attribute -
 // see menu.c's own comment for the several rounds of real-browser testing
 // (IE5/Windows 3.11 vs. 95) that shaped exactly which selector forms those
 // are (and which plausible-looking ones turned out not to work).
@@ -280,7 +289,7 @@ static char *splice_theme_colors(char *html) {
 // {{COLOR_CATEGORIES}}/{{COLOR_CATEGORIES_HOVER}} take blog-list-item-
 // categories/-hover, for #boat-rudder-entry-category(:hover) in epoch 2's
 // layout (see category_epoch2.html and category_tags.c's own comment) - an
-// id, not the boat-rudder__entry-category class epoch 3 uses, and no inline
+// id, not the boat-rudder-entry-category class epoch 3 uses, and no inline
 // color attribute at all: real-browser testing (IE5/Windows 3.11) showed an
 // inline `style="color:..."` there can never be overridden on :hover, not
 // even with `!important`, same as the navbar's own menu items (see menu.c).
@@ -390,14 +399,33 @@ static char *splice_csrf_token(char *html, int epoch) {
     return result;
 }
 
+// On epoch 3 login and dashboard pages (/login, /dashboard and below), links
+// the theme's admin stylesheet (styles_admin_epoch3.css) right before
+// </head>, after the public one the layout already links - the admin pages
+// use both. Decided by the request path, not the session: a signed-in admin
+// browsing the public site doesn't download the admin rules. Spliced here
+// rather than through a layout marker, so a theme's layout needs no change.
+static char *splice_admin_styles(char *html, int epoch) {
+    const char *path = request_path();
+    int is_admin_page = strcmp(path, "/login") == 0 || strcmp(path, "/dashboard") == 0 ||
+                        strncmp(path, "/dashboard/", 11) == 0;
+    if (!html || epoch != EPOCH_MODERN || !is_admin_page || !strstr(html, "</head>")) return html;
+
+    char tag[160];
+    snprintf(tag, sizeof(tag), "<link rel=\"stylesheet\" href=\"/themes/%s/%s\">\n</head>",
+             request_theme(), cms_theme_css_file(THEME_CSS_ADMIN));
+    char *result = str_replace_first(html, "</head>", tag);
+    free(html);
+    return result;
+}
+
 char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
                        const char *body_background) {
     if (!fragment_html) return NULL;
 
     fragment_html = splice_footer(fragment_html, epoch);
     fragment_html = splice_footer_logo(fragment_html, epoch);
-    fragment_html = splice_part(fragment_html, "{{LIGHTBOX}}",   "lightbox",   epoch);
-    fragment_html = splice_part(fragment_html, "{{HOME-MODAL}}", "home-modal", epoch);
+    fragment_html = splice_part(fragment_html, "{{LIGHTBOX}}", "lightbox", epoch);
     fragment_html = splice_site_name(fragment_html);
     if (!fragment_html) return NULL;
 
@@ -451,7 +479,8 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch,
         return NULL;
     }
 
-    with_colors = splice_csrf_token(with_colors, epoch);
+    with_colors = splice_admin_styles(with_colors, epoch);
+    if (with_colors) with_colors = splice_csrf_token(with_colors, epoch);
     if (!with_colors) {
         free(fragment_html);
         return NULL;

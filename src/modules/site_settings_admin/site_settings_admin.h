@@ -36,9 +36,11 @@ char *site_settings_footer_page(int epoch, const char *key, char *const values[E
 // NULL on a missing template / allocation failure.
 char *site_settings_logo_page(int epoch, const char *key, const CmsLogoConfig configs[EPOCH_COUNT]);
 
-// /dashboard/settings/themes/<key>/css - a full-file editor for that
-// theme's epoch 3 stylesheet (styles_epoch3.css, served dynamically by
-// cms_get_theme_css() - see http_router.c's match_theme_css_url()).
+// /dashboard/settings/themes/<key>/css and .../admin-css - a full-file
+// editor for one of that theme's epoch 3 stylesheets (`sheet`: the public
+// styles_epoch3.css or the admin styles_admin_epoch3.css, served dynamically
+// by cms_get_theme_css() - see http_router.c's match_theme_css_url()), with
+// a tab per stylesheet.
 // `value` is the *effective* CSS to pre-fill the textarea with (the DB
 // override if the theme has been customized, else the theme's own on-disk
 // file), not just the stored override: unlike banner/footer/logo's small
@@ -48,7 +50,7 @@ char *site_settings_logo_page(int epoch, const char *key, const CmsLogoConfig co
 // override back to that on-disk file) whenever a customization is stored.
 // Returns a malloc'd string, or NULL on a missing template / allocation
 // failure.
-char *site_settings_css_page(int epoch, const char *key, const char *value);
+char *site_settings_css_page(int epoch, const char *key, ThemeCssSheet sheet, const char *value);
 
 // /dashboard/settings/preview - a static control panel (epoch + screen size
 // pickers) driving an iframe of "/" via the ?preview_epoch=<N> override in
@@ -67,11 +69,17 @@ typedef struct {
     CmsThemeColors colors;
 } ThemeEntry;
 
-// /dashboard/settings/themes - one panel per discovered theme: a "Set
-// active" action (omitted for the active theme), a single color form that
-// applies to every epoch that has a color model, and links to that
-// theme's own banner/footer editors. Returns a malloc'd string, or NULL on
-// a missing template / allocation failure.
+// /dashboard/settings/themes - the list of discovered themes: each one's
+// name (a link to its own page), "Active" or a "Set active" button, and
+// "Edit". Returns a malloc'd string, or NULL on a missing template /
+// allocation failure.
 char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t count);
+
+// /dashboard/settings/themes/<key> - one theme's options: "Set active"
+// (omitted for the active theme), a single color form that applies to every
+// epoch that has a color model, the epoch 3 logo font, and links to that
+// theme's banner/footer/logo/CSS editors. Returns a malloc'd string, or
+// NULL on a missing template / allocation failure.
+char *site_settings_theme_page(int epoch, const ThemeEntry *theme);
 
 #endif // SITE_SETTINGS_ADMIN_H

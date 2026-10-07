@@ -638,26 +638,62 @@ static int match_id_route(const char *decoded_url, const char *prefix,
     return 1;
 }
 
-// Matches "/themes/<key>/styles_epoch3.css" exactly, extracting <key> - the
-// dynamic route that serves a theme's (possibly DB-overridden, see
-// cms_get_theme_css()) epoch 3 stylesheet, ahead of the generic static-file
-// fallback at the bottom of the GET dispatch chain.
-static int match_theme_css_url(const char *decoded_url, char *key_out, size_t key_size) {
+// Matches "/themes/<key>/styles_epoch3.css" or "/themes/<key>/styles_admin_epoch3.css"
+// exactly, extracting <key> and which stylesheet it is - the dynamic route that
+// serves a theme's (possibly DB-overridden, see cms_get_theme_css()) epoch 3
+// stylesheets, ahead of the generic static-file fallback at the bottom of the
+// GET dispatch chain.
+static int match_theme_css_url(const char *decoded_url, char *key_out, size_t key_size,
+                               ThemeCssSheet *sheet_out) {
     static const char *prefix = "/themes/";
-    static const char *suffix = "/styles_epoch3.css";
-    size_t prefix_len = strlen(prefix), suffix_len = strlen(suffix);
+    static const ThemeCssSheet sheets[] = { THEME_CSS_PUBLIC, THEME_CSS_ADMIN };
+    size_t prefix_len = strlen(prefix);
     size_t url_len = strlen(decoded_url);
-
-    if (url_len <= prefix_len + suffix_len) return 0;
     if (strncmp(decoded_url, prefix, prefix_len) != 0) return 0;
-    if (strcmp(decoded_url + url_len - suffix_len, suffix) != 0) return 0;
 
-    size_t key_len = url_len - prefix_len - suffix_len;
-    if (key_len == 0 || key_len >= key_size) return 0;
+    for (size_t i = 0; i < sizeof(sheets) / sizeof(sheets[0]); i++) {
+        char suffix[64];
+        snprintf(suffix, sizeof(suffix), "/%s", cms_theme_css_file(sheets[i]));
+        size_t suffix_len = strlen(suffix);
 
-    memcpy(key_out, decoded_url + prefix_len, key_len);
-    key_out[key_len] = '\0';
-    return 1;
+        if (url_len <= prefix_len + suffix_len) continue;
+        if (strcmp(decoded_url + url_len - suffix_len, suffix) != 0) continue;
+
+        size_t key_len = url_len - prefix_len - suffix_len;
+        if (key_len == 0 || key_len >= key_size) return 0;
+
+        memcpy(key_out, decoded_url + prefix_len, key_len);
+        key_out[key_len] = '\0';
+        *sheet_out = sheets[i];
+        return 1;
+    }
+    return 0;
+}
+
+// Matches the CSS editor's routes: "/dashboard/settings/themes/<key>/css"
+// (public stylesheet) or ".../admin-css" (admin stylesheet), each followed
+// by `tail` - "" for the editor itself, "/restore" for its restore form.
+// Writes <key> and the stylesheet; returns 0 when `decoded_url` is neither.
+static int match_theme_css_editor(const char *decoded_url, const char *tail,
+                                  char *key_out, size_t key_size, ThemeCssSheet *sheet_out) {
+    char suffix[32];
+    snprintf(suffix, sizeof(suffix), "/css%s", tail);
+    if (match_id_route(decoded_url, "/dashboard/settings/themes", suffix, key_out, key_size)) {
+        *sheet_out = THEME_CSS_PUBLIC;
+        return 1;
+    }
+    snprintf(suffix, sizeof(suffix), "/admin-css%s", tail);
+    if (match_id_route(decoded_url, "/dashboard/settings/themes", suffix, key_out, key_size)) {
+        *sheet_out = THEME_CSS_ADMIN;
+        return 1;
+    }
+    return 0;
+}
+
+// Where the CSS editor of `sheet` lives, for the redirect after a save/restore.
+static void theme_css_editor_url(char *out, size_t out_size, const char *key, ThemeCssSheet sheet) {
+    snprintf(out, out_size, "/dashboard/settings/themes/%s/%s", key,
+             sheet == THEME_CSS_ADMIN ? "admin-css" : "css");
 }
 
 // Theme-asset endpoints (/dashboard/api/theme-assets/*) back the banner,
@@ -1272,6 +1308,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         char id[32];
         char block_id[32];
         char theme_epoch_str[8];
+        ThemeCssSheet css_sheet;
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
             if (strcmp(decoded_url, "/") == 0) {
@@ -1607,7 +1644,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
-            } else if (match_id_route(decoded_url, "/dashboard/settings/themes", "/css", id, sizeof(id))) {
+            } else if (match_theme_css_editor(decoded_url, "", id, sizeof(id), &css_sheet)) {
                 int epoch = resolve_epoch(&req);
 
                 if (epoch != EPOCH_MODERN) {
@@ -1619,8 +1656,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         if (!theme_key_is_valid(id)) {
                             send_error_response(ctx, 404, "404 Not Found", epoch);
                         } else {
-                            char *value     = cms_get_theme_css(id);
-                            char *content   = site_settings_css_page(epoch, id, value);
+                            char *value     = cms_get_theme_css(id, css_sheet);
+                            char *content   = site_settings_css_page(epoch, id, css_sheet, value);
                             free(value);
                             char *body      = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response  = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -1681,13 +1718,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *active = cms_get_active_theme_key();
 
                         ThemeEntry *entries = calloc(key_count, sizeof(ThemeEntry));
-                        for (size_t i = 0; i < key_count; i++) {
+                        for (size_t i = 0; entries && i < key_count; i++) {
                             strncpy(entries[i].key, keys[i], sizeof(entries[i].key) - 1);
                             entries[i].active = strcmp(keys[i], active) == 0;
-                            cms_get_theme_colors(keys[i], &entries[i].colors);
                         }
 
-                        char *content  = site_settings_themes_page(epoch, entries, key_count);
+                        char *content  = entries ? site_settings_themes_page(epoch, entries, key_count) : NULL;
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -1696,6 +1732,35 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         free(entries);
                         free(active);
                         free_theme_keys(keys, key_count);
+                    }
+                }
+
+            } else if (match_id_route(decoded_url, "/dashboard/settings/themes", "", id, sizeof(id))) {
+                // One theme's options; the list above links here.
+                int epoch = resolve_epoch(&req);
+
+                if (epoch != EPOCH_MODERN) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        if (!theme_key_is_valid(id)) {
+                            send_error_response(ctx, 404, "404 Not Found", epoch);
+                        } else {
+                            char *active = cms_get_active_theme_key();
+                            ThemeEntry entry = {0};
+                            snprintf(entry.key, sizeof(entry.key), "%s", id);
+                            entry.active = strcmp(id, active) == 0;
+                            cms_get_theme_colors(id, &entry.colors);
+                            free(active);
+
+                            char *content  = site_settings_theme_page(epoch, &entry);
+                            char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
+                            char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                            free(body);
+                            send_or_error(ctx, response, req.method, epoch);
+                        }
                     }
                 }
 
@@ -2554,11 +2619,11 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL,
                                 viewer_can_preview_drafts(&req));
 
-            } else if (match_theme_css_url(decoded_url, id, sizeof(id))) {
+            } else if (match_theme_css_url(decoded_url, id, sizeof(id), &css_sheet)) {
                 if (!theme_key_is_valid(id)) {
                     send_error_response(ctx, 404, "404 Not Found", resolve_epoch(&req));
                 } else {
-                    char *css = cms_get_theme_css(id);
+                    char *css = cms_get_theme_css(id, css_sheet);
                     char *response = build_css_response(css ? css : "", "200 OK");
                     free(css);
                     if (response) {
@@ -3252,7 +3317,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 char user_id[USER_ID_HEX_BUF_SIZE];
                 if (require_admin_session(ctx, &req, epoch, user_id)) {
                     cms_set_active_theme(id);
-                    char *response = build_redirect_response("/dashboard/settings/themes", "", epoch);
+                    // Back to the list or to this theme's page, whichever the
+                    // button was on - nothing else is accepted as a target.
+                    char theme_page[128], return_to[128];
+                    snprintf(theme_page, sizeof(theme_page), "/dashboard/settings/themes/%s", id);
+                    parse_urlencoded_field(req.body, req.body_length, "return", return_to, sizeof(return_to));
+                    const char *target = strcmp(return_to, theme_page) == 0 ? theme_page : "/dashboard/settings/themes";
+                    char *response = build_redirect_response(target, "", epoch);
                     send_or_error(ctx, response, req.method, epoch);
                 }
             }
@@ -3296,6 +3367,19 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         parse_urlencoded_field(req.body, req.body_length, "body-background-epoch1",
                                                 colors.body_background_epoch1,
                                                 sizeof(colors.body_background_epoch1));
+                        parse_bg_color_field(req.body, req.body_length, "page-content-background",
+                                             "page-content-background-alpha",
+                                             colors.page_content_background, sizeof(colors.page_content_background));
+                        parse_urlencoded_field(req.body, req.body_length, "body-text",
+                                                colors.body_text, sizeof(colors.body_text));
+                        parse_urlencoded_field(req.body, req.body_length, "body-text-muted",
+                                                colors.body_text_muted, sizeof(colors.body_text_muted));
+                        parse_urlencoded_field(req.body, req.body_length, "body-surface",
+                                                colors.body_surface, sizeof(colors.body_surface));
+                        parse_urlencoded_field(req.body, req.body_length, "body-surface-raised",
+                                                colors.body_surface_raised, sizeof(colors.body_surface_raised));
+                        parse_urlencoded_field(req.body, req.body_length, "body-border",
+                                                colors.body_border, sizeof(colors.body_border));
                         parse_bg_color_field(req.body, req.body_length, "home-content-background",
                                              "home-content-background-alpha",
                                              colors.home_content_background, sizeof(colors.home_content_background));
@@ -3352,7 +3436,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                         cms_update_theme_colors(id, &colors);
                         cms_update_theme_logo_font(id, logo_font);
-                        char *response = build_redirect_response("/dashboard/settings/themes", "", epoch);
+                        char redirect_to[128];
+                        snprintf(redirect_to, sizeof(redirect_to), "/dashboard/settings/themes/%s", id);
+                        char *response = build_redirect_response(redirect_to, "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     }
                 }
@@ -3458,7 +3544,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             }
 
         } else if (strcmp(req.method, "POST") == 0 &&
-                   match_id_route(decoded_url, "/dashboard/settings/themes", "/css/restore", id, sizeof(id))) {
+                   match_theme_css_editor(decoded_url, "/restore", id, sizeof(id), &css_sheet)) {
             int epoch = resolve_epoch(&req);
 
             if (epoch != EPOCH_MODERN) {
@@ -3470,9 +3556,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (!theme_key_is_valid(id)) {
                         send_error_response(ctx, 404, "404 Not Found", epoch);
                     } else {
-                        cms_update_theme_css(id, "");
+                        cms_update_theme_css(id, css_sheet, "");
                         char redirect_to[128];
-                        snprintf(redirect_to, sizeof(redirect_to), "/dashboard/settings/themes/%s/css", id);
+                        theme_css_editor_url(redirect_to, sizeof(redirect_to), id, css_sheet);
                         char *response = build_redirect_response(redirect_to, "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     }
@@ -3480,7 +3566,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             }
 
         } else if (strcmp(req.method, "POST") == 0 &&
-                   match_id_route(decoded_url, "/dashboard/settings/themes", "/css", id, sizeof(id))) {
+                   match_theme_css_editor(decoded_url, "", id, sizeof(id), &css_sheet)) {
             int epoch = resolve_epoch(&req);
 
             if (epoch != EPOCH_MODERN) {
@@ -3495,9 +3581,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char css[THEME_ASSET_HTML_MAX];
                         parse_urlencoded_field(req.body, req.body_length, "css", css, sizeof(css));
 
-                        cms_update_theme_css(id, css);
+                        cms_update_theme_css(id, css_sheet, css);
                         char redirect_to[128];
-                        snprintf(redirect_to, sizeof(redirect_to), "/dashboard/settings/themes/%s/css", id);
+                        theme_css_editor_url(redirect_to, sizeof(redirect_to), id, css_sheet);
                         char *response = build_redirect_response(redirect_to, "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     }

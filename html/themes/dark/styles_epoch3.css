@@ -1,3 +1,9 @@
+/* Boat Rudder - dark theme, public stylesheet (epoch 3).
+   Every epoch 3 page. The login and dashboard rules live in
+   styles_admin_epoch3.css, loaded after this file on those pages only.
+   Editable per theme from /dashboard/settings/themes/dark/css. Class names:
+   style-guide.md, section 15. */
+
 /* RESET */
 body {
   background-color: var(--br-color-body-background, #241144);
@@ -48,16 +54,16 @@ h3 {
 }
 
 /* MAIN CONTAINER */
-.boat-rudder__main-container {
+.boat-rudder-main-container {
   width: 100%;
 }
 
 /* NAVBAR */
-.boat-rudder__navbar-space {
+.boat-rudder-navbar-space {
   height: 75px;
 }
 
-.boat-rudder__navbar {
+.boat-rudder-navbar {
   height: 75px;
   display: flex;
   justify-content: center;
@@ -68,7 +74,7 @@ h3 {
   z-index: 99;
 }
 
-.boat-rudder__navbar__content {
+.boat-rudder-navbar__content {
   position: relative;
   display: flex;
   justify-content: center;
@@ -79,7 +85,7 @@ h3 {
   transition: all 1s;
 }
 
-.boat-rudder__navbar__title {
+.boat-rudder-navbar__title {
   font-family: var(--br-font-navbar-logo, Milonga), Georgia, serif;
   transition: all 1s;
   padding: 20px;
@@ -88,12 +94,12 @@ h3 {
   margin-right: 300px;
 }
 
-.boat-rudder__navbar__title a {
+.boat-rudder-navbar__title a {
   color: var(--br-color-navbar-logo, #ffffff);
   text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
 }
 
-.boat-rudder__navbar__title_onslidelogo {
+.boat-rudder-navbar__title--onslidelogo {
   position: absolute;
   color: var(--br-color-navbar-logo, #ffffff);
   font-size: 6vw;
@@ -102,7 +108,7 @@ h3 {
   transition: all 1s;
 }
 
-.boat-rudder__navbar__menu {
+.boat-rudder-navbar__menu {
   display: flex;
   justify-content: center;
   padding: 16px;
@@ -113,47 +119,47 @@ h3 {
   margin-left: 300px;
 }
 
-.boat-rudder__navbar__menu_onslidelogo {
+.boat-rudder-navbar__menu--onslidelogo {
   transition: all 1s;
   position: relative;
   margin-left: 0;
 }
 
-.boat-rudder__navbar__separator {
+.boat-rudder-navbar__separator {
   border-right: 1px solid #ffffff;
 }
 
-.boat-rudder__navbar__menu_item {
+.boat-rudder-navbar__menu-item {
   padding: 12px;
 }
 
-.boat-rudder__navbar__menu_item a {
+.boat-rudder-navbar__menu-item a {
   color: var(--br-color-navbar-menu-normal, #ffffff);
   text-shadow: 1px 1px #467a8e;
 }
 
-.boat-rudder__navbar__menu_item a:hover {
+.boat-rudder-navbar__menu-item a:hover {
   color: var(--br-color-navbar-menu-hover, #98ffdd);
 }
 
-.boat-rudder__navbar__menu_item:last-child {
+.boat-rudder-navbar__menu-item:last-child {
   border: none;
 }
 
-.boat-rudder__navbar__menu_item--selected a {
+.boat-rudder-navbar__menu-item--selected a {
   color: var(--br-color-navbar-menu-active, #00ffab);
   text-shadow: 1px 1px #98009d;
 }
 
 /* The mobile dropdown's copy of the user link (menu-user-mobile_epoch3.html)
-   - hidden at desktop widths, where boat-rudder__navbar__user-corner already
+   - hidden at desktop widths, where boat-rudder-navbar__user-corner already
    covers it; shown below the 800px breakpoint instead, where the corner
    link is hidden (see that breakpoint below). */
-.boat-rudder__navbar__menu_item--user {
+.boat-rudder-navbar__menu-item--user {
   display: none;
 }
 
-.navbar__toggle {
+.boat-rudder-navbar__toggle {
   display: none;
   flex-direction: column;
   justify-content: space-around;
@@ -168,11 +174,11 @@ h3 {
   left: 0;
 }
 
-.navbar__toggle:focus {
+.boat-rudder-navbar__toggle:focus {
   outline: none;
 }
 
-.navbar__toggle .bar {
+.boat-rudder-navbar__toggle .boat-rudder-navbar__toggle-bar {
   width: 100%;
   height: 0.2rem;
   background-color: #ffffff;
@@ -181,609 +187,81 @@ h3 {
 }
 
 /* MAINBANNER */
-.boat-rudder__mainbanner {
+.boat-rudder-mainbanner {
   text-align: center;
   position: fixed;
   z-index: -1;
   width: 100%;
 }
 
-.boat-rudder__mainbanner > img {
+.boat-rudder-mainbanner > img {
   width: 100%;
 }
 
-.boat-rudder__mainbanner__top-padding {
+.boat-rudder-mainbanner__top-padding {
   padding-top: 35%;
 }
 
 /* ENTRY PAGE WRAPPER (blog and page entries) */
-.boat-rudder__page-entry__container {
+.boat-rudder-page-entry__container {
   width: 100%;
   display: flex;
   justify-content: center;
 }
 
-.boat-rudder__page-entry {
+.boat-rudder-page-entry {
   width: 80%;
   max-width: 980px;
   color: #ffffff;
+  box-sizing: border-box;
+  padding: 12px 24px;
+  background-color: var(--br-color-page-content-background, transparent);
 }
 
 /* GENERIC PAGE (login, dashboard, error, ...) */
-.boat-rudder__page-content {
+.boat-rudder-page-content {
   width: 80%;
   max-width: 980px;
   margin: 0 auto;
   padding: 40px 20px;
   min-height: 50vh;
   box-sizing: border-box;
+  background-color: var(--br-color-page-content-background, transparent);
 }
-
-/* LOGIN */
-.boat-rudder__login__container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.boat-rudder__login__header {
-  text-align: center;
-}
-
-.boat-rudder__login__form {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 20px;
-  border: 1px solid #7b0a74;
-  background-color: #111111;
-  max-width: 400px;
-  width: 90%;
-}
-
-.boat-rudder__login__input {
-  width: 100%;
-  padding: 10px;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  background-color: #000000;
-  color: #ffffff;
-  border: 1px solid #56e9fd;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.boat-rudder__login__button-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.boat-rudder__login__button {
-  width: 100%;
-  padding: 10px;
-  cursor: pointer;
-  font-size: 14px;
-  background-color: #003530;
-  border: 1px solid #00c832;
-  color: #ffffff;
-}
-
-.boat-rudder__login__button:hover {
-  background-color: #098000;
-  border: 1px solid #00ff40;
-}
-
-.boat-rudder__login__error {
-  width: 90%;
-  max-width: 400px;
-  padding: 10px;
-  box-sizing: border-box;
-  border: 1px solid #f9964f;
-  color: #f9964f;
-  text-align: center;
-}
-
-/* DASHBOARD MAINTAINERS */
-.boat-rudder__dashboard__table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
-}
-
-/* Horizontal separators only: full cell borders made the wide entries
-   table read as a grid of boxes. */
-.boat-rudder__dashboard__table th,
-.boat-rudder__dashboard__table td {
-  padding: 10px;
-  border: none;
-  border-bottom: 1px solid #1e1e1e;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.boat-rudder__dashboard__table thead th {
-  background: #111111;
-  color: #999;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  border-bottom: 2px solid #2a2a2a;
-}
-
-.boat-rudder__dashboard__table tbody tr:hover > td {
-  background: #0d0d0d;
-}
-
-.boat-rudder__dashboard__form {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 20px;
-  border: 1px solid #7b0a74;
-  background-color: #111111;
-  max-width: 400px;
-}
-
-.boat-rudder__dashboard__form-row {
-  display: flex;
-  flex-direction: column;
-}
-
-.boat-rudder__dashboard__input {
-  width: 100%;
-  padding: 10px;
-  margin-top: 5px;
-  background-color: #000000;
-  color: #ffffff;
-  border: 1px solid #56e9fd;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.boat-rudder__dashboard__button-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.boat-rudder__dashboard__inline-form {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.boat-rudder__dashboard__inline-form form {
-  margin: 0;
-}
-
-/* Dashboard home (dashboard_epoch3.html): option groups, then panels - each
-   a heading with its action buttons on the right ("Welcome back" + Log out,
-   "Entries pending publication", the analytics summary). Maintainer lists
-   (entries, categories, users, menu) reuse the same panel-header. */
-.boat-rudder__dashboard__options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin: 16px 0 24px;
-}
-
-.boat-rudder__dashboard__options-group {
-  background: #0d0d0d;
-  border: 1px solid #1e1e1e;
-  padding: 14px 18px;
-}
-
-.boat-rudder__dashboard__options-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: .8px;
-  margin: 0 0 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #1e1e1e;
-}
-
-.boat-rudder__dashboard__options-group ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.boat-rudder__dashboard__options-group li {
-  padding: 4px 0;
-}
-
-/* The option groups above, as a "Menu" dropdown in the home header
-   (nav-admin/nav-author_epoch3.html wrap them in a <details>). */
-.boat-rudder__dashboard__menu {
-  position: relative;
-}
-
-.boat-rudder__dashboard__menu > summary {
-  list-style: none;
-  user-select: none;
-}
-
-.boat-rudder__dashboard__menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.boat-rudder__dashboard__menu > summary::after {
-  content: "\25BE";
-  margin-left: 6px;
-}
-
-.boat-rudder__dashboard__menu[open] > summary::after {
-  content: "\25B4";
-}
-
-.boat-rudder__dashboard__menu > .boat-rudder__dashboard__options {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 60;
-  display: flex;
-  flex-wrap: wrap;
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  margin: 0;
-  gap: 0;
-  background: #0d0d0d;
-  border: 1px solid #2a2a2a;
-  box-shadow: 0 8px 24px rgba(0,0,0,.6);
-}
-
-.boat-rudder__dashboard__menu .boat-rudder__dashboard__options-group {
-  flex: 0 0 180px;
-  box-sizing: border-box;
-  background: transparent;
-  border: none;
-}
-
-.boat-rudder__dashboard__panel {
-  margin: 0 0 32px;
-}
-
-.boat-rudder__dashboard__panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.boat-rudder__dashboard__panel-header h1,
-.boat-rudder__dashboard__panel-header h2 {
-  margin: 0;
-}
-
-.boat-rudder__dashboard__panel-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.boat-rudder__dashboard__panel-actions form {
-  margin: 0;
-}
-
-.boat-rudder__dashboard__panel .boat-rudder__analytics__totals {
-  margin-bottom: 12px;
-}
-
-/* Lets a wide entries table scroll inside itself on a phone instead of
-   pushing the whole page sideways. */
-.boat-rudder__dashboard__table-scroll {
-  overflow-x: auto;
-}
-
-/* "Draft" next to an unpublished entry's title (entries/list-draft_epoch3.html). */
-.boat-rudder__dashboard__badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  background: #7b0a74;
-  color: #ffffff;
-  border-radius: 3px;
-  vertical-align: middle;
-}
-
-/* Summary tables: name | Today | 7 days (analytics_summary()). */
-.boat-rudder__analytics__kv-table--compare th {
-  font-size: 10px;
-  font-weight: 700;
-  color: #555;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  text-align: right;
-  padding: 0 4px 6px 12px;
-  border-bottom: 1px solid #141414;
-}
-
-.boat-rudder__analytics__kv-table--compare th:first-child {
-  text-align: left;
-  padding-left: 4px;
-}
-
-/* Names wrap between words; break-all (the full report's default) split
-   "United States" mid-word in these narrow columns. */
-.boat-rudder__analytics__kv-table.boat-rudder__analytics__kv-table--compare td:first-child {
-  word-break: normal;
-  overflow-wrap: anywhere;
-}
-
-.boat-rudder__analytics__kv-table--compare td:nth-child(2) {
-  text-align: right;
-  color: #bbb;
-  white-space: nowrap;
-  padding-left: 12px;
-}
-
-.boat-rudder__dashboard__button {
-  display: inline-block;
-  padding: 10px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.2;
-  background-color: #003530;
-  border: 1px solid #00c832;
-  color: #ffffff;
-  text-decoration: none;
-}
-
-.boat-rudder__dashboard__button:hover {
-  background-color: #098000;
-  border: 1px solid #00ff40;
-  color: #ffffff;
-}
-
-/* Create/save actions (+ New ..., Save, Upload, Add). */
-.boat-rudder__dashboard__button--primary {
-  background-color: #00c832;
-  border-color: #00c832;
-  color: #000000;
-}
-
-.boat-rudder__dashboard__button--primary:hover {
-  background-color: #00ff40;
-  border-color: #00ff40;
-  color: #000000;
-}
-
-/* Destructive actions (Delete, Remove) - always behind a confirm(). */
-.boat-rudder__dashboard__button--danger {
-  background-color: transparent;
-  border-color: #f87171;
-  color: #f87171;
-}
-
-.boat-rudder__dashboard__button--danger:hover {
-  background-color: #b91c1c;
-  border-color: #b91c1c;
-  color: #ffffff;
-}
-
-.boat-rudder__dashboard__color-alpha {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-/* One self-contained color picker: a swatch button that opens a popover
-   holding the native <input type="color">, the VGA 16-color palette and
-   (for backgrounds) the opacity slider - see settings-themes_epoch3.html's
-   buildColorField(). */
-.boat-rudder__dashboard__color-field {
-  position: relative;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.boat-rudder__dashboard__color-trigger {
-  --boat-rudder-preview-color: transparent;
-  display: inline-block;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid #56e9fd;
-  cursor: pointer;
-  background-image: linear-gradient(var(--boat-rudder-preview-color), var(--boat-rudder-preview-color)),
-                     repeating-conic-gradient(#888 0% 25%, #444 0% 50%);
-  background-size: 100% 100%, 8px 8px;
-}
-
-.boat-rudder__dashboard__color-popover {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 180px;
-  padding: 10px;
-  background-color: #111111;
-  border: 1px solid #56e9fd;
-}
-
-.boat-rudder__dashboard__color-popover[hidden] {
-  display: none;
-}
-
-.boat-rudder__dashboard__color-popover__opacity {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.boat-rudder__dashboard__color-popover__opacity input[type="range"] {
-  flex: 1;
-}
-
-.boat-rudder__dashboard__vga-palette {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  max-width: 160px;
-}
-
-.boat-rudder__dashboard__vga-palette__swatch {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid #56e9fd;
-  cursor: pointer;
-}
-
-.boat-rudder__dashboard__vga-palette__swatch--active {
-  outline: 2px solid #00ffab;
-  outline-offset: 1px;
-}
-
-.boat-rudder__dashboard__theme-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  margin-bottom: 10px;
-  background-color: #003530;
-  border: 1px solid #00c832;
-  border-radius: 3px;
-  font-size: 13px;
-  text-transform: capitalize;
-}
-
-.boat-rudder__dashboard__error {
-  width: 90%;
-  max-width: 400px;
-  padding: 10px;
-  box-sizing: border-box;
-  border: 1px solid #f9964f;
-  color: #f9964f;
-  text-align: center;
-}
-
-.boat-rudder__dashboard__thumb {
-  width: 56px;
-  height: auto;
-  display: block;
-}
-
-/* Entries tables (entries/list-row_epoch3.html). */
-.boat-rudder__dashboard__thumb-cell {
-  width: 56px;
-}
-
-.boat-rudder__dashboard__title-cell {
-  font-weight: 600;
-  min-width: 160px;
-}
-
-/* "Page"/"Blog" next to the title - quieter than the "Draft" badge. */
-.boat-rudder__dashboard__badge.boat-rudder__dashboard__badge--type {
-  background: #1e1e1e;
-  color: #ccc;
-  font-weight: 600;
-}
-
-/* Summary capped at two lines so a long one doesn't stretch the row. */
-.boat-rudder__dashboard__clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-width: 160px;
-}
-
-.boat-rudder__dashboard__nowrap {
-  white-space: nowrap;
-}
-
-/* "No entries ..." row (entries/list-empty_epoch3.html), with its own
-   "+ New entry" button. */
-.boat-rudder__dashboard__table td.boat-rudder__dashboard__empty-state {
-  padding: 32px 10px;
-  text-align: center;
-  color: #999;
-}
-
-.boat-rudder__dashboard__empty-state p {
-  margin: 0 0 12px;
-}
-
-.boat-rudder__dashboard__empty-state form {
-  margin: 0;
-}
-
-.boat-rudder__dashboard__table tbody tr:hover td.boat-rudder__dashboard__empty-state {
-  background: transparent;
-}
-
-/* "Dashboard / Site settings / Themes" above a maintainer page's <h1>:
-   the ancestors only, every one a link - the <h1> is the current page. */
-.boat-rudder__dashboard__breadcrumb ol {
-  display: flex;
-  flex-wrap: wrap;
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-  font-size: 13px;
-}
-
-.boat-rudder__dashboard__breadcrumb li + li::before {
-  content: "/";
-  margin: 0 8px;
-  color: #555;
-}
-
-/* .boat-rudder__dashboard__categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-} */
 
 /* HOME CONTENT */
-.boat-rudder__home-content {
+.boat-rudder-home-content {
   background-color: var(--br-color-home-content-background, #170c29);
   color: var(--br-color-home-content-text, #ffffff);
   position: relative;
 }
 
-.boat-rudder__home-content__container {
+.boat-rudder-home-content__container {
   width: 80%;
   margin: 0 auto;
   max-width: 980px;
   padding: 20px;
 }
 
-.boat-rudder__home-content__item {
+.boat-rudder-home-content-item {
   background-color: #0000006b;
   padding: 20px;
   border: 1px solid #7b0a74;
   margin: 20px 0;
 }
 
-.boat-rudder__home-content__item__byline {
+.boat-rudder-home-content-item__byline {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
 
-.boat-rudder__home-content__item__byline-date {
+.boat-rudder-home-content-item__byline-date {
   color: var(--br-color-blog-list-item-date, #e68e4e);
 }
 
 /* HOME BLOG */
-.boat-rudder__home-blog {
+.boat-rudder-home-blog {
   width: 100%;
   display: flex;
   background-color: var(--br-color-body-background, #241144);
@@ -795,13 +273,13 @@ h3 {
   background-size: 100% auto;
 }
 
-.boat-rudder__home-blog__container {
+.boat-rudder-home-blog__container {
   width: 80%;
   max-width: 980px;
   padding: 20px;
 }
 
-.boat-rudder__home-blog__item {
+.boat-rudder-home-blog-item {
   background-color: var(--br-color-blog-list-item-background, #000000);
   padding: 20px;
   border: 1px solid var(--br-color-blog-list-item-border, #00ffab);
@@ -809,7 +287,7 @@ h3 {
   display: flex;
 }
 
-.boat-rudder__home-blog__item__image {
+.boat-rudder-home-blog-item__image {
   width: 180px;
   height: 100%;
   min-height: 135px;
@@ -820,73 +298,40 @@ h3 {
   background-repeat: no-repeat;
 }
 
-.boat-rudder__home-blog__item > a {
+.boat-rudder-home-blog-item > a {
   display: block;
   flex-shrink: 0;
 }
 
-.boat-rudder__home-blog__item__container {
+.boat-rudder-home-blog-item__container {
   margin-left: 20px;
 }
 
-.boat-rudder__home-blog__item__container h2 {
+.boat-rudder-home-blog-item__container h2 {
   margin-top: 0;
 }
 
-.boat-rudder__home-blog__item__byline {
+.boat-rudder-home-blog-item__byline {
   display: flex;
   justify-content: space-between;
 }
 
-.boat-rudder__home-blog__item__byline-owner {
+.boat-rudder-home-blog-item__byline-owner {
   color: var(--br-color-blog-list-item-author, #dfd106);
 }
 
-.boat-rudder__home-blog__item__byline-date {
+.boat-rudder-home-blog-item__byline-date {
   color: var(--br-color-blog-list-item-date, #e68e4e);
 }
 
-.boat-rudder__home-blog__empty {
+.boat-rudder-home-blog__empty {
   text-align: center;
   color: #cccccc;
   font-style: italic;
 }
 
-/* HOME BLOG - IMAGE MODAL */
-.boat-rudder__home-blog-modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.boat-rudder__home-blog-modal.active {
-  display: flex;
-}
-
-.boat-rudder__home-blog-modal img {
-  max-width: 90%;
-  max-height: 90%;
-  border-radius: 8px;
-}
-
-.boat-rudder__home-blog-modal__close {
-  position: absolute;
-  top: 10px;
-  right: 20px;
-  font-size: 2rem;
-  color: #ffffff;
-  cursor: pointer;
-}
-
 /* FOOTER */
-.boat-rudder__footer {
+.boat-rudder-footer {
   width: 100%;
   height: 280px;
   background-image: url('/themes/dark/assets/footer/grid_epoch3.jpg');
@@ -897,7 +342,7 @@ h3 {
   align-items: end;
 }
 
-.boat-rudder__footer-title {
+.boat-rudder-footer-title {
   background-color: var(--br-color-footer-logo-background, #000000);
   color: var(--br-color-footer-logo, #ffffff);
   padding: 10px;
@@ -907,61 +352,61 @@ h3 {
 }
 
 /* ENTRY PAGE */
-.boat-rudder__entry-header {
+.boat-rudder-entry-header {
   background-color: #0000006b;
   padding: 20px;
   border: 1px solid #349b00;
   margin: 0 0 20px;
 }
 
-.boat-rudder__entry-header__image {
+.boat-rudder-entry-header__image {
   width: 100%;
   display: block;
   margin-bottom: 10px;
 }
 
-.boat-rudder__entry-header__summary {
+.boat-rudder-entry-header__summary {
   font-style: italic;
 }
 
-.boat-rudder__entry-header__byline {
+.boat-rudder-entry-header__byline {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
 
-.boat-rudder__entry-header__byline-owner,
-.boat-rudder__entry-byline-owner {
+.boat-rudder-entry-header__byline-owner,
+.boat-rudder-entry-byline-owner {
   color: var(--br-color-blog-list-item-author, #dfd106);
 }
 
-.boat-rudder__entry-header__byline-date,
-.boat-rudder__entry-byline-date {
+.boat-rudder-entry-header__byline-date,
+.boat-rudder-entry-byline-date {
   color: var(--br-color-blog-list-item-date, #e68e4e);
 }
 
-.boat-rudder__entry-byline {
+.boat-rudder-entry-byline {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   margin: 10px 0;
 }
 
-.boat-rudder__entry-image {
+.boat-rudder-entry-image {
   margin: 20px 0;
   text-align: center;
 }
 
-.boat-rudder__entry-image img {
+.boat-rudder-entry-image img {
   max-width: 100%;
 }
 
-.boat-rudder__entry-image figcaption {
+.boat-rudder-entry-image figcaption {
   font-style: italic;
   color: #fba8f6;
 }
 
-.boat-rudder__entry-meta {
+.boat-rudder-entry-meta {
   display: flex;
   align-items: baseline;
   margin: 10px 0 20px;
@@ -969,14 +414,14 @@ h3 {
 
 /* Equal thirds, so the categories in the middle column land in the true
    center of the row no matter how long the author name or date are. */
-.boat-rudder__entry-header__author {
+.boat-rudder-entry-header__author {
   flex: 1;
   text-align: left;
   font-size: 0.85em;
   color: var(--br-color-blog-list-item-author, #dfd106);
 }
 
-.boat-rudder__entry-header__categories {
+.boat-rudder-entry-header__categories {
   flex: 1;
   min-width: 0;
   text-align: center;
@@ -985,7 +430,7 @@ h3 {
   font-size: 0.85em;
 }
 
-.boat-rudder__entry-header__date {
+.boat-rudder-entry-header__date {
   flex: 1;
   text-align: right;
   color: var(--br-color-blog-list-item-date, #e68e4e);
@@ -993,19 +438,19 @@ h3 {
   white-space: nowrap;
 }
 
-a.boat-rudder__entry-category {
+a.boat-rudder-entry-category {
   color: var(--br-color-blog-list-item-categories, #888888);
   text-decoration: none;
 }
 
-a.boat-rudder__entry-category:hover {
+a.boat-rudder-entry-category:hover {
   color: var(--br-color-blog-list-item-categories-hover, #ffffff);
 }
 
 /* ============================================================
    GALLERY (public)
    ============================================================ */
-.boat-rudder__gallery-container {
+.boat-rudder-gallery-container {
   max-width: 1000px;
   margin: 42px auto;
   display: grid;
@@ -1013,12 +458,12 @@ a.boat-rudder__entry-category:hover {
   grid-gap: 20px;
 }
 
-.boat-rudder__gallery-row {
+.boat-rudder-gallery-row {
   display: flex;
   gap: 20px;
 }
 
-.boat-rudder__gallery-item {
+.boat-rudder-gallery-item {
   display: flex;
   justify-content: center;
   position: relative;
@@ -1027,14 +472,14 @@ a.boat-rudder__entry-category:hover {
   cursor: pointer;
 }
 
-.boat-rudder__gallery-item--single img {
+.boat-rudder-gallery-item--single img {
   max-width: 300px;
   display: flex;
   justify-content: center;
   cursor: pointer;
 }
 
-.boat-rudder__gallery-item img {
+.boat-rudder-gallery-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1042,760 +487,51 @@ a.boat-rudder__entry-category:hover {
   max-height: 300px;
 }
 
-.boat-rudder__gallery-item:nth-child(1) {
+.boat-rudder-gallery-item:nth-child(1) {
   grid-column-start: span 1;
 }
 
-.boat-rudder__gallery-item:nth-child(4) {
+.boat-rudder-gallery-item:nth-child(4) {
   grid-column-start: span 2;
 }
-
-/* ============================================================
-   ENTRY EDITOR (boat-rudder__entry-editor)
-   ============================================================ */
-
-body.boat-rudder__entry-editor-mode { overflow: hidden; height: 100%; }
-body.boat-rudder__entry-editor-mode .boat-rudder__main-container { height: 100%; overflow: hidden; }
-body.boat-rudder__entry-editor-mode nav,
-body.boat-rudder__entry-editor-mode .boat-rudder__navbar-space,
-body.boat-rudder__entry-editor-mode .boat-rudder__footer { display: none; }
-body.boat-rudder__entry-editor-mode .boat-rudder__page-content { width: 100%; max-width: 100%; padding: 0; margin: 0; }
-body.is-dragging { cursor: grabbing !important; user-select: none; }
-
-/* Top bar */
-.boat-rudder__entry-editor__topbar {
-  position: fixed; top: 0; left: 0; width: 100%; height: 44px;
-  border-bottom: 1px solid #3a3a3a;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px; z-index: 200; box-sizing: border-box;
-}
-.boat-rudder__entry-editor__topbar-left,
-.boat-rudder__entry-editor__topbar-center,
-.boat-rudder__entry-editor__topbar-right { display: flex; align-items: center; gap: 10px; }
-
-.boat-rudder__entry-editor__back {
-  color: #aaa; text-decoration: none; font-size: 13px;
-  padding: 4px 8px; border-radius: 4px;
-}
-.boat-rudder__entry-editor__back:hover { background: #333; color: #fff; }
-
-.boat-rudder__entry-editor__preview-btn {
-  background: none; border: 1px solid #3a3a3a; color: #888;
-  padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
-}
-.boat-rudder__entry-editor__preview-btn:hover { border-color: #666; color: #ccc; }
-
-.boat-rudder__entry-editor__save-btn {
-  background: #2563eb; color: #fff; border: none;
-  padding: 6px 18px; border-radius: 4px; font-size: 13px;
-  cursor: pointer; font-weight: 600;
-}
-.boat-rudder__entry-editor__save-btn:hover { background: #1d4ed8; }
-
-.boat-rudder__entry-editor__save-status { font-size: 12px; color: #888; }
-.boat-rudder__entry-editor__save-status.saved { color: #10b981; }
-.boat-rudder__entry-editor__save-status.error { color: #ef4444; }
-
-/* Publish toggle */
-.boat-rudder__entry-editor__publish-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; }
-.boat-rudder__entry-editor__publish-toggle__switch {
-  width: 34px; height: 18px; background: #555; border-radius: 9px;
-  position: relative; transition: background 0.2s;
-}
-.boat-rudder__entry-editor__publish-toggle__switch.on { background: #10b981; }
-.boat-rudder__entry-editor__publish-toggle__knob {
-  width: 14px; height: 14px; background: #fff; border-radius: 50%;
-  position: absolute; top: 2px; left: 2px; transition: left 0.2s;
-}
-.boat-rudder__entry-editor__publish-toggle__switch.on .boat-rudder__entry-editor__publish-toggle__knob { left: 18px; }
-.boat-rudder__entry-editor__publish-toggle__status { font-size: 12px; color: #888; min-width: 54px; }
-.boat-rudder__entry-editor__publish-toggle__status.published { color: #10b981; }
-
-/* Autosave toggle */
-.boat-rudder__entry-editor__autosave-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; }
-.boat-rudder__entry-editor__autosave-toggle__switch {
-  width: 34px; height: 18px; background: #555; border-radius: 9px;
-  position: relative; transition: background 0.2s;
-}
-.boat-rudder__entry-editor__autosave-toggle__switch.on { background: #2563eb; }
-.boat-rudder__entry-editor__autosave-toggle__knob {
-  width: 14px; height: 14px; background: #fff; border-radius: 50%;
-  position: absolute; top: 2px; left: 2px; transition: left 0.2s;
-}
-.boat-rudder__entry-editor__autosave-toggle__switch.on .boat-rudder__entry-editor__autosave-toggle__knob { left: 18px; }
-.boat-rudder__entry-editor__autosave-toggle__label { font-size: 12px; color: #888; }
-.boat-rudder__entry-editor__autosave-toggle__label.on { color: #93c5fd; }
-
-/* Language toggle */
-.boat-rudder__entry-editor__lang-toggle { display: flex; border: 1px solid #444; border-radius: 4px; overflow: hidden; }
-.boat-rudder__entry-editor__lang-btn {
-  background: none; border: none; color: #888;
-  padding: 4px 12px; font-size: 12px; font-weight: 700;
-  cursor: pointer; letter-spacing: 0.5px;
-}
-.boat-rudder__entry-editor__lang-btn:hover { background: #333; color: #fff; }
-.boat-rudder__entry-editor__lang-btn.active { background: #444; color: #fff; }
-
-/* Block type toolbar (second fixed bar) */
-.boat-rudder__entry-editor__block-toolbar {
-  position: fixed; top: 44px; left: 0; width: 100%; height: 36px;
-  background: #111; border-bottom: 1px solid #2a2a2a;
-  display: flex; align-items: center; gap: 3px;
-  padding: 0 10px; overflow-x: auto; z-index: 199;
-  scrollbar-width: none; box-sizing: border-box;
-}
-.boat-rudder__entry-editor__block-toolbar::-webkit-scrollbar { display: none; }
-.boat-rudder__entry-editor__block-toolbar__btn {
-  background: #222; color: #aaa; border: 1px solid #383838;
-  border-radius: 4px; padding: 2px 8px; font-size: 11px;
-  cursor: pointer; white-space: nowrap; flex-shrink: 0;
-}
-.boat-rudder__entry-editor__block-toolbar__btn:hover { background: #333; color: #fff; }
-
-/* Body layout */
-.boat-rudder__entry-editor { padding-top: 80px; }
-.boat-rudder__entry-editor__body {
-  display: flex; height: calc(100vh - 80px); overflow: hidden;
-}
-
-/* Sidebar */
-.boat-rudder__entry-editor__sidebar {
-  width: 290px; min-width: 290px; background: #0d0d0d;
-  border-right: 1px solid #3a3a3a; overflow-y: auto; flex-shrink: 0;
-}
-.boat-rudder__entry-editor__sidebar-inner { padding: 12px; }
-
-/* Main content area */
-.boat-rudder__entry-editor__main {
-  flex: 1; overflow-y: auto; padding: 16px 20px;
-}
-
-/* Metadata form */
-.boat-rudder__entry-editor__meta-section { margin-bottom: 6px; }
-.boat-rudder__entry-editor__meta-section__title {
-  font-size: 10px; font-weight: 700; color: #555;
-  text-transform: uppercase; letter-spacing: 0.8px;
-  margin-bottom: 8px; border-bottom: 1px solid #2a2a2a; padding-bottom: 4px;
-}
-.boat-rudder__entry-editor__meta-group { margin-bottom: 8px; }
-.boat-rudder__entry-editor__meta-group > label {
-  display: block; font-size: 11px; color: #777;
-  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px;
-}
-.boat-rudder__entry-editor__meta-group input[type="text"],
-.boat-rudder__entry-editor__meta-group input[type="number"],
-.boat-rudder__entry-editor__meta-group input[type="date"],
-.boat-rudder__entry-editor__meta-group input[type="datetime-local"],
-.boat-rudder__entry-editor__meta-group select,
-.boat-rudder__entry-editor__meta-group textarea {
-  width: 100%; background: #1a1a1a; border: 1px solid #3a3a3a;
-  color: #e0e0e0; padding: 6px 8px; font-size: 13px;
-  border-radius: 3px; box-sizing: border-box; margin: 0;
-}
-.boat-rudder__entry-editor__meta-group input:focus,
-.boat-rudder__entry-editor__meta-group select:focus,
-.boat-rudder__entry-editor__meta-group textarea:focus { border-color: #2563eb; outline: none; }
-.boat-rudder__entry-editor__meta-group textarea { resize: vertical; min-height: 54px; }
-.boat-rudder__entry-editor__meta-group select[multiple] { height: 100px; }
-.boat-rudder__entry-editor__meta-group input[type="checkbox"] { width: auto; margin: 0 5px 0 0; }
-.boat-rudder__entry-editor__meta-readonly { color: #aaa; font-size: 12px; display: block; padding: 4px 0; }
-
-/* Checkbox row inside a meta group (e.g. "Hide author on the public page").
-   The group's own `label` rule is block-level and bold; this one sits inline
-   next to its control instead. */
-.boat-rudder__entry-editor__meta-group > label.boat-rudder__entry-editor__meta-check {
-  display: flex; align-items: center; gap: 6px;
-  color: #ccc; font-size: 12px; font-weight: normal;
-  margin: 4px 0 0 0; cursor: pointer;
-}
-.boat-rudder__entry-editor__meta-check input[type="checkbox"] {
-  width: auto; margin: 0; cursor: pointer;
-}
-
-.boat-rudder__entry-editor__meta-btn {
-  background: #1a1a1a; color: #ccc; border: 1px solid #3a3a3a;
-  padding: 3px 14px; font-size: 12px; border-radius: 3px;
-  cursor: pointer; width: 100%; text-align: center;
-}
-.boat-rudder__entry-editor__meta-btn:hover { background: #333; color: #fff; border-color: #2563eb;}
-
-.boat-rudder__entry-editor__sidebar-divider { border: none; border-top: 1px solid #2a2a2a; margin: 12px 0; }
-
-/* Image preview */
-.boat-rudder__entry-editor__img-preview {
-  width: 100%; height: 110px; background: #111;
-  border: 1px solid #3a3a3a; border-radius: 3px; overflow: hidden;
-  display: flex; align-items: center; justify-content: center; margin-bottom: 6px;
-}
-.boat-rudder__entry-editor__img-preview img { width: 100%; height: 100%; object-fit: cover; }
-.boat-rudder__entry-editor__img-preview__placeholder { color: #444; font-size: 12px; }
-
-/* Header EN/ES tabs */
-.boat-rudder__entry-editor__tabs { display: flex; border-bottom: 1px solid #333; margin-bottom: 6px; }
-.boat-rudder__entry-editor__tab-btn {
-  background: none; border: none; color: #555; padding: 4px 10px;
-  font-size: 11px; font-weight: 700; cursor: pointer;
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-}
-.boat-rudder__entry-editor__tab-btn:hover { color: #aaa; }
-.boat-rudder__entry-editor__tab-btn.active { color: #e0e0e0; border-bottom-color: #2563eb; }
-.boat-rudder__entry-editor__tab-content { display: none; }
-.boat-rudder__entry-editor__tab-content.active { display: block; }
-
-/* ---- Content blocks ---- */
-
-/* Default (preview mode): document-like appearance */
-.boat-rudder__entry-editor__block {
-  cursor: pointer; position: relative;
-  background: transparent; border: 1px solid transparent;
-  border-left: 2px solid transparent; border-radius: 0;
-  margin-bottom: 0; overflow: visible;
-}
-.boat-rudder__entry-editor__block__header { display: none; }
-.boat-rudder__entry-editor__block__body { display: none; }
-.boat-rudder__entry-editor__block__preview { padding: 4px 14px; min-height: 10px; }
-/* A floated image's preview deliberately escapes its own block, so the
-   following blocks' previews wrap around it as the published page does; the
-   block list contains it at the end, and a block being edited clears it so
-   its form never wraps around a picture. */
-#entryBlocks { display: flow-root; }
-/* Every block is position: relative, and positioned boxes paint over floats -
-   so the next block's (transparent, full-width) box would sit on top of the
-   floated picture and take its clicks. Lift the figure above it; wrapping is
-   unaffected. */
-.boat-rudder__entry-editor__block__preview .boat-rudder__entry-image--float-left,
-.boat-rudder__entry-editor__block__preview .boat-rudder__entry-image--float-right {
-  position: relative; z-index: 1;
-  /* The page's 4px, plus the 6px the editor adds between this figure and
-     the wrapped text that the page doesn't have: this block's bottom border
-     (1px), the next block's top border (1px) and its preview padding (4px). */
-  margin-top: 10px;
-}
-/* On the page a floated figure's block takes no height of its own; here its
-   preview's padding and min-height would push the next block (and its text)
-   down while the picture stays up. */
-.boat-rudder__entry-editor__block__preview:has(> .boat-rudder__entry-image--float-left),
-.boat-rudder__entry-editor__block__preview:has(> .boat-rudder__entry-image--float-right) {
-  padding-top: 0; padding-bottom: 0; min-height: 0;
-}
-
-/* Hover: subtle left accent */
-.boat-rudder__entry-editor__block:not(.boat-rudder__entry-editor__block--editing):hover {
-  background: rgba(141, 141, 141, 0.24);
-  border-left: 2px solid #6d6d6d;
-}
-
-/* Edit mode: full block appearance */
-.boat-rudder__entry-editor__block--editing {
-  clear: both;
-  cursor: default;
-  background: #222; border: 1px solid #2563eb;
-  border-radius: 5px; margin-bottom: 10px;
-}
-.boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__header { display: flex; }
-/* The header bar drags the block from any empty spot (setupDragHandles());
-   its own controls keep their normal pointer. */
-.boat-rudder__entry-editor__block__header { cursor: grab; }
-.boat-rudder__entry-editor__block__header :is(button, input, select, a, label) { cursor: pointer; }
-.boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__body { display: block; }
-.boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__preview { display: none; }
-
-/* Block header bar - display controlled by .boat-rudder__entry-editor__block--editing above */
-.boat-rudder__entry-editor__block__header {
-  align-items: center; justify-content: space-between;
-  background: #2a2a2a; padding: 5px 10px; border-bottom: 1px solid #2e2e2e;
-  border-radius: 5px 5px 0 0; user-select: none;
-}
-.boat-rudder__entry-editor__block__type-label {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.8px; color: #666;
-}
-.boat-rudder__entry-editor__block__type-label.type-title          { color: #a78bfa; }
-.boat-rudder__entry-editor__block__type-label.type-paragraph       { color: #60a5fa; }
-.boat-rudder__entry-editor__block__type-label.type-image           { color: #34d399; }
-.boat-rudder__entry-editor__block__type-label.type-byline          { color: #f59e0b; }
-.boat-rudder__entry-editor__block__type-label.type-gallery         { color: #f472b6; }
-.boat-rudder__entry-editor__block__type-label.type-separator       { color: #9ca3af; }
-.boat-rudder__entry-editor__block__type-label.type-link            { color: #38bdf8; }
-.boat-rudder__entry-editor__block__type-label.type-list            { color: #4ade80; }
-.boat-rudder__entry-editor__block__type-label.type-youtube-embed   { color: #f87171; }
-.boat-rudder__entry-editor__block__type-label.type-code-text       { color: #fbbf24; }
-.boat-rudder__entry-editor__block__type-label.type-generic         { color: #c084fc; }
-.boat-rudder__entry-editor__block__type-label.type-table           { color: #a3e635; }
-.boat-rudder__entry-editor__block__type-label.type-social-networks { color: #fb923c; }
-
-.boat-rudder__entry-editor__block__header-actions { display: flex; align-items: center; gap: 6px; }
-
-/* Grip overlay in preview mode */
-.boat-rudder__entry-editor__block__grip {
-  position: absolute; top: 4px; right: 6px;
-  color: transparent; font-size: 15px; cursor: grab;
-  user-select: none; z-index: 2; line-height: 1;
-  transition: color 0.15s;
-}
-.boat-rudder__entry-editor__block:not(.boat-rudder__entry-editor__block--editing):hover .boat-rudder__entry-editor__block__grip { color: #555; }
-.boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__grip { display: none; }
-
-/* Trash button */
-.boat-rudder__entry-editor__block__trash-btn {
-  background: none; border: none; color: #ddd; font-size: 16px;
-  cursor: pointer; padding: 1px 5px 1px 2px; line-height: 1;
-  opacity: 0; transition: opacity 0.15s, color 0.15s;
-}
-.boat-rudder__entry-editor__block--editing .boat-rudder__entry-editor__block__trash-btn { opacity: 1; }
-.boat-rudder__entry-editor__block__trash-btn:hover { color: #ef4444; opacity: 1; }
-
-/* Close button */
-.boat-rudder__entry-editor__block__close-btn {
-  background: none; border: none; color: #666; font-size: 16px;
-  cursor: pointer; padding: 1px 4px; border-radius: 3px; line-height: 1;
-}
-.boat-rudder__entry-editor__block__close-btn:hover { background: #333; color: #ccc; }
-
-/* Move up/down buttons */
-.boat-rudder__entry-editor__block__move-btn {
-  background: none; border: none; color: #dddddd; font-size: 16px;
-  cursor: pointer; padding: 3px 4px; border-radius: 3px; line-height: 1;
-}
-.boat-rudder__entry-editor__block__move-btn:hover { background: #383838; color: #aaa; }
-
-/* Paragraph Split / Merge (header actions, paragraph blocks only) */
-.boat-rudder__entry-editor__para-btn {
-  background: #1a1a1a; border: 1px solid #3a3a3a; color: #999;
-  padding: 3px 14px; font-size: 11px; border-radius: 3px;
-  cursor: pointer; line-height: 1.4; white-space: nowrap;
-}
-.boat-rudder__entry-editor__para-btn:hover:not(:disabled) { border-color: #2563eb; color: #fff; background: #333; }
-.boat-rudder__entry-editor__para-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-/* Drag handle in header */
-.boat-rudder__entry-editor__block__drag { color: #ddd; font-size: 16px; cursor: grab; padding: 0 4px; user-select: none; }
-
-.boat-rudder__entry-editor__block__body { padding: 10px 12px; }
-
-/* Per-block lang tabs */
-.boat-rudder__entry-editor__block__lang-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
-.boat-rudder__entry-editor__block__tab-btn {
-  background: #2a2a2a; border: 1px solid #3a3a3a; color: #666;
-  padding: 2px 10px; font-size: 10px; font-weight: 700;
-  border-radius: 3px; cursor: pointer; letter-spacing: 0.5px;
-}
-.boat-rudder__entry-editor__block__tab-btn:hover { color: #aaa; }
-.boat-rudder__entry-editor__block__tab-btn.active { background: #1e3a5f; border-color: #2563eb; color: #93c5fd; }
-
-.boat-rudder__entry-editor__block__lang-content { display: none; }
-.boat-rudder__entry-editor__block__lang-content.active { display: block; }
-
-/* Block textareas */
-.boat-rudder__entry-editor__block textarea {
-  width: 100%; background: #1a1a1a; border: 1px solid #333;
-  color: #d4d4d4; padding: 8px 10px; font-size: 14px; line-height: 1.65;
-  border-radius: 3px; box-sizing: border-box;
-  min-height: 72px; font-family: inherit; margin: 0;
-  /* Scrollable and user-resizable: with overflow hidden and resize none,
-     content past the visible rows could not be reached at all. */
-  overflow: auto; resize: vertical;
-}
-.boat-rudder__entry-editor__block textarea:focus { border-color: #2563eb; outline: none; }
-
-/* Title input */
-.boat-rudder__entry-editor__block input.boat-rudder__entry-editor__title-input {
-  width: 100%; background: #1a1a1a; border: 1px solid #333;
-  color: #e0e0e0; padding: 8px 10px; font-size: 18px; font-weight: 600;
-  border-radius: 3px; box-sizing: border-box; margin: 0;
-}
-.boat-rudder__entry-editor__block input.boat-rudder__entry-editor__title-input:focus { border-color: #2563eb; outline: none; }
-
-/* Rich text editor (contenteditable) */
-.boat-rudder__entry-editor__richtext {
-  width: 100%; background-color: var(--br-color-body-background, #241144); border: 1px solid #333;
-  color: #d4d4d4; padding: 8px 10px; font-size: 14px; line-height: 1.7;
-  border-radius: 3px; min-height: 80px; font-family: inherit;
-  outline: none; cursor: text; box-sizing: border-box;
-}
-.boat-rudder__entry-editor__richtext:focus { border-color: #2563eb; }
-.boat-rudder__entry-editor__richtext b, .boat-rudder__entry-editor__richtext strong { color: #f0f0f0; }
-.boat-rudder__entry-editor__richtext i, .boat-rudder__entry-editor__richtext em { color: #c8c8c8; font-style: italic; }
-.boat-rudder__entry-editor__richtext a { color: #60a5fa; text-decoration: underline; }
-.boat-rudder__entry-editor__richtext p { margin: 0 0 8px; }
-.boat-rudder__entry-editor__richtext p:last-child { margin-bottom: 0; }
-.boat-rudder__entry-editor__richtext ul, .boat-rudder__entry-editor__richtext ol { margin: 4px 0 8px 20px; }
-.boat-rudder__entry-editor__richtext blockquote {
-  border-left: 3px solid #3a3a3a; margin: 6px 0; padding: 4px 12px;
-  color: #888; font-style: italic;
-}
-.boat-rudder__entry-editor__richtext pre {
-  background: #0d0d0d; border: 1px solid #333; border-radius: 3px;
-  padding: 8px; font-family: monospace; font-size: 12px;
-  color: #7ec8a0; overflow-x: auto; margin: 6px 0;
-}
-
-/* Formatting toolbar */
-.boat-rudder__entry-editor__toolbar {
-  display: flex; align-items: center; gap: 2px;
-  margin-bottom: 4px; flex-wrap: wrap;
-}
-.boat-rudder__entry-editor__toolbar__btn {
-  background: #2a2a2a; border: 1px solid #3a3a3a; color: #aaa;
-  min-width: 26px; height: 24px; font-size: 12px; font-weight: 700;
-  border-radius: 3px; cursor: pointer; line-height: 1; padding: 0 4px;
-  white-space: nowrap;
-}
-.boat-rudder__entry-editor__toolbar__btn:hover { background: #383838; color: #fff; }
-.boat-rudder__entry-editor__toolbar__btn.active { background: #1e3a5f; border-color: #2563eb; color: #93c5fd; }
-.boat-rudder__entry-editor__toolbar__sep {
-  width: 1px; height: 18px; background: #3a3a3a;
-  display: inline-block; margin: 0 2px; flex-shrink: 0;
-}
-.boat-rudder__entry-editor__toolbar__select {
-  background: #2a2a2a; border: 1px solid #3a3a3a; color: #aaa;
-  height: 24px; font-size: 11px; padding: 0 3px; border-radius: 3px;
-  cursor: pointer; width: auto !important; margin: 0;
-}
-.boat-rudder__entry-editor__toolbar__select:hover { border-color: #666; color: #fff; }
-
-/* Table block editor */
-.boat-rudder__entry-editor__table-editor { overflow-x: auto; }
-.boat-rudder__entry-editor__table-row {
-  display: flex; align-items: stretch; min-width: max-content;
-}
-.boat-rudder__entry-editor__table-row + .boat-rudder__entry-editor__table-row {
-  border-top: 1px solid #2a2a2a;
-}
-.boat-rudder__entry-editor__table-cell {
-  min-width: 80px; flex: 1;
-  background: #1a1a1a; border: none; border-right: 1px solid #2a2a2a;
-  color: #d4d4d4; padding: 6px 8px; font-size: 13px;
-  margin: 0; box-sizing: border-box; outline: none;
-}
-.boat-rudder__entry-editor__table-cell:last-child { border-right: none; }
-.boat-rudder__entry-editor__table-cell:focus { background: #0f2744; color: #fff; }
-.boat-rudder__entry-editor__table-cell--header {
-  background: #1e2d3d; color: #93c5fd;
-  font-weight: 600; border-bottom: 2px solid #2563eb;
-}
-
-/* Source editor (HTML view) */
-.boat-rudder__entry-editor__source-editor {
-  width: 100%; background: #0a0a0a; border: 1px solid #2563eb;
-  color: #7ec8a0; padding: 8px 10px; font-size: 12px; line-height: 1.5;
-  font-family: 'Courier New', Courier, monospace;
-  min-height: 120px; box-sizing: border-box; resize: vertical; margin: 0;
-}
-
-/* Heading level buttons */
-.boat-rudder__entry-editor__heading-btns {
-  display: flex; align-items: center; gap: 4px;
-  margin-top: 8px; padding-top: 8px;
-  border-top: 1px solid #2e2e2e;
-}
-.boat-rudder__entry-editor__heading-label { font-size: 10px; color: #555; margin-right: 4px; text-transform: uppercase; }
-.boat-rudder__entry-editor__heading-btn {
-  background: #2a2a2a; border: 1px solid #3a3a3a; color: #666;
-  width: 28px; height: 24px; font-size: 11px; font-weight: 700;
-  cursor: pointer; border-radius: 3px; padding: 0;
-}
-.boat-rudder__entry-editor__heading-btn:hover { background: #333; color: #aaa; }
-.boat-rudder__entry-editor__heading-btn.active { background: #1e3a5f; border-color: #2563eb; color: #93c5fd; }
-
-/* Advanced section */
-.boat-rudder__entry-editor__advanced {
-  margin-top: 8px; border-top: 1px solid #2e2e2e; padding-top: 6px;
-}
-.boat-rudder__entry-editor__advanced__toggle {
-  background: none; border: none; color: #555; font-size: 11px;
-  cursor: pointer; padding: 2px 0;
-}
-.boat-rudder__entry-editor__advanced__toggle:hover { color: #888; }
-.boat-rudder__entry-editor__advanced__panel { display: none; margin-top: 6px; }
-.boat-rudder__entry-editor__advanced__panel.open { display: block; }
-.boat-rudder__entry-editor__advanced__label { display: block; font-size: 10px; color: #555; margin-bottom: 3px; }
-.boat-rudder__entry-editor__advanced__input,
-.boat-rudder__entry-editor__advanced__type-input {
-  width: 100%; background: #1a1a1a; border: 1px solid #444;
-  color: #aaa; padding: 5px 8px; font-size: 12px;
-  font-family: monospace; box-sizing: border-box; margin: 0 0 6px;
-}
-
-/* Block vertical rhythm */
-.boat-rudder__entry-editor__block + .boat-rudder__entry-editor__block { margin-top: 0; }
-.boat-rudder__entry-editor__block--editing + .boat-rudder__entry-editor__block { margin-top: 10px; }
-.boat-rudder__entry-editor__block + .boat-rudder__entry-editor__block--editing { margin-top: 10px; }
-
-/* Preview content typography */
-.boat-rudder__entry-editor__preview__title {
-  font-size: 22px; font-weight: 700; color: #e0e0e0;
-  margin: 12px 0 4px; line-height: 1.3;
-}
-h1.boat-rudder__entry-editor__preview__title { font-size: 28px; }
-h2.boat-rudder__entry-editor__preview__title { font-size: 22px; }
-h3.boat-rudder__entry-editor__preview__title { font-size: 18px; }
-h4.boat-rudder__entry-editor__preview__title { font-size: 16px; font-weight: 600; }
-h5.boat-rudder__entry-editor__preview__title { font-size: 14px; font-weight: 600; }
-h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600; color: #aaa; }
-
-.boat-rudder__entry-editor__preview__paragraph {
-  font-size: 15px; color: #b0b0b0; line-height: 1.75; margin: 6px 0;
-}
-.boat-rudder__entry-editor__preview__paragraph a { color: #60a5fa; }
-.boat-rudder__entry-editor__preview__paragraph b, .boat-rudder__entry-editor__preview__paragraph strong { color: #e0e0e0; }
-.boat-rudder__entry-editor__preview__paragraph i, .boat-rudder__entry-editor__preview__paragraph em { color: #c0c0c0; }
-.boat-rudder__entry-editor__preview__image { text-align: center; margin: 8px 0; }
-.boat-rudder__entry-editor__preview__image img { max-width: 100%; height: auto; border-radius: 3px; }
-.boat-rudder__entry-editor__preview__image figcaption { font-style: italic; color: #888; font-size: 13px; margin-top: 4px; }
-.boat-rudder__entry-editor__preview__byline { font-size: 13px; color: #888; margin: 4px 0; display:flex; justify-content: space-between; }
-.boat-rudder__entry-editor__preview__byline-author { color: var(--br-color-blog-list-item-author, #dfd106); }
-.boat-rudder__entry-editor__preview__byline-date { color: var(--br-color-blog-list-item-date, #e68e4e); margin-left: 12px; }
-.boat-rudder__entry-editor__preview__empty { color: #3a3a3a; font-size: 12px; font-style: italic; }
-.boat-rudder__entry-editor__preview__table { border-collapse: collapse; width: 100%; font-size: 13px; }
-.boat-rudder__entry-editor__preview__table td,
-.boat-rudder__entry-editor__preview__table th {
-  border: 1px solid #333; padding: 5px 8px; color: #d4d4d4; text-align: left;
-}
-.boat-rudder__entry-editor__preview__table th { background: #1e2d3d; color: #93c5fd; font-weight: 600; }
-
-/* + Add block */
-.boat-rudder__entry-editor__add-block { position: relative; margin-top: 6px; }
-.boat-rudder__entry-editor__add-block__btn {
-  background: none; border: 1px dashed #333; color: #555;
-  padding: 8px; border-radius: 4px; font-size: 13px;
-  cursor: pointer; width: 100%;
-}
-.boat-rudder__entry-editor__add-block__btn:hover { border-color: #2563eb; color: #2563eb; background: #0f1f35; }
-.boat-rudder__entry-editor__add-block__dropdown {
-  display: none; position: absolute; bottom: calc(100% + 4px); left: 0; right: 0;
-  background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 5px;
-  padding: 5px; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-}
-.boat-rudder__entry-editor__add-block__dropdown.open { display: block; }
-/* Opened downward when there's no room above the button (see toggleAddBlockDropdown()). */
-.boat-rudder__entry-editor__add-block__dropdown--down { bottom: auto; top: calc(100% + 4px); }
-.boat-rudder__entry-editor__add-block__option {
-  display: block; width: 100%; background: none; border: none;
-  color: #bbb; text-align: left; padding: 7px 10px;
-  font-size: 13px; border-radius: 3px; cursor: pointer;
-}
-.boat-rudder__entry-editor__add-block__option:hover { background: #333; color: #fff; }
-
-/* Image block preview */
-.boat-rudder__entry-editor__img-block-preview {
-  background: #111; border: 1px solid #333; border-radius: 3px;
-  min-height: 40px; margin-bottom: 8px; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
-}
-.boat-rudder__entry-editor__img-block-preview img { max-width: 100%; max-height: 200px; display: block; }
 
 /* ============================================================
    MODAL
    ============================================================ */
 /* The photo viewer opens on top of other modals too (the media picker). */
 #imageModal { z-index: 1100; }
-.boat-rudder__modal {
+.boat-rudder-modal {
   display: none; background-color: rgba(0,0,0,0.5);
   /* inset rather than 100vw/100vh: 100vw counts a page scrollbar too, which
      widens the modal past the visible area and shifts its center right. */
   position: fixed; z-index: 1000; inset: 0;
   align-items: center; justify-content: center;
 }
-.boat-rudder__modal-overlay {
-  position: absolute; inset: 0; background: rgba(72, 72, 72, 0.84);
-}
-.boat-rudder__modal-content {
-  position: relative; background: #2f2f2f; color: #f0f0f0;
-  border-radius: 12px; width: 90vw; height: 90vh;
-  display: flex; flex-direction: column; overflow: hidden;
-  z-index: 1; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  box-sizing: border-box;
-  max-width: 1150px; max-height: 850px; margin: auto;
-}
-.boat-rudder__modal-close {
-  position: absolute; right: 10px; top: 2px;
-  cursor: pointer; font-size: 30px; z-index: 2; color: #aaa;
-}
-.boat-rudder__modal-close:hover { color: #fff; }
-
-/* ============================================================
-   ADMIN BACK BUTTON
-   ============================================================ */
-.boat-rudder__admin__back-btn {
-  display: inline-block; font-size: 12px; font-weight: 600;
-  color: #666; text-decoration: none; margin-bottom: 12px;
-  transition: color 0.15s;
-}
-.boat-rudder__admin__back-btn:hover { color: #c084fc; }
-
-.none { display: none; }
-
-/* ============================================================
-   MEDIA ADMIN
-   ============================================================ */
-.boat-rudder__media {
-  display: flex; height: calc(100vh - 80px); max-height: 900px;
-  background: #0a0a0a; border: 1px solid #1e1e1e;
-}
-.boat-rudder__media__sidebar {
-  width: 220px; min-width: 180px;
-  display: flex; flex-direction: column;
-  border-right: 1px solid #1e1e1e; background: #0d0d0d;
-}
-.boat-rudder__media__sidebar-header {
-  padding: 12px 14px 10px; border-bottom: 1px solid #1e1e1e;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.boat-rudder__media__sidebar-title {
-  font-size: 11px; font-weight: 700; color: #666;
-  text-transform: uppercase; letter-spacing: 0.8px;
-}
-.boat-rudder__media__dir-actions { display: flex; gap: 4px; }
-.boat-rudder__media__dir-btn {
-  flex: 1; background: #1a1a1a; border: 1px solid #2a2a2a;
-  color: #bbb; padding: 5px 6px; font-size: 11px; font-weight: 600;
-  cursor: pointer; border-radius: 2px; white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
-}
-.boat-rudder__media__dir-btn:hover:not(:disabled) { background: #2a2a2a; color: #eee; }
-.boat-rudder__media__dir-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.boat-rudder__media__dir-btn--danger:hover:not(:disabled) {
-  background: #3a0000; color: #f87171; border-color: #5a0000;
-}
-.boat-rudder__media__dir-list { padding: 0; margin: 0; list-style: none; flex: 1; overflow-y: auto; }
-.boat-rudder__media__dir-item {
-  display: block; padding: 8px 14px; font-size: 13px; color: #bbb;
-  cursor: pointer; border-bottom: 1px solid #111;
-  transition: background 0.1s, color 0.1s;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.boat-rudder__media__dir-item:hover { background: #1a1a1a; color: #eee; }
-.boat-rudder__media__dir-item.selected {
-  background: #1e0a1e; color: #c084fc;
-  border-left: 2px solid #7b0a74; padding-left: 12px;
-}
-.boat-rudder__media__dir-new-input {
-  width: 100%; background: #111; border: 1px solid #7b0a74;
-  color: #e0e0e0; padding: 8px 14px; font-size: 13px;
-  outline: none; box-sizing: border-box; display: block;
-}
-
-.boat-rudder__media__main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-.boat-rudder__media__upload-zone {
-  border-bottom: 1px solid #1e1e1e; padding: 12px 16px;
-  display: flex; align-items: center; gap: 10px;
-  background: #0d0d0d; cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.boat-rudder__media__upload-zone.drag-over {
-  background: #0a1a0a; border-bottom-color: #22c55e;
-}
-.boat-rudder__media__upload-label { font-size: 13px; color: #555; }
-.boat-rudder__media__upload-browse { color: #c084fc; cursor: pointer; text-decoration: underline; }
-.boat-rudder__media__file-input { display: none; }
-
-.boat-rudder__media__upload-feedback { padding: 0 16px; }
-.boat-rudder__media__progress-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 5px 0; font-size: 12px; color: #888;
-}
-.boat-rudder__media__progress-name {
-  max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.boat-rudder__media__progress-bar-wrap {
-  flex: 1; height: 3px; background: #1e1e1e; border-radius: 2px; overflow: hidden;
-}
-.boat-rudder__media__progress-bar { height: 100%; background: #7b0a74; width: 0%; transition: width 0.2s; }
-.boat-rudder__media__progress-item.done .boat-rudder__media__progress-bar { background: #22c55e; }
-.boat-rudder__media__progress-item.error .boat-rudder__media__progress-bar { background: #ef4444; width: 100%; }
-
-.boat-rudder__media__grid-toolbar {
-  display: flex; align-items: center;
-  padding: 8px 12px; border-bottom: 1px solid #1e1e1e;
-}
-.boat-rudder__media__select-btn {
-  background: #7b0a74; color: #fff; border: none;
-  padding: 6px 18px; font-size: 12px; font-weight: 600;
-  cursor: pointer; border-radius: 2px;
-}
-.boat-rudder__media__select-btn:hover { background: #9d0d95; }
-.boat-rudder__media__select-btn + .boat-rudder__media__select-btn { margin-left: 8px; }
-.boat-rudder__media__select-btn--danger { background: #3a0000; }
-.boat-rudder__media__select-btn--danger:hover { background: #5a0000; color: #f87171; }
-
-.boat-rudder__media__move-picker {
-  margin: 0 12px 10px; padding: 10px 12px;
-  background: #111; border: 1px solid #7b0a74; border-radius: 3px;
-}
-.boat-rudder__media__move-picker-title {
-  font-size: 12px; font-weight: 700; color: #c084fc; margin-bottom: 6px;
-}
-.boat-rudder__media__move-picker-list {
-  list-style: none; margin: 0 0 8px; padding: 0;
-  max-height: 160px; overflow-y: auto;
-}
-.boat-rudder__media__move-picker-item { padding: 4px 0; font-size: 13px; color: #ccc; }
-.boat-rudder__media__move-picker-item label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.boat-rudder__media__move-picker-empty { font-size: 12px; color: #555; font-style: italic; }
-.boat-rudder__media__move-picker-actions { display: flex; gap: 6px; }
-
-.boat-rudder__media__grid-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
-.boat-rudder__media__grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px; padding: 12px; align-content: start;
-}
-.boat-rudder__media__photo {
-  position: relative; background: #111;
-  border: 1px solid #1e1e1e; border-radius: 3px;
-  cursor: zoom-in; /* clicking the photo views it; only the checkbox selects */
-  user-select: none; overflow: hidden;
-  transition: border-color 0.15s, background 0.15s;
-}
-.boat-rudder__media__photo:hover { border-color: #7b0a74; background: #160e16; }
-.boat-rudder__media__photo.selected { border-color: #c084fc; background: #1e0a1e; }
-.boat-rudder__media__photo-thumb {
-  width: 100%; height: 110px;
-  background-position: center; background-repeat: no-repeat; background-size: cover;
-  filter: grayscale(60%) brightness(75%);
-  transition: filter 0.2s;
-}
-.boat-rudder__media__photo:hover .boat-rudder__media__photo-thumb,
-.boat-rudder__media__photo.selected .boat-rudder__media__photo-thumb { filter: none; }
-.boat-rudder__media__photo-name {
-  padding: 5px 7px 6px; font-size: 11px; color: #555;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.boat-rudder__media__photo.selected .boat-rudder__media__photo-name { color: #c084fc; }
-.boat-rudder__media__photo input[type="checkbox"] {
-  position: absolute; top: 6px; left: 6px; z-index: 2;
-  width: 18px; height: 18px; margin: 0;
-  opacity: 0.6; transition: opacity 0.15s;
-  accent-color: #c084fc; cursor: pointer;
-}
-.boat-rudder__media__photo:hover input[type="checkbox"],
-.boat-rudder__media__photo.selected input[type="checkbox"] { opacity: 1; }
 
 /* ── Category sub-menu ── */
-.boat-rudder__navbar__category_item {
+.boat-rudder-navbar__category-item {
   padding: 6px;
   border-right: 1px solid var(--br-color-navbar-menu-normal, #ffffff);
   color: var(--br-color-navbar-menu-normal, #ffffff);
 }
 
-.boat-rudder__navbar__category_item a {
+.boat-rudder-navbar__category-item a {
   color: var(--br-color-navbar-menu-normal, #ffffff);
 }
 
-.boat-rudder__navbar__category_item a:hover {
+.boat-rudder-navbar__category-item a:hover {
   color: var(--br-color-navbar-menu-hover, #98ffdd);
 }
 
-.boat-rudder__navbar__category_item--selected a {
+.boat-rudder-navbar__category-item--selected a {
   color: var(--br-color-navbar-menu-active, #00ffab);
 }
 
-.boat-rudder__navbar__category_item:last-child {
+.boat-rudder-navbar__category-item:last-child {
   border: none;
 }
 
-.boat-rudder__category__menu {
+.boat-rudder-category__menu {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
@@ -1804,11 +540,11 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 
 /* ── Public block elements ─────────────────────────────────────────────────── */
 
-.boat-rudder__link {
+.boat-rudder-link {
   margin: 16px 0;
 }
 
-.boat-rudder__separator {
+.boat-rudder-separator {
   margin: 28px 0;
   margin: 50px 0;
   color: var(--br-color-blog-list-item-border, #00ffab);
@@ -1817,15 +553,15 @@ h6.boat-rudder__entry-editor__preview__title { font-size: 13px; font-weight: 600
 /* Links from the "link" block and from inline rich-text links (the
    paragraph editor's link button) - styled from the same "Generic links"
    settings as any other in-page link, not the navbar's own menu colors. */
-a.boat-rudder__link__a { cursor: pointer; }
-a.boat-rudder__link__a:link { color: var(--br-color-link-normal, #ffffff); }
-a.boat-rudder__link__a:visited { color: var(--br-color-link-visited, #ffffff); }
-a.boat-rudder__link__a:hover { color: var(--br-color-link-hover, #98ffdd); }
-a.boat-rudder__link__a:active { color: var(--br-color-link-active, #ffffff); }
+a.boat-rudder-link__a { cursor: pointer; }
+a.boat-rudder-link__a:link { color: var(--br-color-link-normal, #ffffff); }
+a.boat-rudder-link__a:visited { color: var(--br-color-link-visited, #ffffff); }
+a.boat-rudder-link__a:hover { color: var(--br-color-link-hover, #98ffdd); }
+a.boat-rudder-link__a:active { color: var(--br-color-link-active, #ffffff); }
 
 /* Same "Generic links" settings as the "link" block / rich-text links,
-   not the navbar's own menu colors - see a.boat-rudder__link__a above. */
-a.boat-rudder__social-network {
+   not the navbar's own menu colors - see a.boat-rudder-link__a above. */
+a.boat-rudder-social-network {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1833,31 +569,31 @@ a.boat-rudder__social-network {
   cursor: pointer;
   margin-bottom: 6px;
 }
-a.boat-rudder__social-network:link { color: var(--br-color-link-normal, #ffffff); }
-a.boat-rudder__social-network:visited { color: var(--br-color-link-visited, #ffffff); }
-a.boat-rudder__social-network:hover {
+a.boat-rudder-social-network:link { color: var(--br-color-link-normal, #ffffff); }
+a.boat-rudder-social-network:visited { color: var(--br-color-link-visited, #ffffff); }
+a.boat-rudder-social-network:hover {
   color: var(--br-color-link-hover, #98ffdd);
   text-decoration: underline;
 }
-a.boat-rudder__social-network:active { color: var(--br-color-link-active, #ffffff); }
-a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
+a.boat-rudder-social-network:active { color: var(--br-color-link-active, #ffffff); }
+a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 
-.boat-rudder__youtube-embed {
+.boat-rudder-youtube-embed {
   display: flex;
   margin: 20px;
   flex-direction: column;
   align-items: center;
 }
-.boat-rudder__youtube-embed__video {
+.boat-rudder-youtube-embed__video {
   padding: 10px;
   background: #4f4f4f;
 }
-.boat-rudder__youtube-embed__video iframe {
+.boat-rudder-youtube-embed__video iframe {
   width: 560px;
   height: 315px;
 }
 
-.boat-rudder__code-text-container {
+.boat-rudder-code-text-container {
   min-height: 100px;
   padding: 20px;
   border: 8px solid #888888;
@@ -1866,14 +602,14 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   margin-bottom: 20px;
   color: var(--br-color-code-text);
 }
-.boat-rudder__code-text-container pre { 
+.boat-rudder-code-text-container pre { 
   margin: 0;
   max-height: 200px;
   overflow: scroll;
 }
-.boat-rudder__code-text-container code { font-family: monospace; white-space: pre; counter-reset: br-code-line; }
+.boat-rudder-code-text-container code { font-family: monospace; white-space: pre; counter-reset: br-code-line; }
 
-.boat-rudder__code-text-header {
+.boat-rudder-code-text-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1883,10 +619,10 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   border-bottom: 1px solid rgba(240, 248, 255, 0.35);
   font-family: monospace;
 }
-.boat-rudder__code-text-lang { color: var(--br-color-code-comment); }
-.boat-rudder__code-text-actions { display: flex; gap: 8px; }
-.boat-rudder__code-text-container.is-expanded pre { max-height: none; }
-.boat-rudder__code-text-copy {
+.boat-rudder-code-text-lang { color: var(--br-color-code-comment); }
+.boat-rudder-code-text-actions { display: flex; gap: 8px; }
+.boat-rudder-code-text-container--expanded pre { max-height: none; }
+.boat-rudder-code-text-copy {
   background: transparent;
   border: 1px solid aliceblue;
   color: var(--br-color-code-text);
@@ -1894,12 +630,12 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   padding: 2px 12px;
   cursor: pointer;
 }
-.boat-rudder__code-text-copy:hover { background: aliceblue; color: var(--br-color-code-background); }
+.boat-rudder-code-text-copy:hover { background: aliceblue; color: var(--br-color-code-background); }
 
 /* Line numbers as generated content: never part of the code's text, so
    neither selecting nor the Copy button picks them up. */
-.boat-rudder__code-line { counter-increment: br-code-line; }
-.boat-rudder__code-line::before {
+.boat-rudder-code-line { counter-increment: br-code-line; }
+.boat-rudder-code-line::before {
   content: counter(br-code-line);
   display: inline-block;
   min-width: 2.5em;
@@ -1914,124 +650,92 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 /* Syntax colors come from the theme's "Code colors" settings (see
    cms_themes.h's code_*): function calls share the keyword color and
    attributes/CSS properties share the tag color. */
-.boat-rudder__code-token--kw   { color: var(--br-color-code-keyword); font-weight: bold; }
-.boat-rudder__code-token--fn   { color: var(--br-color-code-keyword); }
-.boat-rudder__code-token--str  { color: var(--br-color-code-string); }
-.boat-rudder__code-token--com  { color: var(--br-color-code-comment); font-style: italic; }
-.boat-rudder__code-token--num  { color: var(--br-color-code-number); }
-.boat-rudder__code-token--var  { color: var(--br-color-code-variable); }
-.boat-rudder__code-token--pre,
-.boat-rudder__code-token--tag,
-.boat-rudder__code-token--attr { color: var(--br-color-code-tag); }
+.boat-rudder-code-token--kw   { color: var(--br-color-code-keyword); font-weight: bold; }
+.boat-rudder-code-token--fn   { color: var(--br-color-code-keyword); }
+.boat-rudder-code-token--str  { color: var(--br-color-code-string); }
+.boat-rudder-code-token--com  { color: var(--br-color-code-comment); font-style: italic; }
+.boat-rudder-code-token--num  { color: var(--br-color-code-number); }
+.boat-rudder-code-token--var  { color: var(--br-color-code-variable); }
+.boat-rudder-code-token--pre,
+.boat-rudder-code-token--tag,
+.boat-rudder-code-token--attr { color: var(--br-color-code-tag); }
 
-.boat-rudder__list-container {
+.boat-rudder-list-container {
   padding-left: 24px;
   margin: 8px 0;
 }
-.boat-rudder__list-container li { margin: 4px 0; }
-.boat-rudder__container-table {
+.boat-rudder-list-container li { margin: 4px 0; }
+.boat-rudder-container-table {
   width: 100%;
   overflow: scroll;
 }
-.boat-rudder__table {
+.boat-rudder-table {
   width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
   font-size: 14px;
 }
-.boat-rudder__table th,
-.boat-rudder__table td {
+.boat-rudder-table th,
+.boat-rudder-table td {
   border: 1px solid var(--br-color-table-border, #444);
   padding: 8px 12px;
   text-align: left;
   vertical-align: top;
 }
-.boat-rudder__table th {
+.boat-rudder-table th {
   background: var(--br-color-table-header, #1e2d3d);
   font-weight: 600;
   white-space: nowrap;
 }
-.boat-rudder__table tr:nth-child(odd) td { background: var(--br-color-table-row-a, #1a1a1a); }
-.boat-rudder__table tr:nth-child(even) td { background: var(--br-color-table-row-b, #141414); }
+.boat-rudder-table tr:nth-child(odd) td { background: var(--br-color-table-row-a, #1a1a1a); }
+.boat-rudder-table tr:nth-child(even) td { background: var(--br-color-table-row-b, #141414); }
 
 /* Paragraph variants. These replace the inline style="..." that the previous
    CMS stored in extra_data; the block now names the variant and the theme
    owns the styling. */
-.boat-rudder__paragraph {
+.boat-rudder-paragraph {
   font-size: 18px;
   line-height: 26px;
   margin: 16px 0;
   overflow: scroll;
 }
-.boat-rudder__paragraph--lead {
+.boat-rudder-paragraph--lead {
   font-size: 18px;
 }
-.boat-rudder__paragraph--note {
+.boat-rudder-paragraph--note {
   font-size: 20px;
   color: burlywood;
-}
-
-/* Image block: the body shows the picture itself, since opening a block hides
-   its preview. The path inputs move into the Advanced panel. */
-.boat-rudder__entry-editor__image-preview {
-  display: flex; align-items: center; justify-content: center;
-  min-height: 60px; padding: 8px;
-  background-color: var(--br-color-body-background, #241144);
-  border: 1px solid #2a2a2a; border-radius: 3px;
-}
-.boat-rudder__entry-editor__gallery-preview {
-  background-color: var(--br-color-body-background, #241144);
-}
-.boat-rudder__entry-editor__image-thumb {
-  max-width: 100%; max-height: 260px;
-  object-fit: contain; border-radius: 2px;
-}
-/* Path fields inside Advanced: compact, monospace, full width */
-.boat-rudder__entry-editor__advanced__panel .boat-rudder__entry-editor__block__lang-content textarea {
-  width: 100%; font-family: monospace; font-size: 11px;
-  min-height: 0; height: auto; resize: vertical;
 }
 
 /* Image block size and alignment (extra_data "caption|width|align").
    The figure is sized, so the caption stays under the picture and follows it
    when the block is aligned to one side. */
-.boat-rudder__entry-image--w100 { width: 100%; }
-.boat-rudder__entry-image--w50  { width: 50%; }
-.boat-rudder__entry-image--w30  { width: 30%; }
+.boat-rudder-entry-image--w100 { width: 100%; }
+.boat-rudder-entry-image--w50  { width: 50%; }
+.boat-rudder-entry-image--w30  { width: 30%; }
 
-.boat-rudder__entry-image--left   { margin-left: 0; margin-right: auto; text-align: left; }
-.boat-rudder__entry-image--center { margin-left: auto; margin-right: auto; text-align: center; }
-.boat-rudder__entry-image--right  { margin-left: auto; margin-right: 0; text-align: right; }
+.boat-rudder-entry-image--left   { margin-left: 0; margin-right: auto; text-align: left; }
+.boat-rudder-entry-image--center { margin-left: auto; margin-right: auto; text-align: center; }
+.boat-rudder-entry-image--right  { margin-left: auto; margin-right: 0; text-align: right; }
 
 /* Float: the figure leaves the flow and the following text wraps around it. */
-.boat-rudder__entry-image--float-left  { float: left;  margin: 4px 20px 20px 0; text-align: center; }
-.boat-rudder__entry-image--float-right { float: right; margin: 4px 0 20px 20px; text-align: center; }
+.boat-rudder-entry-image--float-left  { float: left;  margin: 4px 20px 20px 0; text-align: center; }
+.boat-rudder-entry-image--float-right { float: right; margin: 4px 0 20px 20px; text-align: center; }
 
 /* Clicking an image opens the gallery lightbox */
-.boat-rudder__entry-image img[data-full] { cursor: pointer; }
+.boat-rudder-entry-image img[data-full] { cursor: pointer; }
 
 /* The picture fills its figure, so the chosen width is the width you get
    regardless of alignment (the base rule only caps it). */
-.boat-rudder__entry-image--w100 img,
-.boat-rudder__entry-image--w50 img,
-.boat-rudder__entry-image--w30 img { width: 100%; }
-/* Size + alignment controls sit side by side under the caption */
-.boat-rudder__entry-editor__image-options {
-  display: flex; gap: 10px;
-}
-.boat-rudder__entry-editor__image-options .boat-rudder__entry-editor__meta-group {
-  flex: 1; margin-bottom: 0;
-}
-.boat-rudder__entry-editor__image-options select {
-  width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a;
-  color: #e0e0e0; padding: 4px; height: 28px; border-radius: 3px;
-}
+.boat-rudder-entry-image--w100 img,
+.boat-rudder-entry-image--w50 img,
+.boat-rudder-entry-image--w30 img { width: 100%; }
 
 /* ---- Language selector (nav bar drop-down + /language page) ---- */
 
 /* Options bar pinned to the right edge of the viewport: it sits outside
    __content so the centred menu can grow without pushing it around. */
-.boat-rudder__navbar__options {
+.boat-rudder-navbar__options {
   position: fixed;
   right: 15px;
   top: 0;
@@ -2042,10 +746,10 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   z-index: 1000;
 }
 
-/* Pinned to the left edge, mirroring .boat-rudder__navbar__options on the
+/* Pinned to the left edge, mirroring .boat-rudder-navbar__options on the
    right - empty (no active session) and out of normal flow, so it never
    shifts the centred title/menu. */
-.boat-rudder__navbar__user-corner {
+.boat-rudder-navbar__user-corner {
   position: fixed;
   left: 15px;
   top: 0;
@@ -2054,235 +758,113 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
   height: 74px;
   z-index: 1000;
 }
-.boat-rudder__navbar__user {
+.boat-rudder-navbar__user {
   color: inherit; text-decoration: none; padding: 4px 10px;
   border: 1px solid transparent; border-radius: 3px; white-space: nowrap;
 }
-.boat-rudder__navbar__user:hover {
+.boat-rudder-navbar__user:hover {
   color: var(--br-color-navbar-menu-hover, #98ffdd);
 }
 
-.boat-rudder__navbar__lang { position: relative; display: inline-block; }
-.boat-rudder__navbar__lang__btn {
+.boat-rudder-navbar-lang { position: relative; display: inline-block; }
+.boat-rudder-navbar-lang__btn {
   background: none; border: 1px solid transparent; 
   color: var(--br-color-navbar-menu-normal, #ffffff);
   font: inherit; padding: 4px 10px; cursor: pointer; border-radius: 3px;
 }
-.boat-rudder__navbar__lang__btn:hover { 
+.boat-rudder-navbar-lang__btn:hover { 
   color: var(--br-color-navbar-menu-hover, #98ffdd);
 }
-.boat-rudder__navbar__lang__menu {
+.boat-rudder-navbar-lang__menu {
   display: none; position: absolute; right: 0; top: 100%;
   min-width: 160px; z-index: 50;
   background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px;
   padding: 4px 0;
 }
-.boat-rudder__navbar__lang.lang--open .boat-rudder__navbar__lang__menu { display: block; }
-.boat-rudder__navbar__lang__item {
+.boat-rudder-navbar-lang--open .boat-rudder-navbar-lang__menu { display: block; }
+.boat-rudder-navbar-lang__item {
   display: block; padding: 6px 14px; color: #d4d4d4; text-decoration: none;
   white-space: nowrap;
 }
-.boat-rudder__navbar__lang__item:hover { background: #2a2a2a; color: #fff; }
-.boat-rudder__navbar__lang__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
+.boat-rudder-navbar-lang__item:hover { background: #2a2a2a; color: #fff; }
+.boat-rudder-navbar-lang__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
 
 /* Theme switcher - same shape as the language drop-down above. */
-.boat-rudder__navbar__theme { position: relative; display: inline-block; }
-.boat-rudder__navbar__theme__btn {
+.boat-rudder-navbar-theme { position: relative; display: inline-block; }
+.boat-rudder-navbar-theme__btn {
   background: none; border: 1px solid transparent; 
   color: var(--br-color-navbar-menu-normal, #ffffff);
   font: inherit; padding: 4px 10px; cursor: pointer; border-radius: 3px;
   text-transform: capitalize;
 }
-.boat-rudder__navbar__theme__btn:hover {
+.boat-rudder-navbar-theme__btn:hover {
   color: var(--br-color-navbar-menu-hover, #98ffdd);
 }
-.boat-rudder__navbar__theme__menu {
+.boat-rudder-navbar-theme__menu {
   display: none; position: absolute; right: 0; top: 100%;
   min-width: 160px; z-index: 50;
   background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px;
   padding: 4px 0;
 }
-.boat-rudder__navbar__theme.theme--open .boat-rudder__navbar__theme__menu { display: block; }
-.boat-rudder__navbar__theme__item {
+.boat-rudder-navbar-theme--open .boat-rudder-navbar-theme__menu { display: block; }
+.boat-rudder-navbar-theme__item {
   display: block; padding: 6px 14px; color: #d4d4d4; text-decoration: none;
   white-space: nowrap; text-transform: capitalize;
 }
-.boat-rudder__navbar__theme__item:hover { background: #2a2a2a; color: #fff; }
-.boat-rudder__navbar__theme__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
+.boat-rudder-navbar-theme__item:hover { background: #2a2a2a; color: #fff; }
+.boat-rudder-navbar-theme__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
 
-.boat-rudder__language { max-width: 480px; margin: 40px auto; }
-.boat-rudder__language__list { display: flex; flex-direction: column; gap: 2px; }
-.boat-rudder__language__item {
+.boat-rudder-language { max-width: 480px; margin: 40px auto; }
+.boat-rudder-language__list { display: flex; flex-direction: column; gap: 2px; }
+.boat-rudder-language__item {
   display: block; padding: 10px 14px; color: #d4d4d4; text-decoration: none;
   border: 1px solid #2a2a2a; border-radius: 3px;
 }
-.boat-rudder__language__item:hover { background: #2a2a2a; color: #fff; }
-.boat-rudder__language__item--active { color: #56e9fd; font-weight: bold; }
+.boat-rudder-language__item:hover { background: #2a2a2a; color: #fff; }
+.boat-rudder-language__item--active { color: #56e9fd; font-weight: bold; }
 
-.boat-rudder__theme { max-width: 480px; margin: 40px auto; }
-.boat-rudder__theme__list { display: flex; flex-direction: column; gap: 2px; }
-.boat-rudder__theme__item {
+.boat-rudder-theme { max-width: 480px; margin: 40px auto; }
+.boat-rudder-theme__list { display: flex; flex-direction: column; gap: 2px; }
+.boat-rudder-theme__item {
   display: block; padding: 10px 14px; color: #d4d4d4; text-decoration: none;
   border: 1px solid #2a2a2a; border-radius: 3px; text-transform: capitalize;
 }
-.boat-rudder__theme__item:hover { background: #2a2a2a; color: #fff; }
-.boat-rudder__theme__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
-
-/* ANALYTICS (/dashboard/analytics) */
-.boat-rudder__dashboard__empty { color: #555; font-size: 12px; }
-
-.boat-rudder__analytics__period-bar {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  background: #0d0d0d; border: 1px solid #1e1e1e; padding: 12px 16px;
-}
-.boat-rudder__analytics__period-label {
-  font-size: 11px; font-weight: 700; color: #555; text-transform: uppercase;
-  letter-spacing: .8px; margin-right: 4px;
-}
-.boat-rudder__analytics__period-btn {
-  display: inline-block; padding: 5px 14px; font-size: 12px; font-weight: 600;
-  background: #111; border: 1px solid #2a2a2a; color: #888; text-decoration: none;
-  border-radius: 2px; transition: all .15s;
-}
-.boat-rudder__analytics__period-btn:hover { background: #1e1e1e; color: #c084fc; border-color: #7b0a74; }
-.boat-rudder__analytics__period-btn--active { background: #7b0a74; border-color: #7b0a74; color: #fff; }
-.boat-rudder__analytics__range-form { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 0; margin: 0; }
-.boat-rudder__analytics__range-form.boat-rudder__analytics__period-btn--active .boat-rudder__analytics__date-input { border-color: #7b0a74; }
-.boat-rudder__analytics__date-input {
-  background: #111; border: 1px solid #2a2a2a; color: #aaa; font-size: 12px;
-  padding: 4px 8px; border-radius: 2px; width: 120px;
-}
-.boat-rudder__analytics__date-input:focus { outline: none; border-color: #7b0a74; color: #fff; }
-.boat-rudder__analytics__range-sep { color: #444; font-size: 12px; }
-.boat-rudder__analytics__period-current { margin-left: auto; font-size: 12px; color: #666; font-style: italic; }
-
-.boat-rudder__analytics__totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-.boat-rudder__analytics__stat-card { background: #0d0d0d; border: 1px solid #1e1e1e; padding: 16px 20px; text-align: center; }
-.boat-rudder__analytics__stat-card--ewml { border-top: 2px solid #3987e5; }
-.boat-rudder__analytics__stat-card--e0 { border-top: 2px solid #d95926; }
-.boat-rudder__analytics__stat-card--e1 { border-top: 2px solid #199e70; }
-.boat-rudder__analytics__stat-card--e2 { border-top: 2px solid #c98500; }
-.boat-rudder__analytics__stat-card--e3 { border-top: 2px solid #d55181; }
-.boat-rudder__analytics__stat-value { font-size: 28px; font-weight: 700; color: #e0e0e0; line-height: 1; }
-.boat-rudder__analytics__stat-label { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .8px; margin-top: 6px; }
-
-.boat-rudder__analytics__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.boat-rudder__analytics__table-block { background: #0d0d0d; border: 1px solid #1e1e1e; padding: 16px 18px; }
-.boat-rudder__analytics__table-block--wide { grid-column: 1 / -1; }
-
-/* ============================================================
-   ANALYTICS CHARTS (server-side SVG, analytics_charts.c)
-   ============================================================ */
-/* Categorical: one fixed color per epoch (1 = WML ... 5 = epoch 3), the
-   same order the stat cards' top borders use. Validated as a set against
-   this theme's block surface (adjacent-pair CVD separation and
-   normal-vision floor). */
-.boat-rudder__chart__series--1 { color: #3987e5; }
-.boat-rudder__chart__series--2 { color: #d95926; }
-.boat-rudder__chart__series--3 { color: #199e70; }
-.boat-rudder__chart__series--4 { color: #c98500; }
-.boat-rudder__chart__series--5 { color: #d55181; }
-.boat-rudder__chart__series--accent { color: #c084fc; }
-.boat-rudder__chart__series--muted { color: #555555; }
-
-.boat-rudder__chart__svg { display: block; overflow: visible; }
-.boat-rudder__chart__svg text { font-family: inherit; font-variant-numeric: tabular-nums; }
-.boat-rudder__chart__bar { fill: currentColor; }
-.boat-rudder__chart__hit { fill: transparent; }
-.boat-rudder__chart__row:hover .boat-rudder__chart__bar { opacity: .8; }
-.boat-rudder__chart__label { font-size: 12px; fill: currentColor; }
-.boat-rudder__chart__svg a .boat-rudder__chart__label { fill: var(--br-color-link-normal, #ffffff); }
-.boat-rudder__chart__svg a:hover .boat-rudder__chart__label { text-decoration: underline; }
-.boat-rudder__chart__value { font-size: 12px; fill: #bbbbbb; }
-.boat-rudder__chart__track { fill: #1e1e1e; }
-.boat-rudder__chart__axis-label { font-size: 11px; fill: #888888; }
-.boat-rudder__chart__axis-label--strong { font-weight: 700; fill: currentColor; }
-.boat-rudder__chart__baseline { stroke: #444444; stroke-width: 1; }
-
-/* Donut + its legend, stacked so it fits a 220px grid block. */
-.boat-rudder__chart--donut { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.boat-rudder__chart__slice { stroke: currentColor; transition: stroke-width .1s; }
-.boat-rudder__chart__slice:hover { stroke-width: 22; }
-.boat-rudder__chart__center-value { font-size: 20px; font-weight: 700; fill: currentColor; }
-.boat-rudder__chart__center-label { font-size: 10px; fill: #888888; }
-.boat-rudder__chart__legend { list-style: none; margin: 0; padding: 0; width: 100%; font-size: 12px; }
-.boat-rudder__chart__legend li { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.boat-rudder__chart__swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
-.boat-rudder__chart__legend-label { flex: 1; }
-.boat-rudder__chart__legend-value { color: #bbbbbb; white-space: nowrap; font-variant-numeric: tabular-nums; }
-
-/* "Visits per day" spans the panel, between the totals and the grid. */
-.boat-rudder__analytics__table-block--chart { margin-bottom: 12px; }
-
-/* Each chart's numbers as a table (Today | 7 days), folded under it. */
-.boat-rudder__chart__table { margin-top: 10px; }
-.boat-rudder__chart__table > summary { font-size: 11px; color: #888888; cursor: pointer; }
-.boat-rudder__chart__table[open] > summary { margin-bottom: 6px; }
-.boat-rudder__analytics__table-title {
-  font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase;
-  letter-spacing: .8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #1a1a1a;
-}
-.boat-rudder__analytics__kv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.boat-rudder__analytics__kv-table td { padding: 5px 4px; border-bottom: 1px solid #141414; vertical-align: middle; }
-.boat-rudder__analytics__kv-table td:first-child { color: #bbb; word-break: break-all; }
-.boat-rudder__analytics__kv-table td:last-child { text-align: right; color: #c084fc; font-weight: 700; white-space: nowrap; padding-left: 12px; min-width: 40px; }
-.boat-rudder__analytics__kv-table tr:last-child td { border-bottom: none; }
-.boat-rudder__analytics__bar { display: inline-block; height: 6px; background: #7b0a74; border-radius: 1px; margin-left: 8px; vertical-align: middle; min-width: 2px; }
-.boat-rudder__analytics__pct { color: #555; font-size: 11px; }
-/* Browsers/OSes breakdown tree: one expandable <details> per family (Chrome,
-   Firefox, ...) whose children are that family's versions. */
-.boat-rudder__analytics__tree { font-size: 13px; }
-.boat-rudder__analytics__tree-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 5px 4px; border-bottom: 1px solid #141414;
-}
-.boat-rudder__analytics__tree-node > summary { cursor: pointer; list-style: none; }
-.boat-rudder__analytics__tree-node > summary::-webkit-details-marker { display: none; }
-.boat-rudder__analytics__tree-node > summary:hover { background: #151515; }
-.boat-rudder__analytics__tree-node > summary .boat-rudder__analytics__tree-name::before {
-  content: "\25B8"; display: inline-block; width: 14px; color: #666;
-}
-.boat-rudder__analytics__tree-node[open] > summary .boat-rudder__analytics__tree-name::before { content: "\25BE"; }
-.boat-rudder__analytics__tree-row--leaf .boat-rudder__analytics__tree-name { padding-left: 14px; }
-.boat-rudder__analytics__tree-name { color: #bbb; word-break: break-all; }
-.boat-rudder__analytics__tree-versions { color: #555; font-size: 11px; }
-.boat-rudder__analytics__tree-count { color: #c084fc; font-weight: 700; white-space: nowrap; padding-left: 12px; }
-.boat-rudder__analytics__tree-children { background: #0a0a0a; }
-.boat-rudder__analytics__tree-children td:first-child { padding-left: 28px; }
+.boat-rudder-theme__item:hover { background: #2a2a2a; color: #fff; }
+.boat-rudder-theme__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
 
 /*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
 /* RESPONSIVE */
 @media (max-width: 1200px) {
-  .boat-rudder__navbar__title_onslidelogo {
+  .boat-rudder-navbar__title--onslidelogo {
     margin-left: -8vw;
     margin-top: 13vw;
   }
-  .boat-rudder__home-blog, 
-  .boat-rudder__footer {
+  .boat-rudder-home-blog, 
+  .boat-rudder-footer {
     background-size: auto;
   }
 }
 
 @media (max-width: 960px) {
-  .boat-rudder__navbar__title {
+  .boat-rudder-navbar__title {
     margin-right: 0;
   }
 
-  .boat-rudder__navbar__title_onslidelogo {
+  .boat-rudder-navbar__title--onslidelogo {
     font-size: 6vw;
     margin: 10vh auto;
   }
 
-  .boat-rudder__navbar__content {
+  .boat-rudder-navbar__content {
     justify-content: center;
     position: initial;
   }
 
-  .navbar__toggle {
+  .boat-rudder-navbar__toggle {
     display: flex;
   }
 
-  .boat-rudder__navbar__menu {
+  .boat-rudder-navbar__menu {
     position: fixed;
     top: -230px;
     flex-direction: column;
@@ -2298,7 +880,7 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
     z-index: 999; */
   }
 
-  .boat-rudder__navbar__menu.menu--open {
+  .boat-rudder-navbar__menu--open {
     top: 60px;
     width: 100%;
     flex-direction: column;
@@ -2306,40 +888,40 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
     z-index: 999;
   }
 
-  .boat-rudder__navbar__menu_item {
+  .boat-rudder-navbar__menu-item {
     text-align: center;
     padding: 12px;
     border-right: none;
     border-top: 1px solid #333333;
   }
 
-  .boat-rudder__navbar__menu_item--user {
+  .boat-rudder-navbar__menu-item--user {
     font-weight: bold;
   }
 
-  .boat-rudder__navbar__menu_item:last-child {
+  .boat-rudder-navbar__menu-item:last-child {
     border-top: 1px solid #8c0089;;
   }
 
   /* Below 800px the horizontal corner link has nowhere to sit without
      colliding with the hamburger/centred title, so it moves inside the
      dropdown menu instead - same link, same data, just relocated. */
-  .boat-rudder__navbar__user-corner {
+  .boat-rudder-navbar__user-corner {
     display: none;
   }
 
-  .boat-rudder__navbar__menu_item--user {
+  .boat-rudder-navbar__menu-item--user {
     display: block;
   }
-  .boat-rudder__gallery-item:nth-child(1) {
+  .boat-rudder-gallery-item:nth-child(1) {
     grid-column-start: span 1;
   }
 
-  .boat-rudder__home-blog__item__byline {
+  .boat-rudder-home-blog-item__byline {
     flex-wrap: wrap;
   }
 
-  .boat-rudder__home-blog__item__byline-categories {
+  .boat-rudder-home-blog-item__byline-categories {
     order: 3;
     width: 100%;
     text-align: left;
@@ -2351,13 +933,13 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
 
   /* Small screens: the hamburger owns the left edge and the title the centre,
      so the selector stays right but gets tighter. */
-  .boat-rudder__navbar__options { right: 8px; }
-  .boat-rudder__navbar__lang__btn { padding: 4px 6px; font-size: 14px; }
-  .boat-rudder__navbar__theme__btn { padding: 4px 6px; font-size: 14px; }
+  .boat-rudder-navbar__options { right: 8px; }
+  .boat-rudder-navbar-lang__btn { padding: 4px 6px; font-size: 14px; }
+  .boat-rudder-navbar-theme__btn { padding: 4px 6px; font-size: 14px; }
 }
 
 @media (max-width: 768px) {
-  .boat-rudder__youtube-embed__video iframe { width: 450px; height: 253px; }
+  .boat-rudder-youtube-embed__video iframe { width: 450px; height: 253px; }
 }
 
 /* Below 600px the theme and language selectors live inside the hamburger
@@ -2365,8 +947,8 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
    expand in place instead of floating, since the dropdown is full width. */
 @media (max-width: 599px) {
   /* The extra row makes the closed dropdown taller than the 230px offset. */
-  .boat-rudder__navbar__menu:not(.menu--open) { top: -100vh; }
-  .boat-rudder__navbar__menu_options {
+  .boat-rudder-navbar__menu:not(.boat-rudder-navbar__menu--open) { top: -100vh; }
+  .boat-rudder-navbar__menu-options {
     display: flex;
     justify-content: center;
     gap: 10px;
@@ -2374,66 +956,67 @@ a.boat-rudder__social-network img { border-radius: 4px; flex-shrink: 0; }
     padding: 12px;
     border-top: 1px solid #333333;
   }
-  .boat-rudder__navbar__menu_options .boat-rudder__navbar__lang__btn,
-  .boat-rudder__navbar__menu_options .boat-rudder__navbar__theme__btn {
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-lang__btn,
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-theme__btn {
     font-size: 16px; padding: 6px 12px; border-color: currentColor;
   }
-  .boat-rudder__navbar__menu_options .boat-rudder__navbar__lang__menu,
-  .boat-rudder__navbar__menu_options .boat-rudder__navbar__theme__menu {
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-lang__menu,
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-theme__menu {
     right: auto; left: 50%; transform: translateX(-50%);
   }
 
-  .boat-rudder__home-blog__item {
+  .boat-rudder-home-blog-item {
     flex-direction: column;
   }
-  .boat-rudder__home-blog__item__container {
+  .boat-rudder-home-blog-item__container {
     margin-left: 0;
   }
-  .boat-rudder__home-blog__item__image {
+  .boat-rudder-home-blog-item__image {
     width: 100%;
     height: 0;
     padding-top: 56.25%;
     min-height: 0;
     margin-bottom: 20px;
   }
-  .boat-rudder__home-blog__container {
+  .boat-rudder-home-blog__container {
     width: 100%;
   }
 }
 
 @media (max-width: 499px) {
-  .boat-rudder__mainbanner__top-padding {
+  .boat-rudder-mainbanner__top-padding {
     padding-top: 45%;
   }
 
-  .boat-rudder__navbar__title {
+  .boat-rudder-navbar__title {
     margin-left: 35px;
   }
 
-  .boat-rudder__navbar__title_onslidelogo {
+  .boat-rudder-navbar__title--onslidelogo {
     margin-top: 22%;
     font-size: 28px;
   }
 
-  .boat-rudder__youtube-embed__video iframe { width: auto; height: auto; }
+  .boat-rudder-youtube-embed__video iframe { width: auto; height: auto; }
 
-  .boat-rudder__navbar__lang__btn { font-size: 13px; }
-  .boat-rudder__navbar__lang__menu { min-width: 140px; }
-  .boat-rudder__navbar__theme__btn { font-size: 13px; }
-  .boat-rudder__navbar__theme__menu { min-width: 140px; }
+  .boat-rudder-navbar-lang__btn { font-size: 13px; }
+  .boat-rudder-navbar-lang__menu { min-width: 140px; }
+  .boat-rudder-navbar-theme__btn { font-size: 13px; }
+  .boat-rudder-navbar-theme__menu { min-width: 140px; }
 
-  .boat-rudder__page-entry {
+  .boat-rudder-page-entry {
     width: 90%;
+    padding: 16px;
   }
   
-  .boat-rudder__gallery-container {
+  .boat-rudder-gallery-container {
     padding: 15px;
     grid-template-columns: repeat(2, 1fr);
   }
-  .boat-rudder__gallery-item:nth-child(4) {
+  .boat-rudder-gallery-item:nth-child(4) {
     grid-column-start: span 1;
   }
-  .boat-rudder__code-text-container {
+  .boat-rudder-code-text-container {
     outline: 0;
     padding: 6px;
     border: 2px solid #888;

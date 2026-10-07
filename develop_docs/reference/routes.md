@@ -16,8 +16,7 @@ traffic is not routed here directly - it re-enters this table over loopback HTTP
 - Routing is an ordered `if / else if` chain inside `http_route()`, matched on the
   **URL-decoded path without its query string** (`decoded_url`). The first match wins, so the
   order below matters where prefixes overlap (`/blog/category/…` and `/blog/categories` are
-  tested before `/blog/<link>`; `/dashboard/settings/themes/<key>/css/restore` before
-  `…/css`).
+  tested before `/blog/<link>`).
 - `GET` and `HEAD` share every handler; `HEAD` responses are cut after the headers by
   `send_or_error()`.
 - `OPTIONS` (any path) → `204` with `Allow: GET, HEAD, OPTIONS, POST`. Any other method → `405`.
@@ -66,7 +65,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/qr/<code>` | - | `short_link_resolve()` | `302` to the stored `target_path`, `404` if unknown |
 | `/youtube-qr/<video-id>` | `back` | inline, `generate_qr_halfblock_text()` / `generate_qr_asciiblock_text()` | **Always epoch 0's page**, whatever the visitor's epoch: a text QR of `https://youtu.be/<id>` + back link |
 | `/image-qr/<code>` | `back` | inline, same generators | **Always epoch 0's page**: a text QR of `<public_url or Host>/qr/<code>` + back link |
-| `/themes/<key>/styles_epoch3.css` | - | `match_theme_css_url()` → `cms_get_theme_css()` | The theme's epoch 3 stylesheet, from the DB override or the on-disk file; `text/css`. Guard: **Theme** |
+| `/themes/<key>/styles_epoch3.css`, `/themes/<key>/styles_admin_epoch3.css` | - | `match_theme_css_url()` → `cms_get_theme_css()` | The theme's public / admin epoch 3 stylesheet, from the DB override or the on-disk file (admin: falls back to the configured `theme`'s); `text/css`. Guard: **Theme** |
 | `/login` | - | `login()` | Login form (epoch 3) or "not available" page (other epochs). `302 /dashboard` if already signed in |
 | `/logout` | - | - | `405`: logout is `POST` only (see [Authentication](#authentication)) |
 | *anything else* | - | `serve_static_file()` | File from the root directory with `Last-Modified`/`304`; `403`/`404`/`500` rendered per epoch |
@@ -134,18 +133,19 @@ All **E3, A**. Detailed behavior in [themes.md](themes.md) and [fonts.md](fonts.
 | Method | Path | Handler | Notes |
 |---|---|---|---|
 | `GET`/`POST` | `/dashboard/settings` | `site_settings_general_page()` / `cms_update_site_name()` | Field `site_name` |
-| `GET` | `/dashboard/settings/themes` | `site_settings_themes_page()` | Every directory under `html/themes/` with its colors |
-| `POST` | `/dashboard/settings/themes/<key>/activate` | `cms_set_active_theme()` | Sets `site_settings.active_theme` |
-| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 34 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`. Guard: Theme |
+| `GET` | `/dashboard/settings/themes` | `site_settings_themes_page()` | List of the directories under `html/themes/`: name, *Active* or *Set active*, *Edit* |
+| `GET` | `/dashboard/settings/themes/<key>` | `site_settings_theme_page()` | One theme's options: colors, logo font, links to its banner/footer/logo/CSS editors. Guard: Theme |
+| `POST` | `/dashboard/settings/themes/<key>/activate` | `cms_set_active_theme()` | Sets `site_settings.active_theme`; `302` to the field `return` when it is this theme's page, else to the list |
+| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 40 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's page. Guard: Theme |
 | `GET` | `/dashboard/settings/themes/<key>/banner` | `site_settings_banner_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/banner/<epoch>` | `cms_update_theme_banner()` | Field `html` (≤ 128 KiB); `""` restores the file |
 | `GET` | `/dashboard/settings/themes/<key>/footer` | `site_settings_footer_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/footer/<epoch>` | `cms_update_theme_footer()` | Field `html` |
 | `GET` | `/dashboard/settings/themes/<key>/logo` | `site_settings_logo_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/logo/<epoch>` | `cms_update_theme_logo_config()` | Fields `mode`, `text`, `font`, `navbar-image`, `footer-image`; mode forced per epoch server-side |
-| `GET` | `/dashboard/settings/themes/<key>/css` | `site_settings_css_page()` | Guard: Theme |
-| `POST` | `/dashboard/settings/themes/<key>/css` | `cms_update_theme_css()` | Field `css` (≤ 128 KiB) |
-| `POST` | `/dashboard/settings/themes/<key>/css/restore` | `cms_update_theme_css(key, "")` | Back to the on-disk file |
+| `GET` | `/dashboard/settings/themes/<key>/css`, `…/admin-css` | `site_settings_css_page()` | Public / admin stylesheet editor (one tab each). Guard: Theme |
+| `POST` | `/dashboard/settings/themes/<key>/css`, `…/admin-css` | `cms_update_theme_css()` | Field `css` (≤ 128 KiB) |
+| `POST` | `/dashboard/settings/themes/<key>/css/restore`, `…/admin-css/restore` | `cms_update_theme_css(key, sheet, "")` | Back to the on-disk file |
 | `GET` | `/dashboard/settings/preview` | `site_settings_preview_page()` | Iframe + `?preview_epoch=` |
 | `GET` | `/dashboard/settings/fonts` | `fonts_admin_list()` | Query `error` shows a message |
 | `POST` | `/dashboard/settings/fonts/upload` | `cms_add_font()` | Multipart `name`, `file` (`.ttf/.otf/.woff/.woff2`) |
@@ -208,7 +208,7 @@ Guard **A**. Back the banner/footer/logo editors' image widgets; files live in
 | `build_epoch_response()` / `_status()` | Every HTML/WML page: epoch Content-Type, security headers, link re-tagging, WML pagination, Latin-1 transcoding (see [rendering.md](rendering.md#the-response-layer)) |
 | `build_redirect_response()` | `302` with an epoch-appropriate tiny body linking to the target |
 | `build_json_response()` / `_status()` | AJAX endpoints |
-| `build_css_response()` | `/themes/<key>/styles_epoch3.css` |
+| `build_css_response()` | `/themes/<key>/styles_epoch3.css`, `/themes/<key>/styles_admin_epoch3.css` |
 | `send_simple()` | Plain-text errors on AJAX endpoints and last-resort fallback |
 
 ---

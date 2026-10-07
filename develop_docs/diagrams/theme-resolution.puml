@@ -57,8 +57,8 @@ endif
 |page_layout / modules|
 :apply per-theme overrides from the themes collection\n(colors, banner, footer, logo, logo font)\n- each falls back to the theme's file / THEME_DEFAULTS;
 
-|GET /themes/<key>/styles_epoch3.css|
-:cms_get_theme_css(key):\nthemes.css_epoch3 if non-empty,\nelse html/themes/<key>/styles_epoch3.css;
+|GET /themes/<key>/styles(_admin)_epoch3.css|
+:cms_get_theme_css(key, sheet):\nthemes.css_epoch3 / css_admin_epoch3 if non-empty,\nelse html/themes/<key>/styles(_admin)_epoch3.css,\nadmin only: else the configured theme's admin file;
 stop
 
 @enduml

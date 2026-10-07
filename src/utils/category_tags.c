@@ -39,7 +39,7 @@ static char *render_tags(char *item_tpl, char **links, char **names, size_t coun
     // id (see category_epoch2.html) that layout_epoch2.html's own <style>
     // block colors, resting and :hover both, the same way it already colors
     // #boat-rudder-navbar-lang-link/-theme-link. Epoch 3 already carries its
-    // own color via the boat-rudder__entry-category CSS class; -1/0 have no
+    // own color via the boat-rudder-entry-category CSS class; -1/0 have no
     // color model.
     int needs_color = (epoch == EPOCH_EARLY);
     CmsThemeColors retro;

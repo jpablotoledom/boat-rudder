@@ -45,7 +45,7 @@ package "modules" {
 
 package "db" {
     [cms_site_settings\nsite_name, active_theme] as CMSSET
-    [cms_themes\ncolors (34), banner_html, footer_html,\nlogo (CmsLogoConfig), logo_html (legacy),\nlogo_font, css_epoch3] as CMSTHEMES
+    [cms_themes\ncolors (34), banner_html, footer_html,\nlogo (CmsLogoConfig), logo_html (legacy),\nlogo_font, css_epoch3,\ncss_admin_epoch3] as CMSTHEMES
     [cms_fonts\nname, filename] as CMSFONTS
     [mongodb_manager] as MONGO
 }
@@ -57,7 +57,7 @@ package "utils" {
     [image_convert\n+ wbmp_writer] as IMGCONV
 }
 
-database "html/themes/<key>/\n(templates, assets/, styles_epoch3.css)" as THEMEFS
+database "html/themes/<key>/\n(templates, assets/,\nstyles_epoch3.css, styles_admin_epoch3.css)" as THEMEFS
 database "html/templates/dashboard/settings/\nhtml/templates/dashboard/fonts/" as TPLFS
 database "html/assets/fonts/" as FONTFS
 database "MongoDB\nsite_settings (singleton)\nthemes (sparse, per key)\nfonts" as DB
@@ -77,7 +77,7 @@ SETADMIN --> TPLFS
 FONTADMIN --> TPLFS
 
 ' Visitor side
-Visitor --> ROUTER : any page\n/theme, /theme/set\n/themes/<key>/styles_epoch3.css
+Visitor --> ROUTER : any page\n/theme, /theme/set\n/themes/<key>/styles(_admin)_epoch3.css
 ROUTER --> REQTHEME : request_theme_set(Cookie, ?theme)
 REQTHEME --> TCAT : theme_key_is_valid()
 REQTHEME --> CMSSET : cms_get_active_theme_key()

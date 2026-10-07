@@ -10,7 +10,7 @@
 // tables use. Labels are HTML-encoded here, so callers pass raw strings.
 //
 // Colors never appear in the markup: marks carry classes
-// (boat-rudder__chart__series--<n>, --accent, --muted) that each theme's
+// (boat-rudder-chart__series--<n>, --accent, --muted) that each theme's
 // styles_epoch3.css colors, so light and dark get their own validated steps.
 // Hover detail is each mark's native SVG <title> tooltip.
 

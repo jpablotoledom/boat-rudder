@@ -60,7 +60,7 @@ char *category_menu_render(const CmsCategoryItem *categories, size_t count,
     // color> attributes rather than CSS classes nothing defines - matches
     // the navbar menu's own colors (menu.c), which is what this menu sits
     // right below on /blog. Epoch 3 already gets them as CSS vars (see
-    // .boat-rudder__navbar__category_item in styles_epoch3.css).
+    // .boat-rudder-navbar__category-item in styles_epoch3.css).
     int needs_color = (epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE);
     CmsThemeColors colors;
     if (needs_color) cms_get_theme_colors(request_theme(), &colors);

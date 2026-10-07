@@ -217,7 +217,7 @@ back to the theme's on-disk files or to `THEME_DEFAULTS` in `cms_themes.c`.
 {
   "_id": ObjectId,
   "key": "dark",                         // directory name under html/themes/
-  "colors": {                            // 34 tokens, hyphenated names (see themes.md)
+  "colors": {                            // 40 tokens, hyphenated names (see themes.md)
     "navbar-background": "#1a1a2ecc",    // *_background fields accept #rrggbbaa
     "code-keyword": "#ffff55", ...
   },
@@ -229,7 +229,8 @@ back to the theme's on-disk files or to `THEME_DEFAULTS` in `cms_themes.c`.
                 "navbar_image": "", "footer_image": "" }, ...
   },
   "logo_font": "MyFont",                 // epoch 3 navbar font from the Colors panel
-  "css_epoch3": "..."                    // full override of styles_epoch3.css; "" = use file
+  "css_epoch3": "...",                   // full override of styles_epoch3.css; "" = use file
+  "css_admin_epoch3": "..."              // full override of styles_admin_epoch3.css; "" = use file
 }
 ```
 

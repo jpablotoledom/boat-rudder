@@ -81,7 +81,7 @@ char *home_content(int epoch, const char *lang) {
 
     // Epoch 2 only: its container has a bgcolor attribute with no CSS to
     // lean on (epoch 3's equivalent is transparent, showing the body's own
-    // background - see styles_epoch3.css's .boat-rudder__page-entry__
+    // background - see styles_epoch3.css's .boat-rudder-page-entry__
     // container), so it takes body-background straight as a second %s -
     // see home-content_epoch2.html.
     char *result = NULL;

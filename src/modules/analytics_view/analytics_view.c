@@ -215,7 +215,7 @@ static char *build_top_articles_table(const char *period, int year, int month, i
     if (!rows) return strdup("<p>No data</p>");
 
     char *table = render_template(
-        "<table class=\"boat-rudder__dashboard__table\">"
+        "<table class=\"boat-rudder-dashboard__table\">"
         "<thead><tr><th>Article</th><th>Visits</th></tr></thead><tbody>%s</tbody></table>",
         rows);
     free(rows);
@@ -228,7 +228,7 @@ static char *build_top_articles_table(const char *period, int year, int month, i
 static char *build_kv_table(const KVList *list, int total) {
     const KV *arr = list->items;
     int count = list->count;
-    if (count == 0) return strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+    if (count == 0) return strdup("<p class=\"boat-rudder-empty\">No data</p>");
 
     int max_count = arr[0].count > 0 ? arr[0].count : 1;
 
@@ -242,18 +242,18 @@ static char *build_kv_table(const KVList *list, int total) {
         html_encode(key_enc, arr[i].key, strlen(arr[i].key) * 6 + 1);
 
         char *row = render_template(
-            "<tr><td>%s<span class=\"boat-rudder__analytics__bar\" style=\"width:%dpx\"></span></td>"
-            "<td>%d <span class=\"boat-rudder__analytics__pct\">(%d%%)</span></td></tr>",
+            "<tr><td>%s<span class=\"boat-rudder-analytics__bar\" style=\"width:%dpx\"></span></td>"
+            "<td>%d <span class=\"boat-rudder-analytics__pct\">(%d%%)</span></td></tr>",
             key_enc, bar_w, arr[i].count, pct);
         free(key_enc);
         rows = row ? str_append(rows, row) : NULL;
         free(row);
     }
-    if (!rows) return strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+    if (!rows) return strdup("<p class=\"boat-rudder-empty\">No data</p>");
 
-    char *table = render_template("<table class=\"boat-rudder__analytics__kv-table\">%s</table>", rows);
+    char *table = render_template("<table class=\"boat-rudder-analytics__kv-table\">%s</table>", rows);
     free(rows);
-    return table ? table : strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+    return table ? table : strdup("<p class=\"boat-rudder-empty\">No data</p>");
 }
 
 // "Chrome/124" -> family "Chrome" (length up to the first '/'); a key with
@@ -300,7 +300,7 @@ static char *html_encode_dup(const char *src, size_t len) {
 // labels the child count next to the family name ("ver.", "countries"). Native
 // <details>/<summary>, so no JavaScript is needed to expand/collapse.
 static char *build_grouped_kv_table(const KVList *list, int total, const char *child_unit) {
-    const char *empty = "<p class=\"boat-rudder__dashboard__empty\">No data</p>";
+    const char *empty = "<p class=\"boat-rudder-empty\">No data</p>";
     if (list->count == 0) return strdup(empty);
 
     KV *items = malloc((size_t)list->count * sizeof(KV));
@@ -325,7 +325,7 @@ static char *build_grouped_kv_table(const KVList *list, int total, const char *c
 
     int max_group = groups[0].count > 0 ? groups[0].count : 1;
 
-    char *html = strdup("<div class=\"boat-rudder__analytics__tree\">");
+    char *html = strdup("<div class=\"boat-rudder-analytics__tree\">");
     for (int gi = 0; html && gi < group_count; gi++) {
         const KVGroup *g = &groups[gi];
         const KV *first = &items[g->start];
@@ -339,9 +339,9 @@ static char *build_grouped_kv_table(const KVList *list, int total, const char *c
         char *block;
         if (g->len == 1 && first->key[fl] == '\0') {
             block = render_template(
-                "<div class=\"boat-rudder__analytics__tree-row boat-rudder__analytics__tree-row--leaf\">"
-                "<span class=\"boat-rudder__analytics__tree-name\">%s<span class=\"boat-rudder__analytics__bar\" style=\"width:%dpx\"></span></span>"
-                "<span class=\"boat-rudder__analytics__tree-count\">%d <span class=\"boat-rudder__analytics__pct\">(%d%%)</span></span>"
+                "<div class=\"boat-rudder-analytics__tree-row boat-rudder-analytics__tree-row--leaf\">"
+                "<span class=\"boat-rudder-analytics__tree-name\">%s<span class=\"boat-rudder-analytics__bar\" style=\"width:%dpx\"></span></span>"
+                "<span class=\"boat-rudder-analytics__tree-count\">%d <span class=\"boat-rudder-analytics__pct\">(%d%%)</span></span>"
                 "</div>",
                 name_enc, bar_w, g->count, pct);
         } else {
@@ -353,8 +353,8 @@ static char *build_grouped_kv_table(const KVList *list, int total, const char *c
                 char *ver_enc = html_encode_dup(*ver ? ver : "(no version)", strlen(*ver ? ver : "(no version)"));
                 if (!ver_enc) { free(rows); rows = NULL; break; }
                 char *row = render_template(
-                    "<tr><td>%s<span class=\"boat-rudder__analytics__bar\" style=\"width:%dpx\"></span></td>"
-                    "<td>%d <span class=\"boat-rudder__analytics__pct\">(%d%%)</span></td></tr>",
+                    "<tr><td>%s<span class=\"boat-rudder-analytics__bar\" style=\"width:%dpx\"></span></td>"
+                    "<td>%d <span class=\"boat-rudder-analytics__pct\">(%d%%)</span></td></tr>",
                     ver_enc, items[i].count * 100 / max_ver, items[i].count,
                     total > 0 ? items[i].count * 100 / total : 0);
                 free(ver_enc);
@@ -362,12 +362,12 @@ static char *build_grouped_kv_table(const KVList *list, int total, const char *c
                 free(row);
             }
             block = rows ? render_template(
-                "<details class=\"boat-rudder__analytics__tree-node\">"
-                "<summary class=\"boat-rudder__analytics__tree-row\">"
-                "<span class=\"boat-rudder__analytics__tree-name\">%s <span class=\"boat-rudder__analytics__tree-versions\">%d %s</span><span class=\"boat-rudder__analytics__bar\" style=\"width:%dpx\"></span></span>"
-                "<span class=\"boat-rudder__analytics__tree-count\">%d <span class=\"boat-rudder__analytics__pct\">(%d%%)</span></span>"
+                "<details class=\"boat-rudder-analytics__tree-node\">"
+                "<summary class=\"boat-rudder-analytics__tree-row\">"
+                "<span class=\"boat-rudder-analytics__tree-name\">%s <span class=\"boat-rudder-analytics__tree-versions\">%d %s</span><span class=\"boat-rudder-analytics__bar\" style=\"width:%dpx\"></span></span>"
+                "<span class=\"boat-rudder-analytics__tree-count\">%d <span class=\"boat-rudder-analytics__pct\">(%d%%)</span></span>"
                 "</summary>"
-                "<table class=\"boat-rudder__analytics__kv-table boat-rudder__analytics__tree-children\">%s</table>"
+                "<table class=\"boat-rudder-analytics__kv-table boat-rudder-analytics__tree-children\">%s</table>"
                 "</details>",
                 name_enc, g->len, child_unit, bar_w, g->count, pct, rows) : NULL;
             free(rows);
@@ -460,14 +460,14 @@ char *analytics_view(int epoch, const char *period, int year, int month, int wee
     char period_label[64];
     make_period_label(period_label, sizeof(period_label), period, year, month, week, date, from, to);
 
-    #define ACTIVE_CLASS "boat-rudder__analytics__period-btn--active"
+    #define ACTIVE_CLASS "boat-rudder-btn--active"
     const char *act_day      = strcmp(period, "day") == 0 ? ACTIVE_CLASS : "";
     const char *act_week     = strcmp(period, "week") == 0 ? ACTIVE_CLASS : "";
     const char *act_month    = strcmp(period, "month") == 0 ? ACTIVE_CLASS : "";
     const char *act_year     = (strcmp(period, "year") == 0 && year == cur_year) ? ACTIVE_CLASS : "";
     const char *act_lastyear = (strcmp(period, "year") == 0 && year == prev_year) ? ACTIVE_CLASS : "";
     const char *act_all      = strcmp(period, "all") == 0 ? ACTIVE_CLASS : "";
-    const char *act_range    = strcmp(period, "range") == 0 ? ACTIVE_CLASS : "";
+    const char *act_range    = strcmp(period, "range") == 0 ? "boat-rudder-analytics__range-form--active" : "";
 
     char *tpl_path = generate_url_theme("dashboard/analytics/analytics_epoch%d.html", epoch);
     char *tpl = tpl_path ? read_file_to_string(tpl_path) : NULL;
@@ -552,7 +552,7 @@ static void free_analytics_data(AnalyticsData *d) {
 // URL-encoded key (top articles -> "/blog/%s").
 static char *build_compare_table(const char *name_header, const KVList *week,
                                   const KVList *today, int limit, const char *href_fmt) {
-    if (week->count == 0) return strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+    if (week->count == 0) return strdup("<p class=\"boat-rudder-empty\">No data</p>");
 
     char *rows = strdup("");
     for (int i = 0; rows && i < week->count && i < limit; i++) {
@@ -579,14 +579,14 @@ static char *build_compare_table(const char *name_header, const KVList *week,
         rows = row ? str_append(rows, row) : NULL;
         free(row);
     }
-    if (!rows) return strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+    if (!rows) return strdup("<p class=\"boat-rudder-empty\">No data</p>");
 
     char *table = render_template(
-        "<table class=\"boat-rudder__analytics__kv-table boat-rudder__analytics__kv-table--compare\">"
+        "<table class=\"boat-rudder-analytics__kv-table boat-rudder-analytics__kv-table--compare\">"
         "<thead><tr><th>%s</th><th>Today</th><th>7 days</th></tr></thead><tbody>%s</tbody></table>",
         name_header, rows);
     free(rows);
-    return table ? table : strdup("<p class=\"boat-rudder__dashboard__empty\">No data</p>");
+    return table ? table : strdup("<p class=\"boat-rudder-empty\">No data</p>");
 }
 
 // The five per-epoch counters as a compare table, in epoch order (not
@@ -610,7 +610,7 @@ static char *build_epoch_compare_table(const AnalyticsData *today, const Analyti
     if (!body) return NULL;
 
     char *table = render_template(
-        "<table class=\"boat-rudder__analytics__kv-table boat-rudder__analytics__kv-table--compare\">"
+        "<table class=\"boat-rudder-analytics__kv-table boat-rudder-analytics__kv-table--compare\">"
         "<thead><tr><th>Epoch</th><th>Today</th><th>7 days</th></tr></thead><tbody>%s</tbody></table>",
         body);
     free(body);

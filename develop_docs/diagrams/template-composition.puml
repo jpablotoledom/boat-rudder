@@ -21,7 +21,7 @@ package "html/themes/<theme>/ (per theme)" {
     }
 
     object "page/page-home_epoch<N>.html" as CONTAINER {
-      {{FOOTER}}, {{HOME-MODAL}} -> literal replace
+      {{FOOTER}} -> literal replace
       %s (1) -> menu
       %s (2) -> mainbanner
       %s (3) -> home_content

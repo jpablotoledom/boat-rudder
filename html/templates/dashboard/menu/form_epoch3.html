@@ -1,27 +1,27 @@
-<section class="boat-rudder__dashboard">
-  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
     <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/menu">Menu</a></li></ol>
   </nav>
   <h1>Menu item</h1>
 %s
-  <form class="boat-rudder__dashboard__form" method="POST" action="%s">
-    <div class="boat-rudder__dashboard__form-row">
+  <form class="boat-rudder-dashboard__form boat-rudder-card" method="POST" action="%s">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="link">Link</label>
-      <input class="boat-rudder__dashboard__input" type="text" id="link" name="link" value="%s">
+      <input class="boat-rudder-input" type="text" id="link" name="link" value="%s">
     </div>
-    <div class="boat-rudder__dashboard__form-row">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="order">Order</label>
-      <input class="boat-rudder__dashboard__input" type="number" id="order" name="order" value="%d">
+      <input class="boat-rudder-input" type="number" id="order" name="order" value="%d">
     </div>
-    <div class="boat-rudder__dashboard__form-row">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="enabled">
         <input type="checkbox" id="enabled" name="enabled" value="true"%s>
         Enabled
       </label>
     </div>
 %s
-    <div class="boat-rudder__dashboard__button-container">
-      <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">Save</button>
+    <div class="boat-rudder-dashboard__button-container">
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
     </div>
   </form>
 </section>

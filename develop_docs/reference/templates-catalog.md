@@ -29,7 +29,7 @@ and which `{{MARKERS}}` it carries. How templates are resolved is in
 | `{{SITE_NAME}}` | `splice_site_name()`, `splice_footer()` | `site_settings.site_name`, escaped |
 | `{{FOOTER}}` | `splice_footer()` | Theme footer (DB override or `layout/footer_epoch<N>.html`) |
 | `{{FOOTER_LOGO}}` | `splice_footer_logo()` | Footer logo image/text or `layout/footer-logo_epoch<N>.html` |
-| `{{LIGHTBOX}}`, `{{HOME-MODAL}}` | `splice_part()` | `layout/lightbox_epoch<N>.html`, `layout/home-modal_epoch<N>.html` (epoch 3 only) |
+| `{{LIGHTBOX}}` | `splice_part()` | `layout/lightbox_epoch<N>.html` (epoch 3 only) |
 | `{{BODY_BACKGROUND}}` | `page_layout_wrap()` | Per-page body background argument |
 | `{{THEME_COLORS}}` | `splice_theme_colors()` | Epoch 3 `<style>` with `--br-color-*` and logo font |
 | `{{COLOR_*}}` | `splice_retro_colors()` | Epoch 1/2 hex colors (see [themes.md](themes.md#42-how-colors-reach-each-epoch)) |
@@ -46,7 +46,7 @@ shipped themes (`dark`, `light`) contain the same set.
 | `layout/` | `layout` | −1…3 | 0 | `CONTENT PAGE_TITLE BODY_BACKGROUND THEME_COLORS(3) COLOR_*(1,2)` | `page_layout_wrap()` - the outer document |
 | | `footer` | −1…3 | 0 | `FOOTER_LOGO SITE_NAME` | `splice_footer()` fallback |
 | | `footer-logo` | 2 | 0 | `SITE_NAME` | `splice_footer_logo()` fallback |
-| | `lightbox`, `home-modal` | 3 | 0 | | `splice_part()` |
+| | `lightbox` | 3 | 0 | | `splice_part()` |
 | `menu/` | `menu` | −1…3 | 3/4/5 | | `menu()` container |
 | | `menu-item`, `menu-item-selected` | −1…3 | 3/4 | | one nav item (selected = current section) |
 | | `menu-item-separator` | −1…3 | 0 | | between items |
@@ -64,8 +64,9 @@ shipped themes (`dark`, `light`) contain the same set.
 | `category-menu/` | `category-menu`, `-item`, `-item-selected`, `-separator` | −1…3 | 1-3 | | category bar on blog pages (`category_menu.c`) |
 | | `category-menu-compact` | −1 | 1 | | WML: single `[Categories]` link |
 | | `category-menu-page` | −1 | 2 | | `/blog/categories` page body |
-| `page/` | `page-home` | −1…3 | 4 | `FOOTER HOME-MODAL` | home page wrapper (`buildHomeWebSite()`) |
-| `.` | `styles_epoch3.css` | 3 | - | | epoch 3 stylesheet, served via `/themes/<key>/styles_epoch3.css` (DB-overridable) |
+| `page/` | `page-home` | −1…3 | 4 | `FOOTER` | home page wrapper (`buildHomeWebSite()`) |
+| `.` | `styles_epoch3.css` | 3 | - | | public epoch 3 stylesheet, served via `/themes/<key>/styles_epoch3.css` (DB-overridable) |
+| `.` | `styles_admin_epoch3.css` | 3 | - | | admin epoch 3 stylesheet (login, dashboard), served via `/themes/<key>/styles_admin_epoch3.css` (DB-overridable; optional, falls back to the configured `theme`'s) |
 | `assets/` | `blog-list/`, `footer/`, `mainbanner/`, `menu/`, `social-networks/` | | | | images; `mainbanner|footer|menu/epoch<N>/` are also the theme-assets upload targets |
 
 ---
@@ -133,7 +134,7 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` | `entry_editor_blocks.c` |
 | `categories/`, `menu/`, `users/`, `languages/` | `list`, `list-row`, `list-empty`/`list-error`, `form`, `form-field`, `form-error`, `option`, `list-row-actions` | the matching `*_admin.c` |
 | `media/` | `media`, `media-directory-container`, `media-directory`, `item-photo`, `media-modal` | `media_admin.c` ([media-admin.md](media-admin.md)) |
-| `settings/` | `settings`, `settings-error`, `settings-themes`, `settings-themes-panel` (48 args), `settings-themes-activate`, `settings-asset`, `settings-asset-panel`, `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css`, `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |
+| `settings/` | `settings`, `settings-error`, `settings-themes` (the list), `settings-themes-row`, `settings-themes-active`, `settings-theme` (one theme's page), `settings-themes-panel` (52 args), `settings-themes-activate` (key, `return`), `settings-asset`, `settings-asset-panel`, `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css` (7 positional args: key, two tab modifiers, status, `css`/`admin-css`, CSS, restore `hidden`), `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |
 | `fonts/` | `list`, `list-row`, `list-error` | `fonts_admin.c` ([fonts.md](fonts.md)) |
 | `analytics/` | `analytics` (28 args), `summary` (13 args, dashboard home: charts plus their folded tables) | `analytics_view.c` ([analytics.md](analytics.md)) |
 

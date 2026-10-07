@@ -54,9 +54,10 @@ char *theme_page(int epoch, const char *return_url) {
     char *items = strdup("");
     for (size_t i = 0; items && i < count; i++) {
         int is_active = strcmp(keys[i], active) == 0;
-        const char *active_attr = epoch >= EPOCH_MODERN
-            ? (is_active ? " boat-rudder__theme__item--active" : "")
-            : (is_active ? " class=\"br-theme__item--active\"" : "");
+        // Epoch 3 marks the current theme with a modifier class; the older
+        // templates have no stylesheet, so their attribute slot stays empty.
+        const char *active_attr = (epoch >= EPOCH_MODERN && is_active)
+            ? " boat-rudder-theme__item--active" : "";
 
         // The href/key stays the raw lowercase slug; only the reader-facing
         // label is capitalized (epoch 3 gets this for free from

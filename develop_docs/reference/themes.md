@@ -70,7 +70,7 @@ Paths are relative to the **working directory**, not the static root passed on t
 
 ### 4.1 The palette
 
-`CmsThemeColors` (`src/db/cms_themes.h`) holds **34 tokens**, one shared palette for every epoch
+`CmsThemeColors` (`src/db/cms_themes.h`) holds **40 tokens**, one shared palette for every epoch
 that has a notion of color (1, 2, 3). Stored under `themes.colors` with hyphenated names
 (`navbar-background`, …), which are also the admin form's field names and, prefixed with
 `--br-color-`, the epoch 3 CSS custom properties.
@@ -78,14 +78,15 @@ that has a notion of color (1, 2, 3). Stored under `themes.colors` with hyphenat
 | Group | Tokens | Notes |
 |---|---|---|
 | Navbar | `navbar-background`ᵅ, `navbar-menu-normal`, `navbar-menu-hover`, `navbar-menu-active`, `navbar-logo` | |
-| Page | `body-background`ᵅ, `body-background-epoch1`, `home-content-background`ᵅ, `home-content-text` | `body-background-epoch1` is the one per-epoch exception: epoch 1's `<body bgcolor>`, normally one of the 16 VGA-safe colors so indexed-color displays don't dither it |
+| Page | `body-background`ᵅ, `body-background-epoch1`, `page-content-background`ᵅ, `home-content-background`ᵅ, `home-content-text` | `body-background-epoch1` is the one per-epoch exception: epoch 1's `<body bgcolor>`, normally one of the 16 VGA-safe colors so indexed-color displays don't dither it. `page-content-background` is the background of `.boat-rudder-page-content` (login, dashboard, error, language and theme pages) and `.boat-rudder-page-entry` (blog posts and pages), epoch 3 only, transparent by default |
+| Admin (in the panel's *Body* group) | `body-text`, `body-text-muted`, `body-surface`, `body-surface-raised`, `body-border` | Epoch 3 login and dashboard only: text, secondary text (labels, hints), panel and card background, field/popover/menu background, borders. Read by `styles_admin_epoch3.css` through its `--br-admin-*` tokens; the admin's accent is `navbar-menu-active`. See [§6.1](#61-admin-tokens-and-components) |
 | Blog list | `blog-list-item-background`ᵅ, `-border`, `-author`, `-categories`, `-categories-hover`, `-date` | Also used for bylines and category tags |
 | Footer | `footer-logo`, `footer-logo-background`ᵅ | Epoch 3 only |
 | Links | `link-normal`, `link-hover`, `link-visited`, `link-active` | In-content links, independent of the menu colors. `link-hover` applies to epochs 2/3 only |
 | Table block | `table-header`, `table-border`, `table-row-a`, `table-row-b` | Plain `#rrggbb` - epoch 2 uses them as `bgcolor` |
 | Code block | `code-background`, `code-text`, `code-keyword`, `code-string`, `code-comment`, `code-number`, `code-variable`, `code-tag`, `code-line-number` | Syntax highlighting palette ([code-highlighting.md](code-highlighting.md)). Defaults: CGA/Turbo C on navy |
 
-ᵅ The five `*-background` tokens accept `#rrggbbaa`. The admin form shows a color picker plus an
+ᵅ The six `*-background` tokens accept `#rrggbbaa`. The admin form shows a color picker plus an
 opacity slider (`*-alpha` field, 0-100) joined by `cms_join_hex_alpha()`; alpha only has an
 effect on epoch 3 (CSS), since epoch 1/2 `bgcolor` attributes have no alpha.
 
@@ -97,7 +98,7 @@ back to `dark`'s palette.
 
 | Epoch | Mechanism | Where |
 |---|---|---|
-| 3 | `{{THEME_COLORS}}` in `layout_epoch3.html` → inline `<style>:root{--br-color-…}</style>` plus the logo font's `@font-face`. Every rule in `styles_epoch3.css` reads `var(--br-color-x, <default>)` | `splice_theme_colors()` in `page_layout.c` |
+| 3 | `{{THEME_COLORS}}` in `layout_epoch3.html` → inline `<style>:root{--br-color-…}</style>` plus the logo font's `@font-face`. Every rule in `styles_epoch3.css` (and the few admin rules that follow the site palette) reads `var(--br-color-x, <default>)` | `splice_theme_colors()` in `page_layout.c` |
 | 2 | `{{COLOR_*}}` markers in the layout → plain hex in `<body>` attributes and a small CSS1 block (`a:hover`, menu item ids, category tag id) | `splice_retro_colors()` |
 | 1 | Same markers, but only HTML attributes (`<body bgcolor text link vlink alink>`, `<font color>`) - no CSS | `splice_retro_colors()`, `menu.c`, `blog_list.c`, `category_tags.c`, `entry_page.c` |
 | 0, −1 | No color model | - |
@@ -146,19 +147,79 @@ uploaded fonts and only the CSS variable for system fonts.
 
 ---
 
-## 6. Editable epoch 3 stylesheet
+## 6. Editable epoch 3 stylesheets
 
-Each theme's `styles_epoch3.css` is **served dynamically**: `GET /themes/<key>/styles_epoch3.css`
-is intercepted by `match_theme_css_url()` before the static file server and answers
-`cms_get_theme_css(key)` - the `themes.css_epoch3` override if non-empty, otherwise the file on
-disk.
+Each theme ships **two** epoch 3 stylesheets:
 
-- `/dashboard/settings/themes/<key>/css` shows the *effective* CSS in a full-file editor
-  (128 KiB limit, `THEME_ASSET_HTML_MAX`).
-- `POST …/css` saves the override; `POST …/css/restore` clears it, so the shipped file is always
-  the one-click "Restore original".
+| File | Contents | Loaded on | Override |
+|---|---|---|---|
+| `styles_epoch3.css` | The public site: reset, navbar, banner, home, blog list, entry page and every content block, footer, language/theme pages, lightbox | Every epoch 3 page, linked by `layout_epoch3.html` | `themes.css_epoch3` |
+| `styles_admin_epoch3.css` | Login, dashboard, entry editor, media library, settings, analytics and charts | `/login` and `/dashboard*` only, **after** the public one | `themes.css_admin_epoch3` |
+
+Admin pages load both: they use the public navbar and footer, and the entry editor previews the
+public block markup. The admin `<link>` isn't in the layout: `page_layout_wrap()`
+(`splice_admin_styles()`) adds it before `</head>` when the request path is `/login`,
+`/dashboard` or below. It decides by path, not by session, so a signed-in admin browsing the
+public site doesn't download the admin rules, and a theme's layout needs no marker for it.
+
+Both are **served dynamically**: `GET /themes/<key>/styles_epoch3.css` and
+`GET /themes/<key>/styles_admin_epoch3.css` are intercepted by `match_theme_css_url()` before the
+static file server and answer `cms_get_theme_css(key, sheet)`:
+
+1. the theme's override (`css_epoch3` / `css_admin_epoch3`) if non-empty;
+2. otherwise the theme's file on disk;
+3. for the admin stylesheet only, if the theme ships none: the admin stylesheet of
+   `configs/settings.conf`'s `theme`. A new theme with only public CSS still gets a styled
+   dashboard.
+
+The editor at `/dashboard/settings/themes/<key>/css` has a tab per stylesheet (**Public site**,
+**Admin**, the latter at `…/admin-css`):
+
+- It shows the *effective* CSS in a full-file editor (128 KiB limit, `THEME_ASSET_HTML_MAX`).
+- `POST …/css` or `…/admin-css` saves that stylesheet's override; `POST …/restore` clears it, so
+  the shipped file is always the one-click "Restore original".
+- A broken public override no longer takes the dashboard down with it: the editor itself is
+  styled by the admin stylesheet.
 - Colors are still injected through `{{THEME_COLORS}}`, so an edited stylesheet keeps reacting to
   the color panel as long as it keeps its `var(--br-color-…)` references.
+- A `css_epoch3` override saved before the split still holds the admin rules too. It keeps
+  working (the admin stylesheet loads after it); *Restore original* drops the duplicate.
+
+### 6.1 Admin tokens and components
+
+`styles_admin_epoch3.css` has three parts; the rules are the same in every theme that ships
+today, only part 1 differs.
+
+1. **Tokens** - a `:root` block with every color, radius and size the admin uses. No rule outside
+   it carries a literal color (`scripts/check_css_bem.py` enforces it).
+
+   | Token | Value |
+   |---|---|
+   | `--br-admin-text`, `-text-muted`, `-surface`, `-surface-raised`, `-border`, `-hover` | `var(--br-color-body-*)` - the palette's *Body* admin colors |
+   | `--br-admin-accent` / `-on-accent` | `var(--br-color-navbar-menu-active)` / the panel background: primary buttons, focus, active state, switches, tabs, chart accents. One accent for the whole admin |
+   | `--br-admin-success`, `-danger`, `-on-danger` | Fixed per theme: saved/published/upload done; delete and errors |
+   | `--br-admin-overlay`, `-hover-overlay`, `-shadow`, `-thumb-filter` | Effects, fixed per theme |
+   | `--br-admin-series-1…5`, `--br-admin-block-<type>` | Categorical palettes, fixed per theme: one color per epoch (charts, stat cards) and per block type (editor labels) |
+   | `--br-admin-radius(-lg)`, `-font-xs/sm/md`, `-pad-sm/md/card` | Shape and type scale |
+
+2. **Components** - generic BEM blocks, mixed with a page's own element class:
+
+   | Block | Modifiers / elements | Replaces |
+   |---|---|---|
+   | `boat-rudder-btn` | `--primary`, `--danger`, `--ghost`, `--sm`, `--icon`, `--active` | `dashboard__button*`, the login button and ~20 editor, media and analytics buttons |
+   | `boat-rudder-input` | `--sm` | `dashboard__input`, the login fields and every editor field (bare `<input>`s inside `__meta-group` and block `<textarea>`s share the rule) |
+   | `boat-rudder-card` | | Login/dashboard forms, option groups, stat cards, report blocks, period bar, move picker |
+   | `boat-rudder-caption` | | The small uppercase headings (option groups, meta sections, report blocks, stat labels) |
+   | `boat-rudder-badge` | `--accent` | "Draft", "Page"/"Blog", "Theme: …" |
+   | `boat-rudder-alert` | `--error` | `login__error`, `dashboard__error` |
+   | `boat-rudder-empty` | | "No data", "No entries", "No other directories" |
+   | `boat-rudder-switch` | `__knob`, `--on` | The editor's publish and autosave switches |
+   | `boat-rudder-tabs` | `__tab`, `__tab--active` | The CSS editor's stylesheet tabs |
+
+3. **Pages** - login, dashboard, entry editor, media library, analytics: layout only.
+
+Entry previews and the rich-text editor show the entry as the public site does, so they read the
+public palette directly (`home-content-text`, `link-normal`, `table-*`, `code-*`).
 
 ---
 
@@ -204,14 +265,16 @@ All settings routes are epoch 3 and **admin only**.
    `/themes/dark/assets/...`. Replace `/themes/dark/` with `/themes/<key>/` throughout.
 3. Keep the markers the code fills in: `{{CONTENT}}`, `{{PAGE_TITLE}}`, `{{THEME_COLORS}}`
    (epoch 3 layout), `{{COLOR_*}}` (epoch 1/2 layouts), `{{BODY_BACKGROUND}}`, `{{FOOTER}}`,
-   `{{FOOTER_LOGO}}`, `{{LIGHTBOX}}`, `{{HOME-MODAL}}`, `{{SITE_NAME}}`, and the `%s` slots of
+   `{{FOOTER_LOGO}}`, `{{LIGHTBOX}}`, `{{SITE_NAME}}`, and the `%s` slots of
    each fragment in the order its module passes them ([templates-catalog.md](templates-catalog.md)).
 4. Delete any file you don't need to change - it will fall back to `html/templates/`. Files that
    exist only in themes today (layout, menu, banner, home sections, category menu, home page
    wrapper) have no shared copy, so a theme must provide them.
 5. Optionally add default colors for `<key>` to `THEME_DEFAULTS` in `cms_themes.c`; without an
    entry, epochs 1/2 use `dark`'s palette until the theme is saved once from the dashboard.
-6. Restart is **not** needed: the theme appears in `/dashboard/settings/themes` and the visitor
+6. `styles_admin_epoch3.css` is optional: copy it to restyle the dashboard for this theme, or
+   leave it out to use the one of `configs/settings.conf`'s `theme`.
+7. Restart is **not** needed: the theme appears in `/dashboard/settings/themes` and the visitor
    selector immediately.
 7. Remove site-specific text (e.g. `alt="…"` naming a particular site) - see
    [style-guide.md](style-guide.md).

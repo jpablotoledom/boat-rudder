@@ -16,7 +16,7 @@ POSIX threads, optionally enables TLS, and can run a built-in **WAP 1.x gateway*
 vintage phones, targeting **Linux and macOS** as primary platforms. The full dependency list,
 including vendored code, is in [third-party.md](third-party.md).
 
-> **Naming.** Boat Rudder is the software: the binary, the source tree, the `boat-rudder__*` CSS
+> **Naming.** Boat Rudder is the software: the binary, the source tree, the `boat-rudder-*` CSS
 > namespace and every document under `develop_docs/`. A *site* built with it is a separate thing
 > - its own MongoDB database, theme and content - and never appears in the source tree. Anything
 > a visitor reads (site name, banner, page titles) is content, not code; the defaults shipped in
@@ -50,7 +50,7 @@ own documents:
 | [data-flow.md](data-flow.md) | The same system read as one request's journey, start to finish |
 | [scripts.md](scripts.md) / [migrations.md](migrations.md) | Build, run, install, backup scripts; database migrations |
 | [third-party.md](third-party.md) | Vendored, ported and linked third-party code and data |
-| [style-guide.md](style-guide.md) | C conventions and the security rules that are non-negotiable here |
+| [style-guide.md](style-guide.md) | C conventions, the security rules that are non-negotiable here, and BEM CSS class names |
 
 ---
 
@@ -86,7 +86,7 @@ boat-rudder/
 │   │   │                                # buildPageWebSiteAtUrl() / buildBlogListWebSiteAtUrl() /
 │   │   │                                # buildEntryWebSiteAtUrl(): assemble pages per epoch
 │   │   └── page_layout.c/h              # page_layout_wrap(): layout, footer, footer logo, theme
-│   │                                    # colors/fonts, site name, (epoch 3) lightbox/home-modal
+│   │                                    # colors/fonts, site name, (epoch 3) lightbox
 │   ├── modules/
 │   │   ├── menu/menu.c/h                # Nav menu (logo, items, language, theme, user; WML compact)
 │   │   ├── mainbanner/mainbanner.c/h    # Home banner per epoch (theme DB override or file)
@@ -163,7 +163,7 @@ boat-rudder/
 │                                        # Latin-1 transcoding; redirect/JSON/CSS variants
 ├── html/                                # Static + templated content root (CLI root directory)
 │   ├── templates/                       # Shared, theme-agnostic templates (templates-catalog.md)
-│   ├── themes/<theme>/                  # Per-theme templates, assets, styles_epoch3.css
+│   ├── themes/<theme>/                  # Per-theme templates, assets, styles(_admin)_epoch3.css
 │   ├── assets/                          # Site-wide assets (fonts/, slide/)
 │   └── content/                         # posts/<user>/<dir>/ uploads, qr/ cache (gitignored)
 ├── scripts/
@@ -335,7 +335,7 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   - `/page/<link>` → CMS entry via `serve_cms_entry()`, passes `"/page/<link>"` as active menu URL. Same draft rule. WML pagination is no longer a route concern: every epoch −1 response is paginated by `build_epoch_response.c` (`?__page=N`, see [rendering.md](rendering.md#wml-pagination)).
   - `/menu`, `/language`, `/language/set`, `/theme`, `/theme/set` → nav menu page (WML), language and theme pickers, and their cookie-setting redirects.
   - `/qr/<code>`, `/youtube-qr/<id>`, `/image-qr/<code>` → short-link redirect and epoch-0 QR pages ([qr-and-short-links.md](qr-and-short-links.md)).
-  - `/themes/<key>/styles_epoch3.css` → the theme's epoch 3 CSS, possibly DB-overridden ([themes.md](themes.md#6-editable-epoch-3-stylesheet)).
+  - `/themes/<key>/styles_epoch3.css`, `/themes/<key>/styles_admin_epoch3.css` → the theme's public / admin epoch 3 CSS, possibly DB-overridden ([themes.md](themes.md#6-editable-epoch-3-stylesheets)).
   - `/dashboard/settings*`, `/dashboard/analytics`, `/dashboard/api/theme-assets/list` → see [themes.md](themes.md), [fonts.md](fonts.md), [analytics.md](analytics.md).
   - `/logout` → `405`; logout is `POST /logout` (CSRF-checked), which destroys the session and redirects to `/`.
   - anything else → `serve_static_file()`, passing the `If-Modified-Since` header for cache validation; a non-zero return code (`403`/`404`/`500`) is rendered via `send_error_response()`.

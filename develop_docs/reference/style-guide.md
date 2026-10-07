@@ -1,4 +1,4 @@
-# C Style Guide
+# Style Guide (C and CSS)
 
 This guide adapts the parts of the **Google C++ Style Guide** that translate
 cleanly to C (naming, formatting, file/include organization, comments) and
@@ -6,6 +6,7 @@ combines them with the **SEI CERT C Coding Standard** rules that matter most
 for a server that parses raw bytes from the network. It documents the
 conventions already used in `src/` so new code stays consistent, and
 highlights the security rules that are non-negotiable for this project.
+Section 15 adds the naming rules for CSS classes (BEM).
 
 Where the two sources disagree (e.g. Google avoids `goto`, CERT recommends it
 for centralized cleanup), the CERT/C-idiomatic choice wins - this is C, not
@@ -362,6 +363,74 @@ tracked `configs/settings.conf`.
 
 ---
 
+## 15. CSS Class Names (BEM)
+
+Every class is **BEM** with the project prefix:
+
+```
+boat-rudder-<block>__<element>--<modifier>
+```
+
+| Part | Rule | Example |
+|---|---|---|
+| Prefix | Always `boat-rudder-`, joined to the block with a single hyphen | `boat-rudder-navbar` |
+| Block | A standalone component, lowercase words joined by `-` | `boat-rudder-entry-editor` |
+| Element | A part of its block, after `__`. **One level only** | `boat-rudder-navbar__title` |
+| Modifier | A variant or state of a block or element, after `--` | `boat-rudder-navbar__menu--open` |
+
+- **No nested elements.** `block__a__b` is not allowed. When an element has parts of its own, it
+  becomes a block: `boat-rudder-entry-editor-block` with `boat-rudder-entry-editor-block__header`.
+- **No underscores inside names.** Use `menu-item`, not `menu_item`.
+- **State is a modifier, never a bare class.** Write `boat-rudder-modal--active`, not
+  `active`, `is-open` or `selected`. The element keeps its base class too:
+  `class="boat-rudder-media__photo boat-rudder-media__photo--selected"`. JS adds and removes the
+  full modifier name (`el.classList.toggle('boat-rudder-navbar__menu--open')`).
+- **No utility classes** such as `.none` or `.hidden`. To hide an element, use the `hidden`
+  attribute or a modifier.
+- **Classes built at runtime** concatenate a modifier onto a full prefix that ends in `--`:
+  `"boat-rudder-entry-image--" + align` in C, `'boat-rudder-media__progress-item--' + state` in
+  JS. Don't build block or element names at runtime.
+- **IDs are not part of BEM.** IDs (`#imageModal`, `#boat-rudder-navbar-menu-item`) are for JS
+  hooks and for epoch 2 (see below), not for epoch 3 styling.
+
+### Epochs without a stylesheet
+
+Only epoch 3 has stylesheets (`html/themes/<theme>/styles_epoch3.css` and `styles_admin_epoch3.css`). Epochs −1, 0, 1 and 2
+**don't carry class attributes**: there is nothing to style them with. The one exception is epoch
+2's inline `<style>` in `layout/layout_epoch2.html`. Its CSS1 rules use IDs and a few
+hyphen-only classes (`boat-rudder-paragraph`). CSS1 identifiers can't contain `_`, so BEM's `__`
+elements are unsafe for the real browsers of that epoch. Color those epochs with HTML attributes
+(`<font color>`, `bgcolor`) or IDs, as `menu.c` and `category_tags.c` explain.
+
+### Admin stylesheet: tokens and components
+
+`styles_admin_epoch3.css` is tokens, then components, then pages
+([themes.md](themes.md#61-admin-tokens-and-components)):
+
+- **Reuse a component before writing a rule.** A button is
+  `class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-media__select-btn"`: the component
+  draws it, the element class only places it. Give a page rule colors, borders or paddings only
+  when no component fits - and if two pages need the same thing, make it a component.
+- **No literal colors outside the `:root` token block.** Use `var(--br-admin-*)`; a public-palette
+  `var(--br-color-*, #fallback)` is fine where the admin shows site content (entry previews). A
+  new color is a new token first.
+- **Change a theme's admin look in its token block**, not in the rules: the rules are the same in
+  every theme that ships today.
+
+### Checking
+
+```bash
+./scripts/check_css_bem.py
+```
+
+Lists every class that breaks these rules: non-BEM names in the epoch 3 stylesheets, epoch 3
+templates, `html/assets/js` and `src/`; any leftover `boat-rudder__` name; and class attributes
+in epoch −1…2 templates; and a literal color outside the `:root` block of an admin stylesheet. It
+exits `1` when it finds something. Run it before committing CSS or
+template changes.
+
+---
+
 ## Quick Checklist (for review)
 
 - [ ] Header guard matches filename, includes grouped/ordered correctly
@@ -377,6 +446,8 @@ tracked `configs/settings.conf`.
 - [ ] New shared state is mutex-protected and documented
 - [ ] Builds clean with `-Wall -Wextra -Wpedantic`; tested under
       `compiledebug`/ASan
+- [ ] CSS classes are `boat-rudder-block__element--modifier`, states are modifiers, and
+      `./scripts/check_css_bem.py` passes
 
 ---
 

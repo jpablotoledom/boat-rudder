@@ -1,31 +1,31 @@
-<section class="boat-rudder__dashboard">
-  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
     <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/users">Users</a></li></ol>
   </nav>
   <h1>User</h1>
 %s
-  <form class="boat-rudder__dashboard__form" method="POST" action="%s">
-    <div class="boat-rudder__dashboard__form-row">
+  <form class="boat-rudder-dashboard__form boat-rudder-card" method="POST" action="%s">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="name">Name</label>
-      <input class="boat-rudder__dashboard__input" type="text" id="name" name="name" value="%s" required>
+      <input class="boat-rudder-input" type="text" id="name" name="name" value="%s" required>
     </div>
-    <div class="boat-rudder__dashboard__form-row">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="email">Email</label>
-      <input class="boat-rudder__dashboard__input" type="email" id="email" name="email" value="%s" required>
+      <input class="boat-rudder-input" type="email" id="email" name="email" value="%s" required>
     </div>
-    <div class="boat-rudder__dashboard__form-row">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="password">%s</label>
-      <input class="boat-rudder__dashboard__input" type="password" id="password" name="password">
+      <input class="boat-rudder-input" type="password" id="password" name="password">
     </div>
-    <div class="boat-rudder__dashboard__form-row">
+    <div class="boat-rudder-dashboard__form-row">
       <label for="role">Role</label>
-      <select class="boat-rudder__dashboard__input" id="role" name="role">
+      <select class="boat-rudder-input" id="role" name="role">
         <option value="admin"%s>Administrador</option>
         <option value="author"%s>Autor</option>
       </select>
     </div>
-    <div class="boat-rudder__dashboard__button-container">
-      <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">Save</button>
+    <div class="boat-rudder-dashboard__button-container">
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
     </div>
   </form>
 </section>

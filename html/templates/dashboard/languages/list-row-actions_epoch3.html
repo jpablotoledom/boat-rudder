@@ -3,13 +3,13 @@
         <td>%s</td>
         <td>No</td>
         <td>
-          <div class="boat-rudder__dashboard__inline-form">
+          <div class="boat-rudder-dashboard__inline-form">
             <form method="POST" action="/dashboard/languages/%s/default">
-              <button class="boat-rudder__dashboard__button" type="submit">Make default</button>
+              <button class="boat-rudder-btn" type="submit">Make default</button>
             </form>
             <form method="POST" action="/dashboard/languages/%s/remove"
                   onsubmit="return confirm('Remove this language? Content in it will no longer be shown on the site.');">
-              <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--danger" type="submit">Remove</button>
+              <button class="boat-rudder-btn boat-rudder-btn--danger" type="submit">Remove</button>
             </form>
           </div>
         </td>

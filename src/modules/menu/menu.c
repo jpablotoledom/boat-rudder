@@ -89,7 +89,7 @@ static char *language_selector(int epoch) {
             for (size_t i = 0; items && i < count; i++) {
                 if (!langs[i].code) continue;
                 const char *is_active = strcmp(langs[i].code, active) == 0
-                    ? " boat-rudder__navbar__lang__item--active" : "";
+                    ? " boat-rudder-navbar-lang__item--active" : "";
                 char *item = render_template(item_tpl, is_active, langs[i].code, return_enc,
                                               language_catalog_native(langs[i].code));
                 items = item ? str_append(items, item) : NULL;
@@ -159,7 +159,7 @@ static char *theme_selector(int epoch) {
             char *items = strdup("");
             for (size_t i = 0; items && i < count; i++) {
                 const char *is_active = strcmp(keys[i], active) == 0
-                    ? " boat-rudder__navbar__theme__item--active" : "";
+                    ? " boat-rudder-navbar-theme__item--active" : "";
                 char *item = render_template(item_tpl, is_active, keys[i], return_enc, keys[i]);
                 items = item ? str_append(items, item) : NULL;
                 free(item);
@@ -193,7 +193,7 @@ static char *theme_selector(int epoch) {
 // Rendered twice, from two different one-`%s` templates sharing the same
 // name: menu-user_epoch3.html sits in the fixed top-left corner (desktop)
 // and menu-user-mobile_epoch3.html rides inside the hamburger dropdown as
-// one more boat-rudder__navbar__menu_item (mobile) - styles_epoch3.css
+// one more boat-rudder-navbar__menu-item (mobile) - styles_epoch3.css
 // swaps which one is visible at the 800px breakpoint, since a signed-in
 // admin still needs a way to reach /dashboard once the corner link is
 // hidden. See user_menu_item()/user_menu_item_mobile() below.
@@ -292,7 +292,7 @@ char *menu(const char *current_url, int epoch) {
     // dead ends matter less than the pattern: an inline `style="color:..."`
     // per item broke hover outright (this engine won't let even
     // `!important` override an element's own inline style, unlike
-    // IE5/Windows 95); a bare `.boat-rudder__menu__item { color }` class
+    // IE5/Windows 95); a bare menu-item class selector (`.item { color }`)
     // fixed hover but lost the *resting* color to <body link="..."> outright
     // (specificity 0,1,0 - a spec-compliant engine should never let a
     // zero-specificity presentational hint win here, so this one plainly
@@ -300,8 +300,8 @@ char *menu(const char *current_url, int epoch) {
     // pseudo-classes changed nothing (both grouped selectors and pairing
     // `:link`/`:visited` with a class are separately documented as
     // unreliable on real mid-90s engines, so that rule likely just got
-    // dropped whole); a plain `a.boat-rudder__menu__item` (type+class,
-    // 0,1,1) and a `<td>`-qualified `td a.boat-rudder__menu__item` (0,1,2)
+    // dropped whole); a plain `a.item` (type+class,
+    // 0,1,1) and a `<td>`-qualified `td a.item` (0,1,2)
     // both *still* lost on unselected items, even though the same
     // technique's doubled-up selected-state version won outright - meaning
     // whatever specificity this engine effectively grants <body link>/
@@ -317,7 +317,7 @@ char *menu(const char *current_url, int epoch) {
     // item gets the other id instead.
     //
     // The hover rule had to move from class to id too, one step behind: a
-    // bare `.boat-rudder__menu__item:hover` (class+pseudo) stopped winning
+    // bare `.item:hover` (class+pseudo) stopped winning
     // the moment the resting rule became an id, since an id selector
     // outranks any number of classes regardless of pseudo-classes among
     // them - so hover is `#boat-rudder-navbar-menu-item:hover` now, id+

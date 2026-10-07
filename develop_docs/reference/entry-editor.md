@@ -74,7 +74,7 @@ template (3 `%s`: block_id, lang_fields, extra_data).
 
 `lang-tab-button_epoch3.html` renders one language-switcher `<button data-lang="<code>">` per
 language, displayed in the topbar. Clicking a language button calls `setLang(code)`, which
-toggles every `.boat-rudder__entry-editor__block__lang-content[data-lang]` across the entire page (header sidebar +
+toggles every `.boat-rudder-entry-editor-block__lang-content[data-lang]` across the entire page (header sidebar +
 every content block).
 
 ---
@@ -134,7 +134,7 @@ The three controls read from and write back to the single hidden `extra_data` fi
 the variant per epoch (see [rendering.md](rendering.md)), so the media picker's value is
 stored unchanged.
 
-`blocks/lang-field_epoch3.html` - one `<div class="boat-rudder__entry-editor__block__lang-content" data-lang="<code>">` wrapping a `<textarea name="text">` per language.
+`blocks/lang-field_epoch3.html` - one `<div class="boat-rudder-entry-editor-block__lang-content" data-lang="<code>">` wrapping a `<textarea name="text">` per language.
 
 `entry_editor_render_blocks(&entry, langs, lang_count, epoch)` renders all blocks and wraps them in `blocks_epoch3.html` (holds the block list + "+ Add block" dropdown).
 
@@ -146,11 +146,11 @@ No external `.js` file - same convention as `layout/layout_epoch3.html`. An IIFE
 `data-entry-id` and `data-langs` off `#entryEditor` and wires up:
 
 ### Language switching
-- `setLang(code)` - updates all `.boat-rudder__entry-editor__lang-btn` active states, calls `applyLangVisibility(document)` (shows only `[data-lang=code]` panels) and `refreshAllPreviews()`.
+- `setLang(code)` - updates all `.boat-rudder-entry-editor__lang-btn` active states, calls `applyLangVisibility(document)` (shows only `[data-lang=code]` panels) and `refreshAllPreviews()`.
 
 ### Preview / edit mode
-- `activateBlock(el)` - deactivates the previously active block, adds `.boat-rudder__entry-editor__block--editing` to the clicked block, calls `initBlockEditors(block)` (paragraph → rich text, title → heading buttons, gallery → thumbnail preview).
-- `deactivateBlock(el)` - removes `.boat-rudder__entry-editor__block--editing`, calls `refreshBlockPreview(block)`.
+- `activateBlock(el)` - deactivates the previously active block, adds `.boat-rudder-entry-editor-block--editing` to the clicked block, calls `initBlockEditors(block)` (paragraph → rich text, title → heading buttons, gallery → thumbnail preview).
+- `deactivateBlock(el)` - removes `.boat-rudder-entry-editor-block--editing`, calls `refreshBlockPreview(block)`.
 - `refreshBlockPreview(blockEl)` - builds the preview of a closed block from the current
   language's text field and `extra_data`. Two strategies:
   - **Server-rendered** (`fetchServerPreview()`, see [Block preview](#block-preview)):
@@ -160,7 +160,7 @@ No external `.js` file - same convention as `layout/layout_epoch3.html`. An IIFE
     the response arrives, or if it fails.
   - **Client-side**: `title` (`<hN>` from `extra_data`), `byline`, `separator` (`<hr>`), `link`,
     `list` (`<ul>`/`<ol>` per line), `social-networks`, `generic`.
-  - Each type renders a `<span class="boat-rudder__entry-editor__preview__empty">` placeholder
+  - Each type renders a `<span class="boat-rudder-empty">` placeholder
     when its field is blank. Values are HTML-escaped for client-side previews; `paragraph` and
     `generic` intentionally inject raw HTML, since that is what those blocks store.
 
@@ -179,10 +179,10 @@ above are accepted; anything else is a `500`. On the client:
   re-run so the new grid gets its "+N" tile and lightbox wiring.
 
 ### Rich text (paragraph blocks)
-`initParagraphEditors(block)` - for each `.boat-rudder__entry-editor__block__lang-content` panel: creates a
-`<div class="boat-rudder__entry-editor__richtext" contenteditable>` div above the hidden textarea, syncs content via
+`initParagraphEditors(block)` - for each `.boat-rudder-entry-editor-block__lang-content` panel: creates a
+`<div class="boat-rudder-entry-editor__richtext" contenteditable>` div above the hidden textarea, syncs content via
 `syncRichtext()`. The rich-text toolbar (two rows: formatting + alignment/lists/source) is
-injected via `insertAdjacentHTML`. Paste handler strips external styles/classes. `toggleSource(btn)` toggles between the contenteditable view and a raw `<textarea class="boat-rudder__entry-editor__source-editor">`.
+injected via `insertAdjacentHTML`. Paste handler strips external styles/classes. `toggleSource(btn)` toggles between the contenteditable view and a raw `<textarea class="boat-rudder-entry-editor__source-editor">`.
 
 ### Splitting and merging paragraphs
 `splitParagraph(btn)` moves everything after the caret into a new paragraph block below (one
@@ -205,7 +205,7 @@ The merge button is enabled only when the block above is also a paragraph
 
 ### Gallery blocks
 - `initGalleryBlock(block)` - reads the first lang's text field (semicolon URLs) and calls `renderGalleryThumbs()`.
-- `renderGalleryThumbs(container, value)` - renders 56×56 px `<img class="boat-rudder__entry-editor__gallery-thumb">` draggable thumbnails using `_small` variant URLs.
+- `renderGalleryThumbs(container, value)` - renders 56×56 px `<img class="boat-rudder-entry-editor__gallery-thumb">` draggable thumbnails using `_small` variant URLs.
 - `initGalleryThumbDragDrop(container)` - HTML5 drag-and-drop to reorder thumbnails; on drop calls `syncGalleryInput()`.
 - `syncGalleryInput(container)` - writes reordered URLs back to all lang text fields.
 - `openGalleryForBlock(btn)` / `openImageGallery(btn)` - fetch `/dashboard/api/media/modal`, inject into `#modalContainer`, execute inline scripts so `selectDirectory`, `upload`, etc. work.
@@ -235,7 +235,7 @@ The merge button is enabled only when the block above is also a paragraph
 - `toggleAutoSave()` - enables/disables the 3-second autosave timer.
 - `insertNewComponent(type)` / `removeComponent(btn)` - POST to `.../blocks` / `.../blocks/<id>/delete`; patch `#entryBlocks` directly.
 - `moveBlockUp/Down(btn)` - client-side DOM reorder; persisted on next `saveContent()`.
-- Drag-and-drop block reorder - mousedown on `.boat-rudder__entry-editor__block__grip` or `.boat-rudder__entry-editor__block__drag`, ghost clone, placeholder indicator; reindexes order on mouseup.
+- Drag-and-drop block reorder - mousedown on `.boat-rudder-entry-editor-block__grip` or `.boat-rudder-entry-editor-block__drag`, ghost clone, placeholder indicator; reindexes order on mouseup.
 
 ---
 
@@ -271,7 +271,7 @@ creates or updates a `media_galleries` document (BSON array of URLs) and writes 
 `_id` back into `content[].extra_data`. On the next save the existing `_id` is updated in-place.
 
 The media picker modal (`/dashboard/api/media/modal`) returns the full
-`dashboard/media/media_epoch3.html` wrapped in `.boat-rudder__modal`. Its inline JS sets selected
+`dashboard/media/media_epoch3.html` wrapped in `.boat-rudder-modal`. Its inline JS sets selected
 URLs into the target block's text fields (gallery) or the header `image_url` input (header cover).
 `activateScripts(container)` re-executes all `<script>` tags after `innerHTML` injection so that
 `selectDirectory`, `upload`, and other media functions are available.

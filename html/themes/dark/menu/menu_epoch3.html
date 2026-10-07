@@ -1,30 +1,30 @@
-<div class="boat-rudder__navbar-space">
-  <div class="boat-rudder__navbar">
+<div class="boat-rudder-navbar-space">
+  <div class="boat-rudder-navbar">
     <!-- Pinned to the left edge, outside __content, mirroring the options
          bar on the right - it must not shift when the centred menu grows. -->
-    <div class="boat-rudder__navbar__user-corner" id="userCorner">
+    <div class="boat-rudder-navbar__user-corner" id="userCorner">
 %s
     </div>
 
-    <div class="boat-rudder__navbar__content">
-      <div class="boat-rudder__navbar__title boat-rudder__navbar__title_onslidelogo" id="navbarTitle">
+    <div class="boat-rudder-navbar__content">
+      <div class="boat-rudder-navbar__title boat-rudder-navbar__title--onslidelogo" id="navbarTitle">
         <a href="/">%s</a>
       </div>
 
-      <button class="navbar__toggle" id="navbarToggle">
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
+      <button class="boat-rudder-navbar__toggle" id="navbarToggle">
+        <span class="boat-rudder-navbar__toggle-bar"></span>
+        <span class="boat-rudder-navbar__toggle-bar"></span>
+        <span class="boat-rudder-navbar__toggle-bar"></span>
       </button>
 
-      <div class="boat-rudder__navbar__menu boat-rudder__navbar__menu_onslidelogo" id="navbarMenu">
+      <div class="boat-rudder-navbar__menu boat-rudder-navbar__menu--onslidelogo" id="navbarMenu">
 %s
       </div>
     </div>
 
     <!-- Pinned to the right edge, outside __content, like the previous site's
          options bar - it must not shift when the centred menu grows. -->
-    <div class="boat-rudder__navbar__options" id="optionsMenu">
+    <div class="boat-rudder-navbar__options" id="optionsMenu">
 %s
 %s
     </div>
@@ -42,11 +42,11 @@
     const updateScroll = () => {
       const threshold = window.innerWidth < 500 ? 20 : 100;
       if (window.scrollY > threshold) {
-        navbarTitle.classList.remove('boat-rudder__navbar__title_onslidelogo');
-        navbarMenu.classList.remove('boat-rudder__navbar__menu_onslidelogo');
+        navbarTitle.classList.remove('boat-rudder-navbar__title--onslidelogo');
+        navbarMenu.classList.remove('boat-rudder-navbar__menu--onslidelogo');
       } else {
-        navbarTitle.classList.add('boat-rudder__navbar__title_onslidelogo');
-        navbarMenu.classList.add('boat-rudder__navbar__menu_onslidelogo');
+        navbarTitle.classList.add('boat-rudder-navbar__title--onslidelogo');
+        navbarMenu.classList.add('boat-rudder-navbar__menu--onslidelogo');
       }
     };
 
@@ -72,12 +72,12 @@
     updateScroll();
     window.addEventListener('scroll', throttle(updateScroll, 50));
   } else {
-    navbarTitle.classList.remove('boat-rudder__navbar__title_onslidelogo');
-    navbarMenu.classList.remove('boat-rudder__navbar__menu_onslidelogo');
+    navbarTitle.classList.remove('boat-rudder-navbar__title--onslidelogo');
+    navbarMenu.classList.remove('boat-rudder-navbar__menu--onslidelogo');
   }
 
   toggleBtn.addEventListener('click', () => {
-    navbarMenu.classList.toggle('menu--open');
+    navbarMenu.classList.toggle('boat-rudder-navbar__menu--open');
   });
 
   // Below 600px the options bar (theme + language) has no room next to the
@@ -92,7 +92,7 @@
     if (optionsMq.matches) {
       if (!menuOptions) {
         menuOptions = document.createElement('div');
-        menuOptions.className = 'boat-rudder__navbar__menu_options';
+        menuOptions.className = 'boat-rudder-navbar__menu-options';
       }
       while (optionsBar.firstElementChild) menuOptions.appendChild(optionsBar.firstElementChild);
       if (menuOptions.children.length) navbarMenu.appendChild(menuOptions);
@@ -111,18 +111,18 @@
   if (langBtn && langWrap) {
     langBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const open = langWrap.classList.toggle('lang--open');
+      const open = langWrap.classList.toggle('boat-rudder-navbar-lang--open');
       langBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
     document.addEventListener('click', (e) => {
       if (!langWrap.contains(e.target)) {
-        langWrap.classList.remove('lang--open');
+        langWrap.classList.remove('boat-rudder-navbar-lang--open');
         langBtn.setAttribute('aria-expanded', 'false');
       }
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        langWrap.classList.remove('lang--open');
+        langWrap.classList.remove('boat-rudder-navbar-lang--open');
         langBtn.setAttribute('aria-expanded', 'false');
       }
     });
@@ -135,18 +135,18 @@
   if (themeBtn && themeWrap) {
     themeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const open = themeWrap.classList.toggle('theme--open');
+      const open = themeWrap.classList.toggle('boat-rudder-navbar-theme--open');
       themeBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
     document.addEventListener('click', (e) => {
       if (!themeWrap.contains(e.target)) {
-        themeWrap.classList.remove('theme--open');
+        themeWrap.classList.remove('boat-rudder-navbar-theme--open');
         themeBtn.setAttribute('aria-expanded', 'false');
       }
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        themeWrap.classList.remove('theme--open');
+        themeWrap.classList.remove('boat-rudder-navbar-theme--open');
         themeBtn.setAttribute('aria-expanded', 'false');
       }
     });

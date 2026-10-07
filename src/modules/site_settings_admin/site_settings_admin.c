@@ -290,11 +290,11 @@ char *site_settings_preview_page(int epoch) {
     return load_template("dashboard/settings/preview_epoch%d.html", epoch);
 }
 
-char *site_settings_css_page(int epoch, const char *key, const char *value) {
+char *site_settings_css_page(int epoch, const char *key, ThemeCssSheet sheet, const char *value) {
     char *page_tpl = load_template("dashboard/settings/settings-css_epoch%d.html", epoch);
     if (!page_tpl) return NULL;
 
-    char *stored = cms_get_theme_css_value(key);
+    char *stored = cms_get_theme_css_value(key, sheet);
     const char *status = stored[0]
         ? "Customized - showing your saved override below. \"Restore original\" discards it."
         : "Showing the theme's original stylesheet - nothing customized yet.";
@@ -307,8 +307,12 @@ char *site_settings_css_page(int epoch, const char *key, const char *value) {
         return NULL;
     }
 
-    char *result = render_template(page_tpl, key, status, key, encoded_css,
-                                    key, is_customized ? "" : " hidden");
+    static const char *ACTIVE_TAB = " boat-rudder-tabs__tab--active";
+    int is_admin = sheet == THEME_CSS_ADMIN;
+    char *result = render_template(page_tpl, key,
+                                    is_admin ? "" : ACTIVE_TAB, is_admin ? ACTIVE_TAB : "",
+                                    status, is_admin ? "admin-css" : "css", encoded_css,
+                                    is_customized ? "" : " hidden");
     free(encoded_css);
     free(page_tpl);
     return result;
@@ -358,74 +362,104 @@ static char *build_font_options(const char *selected) {
     return options ? options : strdup("");
 }
 
-char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t count) {
-    char *page_tpl     = load_template("dashboard/settings/settings-themes_epoch%d.html", epoch);
-    char *panel_tpl    = load_template("dashboard/settings/settings-themes-panel_epoch%d.html", epoch);
-    char *activate_tpl = load_template("dashboard/settings/settings-themes-activate_epoch%d.html", epoch);
+// "Set active" for a theme that isn't the active one, "" for the one that
+// is; `return_to` is where the activate route sends the admin back.
+static char *activate_control(const char *key, bool active, const char *return_to, int epoch) {
+    if (active) return strdup("");
+    char *tpl = load_template("dashboard/settings/settings-themes-activate_epoch%d.html", epoch);
+    char *html = tpl ? render_template(tpl, key, return_to) : NULL;
+    free(tpl);
+    return html;
+}
 
-    char *panels = NULL;
+char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t count) {
+    char *page_tpl   = load_template("dashboard/settings/settings-themes_epoch%d.html", epoch);
+    char *row_tpl    = load_template("dashboard/settings/settings-themes-row_epoch%d.html", epoch);
+    char *active_tpl = load_template("dashboard/settings/settings-themes-active_epoch%d.html", epoch);
+
+    char *rows = NULL;
     char *result = NULL;
 
-    if (!page_tpl || !panel_tpl || !activate_tpl) goto cleanup;
+    if (!page_tpl || !row_tpl || !active_tpl) goto cleanup;
 
-    panels = strdup("");
-    for (size_t i = 0; panels && i < count; i++) {
-        char *activate = themes[i].active ? strdup("") : render_template(activate_tpl, themes[i].key);
-        if (!activate) {
-            free(panels);
-            panels = NULL;
-            break;
-        }
-
-        const CmsThemeColors *c = &themes[i].colors;
-        BgColorForm navbar_bg     = split_bg(c->navbar_background);
-        BgColorForm body_bg       = split_bg(c->body_background);
-        BgColorForm home_bg       = split_bg(c->home_content_background);
-        BgColorForm blog_item_bg  = split_bg(c->blog_list_item_background);
-        BgColorForm footer_bg     = split_bg(c->footer_logo_background);
-
-        char *logo_font = cms_get_theme_logo_font(themes[i].key);
-        char *font_options = build_font_options(logo_font);
-        free(logo_font);
-        if (!font_options) { free(activate); free(panels); panels = NULL; break; }
-
-        char *panel = render_template(panel_tpl, themes[i].key,
-                                       themes[i].active ? " (active)" : "", activate,
-                                       themes[i].key,
-                                       navbar_bg.rgb, navbar_bg.alpha, c->navbar_menu_normal,
-                                       c->navbar_menu_hover, c->navbar_menu_active,
-                                       c->navbar_logo, font_options,
-                                       c->link_normal, c->link_hover, c->link_visited, c->link_active,
-                                       body_bg.rgb, body_bg.alpha, c->body_background_epoch1,
-                                       home_bg.rgb, home_bg.alpha, c->home_content_text,
-                                       blog_item_bg.rgb, blog_item_bg.alpha, c->blog_list_item_border,
-                                       c->blog_list_item_author, c->blog_list_item_categories,
-                                       c->blog_list_item_categories_hover, c->blog_list_item_date,
-                                       c->table_header, c->table_border, c->table_row_a, c->table_row_b,
-                                       c->code_background, c->code_text, c->code_keyword,
-                                       c->code_string, c->code_comment, c->code_number,
-                                       c->code_variable, c->code_tag, c->code_line_number,
-                                       c->footer_logo, footer_bg.rgb, footer_bg.alpha,
-                                       themes[i].key, themes[i].key, themes[i].key, themes[i].key);
-        free(font_options);
-        free(activate);
-        if (!panel) {
-            free(panels);
-            panels = NULL;
-            break;
-        }
-
-        panels = str_append(panels, panel);
-        free(panel);
+    rows = strdup("");
+    for (size_t i = 0; rows && i < count; i++) {
+        char *status = themes[i].active ? strdup(active_tpl)
+                                        : activate_control(themes[i].key, false, "/dashboard/settings/themes", epoch);
+        char *row = status ? render_template(row_tpl, themes[i].key, status) : NULL;
+        free(status);
+        rows = row ? str_append(rows, row) : NULL;
+        free(row);
     }
-    if (!panels) goto cleanup;
+    if (!rows) goto cleanup;
 
-    result = render_template(page_tpl, panels);
+    result = render_template(page_tpl, rows);
+
+cleanup:
+    free(page_tpl);
+    free(row_tpl);
+    free(active_tpl);
+    free(rows);
+    return result;
+}
+
+char *site_settings_theme_page(int epoch, const ThemeEntry *theme) {
+    char *page_tpl   = load_template("dashboard/settings/settings-theme_epoch%d.html", epoch);
+    char *panel_tpl  = load_template("dashboard/settings/settings-themes-panel_epoch%d.html", epoch);
+    char *active_tpl = load_template("dashboard/settings/settings-themes-active_epoch%d.html", epoch);
+
+    char *panel = NULL, *activate = NULL, *font_options = NULL;
+    char *result = NULL;
+
+    if (!page_tpl || !panel_tpl || !active_tpl) goto cleanup;
+
+    char return_to[128];
+    snprintf(return_to, sizeof(return_to), "/dashboard/settings/themes/%s", theme->key);
+    activate = activate_control(theme->key, theme->active, return_to, epoch);
+    if (!activate) goto cleanup;
+
+    const CmsThemeColors *c = &theme->colors;
+    BgColorForm navbar_bg     = split_bg(c->navbar_background);
+    BgColorForm body_bg       = split_bg(c->body_background);
+    BgColorForm page_bg       = split_bg(c->page_content_background);
+    BgColorForm home_bg       = split_bg(c->home_content_background);
+    BgColorForm blog_item_bg  = split_bg(c->blog_list_item_background);
+    BgColorForm footer_bg     = split_bg(c->footer_logo_background);
+
+    char *logo_font = cms_get_theme_logo_font(theme->key);
+    font_options = build_font_options(logo_font);
+    free(logo_font);
+    if (!font_options) goto cleanup;
+
+    panel = render_template(panel_tpl, theme->key,
+                             navbar_bg.rgb, navbar_bg.alpha, c->navbar_menu_normal,
+                             c->navbar_menu_hover, c->navbar_menu_active,
+                             c->navbar_logo, font_options,
+                             c->link_normal, c->link_hover, c->link_visited, c->link_active,
+                             body_bg.rgb, body_bg.alpha, c->body_background_epoch1,
+                             page_bg.rgb, page_bg.alpha,
+                             c->body_text, c->body_text_muted, c->body_surface,
+                             c->body_surface_raised, c->body_border,
+                             home_bg.rgb, home_bg.alpha, c->home_content_text,
+                             blog_item_bg.rgb, blog_item_bg.alpha, c->blog_list_item_border,
+                             c->blog_list_item_author, c->blog_list_item_categories,
+                             c->blog_list_item_categories_hover, c->blog_list_item_date,
+                             c->table_header, c->table_border, c->table_row_a, c->table_row_b,
+                             c->code_background, c->code_text, c->code_keyword,
+                             c->code_string, c->code_comment, c->code_number,
+                             c->code_variable, c->code_tag, c->code_line_number,
+                             c->footer_logo, footer_bg.rgb, footer_bg.alpha,
+                             theme->key, theme->key, theme->key, theme->key);
+    if (!panel) goto cleanup;
+
+    result = render_template(page_tpl, theme->key, theme->active ? active_tpl : "", activate, panel);
 
 cleanup:
     free(page_tpl);
     free(panel_tpl);
-    free(activate_tpl);
-    free(panels);
+    free(active_tpl);
+    free(activate);
+    free(font_options);
+    free(panel);
     return result;
 }

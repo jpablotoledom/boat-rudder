@@ -11,6 +11,108 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 
 ## [Unreleased] - v0.0.1
 
+### 2026-10-06 - One page per theme
+
+**Changed**
+- `/dashboard/settings/themes` is now a list of the themes (name, *Active* or *Set active*,
+  *Edit*); each theme's colors, logo font and editor links moved to its own page,
+  `/dashboard/settings/themes/<key>`, so editing a theme no longer means scrolling past the
+  others. Saving colors returns to that page; *Set active* returns to whichever page it was
+  clicked on. The banner, footer, logo and CSS editors link back to their theme in the
+  breadcrumb.
+
+### 2026-10-06 - Page content background
+
+**Added**
+- `page-content-background` theme color (with opacity), in the panel's *Body* group: the
+  background of `.boat-rudder-page-content`, the wrapper of the login, dashboard, error and
+  language/theme pages (epoch 3). Transparent by default, so nothing changes until it's set.
+  40 theme colors in all.
+- `.boat-rudder-page-entry` (blog posts and pages) uses the same background, with a
+  `24px 32px` padding (`16px` on phones) so its text doesn't touch the edge of the box.
+
+### 2026-10-06 - Admin design tokens and components
+
+**Added**
+- Five theme colors for the admin, in the panel's *Body* group: text, secondary text, panel
+  background, field background and borders (`body-text`, `body-text-muted`, `body-surface`,
+  `body-surface-raised`, `body-border`) - 39 theme colors in all. Each groups what used to be a
+  dozen near-identical grays per role.
+- A `--br-admin-*` token block at the top of every `styles_admin_epoch3.css`: palette colors
+  (the new *Body* ones, and `navbar-menu-active` as the single accent), fixed states (success,
+  danger), effects, the categorical palettes (charts, editor block types) and a type/shape scale.
+- Generic admin components: `boat-rudder-btn` (`--primary`, `--danger`, `--ghost`, `--sm`,
+  `--icon`, `--active`), `-input`, `-card`, `-caption`, `-badge`, `-alert`, `-empty`, `-switch`,
+  `-tabs`, mixed into the templates next to each element's own class.
+- `scripts/check_css_bem.py` also fails on a literal color outside an admin sheet's `:root`.
+
+**Changed**
+- The admin's ~90 (dark) and ~100 (light) distinct colors are now tokens; outside `:root` no
+  rule carries a literal color, and the rules are identical in both themes. The admin follows
+  the theme palette and has one accent instead of three (violet dashboard, blue editor, green
+  media library). Entry previews and the rich-text editor use the public palette, as the site
+  shows the entry.
+- Buttons, fields, cards, badges, alerts, switches and tabs look the same on every admin page
+  (26 button styles with 16 paddings and 6 font sizes before).
+
+**Removed**
+- Dead CSS: the editor's per-block language tabs, title input, toolbar select, image block
+  preview, header tabs (`entry-editor__tabs`, `__tab-btn`, `__tab-content`) and the unused
+  `switchHeaderTab()` script.
+
+**Fixed**
+- The HTML source editor's colors never applied (`.boat-rudder-entry-editor-block textarea` won
+  on specificity); it now uses the code block's colors.
+- Links styled as buttons took the public `a:link` color instead of the button's.
+
+### 2026-10-06 - Public and admin stylesheets per theme
+
+**Changed**
+- Each theme's epoch 3 CSS is split in two: `styles_epoch3.css` (public site, every page) and
+  the new `styles_admin_epoch3.css` (login, dashboard, entry editor, media library, settings,
+  analytics), linked only on `/login` and `/dashboard*`, after the public one. Public pages no
+  longer download the ~55 KB of admin rules. Every rule kept its text and order; screenshots
+  of every public and admin page are pixel-identical before and after.
+- The CSS editor (`/dashboard/settings/themes/<key>/css`) has a tab per stylesheet; the admin one
+  lives at `…/admin-css` and is stored in `themes.css_admin_epoch3`. A broken public override no
+  longer breaks the dashboard.
+- A theme without `styles_admin_epoch3.css` uses the one of `configs/settings.conf`'s `theme`.
+
+**Removed**
+- The epoch 3 home thumbnail modal (`layout/home-modal_epoch3.html`, `{{HOME-MODAL}}`, its CSS):
+  nothing ever opened it.
+
+**Fixed**
+- Unescaped `%` in five templates rendered through printf (`home-content_epoch2.html`, the
+  image block's size options, two editor scripts) - undefined behavior that ASan flagged.
+
+### 2026-10-06 - BEM CSS class names
+
+**Changed**
+- Every CSS class is now BEM with the `boat-rudder-` prefix
+  (`boat-rudder-<block>__<element>--<modifier>`), replacing the `boat-rudder__block__element`
+  namespace: 416 names renamed across the stylesheets, templates, C and JS. Elements nested two
+  levels deep became blocks of their own (`boat-rudder__entry-editor__block__header` →
+  `boat-rudder-entry-editor-block__header`), and `_` inside names became `-`.
+- Bare state classes became modifiers: `active`, `open`, `on`, `selected`, `saved`, `error`,
+  `done`, `disabled`, `drag-over`, `dragging`, `is-dragging`, `is-expanded`, `menu--open`,
+  `lang--open`, `theme--open`, the editor's `type-*` labels, the navbar's `navbar__toggle`/`bar`
+  and the gallery page's `gallery-page*`. The `.none` utility is gone: the media library's
+  directory rename uses the `hidden` attribute.
+- **Run `scripts/migrations/2026-10-06-bem-class-names.js`** on every site: saved theme CSS
+  overrides and stored markup still use the old names.
+
+**Removed**
+- Class attributes from epoch −1/0/1/2 templates and the C that emitted them for those epochs
+  (`br-*`, the epoch 2 menu, footer, home, page and list classes, the separator variant, the
+  active language/theme marker). Those epochs have no stylesheet. Epoch 2 keeps
+  `boat-rudder-paragraph`, which its inline `<style>` uses.
+
+**Added**
+- Section 15 of `style-guide.md`: CSS class naming rules.
+- `scripts/check_css_bem.py`: fails on non-BEM classes, leftover `boat-rudder__` names, or class
+  attributes on epochs without a stylesheet.
+
 ### 2026-10-06 - Dashboard usability
 
 **Added**

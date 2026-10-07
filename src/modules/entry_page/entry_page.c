@@ -227,7 +227,7 @@ static char *render_paragraph(const CmsContentBlock *block, int epoch) {
         result = render_template(tpl, color, text);
     } else {
         char mod[64];
-        modifier_class(block->extra_data, "boat-rudder__paragraph", mod, sizeof(mod));
+        modifier_class(block->extra_data, "boat-rudder-paragraph", mod, sizeof(mod));
         result = render_template(tpl, mod, text);
     }
     free(text);
@@ -423,7 +423,7 @@ static char *render_image(const CmsContentBlock *block, int epoch) {
                                  full, src, width_attr, o.caption, o.caption);
     } else {
         char mods[128];
-        snprintf(mods, sizeof(mods), " boat-rudder__entry-image--w%s boat-rudder__entry-image--%s",
+        snprintf(mods, sizeof(mods), " boat-rudder-entry-image--w%s boat-rudder-entry-image--%s",
                  o.width, o.align);
         // The full-size URL rides along in data-full for the lightbox.
         result = render_template(tpl, mods, src, full, o.caption, o.caption);
@@ -581,13 +581,14 @@ static char *render_separator(const CmsContentBlock *block, int epoch) {
     char *tpl = load_template("elements/separator/separator_epoch%d.html", epoch);
     if (!tpl) return NULL;
 
-    // Epochs -1/0 emit a bare <br/>/<hr> with no class to modify.
+    // Only epoch 3 has a stylesheet, so only its <hr> carries the variant
+    // class; every older epoch emits a bare rule.
     char *result;
-    if (epoch <= EPOCH_PRESTANDARD) {
+    if (epoch < EPOCH_MODERN) {
         result = render_template(tpl);
     } else {
         char mod[64];
-        modifier_class(block->extra_data, "boat-rudder__separator", mod, sizeof(mod));
+        modifier_class(block->extra_data, "boat-rudder-separator", mod, sizeof(mod));
         result = render_template(tpl, mod);
     }
     free(tpl);

@@ -208,13 +208,13 @@ and `id` (hex ObjectId). `dashboard_epoch<N>.html` also has a static "+ New entr
 ### Maintainer page conventions (epoch 3)
 
 - **Breadcrumb**: every maintainer page except the entry editor and the media library opens with
-  `<nav class="boat-rudder__dashboard__breadcrumb">` listing its ancestors as links
+  `<nav class="boat-rudder-dashboard__breadcrumb">` listing its ancestors as links
   (`Dashboard / Site settings / Themes`); the `<h1>` below it is the current page. It replaces the
   old "Back to ..." links at the bottom.
 - **Header**: lists with a "New ..." action (entries, categories, users, menu) put it on the right
-  of the `<h1>` in a `boat-rudder__dashboard__panel-header`, like the dashboard home's panels.
-- **Buttons**: `boat-rudder__dashboard__button` plus `--primary` for create/save actions and
-  `--danger` for destructive ones. Every Delete/Remove form asks first with
+  of the `<h1>` in a `boat-rudder-dashboard__panel-header`, like the dashboard home's panels.
+- **Buttons**: `boat-rudder-btn` plus `--primary` for create/save actions and `--danger` for
+  destructive ones (the admin components: [themes.md](themes.md#61-admin-tokens-and-components)). Every Delete/Remove form asks first with
   `onsubmit="return confirm(...)"`.
 
 ### Entry editor (`src/db/cms_entries_admin.c`, `src/modules/entry_editor/`)
@@ -266,7 +266,7 @@ document instead of a 5-table relational model).
   "+ Add block" dropdown (one button per supported type) and the "Save all"/autosave controls.
 - **Editor JS** (inline `<script>` in `container_epoch3.html`, no external `.js` file, following
   the convention in `layout/layout_epoch3.html` / `menu/menu_epoch3.html`): language tabs
-  toggle every `.boat-rudder__entry-editor__lang-panel[data-lang="<code>"]` element (header
+  toggle every `.boat-rudder-entry-editor__lang-panel[data-lang="<code>"]` element (header
   sidebar + each block) via `setLang()`. `saveMeta()`/`saveHeader()`/`saveContent()` each `POST`
   one of the `/dashboard/api/entries/<id>/...` endpoints below as
   `application/x-www-form-urlencoded`; `editorSaveAll()` runs all three. Editing any field marks
@@ -484,7 +484,8 @@ A media library for uploading and managing images used in entries. Requires a da
 - `match_theme_epoch_route(decoded_url, segment, key_out, …, epoch_out, …)`: matches
   `/dashboard/settings/themes/<key>/<segment>/<epoch>` for the banner/footer/logo saves (the
   epoch may be `-1`).
-- `match_theme_css_url()`: matches the public `/themes/<key>/styles_epoch3.css`.
+- `match_theme_css_url()`: matches `/themes/<key>/styles_epoch3.css` and `/themes/<key>/styles_admin_epoch3.css`.
+- `match_theme_css_editor()`: matches the CSS editor's `…/css` and `…/admin-css` routes (plus `/restore`).
 - `theme_assets_dir()`, `sanitize_asset_filename()`, `mkdir_recursive()`: validation and
   filesystem helpers for the theme-assets and font uploads ([security.md](security.md#request-handling)).
 - `parse_bg_color_field()`: joins a color picker and an opacity field into `#rrggbb[aa]`.
@@ -499,10 +500,11 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 | Page | What it edits | Stored in |
 |---|---|---|
 | `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere) | `site_settings.site_name` |
-| `/dashboard/settings/themes` | One panel per directory under `html/themes/`: *Set active*, the 34 colors (backgrounds with opacity), the epoch 3 logo font, links to the per-theme editors | `site_settings.active_theme`, `themes.colors`, `themes.logo_font` |
+| `/dashboard/settings/themes` | The list of directories under `html/themes/`: each one's name, *Active* or *Set active*, and *Edit* | `site_settings.active_theme` |
+| `…/themes/<key>` | One theme: *Set active* (unless it is), the 40 colors (backgrounds with opacity), the epoch 3 logo font, links to its banner/footer/logo/CSS editors | `themes.colors`, `themes.logo_font` |
 | `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) + image upload/browse | `themes.banner_html`, `themes.footer_html`, files in `html/themes/<key>/assets/` |
 | `…/themes/<key>/logo` | Per-epoch logo: text (0), image (−1, 1, 2; −1 auto-converted to WBMP) or either (3) | `themes.logo` |
-| `…/themes/<key>/css` | Full epoch 3 stylesheet, with *Restore original* | `themes.css_epoch3` |
+| `…/themes/<key>/css`, `…/admin-css` | Full epoch 3 stylesheets, public and admin (one tab each), with *Restore original* | `themes.css_epoch3`, `themes.css_admin_epoch3` |
 | `/dashboard/settings/preview` | Nothing - an iframe of the site in any epoch and screen size (`?preview_epoch=`) | - |
 | `/dashboard/settings/fonts` | Uploaded font library ([fonts.md](fonts.md)) | `fonts`, `html/assets/fonts/` |
 

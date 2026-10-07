@@ -304,7 +304,7 @@ boat-rudder/
 │   └── GeoLite2-Country.mmdb   # Optional, read at startup for analytics
 └── html/                       # Document root: templates, assets and uploaded media
     ├── templates/...           # Shared templates
-    ├── themes/<theme>/...      # Per-theme templates, assets, styles_epoch3.css
+    ├── themes/<theme>/...      # Per-theme templates, assets, styles(_admin)_epoch3.css
     ├── assets/fonts/...        # Font library
     └── content/posts/...       # Media uploads land here (content/qr/ caches QR images)
 ```
@@ -404,6 +404,7 @@ These scripts are not meant to be called directly but can be if needed. All of t
 | `scripts/mongodb_dump.sh` | nothing (manual) | `./scripts/mongodb_dump.sh` |
 | `scripts/mongodb_restore.sh` | nothing (manual) | `./scripts/mongodb_restore.sh` |
 | `scripts/migrations/*.js` | nothing (manual, `mongosh`) | see [migrations.md](migrations.md) |
+| `scripts/check_css_bem.py` | nothing (manual, before committing CSS/templates) | `./scripts/check_css_bem.py` - see [style-guide.md](style-guide.md#15-css-class-names-bem); needs `python3` |
 | `scripts/boat-rudder.service` | copied by `install` | not executable |
 | `scripts/boat-rudder.logrotate` | copied by `install` | not executable |
 | `scripts/show/banner`, `scripts/show/divbar` | sourced (`source ./scripts/show/…`) by `compile_*`, `install`, `uninstall`, `run_debug`, `clean`, `create_local_cert` for console output: the ASCII banner and a divider line | not standalone - plain shell fragments, no shebang |

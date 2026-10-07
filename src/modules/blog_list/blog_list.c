@@ -45,7 +45,7 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
 
         if (epoch == EPOCH_MODERN) {
             // home-blog-item_epoch3.html carries its own color via CSS
-            // classes (boat-rudder__home-blog__item__byline-owner etc.) -
+            // classes (boat-rudder-home-blog-item__byline-owner etc.) -
             // no color arguments to insert. Unlike epoch 2's item template,
             // this one addresses its %s slots sequentially, not by %N$s
             // position, so passing the epoch 1/2 color arguments here would

@@ -2,27 +2,27 @@
      keyboard, and touch (swipe, pinch zoom, pan, double-tap reset). Also
      folds each gallery down to 5 tiles (4 under 500px) with a "+N" overlay. -->
 <style>
-.boat-rudder__modal {
+.boat-rudder-modal {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0, 0, 0, 0); transition: background 0.3s ease;
   justify-content: space-between; align-items: center; z-index: 1000;
 }
-.boat-rudder__modal.active { display: flex; background: rgba(0, 0, 0, 0.8); }
-.boat-rudder__modal img {
+.boat-rudder-modal--active { display: flex; background: rgba(0, 0, 0, 0.8); }
+.boat-rudder-modal img {
   max-width: 90%; max-height: 90%; border-radius: 8px; z-index: 1; touch-action: none;
 }
-.boat-rudder__modal__close {
+.boat-rudder-modal__close {
   position: absolute; top: 0; right: 0; font-size: 40px; line-height: 24px;
   color: white; cursor: pointer; padding: 10px; background-color: #7b0a74; z-index: 1000;
 }
-.boat-rudder__modal__prev, .boat-rudder__modal__next {
+.boat-rudder-modal__prev, .boat-rudder-modal__next {
   font-size: 40px; padding: 10px; background-color: #7b0a74; color: white;
   cursor: pointer; user-select: none; z-index: 1000;
 }
-.boat-rudder__modal__prev.disabled, .boat-rudder__modal__next.disabled {
+.boat-rudder-modal__prev--disabled, .boat-rudder-modal__next--disabled {
   opacity: 0.3; cursor: default; pointer-events: none;
 }
-.boat-rudder__modal__spinner {
+.boat-rudder-modal__spinner {
   display: none; position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
   border: 4px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%;
   animation: boat-rudder-spin 0.7s linear infinite; z-index: 10;
@@ -31,28 +31,28 @@
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to { transform: translate(-50%, -50%) rotate(360deg); }
 }
-.boat-rudder__gallery-overlay {
+.boat-rudder-gallery-overlay {
   position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; border-radius: inherit;
   color: white; font-size: 3rem; font-weight: bold;
 }
-@media (max-width: 900px) { .boat-rudder__modal img { max-width: 80%; } }
+@media (max-width: 900px) { .boat-rudder-modal img { max-width: 80%; } }
 @media (max-width: 500px) {
-  .boat-rudder__modal { justify-content: center; }
-  .boat-rudder__modal img { max-width: 100%; }
-  .boat-rudder__modal__prev, .boat-rudder__modal__next { position: absolute; bottom: 0; }
-  .boat-rudder__modal__prev { left: 0; }
-  .boat-rudder__modal__next { right: 0; }
+  .boat-rudder-modal { justify-content: center; }
+  .boat-rudder-modal img { max-width: 100%; }
+  .boat-rudder-modal__prev, .boat-rudder-modal__next { position: absolute; bottom: 0; }
+  .boat-rudder-modal__prev { left: 0; }
+  .boat-rudder-modal__next { right: 0; }
 }
 </style>
 
-<div class="boat-rudder__modal" id="imageModal">
-  <span class="boat-rudder__modal__close" id="closeModal">&times;</span>
-  <div class="boat-rudder__modal__prev" id="prevImage">&lt;</div>
+<div class="boat-rudder-modal" id="imageModal">
+  <span class="boat-rudder-modal__close" id="closeModal">&times;</span>
+  <div class="boat-rudder-modal__prev" id="prevImage">&lt;</div>
   <img id="modalImage" src="" alt="">
-  <div class="boat-rudder__modal__next" id="nextImage">&gt;</div>
-  <div class="boat-rudder__modal__spinner" id="modalSpinner"></div>
+  <div class="boat-rudder-modal__next" id="nextImage">&gt;</div>
+  <div class="boat-rudder-modal__spinner" id="modalSpinner"></div>
 </div>
 
 <script>
@@ -69,8 +69,8 @@
   function fullUrl(img) { return img.getAttribute('data-full') || img.src; }
 
   function updateNav() {
-    prevBtn.classList.toggle('disabled', idx === 0);
-    nextBtn.classList.toggle('disabled', idx === group.length - 1);
+    prevBtn.classList.toggle('boat-rudder-modal__prev--disabled', idx === 0);
+    nextBtn.classList.toggle('boat-rudder-modal__next--disabled', idx === group.length - 1);
   }
 
   // Preload so the spinner shows until the full-size file is ready. A newer
@@ -102,8 +102,8 @@
   }
 
   window.openGalleryLightbox = function(img) {
-    var container = img.closest('.boat-rudder__gallery-container');
-    var imgs = container ? Array.from(container.querySelectorAll('.boat-rudder__gallery-item img')) : [img];
+    var container = img.closest('.boat-rudder-gallery-container');
+    var imgs = container ? Array.from(container.querySelectorAll('.boat-rudder-gallery-item img')) : [img];
     openGroup(imgs, Math.max(0, imgs.indexOf(img)));
   };
 
@@ -127,14 +127,14 @@
     modalImage.style.transition = 'none';
     modalImage.style.transform = 'scale(0.85)';
     modalImage.style.opacity = '0';
-    modal.classList.add('active');
+    modal.classList.add('boat-rudder-modal--active');
     document.body.style.overflow = 'hidden';
     updateNav();
     loadImage(fullUrl(group[idx]), function() { fadeIn('scale(1)', 0.3); });
   }
 
   function close() {
-    modal.classList.remove('active');
+    modal.classList.remove('boat-rudder-modal--active');
     document.body.style.overflow = '';
     loadToken++;
     modalImage.style.transition = 'none';
@@ -168,7 +168,7 @@
   prevBtn.addEventListener('click', function() { navigate('prev'); });
   nextBtn.addEventListener('click', function() { navigate('next'); });
   document.addEventListener('keydown', function(e) {
-    if (!modal.classList.contains('active')) return;
+    if (!modal.classList.contains('boat-rudder-modal--active')) return;
     if (e.key === 'Escape') close();
     if (e.key === 'ArrowLeft') navigate('prev');
     if (e.key === 'ArrowRight') navigate('next');
@@ -255,18 +255,18 @@
   // tile carries a "+N" overlay that opens the viewer at that image.
   function buildGalleries() {
     var maxVisible = window.innerWidth < 500 ? 4 : 5;
-    document.querySelectorAll('.boat-rudder__gallery-container').forEach(function(container) {
-      var items = container.querySelectorAll('.boat-rudder__gallery-item');
+    document.querySelectorAll('.boat-rudder-gallery-container').forEach(function(container) {
+      var items = container.querySelectorAll('.boat-rudder-gallery-item');
       items.forEach(function(item) {
         item.style.display = '';
-        var old = item.querySelector('.boat-rudder__gallery-overlay');
+        var old = item.querySelector('.boat-rudder-gallery-overlay');
         if (old) old.remove();
       });
       if (items.length <= maxVisible) return;
       items.forEach(function(item, i) { if (i >= maxVisible) item.style.display = 'none'; });
       var last = items[maxVisible - 1];
       var overlay = document.createElement('div');
-      overlay.className = 'boat-rudder__gallery-overlay';
+      overlay.className = 'boat-rudder-gallery-overlay';
       overlay.textContent = '+' + (items.length - maxVisible + 1);
       overlay.addEventListener('click', function(e) {
         e.stopPropagation();

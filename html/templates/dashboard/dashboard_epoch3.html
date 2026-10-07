@@ -1,26 +1,26 @@
-<section class="boat-rudder__dashboard boat-rudder__dashboard--home">
-<div class="boat-rudder__dashboard__panel-header">
+<section class="boat-rudder-dashboard boat-rudder-dashboard--home">
+<div class="boat-rudder-dashboard__panel-header">
   <h1>Welcome back</h1>
-  <div class="boat-rudder__dashboard__panel-actions">
+  <div class="boat-rudder-dashboard__panel-actions">
 %s
     <form method="post" action="/logout">
-      <button class="boat-rudder__dashboard__button" type="submit">Log out</button>
+      <button class="boat-rudder-btn" type="submit">Log out</button>
     </form>
   </div>
 </div>
 %s
-<section class="boat-rudder__dashboard__panel">
-  <div class="boat-rudder__dashboard__panel-header">
+<section class="boat-rudder-dashboard__panel">
+  <div class="boat-rudder-dashboard__panel-header">
     <h2>Entries pending publication</h2>
-    <div class="boat-rudder__dashboard__panel-actions">
+    <div class="boat-rudder-dashboard__panel-actions">
       <form method="POST" action="/dashboard/entries/new">
-        <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">+ New entry</button>
+        <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">+ New entry</button>
       </form>
-      <a class="boat-rudder__dashboard__button" href="/dashboard/entries">View all</a>
+      <a class="boat-rudder-btn" href="/dashboard/entries">View all</a>
     </div>
   </div>
-  <div class="boat-rudder__dashboard__table-scroll">
-  <table class="boat-rudder__dashboard__table">
+  <div class="boat-rudder-dashboard__table-scroll">
+  <table class="boat-rudder-dashboard__table">
     <thead>
       <tr>
         <th>Image</th>
@@ -44,7 +44,7 @@
 // The options menu is a <details>: it opens and closes without JS. This only
 // closes it on a click outside it or on Escape.
 (function () {
-  var menu = document.querySelector('.boat-rudder__dashboard__menu');
+  var menu = document.querySelector('.boat-rudder-dashboard__menu');
   if (!menu) return;
   document.addEventListener('click', function (e) {
     if (menu.open && !menu.contains(e.target)) menu.open = false;

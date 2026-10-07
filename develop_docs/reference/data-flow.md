@@ -192,7 +192,7 @@ http_route(read_func, ctx, root_directory)
   │     GET/HEAD "/gallery/<id>"           → gallery page (QR on epochs -1/0)
   │     GET/HEAD "/menu", "/language", "/language/set", "/theme", "/theme/set"
   │     GET/HEAD "/qr/<code>", "/youtube-qr/<id>", "/image-qr/<code>"
-  │     GET/HEAD "/themes/<key>/styles_epoch3.css" → DB-overridable theme CSS
+  │     GET/HEAD "/themes/<key>/styles(_admin)_epoch3.css" → DB-overridable theme CSS
   │     GET/HEAD/POST "/login", POST "/logout", GET "/dashboard" ──────►  see §5b
   │     GET/POST "/dashboard/..."          → admin area (E3 + session/role guards)
   │     GET/HEAD other                     → serve_static_file()  ───────►  see §5
@@ -567,7 +567,7 @@ Details: [wap-gateway.md](wap-gateway.md).
 | `RateEntry` | `wap_gateway.c` (internal) | WAP gateway per-IP minute window (256 entries, gateway thread only) |
 | `WbxmlBuf` | `wap_gateway/wbxml.h` | Compiled WBXML page (`data`, `len`) |
 | `CmsEntry`, `CmsContentBlock` | `db/cms_entries.h` | An entry resolved to one language, for rendering |
-| `CmsThemeColors` | `db/cms_themes.h` | The theme's 34 color tokens |
+| `CmsThemeColors` | `db/cms_themes.h` | The theme's 40 color tokens |
 | `CmsLogoConfig` / `CmsLogoMode` | `db/cms_themes.h` | Per-epoch logo: mode (unset/text/image), text, font, images |
 | `CmsFont` | `db/cms_fonts.h` | Uploaded font: id, name, filename |
 | `CodeHighlightPalette` | `utils/code_highlight.h` | Colors and flags for epoch 0-2 highlighting |

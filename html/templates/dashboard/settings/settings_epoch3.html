@@ -1,14 +1,14 @@
-<section class="boat-rudder__dashboard">
-  <nav class="boat-rudder__dashboard__breadcrumb" aria-label="Breadcrumb">
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
     <ol><li><a href="/dashboard">Dashboard</a></li></ol>
   </nav>
   <h1>Site settings</h1>
 %s
   <form method="POST" action="/dashboard/settings">
     <label for="site_name">Site name</label>
-    <input class="boat-rudder__dashboard__input" type="text" id="site_name" name="site_name"
+    <input class="boat-rudder-input" type="text" id="site_name" name="site_name"
            value="%s" maxlength="120" required>
-    <button class="boat-rudder__dashboard__button boat-rudder__dashboard__button--primary" type="submit">Save</button>
+    <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
   </form>
   <ul>
     <li><a href="/dashboard/settings/themes">Themes</a> - colors, home banner, footer and logo, one set per theme</li>

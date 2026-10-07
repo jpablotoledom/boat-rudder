@@ -7,7 +7,7 @@
 #include <stddef.h>
 
 // Renders the full /dashboard/entries/<id>/edit page content (everything
-// inside <section class="boat-rudder__dashboard boat-rudder__entry-editor">):
+// inside <section class="boat-rudder-dashboard boat-rudder-entry-editor">):
 // the global language-tab row, the entry-settings sidebar, the post-header
 // sidebar, the content-blocks section (see entry_editor_blocks.h), and the
 // editor's inline <script>. `categories` is every entry_category (for the

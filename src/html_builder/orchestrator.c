@@ -70,8 +70,8 @@ char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_conten
     char *result = NULL;
     if (raw && html_menu && html_content) {
         char *fragment;
-        // Epoch 2 only: page_epoch2.html's .boat-rudder__page-entry__
-        // container carries its own bgcolor attribute with no CSS to lean
+        // Epoch 2 only: page_epoch2.html's page-entry container table
+        // carries its own bgcolor attribute with no CSS to lean
         // on - epoch 3's equivalent is transparent to the body background
         // instead (see styles_epoch3.css) - so it takes an extra %s here.
         if (epoch == EPOCH_MIDDLE) {
@@ -96,7 +96,7 @@ char *buildPageWebSite(int epoch, const char *page_title, char *html_content) {
 }
 
 // `has_container_bg`: whether `tpl_fmt` is the page-entry variant, whose
-// .boat-rudder__page-entry__container carries its own bgcolor attribute
+// page-entry container table carries its own bgcolor attribute
 // (see buildPageWebSiteAtUrl()'s comment above) - the page-blog variant's
 // wrapper has no such attribute, so buildBlogListWebSiteAtUrl() always
 // passes 0. Only actually matters at epoch 2 (checked below): epoch 3's

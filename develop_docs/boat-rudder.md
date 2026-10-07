@@ -10,7 +10,7 @@ visits per epoch, browser, OS and country.
 
 Boat Rudder grew out of `base-http-server`, a minimal standalone static file server; that
 ancestry survives only as the shape of the web-server half. Everything in this repository - the
-`boat-rudder` binary and systemd service, the source tree, the `boat-rudder__*` CSS namespace -
+`boat-rudder` binary and systemd service, the source tree, the `boat-rudder-*` CSS namespace -
 is Boat Rudder. A **site** built with it (its MongoDB database, its theme, its content) is a
 separate concern that never appears in the source: the site name, banner and page titles a
 visitor reads are content, and the templates ship "Boat Rudder" only as the default until a site
@@ -222,7 +222,8 @@ html/templates/
 └── dashboard/                       (admin pages, epoch 3 only)
 
 html/themes/dark/
-├── styles_epoch3.css
+├── styles_epoch3.css              (public site)
+├── styles_admin_epoch3.css        (login and dashboard, optional)
 ├── page/
 │   └── page-home_epoch{-1,0,1,2,3}.html    (home: 4 regions)
 ├── menu/
@@ -240,8 +241,7 @@ html/themes/dark/
 ├── layout/                          (chrome shared by every page of an epoch)
 │   ├── layout_epoch{-1,0,1,2,3}.html
 │   ├── footer_epoch{-1,0,1,2,3}.html
-│   ├── lightbox_epoch3.html
-│   └── home-modal_epoch3.html
+│   └── lightbox_epoch3.html
 ├── category-menu/
 │   └── category-menu{,-item,-item-selected,-separator}_epoch{-1,0,1,2,3}.html
 └── assets/                          (brand imagery: banner, footer, menu logo, ...)
@@ -260,7 +260,7 @@ last-resort fallback) or picking it as the active theme from `/dashboard/setting
 
 **Which theme renders a request** is resolved per request, like the language: `?theme=` →
 `theme` cookie (set by the visitor's theme selector) → `site_settings.active_theme` → `theme` in
-the config. Each theme can be customized from the dashboard without touching files: 34 colors
+the config. Each theme can be customized from the dashboard without touching files: 40 colors
 (one palette for epochs 1-3), per-epoch banner, footer and logo, a logo font from the uploaded
 font library, and a full replacement of its epoch 3 stylesheet. Step by step, including how to
 create a theme: [reference/themes.md](reference/themes.md).
@@ -307,7 +307,7 @@ package "html/themes/<theme>/ (per theme)" {
     }
 
     object "page/page-home_epoch<N>.html" as CONTAINER {
-      {{FOOTER}}, {{HOME-MODAL}} -> literal replace
+      {{FOOTER}} -> literal replace
       %s (1) -> menu
       %s (2) -> mainbanner
       %s (3) -> home_content
@@ -784,8 +784,8 @@ In short:
 
 Static paths (`/favicon.ico`, `/assets/slide/background/floor.jpg`, `/content/posts/...`, ...)
 bypass the CMS entirely and are served directly from `html/` by the static file server, with
-normal caching headers. `/themes/<key>/styles_epoch3.css` is the one asset served by a route, so
-an admin can edit it from the dashboard.
+normal caching headers. `/themes/<key>/styles_epoch3.css` and `styles_admin_epoch3.css` are the
+assets served by a route, so an admin can edit them from the dashboard.
 
 ---
 

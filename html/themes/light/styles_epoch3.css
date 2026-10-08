@@ -215,7 +215,7 @@ h3 {
   color: #1a1a1a;
   box-sizing: border-box;
   padding: 12px 24px;
-  background-color: var(--br-color-page-content-background, transparent);
+  background-color: var(--br-color-page-content-background, #ddf3ff);
 }
 
 /* GENERIC PAGE (login, dashboard, error, ...) */

@@ -9,9 +9,10 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 
 ---
 
-## [Unreleased] - v0.0.1
+## v0.0.1
 
-### 2026-10-06 - One page per theme
+### 2026-10-06
+### One page per theme
 
 **Changed**
 - `/dashboard/settings/themes` is now a list of the themes (name, *Active* or *Set active*,
@@ -21,7 +22,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
   clicked on. The banner, footer, logo and CSS editors link back to their theme in the
   breadcrumb.
 
-### 2026-10-06 - Page content background
+### Page content background
 
 **Added**
 - `page-content-background` theme color (with opacity), in the panel's *Body* group: the
@@ -31,7 +32,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 - `.boat-rudder-page-entry` (blog posts and pages) uses the same background, with a
   `24px 32px` padding (`16px` on phones) so its text doesn't touch the edge of the box.
 
-### 2026-10-06 - Admin design tokens and components
+### Admin design tokens and components
 
 **Added**
 - Five theme colors for the admin, in the panel's *Body* group: text, secondary text, panel
@@ -65,7 +66,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
   on specificity); it now uses the code block's colors.
 - Links styled as buttons took the public `a:link` color instead of the button's.
 
-### 2026-10-06 - Public and admin stylesheets per theme
+### Public and admin stylesheets per theme
 
 **Changed**
 - Each theme's epoch 3 CSS is split in two: `styles_epoch3.css` (public site, every page) and
@@ -86,7 +87,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 - Unescaped `%` in five templates rendered through printf (`home-content_epoch2.html`, the
   image block's size options, two editor scripts) - undefined behavior that ASan flagged.
 
-### 2026-10-06 - BEM CSS class names
+### BEM CSS class names
 
 **Changed**
 - Every CSS class is now BEM with the `boat-rudder-` prefix
@@ -113,7 +114,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 - `scripts/check_css_bem.py`: fails on non-BEM classes, leftover `boat-rudder__` names, or class
   attributes on epochs without a stylesheet.
 
-### 2026-10-06 - Dashboard usability
+### Dashboard usability
 
 **Added**
 - Charts in the dashboard's analytics summary, drawn as inline SVG on the server (no JavaScript,
@@ -145,7 +146,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 - Light theme: dashboard forms had a near-black background behind dark labels.
 - Menu list rows closed `</td>` before `</div>`.
 
-### 2026-10-06 - Dashboard security fixes
+### Dashboard security fixes
 
 **Added**
 - New dashboard home: option groups (Content / Site / Administration / Account, with a link to the
@@ -177,7 +178,7 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
   (e.g. `photo.png -> photo_half.gif`), which was left behind.
 - `media.author_username` is sanitized the same way as the upload directory name.
 
-### 2026-10-06 - WAP gateway, code highlighting, QR short links (`7c55aef`)
+### WAP gateway, code highlighting, QR short links (`7c55aef`)
 
 **Added**
 - WAP 1.x gateway (`src/wap_gateway/`): UDP listener with Palm Rover WTP (49300) and

@@ -391,7 +391,8 @@ static char *build_continent_kv_table(const KVList *countries, int total) {
     KVList by_continent = {0};
     for (int i = 0; i < countries->count; i++) {
         const char *continent = country_continent(countries->items[i].key);
-        char key[sizeof(countries->items[i].key)];
+        // Room for the longest continent name ("South America") plus the '/'.
+        char key[sizeof(countries->items[i].key) + 32];
         if (continent) snprintf(key, sizeof(key), "%s/%s", continent, countries->items[i].key);
         else snprintf(key, sizeof(key), "%s", countries->items[i].key);
         kv_increment(&by_continent, key, countries->items[i].count);
@@ -457,7 +458,7 @@ char *analytics_view(int epoch, const char *period, int year, int month, int wee
     kv_sort(&d.countries);
     kv_sort(&d.routes);
 
-    char period_label[64];
+    char period_label[96];
     make_period_label(period_label, sizeof(period_label), period, year, month, week, date, from, to);
 
     #define ACTIVE_CLASS "boat-rudder-btn--active"

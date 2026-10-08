@@ -10,7 +10,7 @@ int url_parse(const char *url, char *route, size_t route_size,
     size_t route_len = query_start ? (size_t)(query_start - url) : strlen(url);
 
     if (route_len >= route_size) route_len = route_size - 1;
-    strncpy(route, url, route_len);
+    memcpy(route, url, route_len);
     route[route_len] = '\0';
 
     *param_count = 0;
@@ -25,13 +25,13 @@ int url_parse(const char *url, char *route, size_t route_size,
 
         size_t key_len = eq - param;
         if (key_len >= MAX_PARAM_LENGTH) key_len = MAX_PARAM_LENGTH - 1;
-        strncpy(params[*param_count].key, param, key_len);
+        memcpy(params[*param_count].key, param, key_len);
         params[*param_count].key[key_len] = '\0';
 
         eq++;
         size_t val_len = next ? (size_t)(next - eq) : strlen(eq);
         if (val_len >= MAX_PARAM_LENGTH) val_len = MAX_PARAM_LENGTH - 1;
-        strncpy(params[*param_count].value, eq, val_len);
+        memcpy(params[*param_count].value, eq, val_len);
         params[*param_count].value[val_len] = '\0';
 
         (*param_count)++;

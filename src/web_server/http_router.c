@@ -1976,7 +1976,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         } else {
                             char username[64] = {0};
                             cms_get_username_by_id(user_id, username, sizeof(username));
-                            strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
+                            snprintf(dir.author_name, sizeof(dir.author_name), "%s", username);
 
                             char *html = media_admin_render_directory_item(&dir, epoch);
                             char *response = build_json_response(html ? html : "");
@@ -2080,7 +2080,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 char safe_return[512];
                 language_sanitize_return(return_raw, safe_return, sizeof(safe_return));
 
-                char extra[192] = "";
+                char extra[384] = "";
                 const char *key = get_query_param(params, param_count, "key");
                 if (theme_key_is_valid(key)) {
                     snprintf(extra, sizeof(extra),
@@ -2206,7 +2206,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
-            } else if (strncmp(decoded_url, "/image-qr/", 10) == 0 && decoded_url[10] != '\0') {
+            } else if (strncmp(decoded_url, "/image-qr/", 10) == 0 && decoded_url[10] != '\0' &&
+                       strlen(decoded_url + 10) < 60) {
                 // Same reasoning and structure as /youtube-qr/ just above:
                 // always epoch 0's own page, so an inline QR never gets cut
                 // across a paginated text browser's screen boundary. The
@@ -2226,7 +2227,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 qr_back_label(safe_back, content_lang, back_label, sizeof(back_label));
 
                 char short_path[64];
-                snprintf(short_path, sizeof(short_path), "/qr/%s", code);
+                snprintf(short_path, sizeof(short_path), "/qr/%.59s", code);
                 char short_url[600];
                 if (public_url[0]) {
                     snprintf(short_url, sizeof(short_url), "%s%s", public_url, short_path);
@@ -2564,11 +2565,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char *content = blog_list_category(epoch, content_lang, cat_id);
                     free(cat_id);
 
-                    char page_title[256];
-                    snprintf(page_title, sizeof(page_title), "Blog - %s", cat_name ? cat_name : cat_slug);
+                    char *page_title = render_template("Blog - %s", cat_name ? cat_name : cat_slug);
                     free(cat_name);
 
-                    char *body     = buildBlogListWebSiteAtUrl(epoch, page_title, content, "/blog", cat_menu);
+                    char *body     = buildBlogListWebSiteAtUrl(epoch, page_title ? page_title : "Blog",
+                                                               content, "/blog", cat_menu);
+                    free(page_title);
                     char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);
@@ -2593,7 +2595,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 if (!tpl) {
                     send_error_response(ctx, 404, "404 Not Found", epoch);
                 } else {
-                    char current[256] = "";
+                    char current[sizeof(safe_return)] = "";
                     if (strncmp(safe_return, "/blog/category/", 15) == 0) {
                         snprintf(current, sizeof(current), "%s", safe_return + 15);
                         current[strcspn(current, "?#&")] = '\0';
@@ -3794,7 +3796,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         if (cms_create_media_directory(name, "posts", user_id, new_id) == 0) {
                             CmsMediaDirectory dir;
                             if (cms_get_media_directory_by_id(new_id, &dir)) {
-                                strncpy(dir.author_name, username, sizeof(dir.author_name) - 1);
+                                snprintf(dir.author_name, sizeof(dir.author_name), "%s", username);
                                 char *html = media_admin_render_directory_item(&dir, epoch);
                                 if (html) {
                                     send_html_fragment(ctx, html);
@@ -3871,7 +3873,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             CmsMediaDirectory renamed;
                             char *html = NULL;
                             if (cms_get_media_directory_by_id(dir.id, &renamed)) {
-                                strncpy(renamed.author_name, owner, sizeof(renamed.author_name) - 1);
+                                snprintf(renamed.author_name, sizeof(renamed.author_name), "%s", owner);
                                 html = media_admin_render_directory_item(&renamed, epoch);
                             }
                             if (html) {

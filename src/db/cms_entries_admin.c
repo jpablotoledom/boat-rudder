@@ -368,7 +368,7 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
         bson_oid_t cat_oid;
         bson_oid_init_from_string(&cat_oid, category_ids[i]);
 
-        char key[16];
+        char key[24];
         snprintf(key, sizeof(key), "%zu", n++);
         bson_append_oid(&categories_arr, key, -1, &cat_oid);
     }
@@ -467,7 +467,7 @@ int cms_update_entry_content(const char *id_hex, const CmsLanguageItem *langs,
             blocks[i].id = strdup(new_id);
         }
 
-        char key[16];
+        char key[24];
         snprintf(key, sizeof(key), "%zu", n++);
 
         bson_t block_doc;

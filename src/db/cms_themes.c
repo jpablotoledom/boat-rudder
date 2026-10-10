@@ -3,6 +3,7 @@
 #include "../utils/config_loader.h"
 #include "../utils/read_file.h"
 #include "../utils/log.h"
+#include "../utils/template_utils.h"
 #include <bson/bson.h>
 #include <mongoc/mongoc.h>
 #include <stdbool.h>
@@ -449,6 +450,26 @@ int cms_update_theme_logo(const char *key, int epoch, const char *html) {
     return update_theme_epoch_field(key, "logo_html", epoch, html);
 }
 
+char *cms_get_theme_home_blog_background(const char *key, int epoch) {
+    if (epoch != EPOCH_MIDDLE && epoch != EPOCH_MODERN) return strdup("");
+    return stored_epoch_field(key, "home_blog_background", epoch);
+}
+
+int cms_update_theme_home_blog_background(const char *key, int epoch, const char *filename) {
+    if (epoch != EPOCH_MIDDLE && epoch != EPOCH_MODERN) return -1;
+    return update_theme_epoch_field(key, "home_blog_background", epoch, filename ? filename : "");
+}
+
+char *cms_get_theme_home_blog_item_background(const char *key, int epoch) {
+    if (epoch != EPOCH_MIDDLE && epoch != EPOCH_MODERN) return strdup("");
+    return stored_epoch_field(key, "home_blog_item_background", epoch);
+}
+
+int cms_update_theme_home_blog_item_background(const char *key, int epoch, const char *filename) {
+    if (epoch != EPOCH_MIDDLE && epoch != EPOCH_MODERN) return -1;
+    return update_theme_epoch_field(key, "home_blog_item_background", epoch, filename ? filename : "");
+}
+
 char *cms_get_theme_logo_font(const char *key) {
     if (!key || !key[0]) return strdup("");
 
@@ -589,8 +610,11 @@ int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig
     return ok ? 0 : -1;
 }
 
+// Customization layers only, appended after the on-disk file - not the
+// css_epoch3/css_admin_epoch3 fields earlier versions used for a full
+// replacement, which are no longer read.
 static const char *css_field(ThemeCssSheet sheet) {
-    return sheet == THEME_CSS_ADMIN ? "css_admin_epoch3" : "css_epoch3";
+    return sheet == THEME_CSS_ADMIN ? "css_admin_custom_epoch3" : "css_custom_epoch3";
 }
 
 const char *cms_theme_css_file(ThemeCssSheet sheet) {
@@ -626,15 +650,27 @@ char *cms_get_theme_css_value(const char *key, ThemeCssSheet sheet) {
     return result ? result : strdup("");
 }
 
-char *cms_get_theme_css(const char *key, ThemeCssSheet sheet) {
-    char *db_value = cms_get_theme_css_value(key, sheet);
-    if (db_value[0]) return db_value;
-    free(db_value);
-
+char *cms_get_theme_css_original(const char *key, ThemeCssSheet sheet) {
     char *body = read_theme_css_file(key ? key : "", sheet);
     if (!body && sheet == THEME_CSS_ADMIN && strcmp(key ? key : "", theme) != 0)
         body = read_theme_css_file(theme, sheet);
     return body ? body : strdup("");
+}
+
+char *cms_get_theme_css(const char *key, ThemeCssSheet sheet) {
+    static const char MARKER[] = "\n\n/* ---- Customizations (dashboard) ---- */\n";
+
+    char *original = cms_get_theme_css_original(key, sheet);
+    char *custom   = cms_get_theme_css_value(key, sheet);
+    if (!original || !custom || !custom[0]) {
+        free(custom);
+        return original;
+    }
+
+    char *result = str_append(original, MARKER);
+    if (result) result = str_append(result, custom);
+    free(custom);
+    return result;
 }
 
 int cms_update_theme_css(const char *key, ThemeCssSheet sheet, const char *css) {

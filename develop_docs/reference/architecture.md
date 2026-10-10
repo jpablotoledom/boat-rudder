@@ -48,7 +48,7 @@ own documents:
 | [configuration.md](configuration.md) | Every `configs/settings.conf` key - the single reference for configuration |
 | [security.md](security.md) | Every defense (anti-DDoS, TLS, sanitizers, sessions, roles) and known gaps |
 | [data-flow.md](data-flow.md) | The same system read as one request's journey, start to finish |
-| [scripts.md](scripts.md) / [migrations.md](migrations.md) | Build, run, install, backup scripts; database migrations |
+| [scripts.md](scripts.md) | Build, run, install, backup scripts |
 | [third-party.md](third-party.md) | Vendored, ported and linked third-party code and data |
 | [style-guide.md](style-guide.md) | C conventions, the security rules that are non-negotiable here, and BEM CSS class names |
 
@@ -150,7 +150,7 @@ boat-rudder/
 │       ├── code_highlight.c/h           # Server-side syntax highlighting (code-highlighting.md)
 │       ├── ua_parser.c/h                # User-Agent → browser/OS keys for analytics
 │       ├── qr_generator/                # QR codes for retro epochs (GIF/WBMP/text)
-│       ├── image_convert/               # PNG/JPEG → 1-bit WBMP (epoch -1 logos)
+│       ├── image_convert/               # PNG → 1-bit WBMP (epoch -1 theme uploads)
 │       ├── wbmp_writer.c/h              # WBMP writer shared by QR and logo conversion
 │       ├── read_file.c/h                # read_file_to_string(): malloc'd file contents
 │       ├── template_utils.c/h           # render_template, str_replace_first/_all, str_append,
@@ -164,8 +164,10 @@ boat-rudder/
 ├── html/                                # Static + templated content root (CLI root directory)
 │   ├── templates/                       # Shared, theme-agnostic templates (templates-catalog.md)
 │   ├── themes/<theme>/                  # Per-theme templates, assets, styles(_admin)_epoch3.css
-│   ├── assets/                          # Site-wide assets (fonts/, slide/)
-│   └── content/                         # posts/<user>/<dir>/ uploads, qr/ cache (gitignored)
+│   ├── assets/                          # Site-wide assets: fonts/, js/ (dashboard scripts: csrf,
+│   │                                    # code editor, theme customizer, upload widgets, color picker)
+│   └── content/                         # posts/<user>/<dir>/ uploads, themes/<key>/ theme uploads,
+│                                        # qr/ cache (gitignored)
 ├── scripts/
 │   ├── image-optimizer.sh               # Generates 5 image variants per upload via ImageMagick
 │   ├── compile_debug.sh / compile_prod.sh / run_debug.sh / install.sh / uninstall.sh / clean.sh
@@ -173,7 +175,6 @@ boat-rudder/
 │   ├── mongodb_start.sh / mongodb_dump.sh / mongodb_restore.sh
 │   ├── boat-rudder.service              # systemd unit installed by install.sh
 │   ├── boat-rudder.logrotate            # /etc/logrotate.d/boat-rudder, installed by install.sh
-│   ├── migrations/                      # One-off mongosh data migrations (migrations.md)
 │   └── show/                            # banner/divbar snippets sourced by the scripts
 ├── configs/
 │   └── settings.conf                    # Runtime configuration (configuration.md)

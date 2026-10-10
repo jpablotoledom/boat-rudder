@@ -1,14 +1,17 @@
   <section class="boat-rudder-dashboard__settings-panel" data-component="%s" data-epoch="%s" data-theme="%s">
     <h2>%s</h2>
     <form method="POST" action="/dashboard/settings/themes/%s/%s/%s">
-      <textarea class="boat-rudder-dashboard__textarea" name="html" rows="10" spellcheck="false">%s</textarea>
-      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
+      <textarea class="boat-rudder-dashboard__textarea" name="html" rows="10" spellcheck="false" data-code-editor="html">%s</textarea>
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save markup</button>
     </form>
     <div class="boat-rudder-dashboard__asset-manager">
-      <label class="boat-rudder-btn">
-        Upload image
-        <input type="file" class="boat-rudder-dashboard__asset-upload" accept="image/*" hidden>
-      </label>
+      <div class="boat-rudder-dashboard__asset-head">
+        <strong>Images</strong>
+        <label class="boat-rudder-btn boat-rudder-btn--sm">
+          Upload
+          <input type="file" class="boat-rudder-dashboard__asset-upload" accept="image/*" hidden>
+        </label>
+      </div>
       <ul class="boat-rudder-dashboard__asset-list"></ul>
     </div>
   </section>

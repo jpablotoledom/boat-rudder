@@ -65,7 +65,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/qr/<code>` | - | `short_link_resolve()` | `302` to the stored `target_path`, `404` if unknown |
 | `/youtube-qr/<video-id>` | `back` | inline, `generate_qr_halfblock_text()` / `generate_qr_asciiblock_text()` | **Always epoch 0's page**, whatever the visitor's epoch: a text QR of `https://youtu.be/<id>` + back link |
 | `/image-qr/<code>` | `back` | inline, same generators | **Always epoch 0's page**: a text QR of `<public_url or Host>/qr/<code>` + back link |
-| `/themes/<key>/styles_epoch3.css`, `/themes/<key>/styles_admin_epoch3.css` | - | `match_theme_css_url()` → `cms_get_theme_css()` | The theme's public / admin epoch 3 stylesheet, from the DB override or the on-disk file (admin: falls back to the configured `theme`'s); `text/css`. Guard: **Theme** |
+| `/themes/<key>/styles_epoch3.css`, `/themes/<key>/styles_admin_epoch3.css` | - | `match_theme_css_url()` → `cms_get_theme_css()` | The theme's public / admin epoch 3 stylesheet: the on-disk file (admin: falls back to the configured `theme`'s) followed by the theme's customization layer, if any; `text/css`. Guard: **Theme** |
 | `/login` | - | `login()` | Login form (epoch 3) or "not available" page (other epochs). `302 /dashboard` if already signed in |
 | `/logout` | - | - | `405`: logout is `POST` only (see [Authentication](#authentication)) |
 | *anything else* | - | `serve_static_file()` | File from the root directory with `Last-Modified`/`304`; `403`/`404`/`500` rendered per epoch |
@@ -133,19 +133,21 @@ All **E3, A**. Detailed behavior in [themes.md](themes.md) and [fonts.md](fonts.
 | Method | Path | Handler | Notes |
 |---|---|---|---|
 | `GET`/`POST` | `/dashboard/settings` | `site_settings_general_page()` / `cms_update_site_name()` | Field `site_name` |
-| `GET` | `/dashboard/settings/themes` | `site_settings_themes_page()` | List of the directories under `html/themes/`: name, *Active* or *Set active*, *Edit* |
-| `GET` | `/dashboard/settings/themes/<key>` | `site_settings_theme_page()` | One theme's options: colors, logo font, links to its banner/footer/logo/CSS editors. Guard: Theme |
-| `POST` | `/dashboard/settings/themes/<key>/activate` | `cms_set_active_theme()` | Sets `site_settings.active_theme`; `302` to the field `return` when it is this theme's page, else to the list |
-| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 40 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's page. Guard: Theme |
+| `GET` | `/dashboard/settings/themes` | `site_settings_themes_page()` | List of the directories under `html/themes/`: name, *Active* or *Set active*, *Customize* |
+| `GET` | `/dashboard/settings/themes/<key>/customize` | `site_settings_customize_page()` | The theme customizer: per-epoch panels, live preview, CSS drawer ([themes.md](themes.md#81-theme-customizer)). Guard: Theme |
+| `GET` | `/dashboard/settings/themes/<key>` | - | `302` to `…/<key>/customize` (to the list for an unknown key) |
+| `POST` | `/dashboard/settings/themes/<key>/activate` | `cms_set_active_theme()` | Sets `site_settings.active_theme`; `302` to the field `return` when it is this theme's customizer, else to the list |
+| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 40 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's customizer. Guard: Theme |
 | `GET` | `/dashboard/settings/themes/<key>/banner` | `site_settings_banner_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/banner/<epoch>` | `cms_update_theme_banner()` | Field `html` (≤ 128 KiB); `""` restores the file |
 | `GET` | `/dashboard/settings/themes/<key>/footer` | `site_settings_footer_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/footer/<epoch>` | `cms_update_theme_footer()` | Field `html` |
 | `GET` | `/dashboard/settings/themes/<key>/logo` | `site_settings_logo_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/logo/<epoch>` | `cms_update_theme_logo_config()` | Fields `mode`, `text`, `font`, `navbar-image`, `footer-image`; mode forced per epoch server-side |
-| `GET` | `/dashboard/settings/themes/<key>/css`, `…/admin-css` | `site_settings_css_page()` | Public / admin stylesheet editor (one tab each). Guard: Theme |
-| `POST` | `/dashboard/settings/themes/<key>/css`, `…/admin-css` | `cms_update_theme_css()` | Field `css` (≤ 128 KiB) |
-| `POST` | `/dashboard/settings/themes/<key>/css/restore`, `…/admin-css/restore` | `cms_update_theme_css(key, sheet, "")` | Back to the on-disk file |
+| `POST` | `/dashboard/settings/themes/<key>/home-blog/<epoch>` | `cms_update_theme_home_blog_background()`, `cms_update_theme_home_blog_item_background()` | Epoch `2`/`3` only (`404` otherwise). Fields `background`, `item-background`: filenames under `content/themes/<key>/home-blog/epoch<N>/`, sanitized like an upload (`400` if invalid), `""` = the theme's own; `302` to the customizer |
+| `GET` | `/dashboard/settings/themes/<key>/css`, `…/admin-css` | `site_settings_css_page()` | Public / admin stylesheet customization layer, with the original read-only (one tab each). Guard: Theme |
+| `POST` | `/dashboard/settings/themes/<key>/css`, `…/admin-css` | `cms_update_theme_css()` | Field `css` (≤ 128 KiB): the layer appended after the theme's file |
+| `POST` | `/dashboard/settings/themes/<key>/css/restore`, `…/admin-css/restore` | `cms_update_theme_css(key, sheet, "")` | *Discard my changes*: an empty layer, the plain file again |
 | `GET` | `/dashboard/settings/preview` | `site_settings_preview_page()` | Iframe + `?preview_epoch=` |
 | `GET` | `/dashboard/settings/fonts` | `fonts_admin_list()` | Query `error` shows a message |
 | `POST` | `/dashboard/settings/fonts/upload` | `cms_add_font()` | Multipart `name`, `file` (`.ttf/.otf/.woff/.woff2`) |
@@ -190,14 +192,15 @@ Errors are plain text. Detailed in [media-admin.md](media-admin.md).
 
 ### Theme assets
 
-Guard **A**. Back the banner/footer/logo editors' image widgets; files live in
-`html/themes/<key>/assets/<component>/epoch<N>/`.
+Guard **A**. Back the banner/footer/logo/home blog image widgets; files live in
+`html/content/themes/<key>/<component>/epoch<N>/` (served as `/content/themes/...`), never in the
+theme's own `assets/` ([themes.md](themes.md#7-theme-uploads-and-wbmp-conversion)).
 
 | Method | Path | Query | Response |
 |---|---|---|---|
-| `GET` | `/dashboard/api/theme-assets/list` | `theme`, `component` (`mainbanner`/`footer`/`menu`), `epoch` (`-1`…`3`) | `{"files":[…]}` (empty list on any invalid argument) |
-| `POST` | `/dashboard/api/theme-assets/upload` | same | `{ok, filename}`; multipart `file` (`.png/.jpg/.jpeg/.gif`; epoch −1: `.png/.jpg/.jpeg` only, converted to `.wbmp` for `component=menu`) |
-| `POST` | `/dashboard/api/theme-assets/delete` | same + `file` | Plain text `Deleted` |
+| `GET` | `/dashboard/api/theme-assets/list` | `theme`, `component` (`banner`/`footer`/`logo`/`home-blog`), `epoch` (`-1`…`3`) | `{"files":[…]}` (empty list on any invalid argument) |
+| `POST` | `/dashboard/api/theme-assets/upload` | same | `{ok, filename}`; multipart `file` (`.png/.jpg/.jpeg/.gif`; epoch −1: `.png` only - kept, with a `.wbmp` twin written next to it, and the `.wbmp` name returned); `400` plain text on a bad file |
+| `POST` | `/dashboard/api/theme-assets/delete` | same + `file` | Plain text `Deleted`; on epoch −1 the PNG/WBMP twin goes too |
 
 ---
 

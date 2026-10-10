@@ -403,7 +403,6 @@ These scripts are not meant to be called directly but can be if needed. All of t
 | `scripts/mongodb_start.sh` | nothing (manual) | `./scripts/mongodb_start.sh` |
 | `scripts/mongodb_dump.sh` | nothing (manual) | `./scripts/mongodb_dump.sh` |
 | `scripts/mongodb_restore.sh` | nothing (manual) | `./scripts/mongodb_restore.sh` |
-| `scripts/migrations/*.js` | nothing (manual, `mongosh`) | see [migrations.md](migrations.md) |
 | `scripts/check_css_bem.py` | nothing (manual, before committing CSS/templates) | `./scripts/check_css_bem.py` - see [style-guide.md](style-guide.md#15-css-class-names-bem); needs `python3` |
 | `scripts/boat-rudder.service` | copied by `install` | not executable |
 | `scripts/boat-rudder.logrotate` | copied by `install` | not executable |
@@ -432,18 +431,6 @@ they follow whichever site this checkout is configured for - no database name is
 > The dump directory `db_backup/` (and `db_backup_clean/`) is currently **tracked in git** and
 > contains `users.bson` (password hashes) and `sessions.bson` (session tokens). Dumps of a real
 > site should stay out of version control - see [security.md](security.md#known-gaps).
-
-### Database migrations
-
-One-off `mongosh` scripts under `scripts/migrations/`, named `YYYY-MM-DD-<what>.js`,
-idempotent, run by hand against the site's database after a backup:
-
-```bash
-./scripts/mongodb_dump.sh
-mongosh "mongodb://localhost:27017/<mongodb_db>" scripts/migrations/<file>.js
-```
-
-Conventions, catalog and how to write one: [migrations.md](migrations.md).
 
 ---
 
@@ -478,7 +465,6 @@ Runtime dependencies (not needed to compile, but the media library is broken wit
 
 ```bash
 sudo apt install mongodb-org imagemagick jpegoptim gifsicle
-sudo apt install mongodb-mongosh   # to run scripts/migrations/ (package name per MongoDB's repo)
 ```
 
 Optional runtime data: `data/GeoLite2-Country.mmdb` (MaxMind GeoLite2, see

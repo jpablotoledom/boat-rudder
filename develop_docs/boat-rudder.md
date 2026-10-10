@@ -35,7 +35,7 @@ illustrated with diagrams. For deeper detail see:
 - [reference/configuration.md](reference/configuration.md) - every `configs/settings.conf` key.
 - [reference/security.md](reference/security.md) - every defense and the known gaps.
 - [reference/data-flow.md](reference/data-flow.md) - step-by-step data flow, including the dynamic `/` route.
-- [reference/scripts.md](reference/scripts.md) and [reference/migrations.md](reference/migrations.md) - build, run, deployment and data migrations.
+- [reference/scripts.md](reference/scripts.md) - build, run and deployment.
 - [reference/third-party.md](reference/third-party.md) - vendored, ported and linked code.
 - [reference/style-guide.md](reference/style-guide.md) - C conventions and security rules.
 - [../CHANGELOG.md](../CHANGELOG.md) - what changed, by version.
@@ -993,12 +993,12 @@ Features added after the initial home-page MVP (dated history in [../CHANGELOG.m
 - **Languages**: `languages` collection drives the default content language; `/dashboard/languages` to add/remove/set default; **per-visitor language** via `?lang=` and a `lang` cookie (`/language`, `/language/set`), carried through links on old epochs.
 - **Multipart body reading**: router reads full POST body based on `Content-Length` (supports file uploads up to 10 MiB, `413` beyond).
 - **Site personalization**: site name (`site_settings`), per-theme raw-HTML banner/footer per epoch with image uploads, `/dashboard/settings/preview` (any epoch, any screen size) and a signed-in-user navbar link.
-- **Theme system**: `html/templates/` (shared) vs `html/themes/<theme>/` split, per-request theme resolution (`?theme=` → cookie → active theme → config) with a visitor theme selector, a `themes` collection with 34 DB-editable colors (backgrounds with opacity), structured per-epoch logos (epoch −1 PNG/JPEG uploads converted to WBMP), an editable epoch 3 stylesheet with restore, and a **font library** (`/dashboard/settings/fonts`) for the epoch 3 logo - see [reference/themes.md](reference/themes.md).
+- **Theme system**: `html/templates/` (shared) vs `html/themes/<theme>/` split, per-request theme resolution (`?theme=` → cookie → active theme → config) with a visitor theme selector, a `themes` collection with 34 DB-editable colors (backgrounds with opacity), structured per-epoch logos (epoch −1 a PNG plus its WBMP twin), a customization layer over each epoch 3 stylesheet, a **theme customizer** with live preview, and a **font library** (`/dashboard/settings/fonts`) for the epoch 3 logo - see [reference/themes.md](reference/themes.md).
 - **WML for real devices**: every WML response paginated to single-packet (860-byte) pages, compact `[Menu]`/`[Categories]` links with `/menu` and `/blog/categories` pages, and the **WAP 1.x gateway** (UDP, WBXML) - see [reference/wap-gateway.md](reference/wap-gateway.md).
 - **Legacy browser charset**: Latin-1 transcoding for epoch 1, WML and Cello (`request_charset`).
-- **Analytics**: per-day visit counters by epoch, browser, OS, country (optional GeoLite2) and route, top entries, `/dashboard/analytics` report, import migration - see [reference/analytics.md](reference/analytics.md).
+- **Analytics**: per-day visit counters by epoch, browser, OS, country (optional GeoLite2) and route, top entries, `/dashboard/analytics` report - see [reference/analytics.md](reference/analytics.md).
 - **Hardening**: configurable anti-DDoS (`ddos_*`), IP-table cleanup thread, `429` for rejected HTTP connections, configurable I/O timeout, accept loop on its own thread for a prompt shutdown.
-- **Operations**: `install` keeps the host's `settings.conf` and certificates, merges `html/`, installs logrotate and GeoLite2; `scripts/migrations/` for data migrations.
+- **Operations**: `install` keeps the host's `settings.conf` and certificates, merges `html/`, installs logrotate and GeoLite2.
 
 ## 9. Roadmap (not yet implemented)
 

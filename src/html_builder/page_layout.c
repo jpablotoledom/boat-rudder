@@ -105,8 +105,13 @@ static char *splice_footer_logo(char *html, int epoch) {
         char encoded_alt[512];
         html_encode(encoded_alt, site_name ? site_name : "", sizeof(encoded_alt));
         free(site_name);
-        img = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
-                               request_theme(), epoch, cfg.footer_image, encoded_alt);
+        // WML is XML: its <img> must close itself, or the deck is invalid.
+        // Epoch 1/2 browsers draw a link border around an image unless told
+        // not to (WML has no border attribute at all).
+        img = render_template("<img src=\"/content/themes/%s/logo/epoch%d/%s\" alt=\"%s\"%s%s>",
+                               request_theme(), epoch, cfg.footer_image, encoded_alt,
+                               epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE ? " border=\"0\"" : "",
+                               epoch == EPOCH_WML ? "/" : "");
     } else if (epoch == EPOCH_PRESTANDARD) {
         char *site_name = cms_get_site_name();
         const char *text = cfg.text[0] ? cfg.text : (site_name ? site_name : "");
@@ -197,6 +202,27 @@ static char *splice_theme_colors(char *html) {
         : cms_get_theme_logo_font(request_theme());
     char *font_css = build_logo_font_css(logo_font);
     free(logo_font);
+
+    // The home blog's background images - the list's and each item's - if
+    // the theme customizer set them: filenames the home-blog POST route
+    // already sanitized, so they can sit inside url('...') as they are.
+    // After the stylesheet's own rules, so they win; an item's image is
+    // drawn over its background color.
+    static const struct { const char *selector; char *(*get)(const char *, int); } BLOG_IMAGES[] = {
+        { ".boat-rudder-home-blog",      cms_get_theme_home_blog_background },
+        { ".boat-rudder-home-blog-item", cms_get_theme_home_blog_item_background },
+    };
+    for (size_t i = 0; font_css && i < sizeof(BLOG_IMAGES) / sizeof(BLOG_IMAGES[0]); i++) {
+        char *file = BLOG_IMAGES[i].get(request_theme(), EPOCH_MODERN);
+        if (file && file[0]) {
+            char *rule = render_template(
+                "%s{background-image:url('/content/themes/%s/home-blog/epoch3/%s');}",
+                BLOG_IMAGES[i].selector, request_theme(), file);
+            font_css = rule ? str_append(font_css, rule) : font_css;
+            free(rule);
+        }
+        free(file);
+    }
 
     char *style = render_template(
         "<style>:root{"

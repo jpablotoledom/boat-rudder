@@ -1,0 +1,128 @@
+<section class="boat-rudder-customizer" data-theme="%1$s">
+  <header class="boat-rudder-customizer__topbar">
+    <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+      <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/settings">Site settings</a></li><li><a href="/dashboard/settings/themes">Themes</a></li></ol>
+    </nav>
+    <div class="boat-rudder-customizer__toolbar">
+      <h1 class="boat-rudder-customizer__title">%1$s</h1>
+      <div class="boat-rudder-dashboard__inline-form">%2$s</div>
+      <div class="boat-rudder-customizer__epochs" role="group" aria-label="Epoch">
+        <button type="button" class="boat-rudder-customizer__epoch" data-epoch="-1">-1 <small>WAP</small></button>
+        <button type="button" class="boat-rudder-customizer__epoch" data-epoch="0">0 <small>Text</small></button>
+        <button type="button" class="boat-rudder-customizer__epoch" data-epoch="1">1 <small>Early</small></button>
+        <button type="button" class="boat-rudder-customizer__epoch" data-epoch="2">2 <small>HTML 3.2</small></button>
+        <button type="button" class="boat-rudder-customizer__epoch" data-epoch="3">3 <small>Modern</small></button>
+      </div>
+      <label class="boat-rudder-customizer__size">
+        Screen
+        <select class="boat-rudder-input boat-rudder-input--sm">
+          <option value="full" selected>Full width</option>
+          <option value="1920x1080">Desktop (1920x1080)</option>
+          <option value="1366x768">Laptop (1366x768)</option>
+          <option value="1024x768">XGA (1024x768)</option>
+          <option value="800x600">SVGA (800x600)</option>
+          <option value="640x480">VGA (640x480)</option>
+          <option value="768x1024">Tablet (768x1024)</option>
+          <option value="414x896">Mobile large (414x896)</option>
+          <option value="375x667">Mobile (375x667)</option>
+        </select>
+      </label>
+      <button type="button" class="boat-rudder-btn boat-rudder-btn--sm boat-rudder-customizer__reload">Reload preview</button>
+      <span class="boat-rudder-customizer__status" role="status" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <div class="boat-rudder-customizer__workspace">
+    <aside class="boat-rudder-customizer__sidebar" aria-label="Theme sections">
+      <details class="boat-rudder-customizer__section" data-section="logo" data-scroll="top">
+        <summary>Logo</summary>
+        <div class="boat-rudder-customizer__section-body">
+%3$s
+        </div>
+      </details>
+      <details class="boat-rudder-customizer__section" data-section="navbar" data-scroll="top">
+        <summary>Navbar</summary>
+        <div class="boat-rudder-customizer__section-body">
+          <p class="boat-rudder-customizer__hint">Every picker offers the 16-color VGA palette - outside it,
+             an indexed-color display dithers instead of painting a solid color.</p>
+        </div>
+      </details>
+      <details class="boat-rudder-customizer__section" data-section="banner" data-scroll="top">
+        <summary>Banner</summary>
+        <div class="boat-rudder-customizer__section-body">
+          <p class="boat-rudder-customizer__hint">Raw markup for this epoch; empty uses the theme's own.
+             Upload an image, "Copy URL", paste it into the markup.</p>
+%4$s
+        </div>
+      </details>
+      <details class="boat-rudder-customizer__section" data-section="content" data-scroll="top">
+        <summary>Content</summary>
+        <div class="boat-rudder-customizer__section-body">
+        </div>
+      </details>
+      <details class="boat-rudder-customizer__section" data-section="home-blog" data-scroll="middle">
+        <summary>Home blog</summary>
+        <div class="boat-rudder-customizer__section-body">
+%5$s
+        </div>
+      </details>
+      <details class="boat-rudder-customizer__section" data-section="footer" data-scroll="bottom">
+        <summary>Footer</summary>
+        <div class="boat-rudder-customizer__section-body">
+          <p class="boat-rudder-customizer__hint">Raw markup for this epoch; empty uses the theme's own.</p>
+%6$s
+        </div>
+      </details>
+      <details class="boat-rudder-customizer__section" data-section="colors">
+        <summary>Data colors</summary>
+        <div class="boat-rudder-customizer__section-body">
+%7$s
+        </div>
+      </details>
+    </aside>
+
+    <div class="boat-rudder-customizer__preview">
+      <div class="boat-rudder-customizer__stage">
+        <iframe class="boat-rudder-customizer__frame" title="Site preview"></iframe>
+        <div class="boat-rudder-customizer__wap" hidden>
+          <div class="boat-rudder-customizer__wap-phone">
+            <div class="boat-rudder-customizer__wap-title"></div>
+            <div class="boat-rudder-customizer__wap-screen"></div>
+            <div class="boat-rudder-customizer__wap-keys"></div>
+          </div>
+          <p class="boat-rudder-customizer__hint">WML translated for this preview: text, links and
+             images (each WBMP shown through the PNG next to it, if there is one).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="boat-rudder-customizer__drawer">
+    <button type="button" class="boat-rudder-customizer__drawer-toggle" aria-expanded="false">
+      <span aria-hidden="true">{ }</span> CSS <small>public stylesheet, epoch 3</small>
+    </button>
+    <div class="boat-rudder-customizer__drawer-body" hidden>
+      <form method="POST" action="/dashboard/settings/themes/%1$s/css" class="boat-rudder-customizer__css-form">
+        <div class="boat-rudder-customizer__drawer-head">
+          <strong>Your changes</strong>
+          <span class="boat-rudder-customizer__hint">appended after the original, so they win over it</span>
+          <label class="boat-rudder-customizer__live"><input type="checkbox" checked> Live preview</label>
+          <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="submit">Save CSS</button>
+        </div>
+        <textarea class="boat-rudder-dashboard__textarea" name="css" rows="14" spellcheck="false" data-code-editor="css">%8$s</textarea>
+      </form>
+      <div class="boat-rudder-customizer__css-original">
+        <div class="boat-rudder-customizer__drawer-head">
+          <strong>Original (read-only)</strong>
+          <span class="boat-rudder-customizer__hint">Ctrl+F to find a rule, copy it to your changes</span>
+        </div>
+        <textarea class="boat-rudder-dashboard__textarea" rows="14" spellcheck="false" readonly data-code-editor="css">%9$s</textarea>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="/assets/js/code-editor.js" defer></script>
+<script src="/assets/js/color-field.js" defer></script>
+<script src="/assets/js/theme-assets.js" defer></script>
+<script src="/assets/js/theme-customizer.js" defer></script>

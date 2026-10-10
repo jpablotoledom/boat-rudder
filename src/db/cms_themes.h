@@ -211,6 +211,26 @@ void cms_get_theme_footer_values(const char *key, char *out_values[EPOCH_COUNT])
 // epoch back to the theme's on-disk default.
 int cms_update_theme_banner(const char *key, int epoch, const char *html);
 int cms_update_theme_footer(const char *key, int epoch, const char *html);
+
+// The home blog list's background image, per epoch - only epoch 2 (the
+// <table background="..."> of home-blog_epoch2.html) and epoch 3 (the
+// .boat-rudder-home-blog rule's background-image) have one. Stored in
+// db.themes.home_blog_background.<epoch field> as a bare filename under
+// html/content/themes/<key>/home-blog/epoch<N>/ (the theme-assets upload
+// widget's directory, served as /content/themes/...); "" - the default -
+// keeps the theme's own image. get returns a malloc'd string ("" for any
+// other epoch, or if unset); update returns 0 on success, -1 for any other
+// epoch, on a DB error, or if mongodb is not ready.
+char *cms_get_theme_home_blog_background(const char *key, int epoch);
+int cms_update_theme_home_blog_background(const char *key, int epoch, const char *filename);
+
+// Same, for each blog list item's background image - epoch 2's item <table>
+// (home-blog-item_epoch2.html) and epoch 3's .boat-rudder-home-blog-item -
+// in db.themes.home_blog_item_background.<epoch field>, the file in the same
+// content/themes/<key>/home-blog/epoch<N>/ directory. Drawn over the item's
+// "Blog list item" background color.
+char *cms_get_theme_home_blog_item_background(const char *key, int epoch);
+int cms_update_theme_home_blog_item_background(const char *key, int epoch, const char *filename);
 int cms_update_theme_logo(const char *key, int epoch, const char *html);
 
 // The theme's chosen font-family for the epoch 3 navbar logo text (the
@@ -231,13 +251,14 @@ int cms_update_theme_logo_font(const char *key, const char *font_name);
 // (-1..3), replacing the old single raw-markup logo_html field above for
 // any epoch that has been saved through the new panel:
 //   epoch -1 (WAP/WML): LOGO_MODE_IMAGE only - navbar_image/footer_image
-//     are WBMP filenames (see image_convert_to_wbmp(), called at upload
-//     time by the theme-assets upload route before this struct is ever
-//     saved - by the time it lands here the file is already WBMP).
+//     are WBMP filenames: the upload is a PNG, kept next to the WBMP twin
+//     the theme-assets upload route writes from it (image_convert_to_wbmp()),
+//     and the route reports the WBMP's name, which is what lands here.
 //   epoch 0 (text browsers): LOGO_MODE_TEXT only - `text` is shown as
 //     plain text where the nav bar has no room for an image at all.
 //   epoch 1/2: LOGO_MODE_IMAGE only - navbar_image/footer_image are
-//     filenames under html/themes/<key>/assets/menu/epoch<N>/.
+//     filenames under html/content/themes/<key>/logo/epoch<N>/ (the
+//     theme-assets upload route's directory, served as /content/themes/...).
 //   epoch 3: either mode, admin's choice (a radio button in the panel).
 //     LOGO_MODE_TEXT: `text` (falls back to the site name if empty) shown
 //     in the font named by `font` - "system:<name>" for a hardcoded
@@ -259,8 +280,8 @@ typedef struct {
     CmsLogoMode mode;
     char text[256];          // epoch 0, or epoch 3 in LOGO_MODE_TEXT
     char font[128];          // epoch 3 in LOGO_MODE_TEXT only: "system:<name>" / "uploaded:<name>"
-    char navbar_image[256];  // filename under assets/menu/epoch<N>/ (LOGO_MODE_IMAGE)
-    char footer_image[256];  // filename under assets/menu/epoch<N>/ (LOGO_MODE_IMAGE)
+    char navbar_image[256];  // filename under content/themes/<key>/logo/epoch<N>/ (LOGO_MODE_IMAGE)
+    char footer_image[256];  // filename under content/themes/<key>/logo/epoch<N>/ (LOGO_MODE_IMAGE)
 } CmsLogoConfig;
 
 // db.themes.findOne({key}).logo.<epoch field>. Fills `out` with the stored
@@ -278,35 +299,40 @@ int cms_get_theme_logo_config(const char *key, int epoch, CmsLogoConfig *out);
 // DB error, or if mongodb is not ready.
 int cms_update_theme_logo_config(const char *key, int epoch, const CmsLogoConfig *cfg);
 
-// A theme's two epoch 3 stylesheets:
-//   THEME_CSS_PUBLIC  styles_epoch3.css, db.themes.css_epoch3 - every page;
-//   THEME_CSS_ADMIN   styles_admin_epoch3.css, db.themes.css_admin_epoch3 -
+// A theme's two epoch 3 stylesheets, each its on-disk file plus an optional
+// DB-stored customization layer appended after it:
+//   THEME_CSS_PUBLIC  styles_epoch3.css, db.themes.css_custom_epoch3 - every page;
+//   THEME_CSS_ADMIN   styles_admin_epoch3.css, db.themes.css_admin_custom_epoch3 -
 //                     /login and /dashboard* only, loaded after the public one.
 typedef enum { THEME_CSS_PUBLIC, THEME_CSS_ADMIN } ThemeCssSheet;
 
 // The on-disk file name of `sheet` ("styles_epoch3.css", ...).
 const char *cms_theme_css_file(ThemeCssSheet sheet);
 
-// One of the theme's epoch 3 stylesheets - "" (DB unset) falls back to that
-// theme's own on-disk html/themes/<key>/<file>, the file every theme ships
-// with. Lets an admin fully rewrite a theme's CSS from
-// /dashboard/settings/themes/<key>/css (or /admin-css) while the shipped
-// file stays the one-click "Restore original" target (see
-// cms_update_theme_css()). A theme that ships no admin stylesheet uses the
-// one of configs/settings.conf's `theme`, so a new theme with only public
-// CSS still gets a styled dashboard. Returns a malloc'd string, never NULL
+// The theme's own on-disk html/themes/<key>/<file>, the file every theme
+// ships with - never the DB layer. A theme that ships no admin stylesheet
+// uses the one of configs/settings.conf's `theme`, so a new theme with only
+// public CSS still gets a styled dashboard. Returns a malloc'd string ("" if
+// there is no file), never NULL unless allocation fails.
+char *cms_get_theme_css_original(const char *key, ThemeCssSheet sheet);
+
+// What /themes/<key>/<file> serves: cms_get_theme_css_original(), then - if
+// the admin saved any from /dashboard/settings/themes/<key>/css (or
+// /admin-css) - a "Customizations (dashboard)" comment and that layer.
+// Appended last, a customized rule wins over the original's at equal
+// specificity, so the layer holds only what changed and every update of the
+// shipped file still reaches the site. Returns a malloc'd string, never NULL
 // unless allocation fails.
 char *cms_get_theme_css(const char *key, ThemeCssSheet sheet);
 
-// The *stored* override only ("" if unset - not file-resolved), for the
-// editor form: tells "nothing saved" apart from "saved text matching the
-// file".
+// The stored customization layer only ("" if none), for the editor form.
 char *cms_get_theme_css_value(const char *key, ThemeCssSheet sheet);
 
-// db.themes.updateOne({key}, {$set: {<field>: css}}, {upsert: true}). An
-// empty `css` clears the override back to the on-disk original - this is
-// what the editor's "Restore original" button submits. Returns 0 on
-// success, -1 on a DB error or if mongodb is not ready.
+// db.themes.updateOne({key}, {$set: {<field>: css}}, {upsert: true}) - the
+// customization layer. An empty `css` removes every customization, back to
+// the plain on-disk file - this is what the editor's "Discard my changes"
+// button submits. Returns 0 on success, -1 on a DB error or if mongodb is
+// not ready.
 int cms_update_theme_css(const char *key, ThemeCssSheet sheet, const char *css);
 
 // Splits a stored "#rrggbb" or "#rrggbbaa" background value into its opaque

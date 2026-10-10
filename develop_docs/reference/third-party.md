@@ -13,7 +13,7 @@ viewing and evaluation). Third-party components keep their own licenses.
 
 | Component | Location | Version | License | Used for |
 |---|---|---|---|---|
-| **stb_image** (Sean Barrett) | `src/third_party/stb_image.h` | v2.30 | Public domain (Unlicense) **or** MIT, at the user's choice | Decoding PNG/JPEG uploads for the WBMP logo converter. Compiled once, in `src/utils/image_convert/image_convert.c`, with `STB_IMAGE_IMPLEMENTATION`, `STBI_ONLY_PNG`, `STBI_ONLY_JPEG` |
+| **stb_image** (Sean Barrett) | `src/third_party/stb_image.h` | v2.30 | Public domain (Unlicense) **or** MIT, at the user's choice | Decoding the epoch −1 PNG theme uploads (with alpha) for the WBMP converter. Compiled once, in `src/utils/image_convert/image_convert.c`, with `STB_IMAGE_IMPLEMENTATION`, `STBI_ONLY_PNG`, `STBI_ONLY_JPEG` |
 | **libqrencode declarations** | `src/utils/qr_generator/qrencode_minimal.h` | - | Own code (declarations of libqrencode's public API) | libqrencode ships no pkg-config file and the `-dev` package may be absent; this header declares the two symbols used (`QRcode_encodeString`, `QRcode_free`) so only the runtime library is needed |
 
 ### Rules for vendored code
@@ -78,7 +78,7 @@ Known driver issue: libmongoc 1.30.4-1+deb13u3 breaks `mongoc_collection_aggrega
 | **trc-wap-relay** | Not ported - an external companion program that claims the device's dead gateway IP and relays UDP to this server | separate project | See [wap-gateway.md](wap-gateway.md#topology) |
 | **the-retro-center-old** (TRC) | Analytics day-bucket model and tracker | `src/modules/analytics/analytics.c` | Route classification for Boat Rudder's URLs, `mongodb_manager`, GeoIP split into `geoip.c` |
 | **the-retro-center-old** (TRC) | QR generator | `src/utils/qr_generator/` | GIF/WBMP writers rewritten in pure C (the original shelled out to ImageMagick), per-call LZW tables and atomic writes for thread safety, text renderers for epoch 0 |
-| **the-retro-center-old** (TRC) | Analytics data | via `scripts/migrations/2026-10-03-merge-analytics.js` | Counters summed into the live collections |
+| **the-retro-center-old** (TRC) | Analytics data | imported once into the analytics collections | Counters summed into the live collections |
 | **base-http-server** | Static file server, listener, TLS, router skeleton | `src/web_server/` | Grew into the CMS router; anti-DDoS made configurable, cleanup thread and mutex added |
 
 When porting more code, note the origin in the file's header comment and add a row here.

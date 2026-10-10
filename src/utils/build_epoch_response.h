@@ -42,7 +42,7 @@ char *build_json_response_status(const char *json_body, const char *status_line)
 char *build_json_response(const char *json_body);
 
 // Same shape as build_json_response_status(), but Content-Type: text/css;
-// charset=UTF-8 - serves a theme's (possibly DB-overridden) epoch 3
+// charset=UTF-8 - serves a theme's (possibly DB-customized) epoch 3
 // stylesheet, see cms_get_theme_css() in cms_themes.h.
 char *build_css_response(const char *css_body, const char *status_line);
 

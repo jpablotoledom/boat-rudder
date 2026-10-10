@@ -314,6 +314,162 @@
   border-bottom-color: var(--br-admin-accent);
 }
 
+/* Code editor - built by /assets/js/code-editor.js around any
+   <textarea data-code-editor="css|html|javascript">: the textarea's text is
+   made transparent over __lines, a copy colored with the public sheet's
+   .boat-rudder-code-token--* classes (the theme's "Code colors"). Both
+   layers must share font, line height, padding and tab size exactly, or the
+   caret drifts off the colored text. --br-code-editor-ready tells the script
+   these rules are present; without it the textarea is left as it was. */
+.boat-rudder-code-editor {
+  --br-code-editor-ready:       1;
+  --br-code-editor-font:        ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --br-code-editor-font-size:   13px;
+  --br-code-editor-line-height: 20px;
+  --br-code-editor-pad:         8px;
+  --br-code-editor-tab-size:    4;
+  --br-code-editor-digits:      2;  /* set by the script from the line count */
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+  overflow: hidden;
+  background: var(--br-color-code-background);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-code-editor:focus-within {
+  border-color: var(--br-admin-accent);
+}
+
+/* height 0 + min-height 100%: the gutter holds every line number but must not
+   stretch the row past the textarea's own height. */
+.boat-rudder-code-editor__gutter {
+  position: relative;
+  height: 0;
+  min-height: 100%;
+  overflow: hidden;
+  border-right: 1px solid var(--br-color-code-line-number);
+  user-select: none;
+}
+
+.boat-rudder-code-editor__gutter-lines {
+  position: relative;
+  box-sizing: content-box;
+  min-width: calc(var(--br-code-editor-digits) * 1ch);
+  padding: var(--br-code-editor-pad) 10px;
+  font-family: var(--br-code-editor-font);
+  font-size: var(--br-code-editor-font-size);
+  line-height: var(--br-code-editor-line-height);
+  white-space: pre;
+  text-align: right;
+  color: var(--br-color-code-line-number);
+  will-change: transform;
+}
+
+.boat-rudder-code-editor__body {
+  position: relative;
+  min-width: 0;
+}
+
+.boat-rudder-code-editor__highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.boat-rudder-code-editor__lines,
+.boat-rudder-code-editor__input {
+  margin: 0;
+  padding: var(--br-code-editor-pad);
+  font-family: var(--br-code-editor-font);
+  font-size: var(--br-code-editor-font-size);
+  font-weight: normal;
+  line-height: var(--br-code-editor-line-height);
+  letter-spacing: normal;
+  tab-size: var(--br-code-editor-tab-size);
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.boat-rudder-code-editor__lines {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+  color: var(--br-color-code-text);
+  will-change: transform;
+}
+
+.boat-rudder-code-editor__line {
+  height: var(--br-code-editor-line-height);
+}
+
+/* Bold (keywords, in the public sheet) can widen a monospace glyph when the
+   font has no real bold face, pushing the colored text off the caret. */
+.boat-rudder-code-editor__lines [class^="boat-rudder-code-token--"] {
+  font-weight: normal;
+}
+
+.boat-rudder-code-editor__active-line,
+.boat-rudder-code-editor__gutter-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--br-code-editor-line-height);
+  background: color-mix(in srgb, var(--br-color-code-text) 8%, transparent);
+}
+
+.boat-rudder-code-editor__input {
+  position: relative;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  overflow: auto;
+  resize: vertical;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--br-color-code-text);
+  scrollbar-color: var(--br-color-code-line-number) transparent;
+}
+
+.boat-rudder-code-editor__input::selection {
+  color: transparent;
+  background: color-mix(in srgb, var(--br-admin-accent) 35%, transparent);
+}
+
+/* Past the script's line limit: no colored layer, the textarea's own text. */
+.boat-rudder-code-editor--plain .boat-rudder-code-editor__highlight { display: none; }
+.boat-rudder-code-editor--plain .boat-rudder-code-editor__input { color: var(--br-color-code-text); }
+
+.boat-rudder-code-editor__status {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 10px;
+  font-size: var(--br-admin-font-xs);
+  color: var(--br-admin-text-muted);
+  background: var(--br-admin-surface-raised);
+  border-top: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-code-editor__status-state {
+  font-weight: 600;
+  color: var(--br-admin-accent);
+}
+
+.boat-rudder-code-editor__status-hint {
+  margin-left: auto;
+}
+
 /* ============================================================
    3. PAGES
    ============================================================ */
@@ -397,6 +553,524 @@
   max-width: 400px;
 }
 
+/* A form holding a code editor uses the page's full width. */
+.boat-rudder-dashboard__form--wide {
+  max-width: none;
+}
+
+/* Theme customizer (/dashboard/settings/themes/<key>/customize):
+   settings-customize_epoch3.html + /assets/js/theme-customizer.js. A
+   toolbar (epoch, screen size), the sections sidebar beside the live
+   preview, and the CSS drawer below both. */
+.boat-rudder-customizer {
+  --br-customizer-sidebar:   380px;
+  --br-customizer-height:    calc(100vh - 230px);
+  --br-customizer-drawer:    42vh;
+  --br-customizer-wap-screen: #c5d1b5;  /* the WAP preview's LCD */
+  --br-customizer-wap-ink:    #1d2414;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.boat-rudder-customizer [hidden] {
+  display: none !important;
+}
+
+/* The page's content column (980px) is too narrow for sidebar + preview:
+   the customizer takes the window's width. */
+.boat-rudder-page-content:has(.boat-rudder-customizer) {
+  width: auto;
+  max-width: 1800px;
+  padding: 20px;
+}
+
+.boat-rudder-customizer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.boat-rudder-customizer__title {
+  margin: 0;
+  padding: 0;
+  font-size: 24px;
+}
+
+.boat-rudder-customizer__epochs {
+  display: inline-flex;
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+  overflow: hidden;
+}
+
+.boat-rudder-customizer__epoch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+  padding: 5px 10px;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--br-admin-text);
+  background: var(--br-admin-surface);
+  border: 0;
+  border-right: 1px solid var(--br-admin-border);
+  cursor: pointer;
+}
+
+.boat-rudder-customizer__epoch:last-child {
+  border-right: 0;
+}
+
+.boat-rudder-customizer__epoch small {
+  font-size: var(--br-admin-font-xs);
+  font-weight: normal;
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-customizer__epoch:hover {
+  background: var(--br-admin-hover);
+}
+
+.boat-rudder-customizer__epoch[aria-pressed="true"],
+.boat-rudder-customizer__epoch[aria-pressed="true"] small {
+  color: var(--br-admin-on-accent);
+  background: var(--br-admin-accent);
+}
+
+.boat-rudder-customizer__size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--br-admin-font-sm);
+}
+
+.boat-rudder-customizer__status {
+  margin-left: auto;
+  font-size: var(--br-admin-font-sm);
+  font-weight: 600;
+  color: var(--br-admin-accent);
+}
+
+.boat-rudder-customizer__status--error {
+  color: var(--br-admin-danger);
+}
+
+.boat-rudder-customizer__workspace {
+  display: grid;
+  grid-template-columns: var(--br-customizer-sidebar) minmax(0, 1fr);
+  gap: 12px;
+  height: var(--br-customizer-height);
+  min-height: 480px;
+}
+
+.boat-rudder-customizer--drawer-open .boat-rudder-customizer__workspace {
+  height: calc(var(--br-customizer-height) - var(--br-customizer-drawer));
+  min-height: 320px;
+}
+
+.boat-rudder-customizer__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-customizer__section {
+  flex-shrink: 0;
+  background: var(--br-admin-surface);
+  border: 1px solid var(--br-admin-border);
+  border-bottom: none;
+}
+
+.boat-rudder-customizer__section:last-child {
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-customizer__section > summary {
+  padding: 10px 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.boat-rudder-customizer__section[open] > summary {
+  border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-customizer__section--dirty > summary::after {
+  content: " \25CF";
+  color: var(--br-admin-accent);
+}
+
+.boat-rudder-customizer__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background-color: var(--br-color-page-content-background, transparent);
+}
+
+/* The panels are the single-purpose editors' own; the epoch picker already
+   says which epoch they are for. */
+.boat-rudder-customizer__section-body .boat-rudder-dashboard__settings-panel > h2 {
+  display: none;
+}
+
+.boat-rudder-customizer__section-body .boat-rudder-dashboard__settings-panel {
+  margin: 0;
+}
+
+.boat-rudder-customizer__section-body fieldset {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-customizer__save-colors {
+  align-self: flex-start;
+}
+
+.boat-rudder-customizer .boat-rudder-customizer__colors form {
+  align-items: stretch;
+}
+
+.boat-rudder-customizer .boat-rudder-customizer__colors form > button {
+  align-self: flex-start;
+}
+
+.boat-rudder-dashboard__color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--br-admin-font-md);
+}
+
+.boat-rudder-customizer__hint {
+  margin: 0;
+  font-size: var(--br-admin-font-sm);
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-customizer__empty {
+  margin: 0;
+  font-style: italic;
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-customizer__preview {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-customizer__stage {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  overflow: auto;
+}
+
+.boat-rudder-customizer__frame {
+  display: block;
+  flex-shrink: 0;
+  border: 0;
+}
+
+/* Epoch -1: the WML deck, translated, on a phone-sized LCD. */
+.boat-rudder-customizer__wap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+}
+
+.boat-rudder-customizer__wap-phone {
+  width: 240px;
+  padding: 10px;
+  background: var(--br-admin-surface);
+  border: 2px solid var(--br-admin-border);
+  border-radius: 18px;
+}
+
+.boat-rudder-customizer__wap-title,
+.boat-rudder-customizer__wap-screen,
+.boat-rudder-customizer__wap-keys {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--br-customizer-wap-ink);
+  background: var(--br-customizer-wap-screen);
+}
+
+.boat-rudder-customizer__wap-title {
+  min-height: 1.4em;
+  padding: 3px 6px;
+  font-weight: bold;
+  border-bottom: 1px solid var(--br-customizer-wap-ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.boat-rudder-customizer__wap-screen {
+  height: 320px;
+  padding: 4px 6px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.boat-rudder-customizer__wap-screen p {
+  margin: 0 0 4px;
+}
+
+.boat-rudder-customizer__wap-screen pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.boat-rudder-customizer__wap-screen .boat-rudder-customizer__wap-warning {
+  margin: 0 0 6px;
+  padding: 3px 4px;
+  font-weight: bold;
+  border: 1px dashed var(--br-customizer-wap-ink);
+}
+
+.boat-rudder-customizer__wap-screen img {
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+
+.boat-rudder-customizer__wap-screen big {
+  font-size: 14px;
+}
+
+.boat-rudder-customizer__wap-link,
+.boat-rudder-customizer__wap-link:is(:link, :visited, :hover) {
+  color: var(--br-customizer-wap-ink);
+  text-decoration: underline;
+}
+
+.boat-rudder-customizer__wap-keys {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 1.6em;
+  padding: 3px 6px;
+  border-top: 1px solid var(--br-customizer-wap-ink);
+}
+
+/* CSS drawer */
+.boat-rudder-customizer__drawer {
+  background: var(--br-admin-surface);
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-customizer__drawer-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--br-admin-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.boat-rudder-customizer__drawer-toggle small {
+  font-weight: normal;
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-customizer__drawer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  height: var(--br-customizer-drawer);
+  padding: 0 12px 12px;
+}
+
+.boat-rudder-customizer__css-form,
+.boat-rudder-customizer__css-original {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.boat-rudder-customizer__css-form .boat-rudder-code-editor,
+.boat-rudder-customizer__css-original .boat-rudder-code-editor {
+  flex: 1;
+  min-height: 0;
+}
+
+.boat-rudder-customizer__drawer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+
+.boat-rudder-customizer__live {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: var(--br-admin-font-sm);
+}
+
+@media (max-width: 900px) {
+  .boat-rudder-customizer__workspace,
+  .boat-rudder-customizer--drawer-open .boat-rudder-customizer__workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .boat-rudder-customizer__preview {
+    height: 70vh;
+  }
+
+  .boat-rudder-customizer__drawer-body {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .boat-rudder-customizer__status {
+    margin-left: 0;
+  }
+}
+
+/* Theme CSS editor: the original stylesheet, read-only, folded under the
+   customization layer's form. */
+.boat-rudder-dashboard__css-original {
+  margin: 15px 0;
+}
+
+.boat-rudder-dashboard__css-original summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Uploaded files of a banner/footer panel (theme-assets.js): one row per
+   file - thumbnail, name (ellipsized; the full path on hover), Copy URL,
+   Delete. */
+.boat-rudder-dashboard__asset-manager {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--br-admin-border);
+}
+
+/* A file list's title with its Upload button on the right. */
+.boat-rudder-dashboard__asset-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+/* A single-image field (logo, home blog background): its label, the current
+   file as a one-row file list, and the upload button below. */
+.boat-rudder-dashboard__asset-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.boat-rudder-dashboard__asset-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-dashboard__asset,
+.boat-rudder-dashboard__asset-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: var(--br-admin-font-md);
+}
+
+.boat-rudder-dashboard__asset + .boat-rudder-dashboard__asset {
+  border-top: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-dashboard__asset:hover {
+  background: var(--br-admin-hover-overlay);
+}
+
+.boat-rudder-dashboard__asset-empty {
+  font-style: italic;
+  color: var(--br-admin-text-muted);
+}
+
+.boat-rudder-dashboard__asset-thumb {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  font-size: var(--br-admin-font-xs);
+  color: var(--br-admin-text-muted);
+  background: repeating-conic-gradient(var(--br-admin-surface-raised) 0% 25%, var(--br-admin-surface) 0% 50%) 0 0 / 8px 8px;
+  border: 1px solid var(--br-admin-border);
+  border-radius: var(--br-admin-radius);
+}
+
+.boat-rudder-dashboard__asset-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Theme banner/footer panels: a code editor and its Save button. */
+.boat-rudder-dashboard__settings-panel form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .boat-rudder-dashboard__form-row {
   display: flex;
   flex-direction: column;
@@ -437,7 +1111,7 @@
 
 .boat-rudder-dashboard__options-group ul {
   list-style: none;
-  margin: 0;
+  margin: 8px 0 0 0;
   padding: 0;
 }
 
@@ -595,7 +1269,7 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 50;
+  z-index: 1000;  /* color-field.js fixes it to the window, above the navbar */
   display: flex;
   flex-direction: column;
   gap: 8px;

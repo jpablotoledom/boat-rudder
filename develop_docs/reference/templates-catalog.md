@@ -67,7 +67,7 @@ shipped themes (`dark`, `light`) contain the same set.
 | `page/` | `page-home` | −1…3 | 4 | `FOOTER` | home page wrapper (`buildHomeWebSite()`) |
 | `.` | `styles_epoch3.css` | 3 | - | | public epoch 3 stylesheet, served via `/themes/<key>/styles_epoch3.css` (DB-overridable) |
 | `.` | `styles_admin_epoch3.css` | 3 | - | | admin epoch 3 stylesheet (login, dashboard), served via `/themes/<key>/styles_admin_epoch3.css` (DB-overridable; optional, falls back to the configured `theme`'s) |
-| `assets/` | `blog-list/`, `footer/`, `mainbanner/`, `menu/`, `social-networks/` | | | | images; `mainbanner|footer|menu/epoch<N>/` are also the theme-assets upload targets |
+| `assets/` | `blog-list/`, `footer/`, `mainbanner/`, `menu/`, `social-networks/` | | | | the theme's own images (dashboard uploads go to `html/content/themes/<key>/`, see [themes.md](themes.md#7-theme-uploads-and-wbmp-conversion)) |
 
 ---
 
@@ -134,7 +134,7 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` | `entry_editor_blocks.c` |
 | `categories/`, `menu/`, `users/`, `languages/` | `list`, `list-row`, `list-empty`/`list-error`, `form`, `form-field`, `form-error`, `option`, `list-row-actions` | the matching `*_admin.c` |
 | `media/` | `media`, `media-directory-container`, `media-directory`, `item-photo`, `media-modal` | `media_admin.c` ([media-admin.md](media-admin.md)) |
-| `settings/` | `settings`, `settings-error`, `settings-themes` (the list), `settings-themes-row`, `settings-themes-active`, `settings-theme` (one theme's page), `settings-themes-panel` (52 args), `settings-themes-activate` (key, `return`), `settings-asset`, `settings-asset-panel`, `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css` (7 positional args: key, two tab modifiers, status, `css`/`admin-css`, CSS, restore `hidden`), `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |
+| `settings/` | `settings`, `settings-error`, `settings-themes` (the list), `settings-themes-row`, `settings-themes-active`, `settings-customize` (the theme customizer; 9 positional args: key, status, logo / banner / home blog / footer panels, color panel, CSS layer, original CSS), `settings-themes-panel` (the color form; 48 args, fields tagged `data-epochs`, groups `data-section`), `settings-themes-activate` (key, `return`), `settings-asset`, `settings-asset-panel`, `settings-home-blog-panel` (epoch, key, list and item background), `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css` (9 positional args: key, two tab modifiers, status, `css`/`admin-css`, the layer, *Discard* `hidden`, the original CSS, its file name), `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |
 | `fonts/` | `list`, `list-row`, `list-error` | `fonts_admin.c` ([fonts.md](fonts.md)) |
 | `analytics/` | `analytics` (28 args), `summary` (13 args, dashboard home: charts plus their folded tables) | `analytics_view.c` ([analytics.md](analytics.md)) |
 

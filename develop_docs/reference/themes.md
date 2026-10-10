@@ -20,7 +20,8 @@ Diagrams: [diagrams/theme-resolution.puml](../diagrams/theme-resolution.puml),
 |---|---|---|
 | **Theme** | A directory `html/themes/<key>/` holding the visual parts of the site (layout, menu, banner, home sections, assets, epoch 3 CSS). Ships with `dark` and `light`. | Filesystem |
 | **Shared templates** | Everything theme-agnostic (content blocks, dashboard, login, errors, entry pages…) | `html/templates/` |
-| **Theme overrides** | Colors, per-epoch banner/footer/logo, logo font, a full epoch 3 CSS replacement | `themes` collection, one sparse document per customized theme |
+| **Theme overrides** | Colors, per-epoch banner/footer/logo, home blog background images, logo font, a customization layer over each epoch 3 stylesheet | `themes` collection, one sparse document per customized theme |
+| **Theme uploads** | The images those overrides use (banner, footer, logo, home blog) | `html/content/themes/<key>/` - site content, never the theme's own `assets/` |
 | **Site settings** | Site name, which theme new visitors get | `site_settings` singleton |
 | **Font library** | Uploaded font files usable by the epoch 3 logo | `fonts` collection + `html/assets/fonts/` ([fonts.md](fonts.md)) |
 
@@ -108,15 +109,19 @@ text, byline, table rows, code tokens) via `cms_get_theme_colors(request_theme()
 
 ---
 
-## 5. Banner, footer and logo (per theme, per epoch)
+## 5. Banner, footer, logo and home blog (per theme, per epoch)
+
+All of it is edited from the theme customizer ([§8](#8-theme-customizer-site-name-and-preview));
+the single-purpose pages below still exist and post to the same endpoints.
 
 | Part | Admin page | Storage | Fallback when unset |
 |---|---|---|---|
 | Home banner | `/dashboard/settings/themes/<key>/banner` | `themes.banner_html.<epoch>` (raw markup) | `mainbanner/mainbanner_epoch<N>.html` of that theme |
 | Footer | `…/<key>/footer` | `themes.footer_html.<epoch>` | `layout/footer_epoch<N>.html` |
 | Logo | `…/<key>/logo` | `themes.logo.<epoch>` (structured `CmsLogoConfig`) | legacy `themes.logo_html.<epoch>`, then `menu/menu-logo_epoch<N>.html` |
+| Home blog backgrounds | customizer only | `themes.home_blog_background.<epoch>`, `themes.home_blog_item_background.<epoch>` (epoch 2/3, filenames) | the theme's own (CSS rule / `<table background>`) |
 
-Banner and footer are one `<textarea>` per epoch (−1…3) plus an image upload/browse widget.
+Banner and footer are one code editor per epoch (−1…3) plus the epoch's uploaded images (§7).
 An empty value restores the on-disk file. Raw markup is inserted with `str_replace_*`, never
 through `printf`, so `%` in CSS is safe. The epoch 3 footer's `{{SITE_NAME}}` token becomes the
 site name.
@@ -125,14 +130,37 @@ site name.
 
 | Epoch | Allowed mode (enforced server-side) | Rendering |
 |---|---|---|
-| −1 (WML) | image only | navbar/footer images must be **WBMP**: PNG/JPEG uploads are converted automatically (see §7) |
+| −1 (WML) | image only | navbar/footer images are **WBMP**: the upload is a PNG and the server writes its WBMP twin (see §7); the stored name is the `.wbmp` |
 | 0 | text only | `text` (or the site name) as plain text in the nav bar and footer |
-| 1, 2 | image only | `navbar_image` / `footer_image` from `html/themes/<key>/assets/menu/epoch<N>/` |
+| 1, 2 | image only | `navbar_image` / `footer_image` from `html/content/themes/<key>/logo/epoch<N>/`, rendered with `border="0"` |
 | 3 | text **or** image (radio) | Text: `text` (or site name) in `font` = `system:<name>` (Arial, Times New Roman, Courier New, Georgia, Verdana, Comic Sans MS, Impact, Trebuchet MS) or `uploaded:<name>` from the font library. Image: same fields as epochs 1/2 |
+
+The image `<img>` is built in C (`menu.c` for the navbar, `splice_footer_logo()` for the footer),
+not from a template: `/content/themes/<key>/logo/epoch<N>/<file>`, self-closed (`/>`) on WML -
+an unclosed `<img>` makes the deck invalid XML - and with `border="0"` on epochs 1/2, whose
+browsers otherwise draw a link border around it.
 
 On the home page the banner stands in for the logo, so the menu omits it there. The footer logo
 uses the `{{FOOTER_LOGO}}` marker (`splice_footer_logo()`), falling back to the theme's
 `layout/footer-logo_epoch<N>.html`.
+
+### Home blog background images
+
+Two images for epoch 2 and 3, the list's and each item's (drawn over the "Blog list item"
+background color), both uploaded to `content/themes/<key>/home-blog/epoch<N>/` and saved by
+`POST /dashboard/settings/themes/<key>/home-blog/<epoch>` (fields `background`,
+`item-background`; `""` = the theme's own). The route sanitizes them with the upload's filename
+rules, since they are written unescaped:
+
+| Epoch | List | Each item |
+|---|---|---|
+| 3 | `.boat-rudder-home-blog{background-image:url(…)}` | `.boat-rudder-home-blog-item{background-image:url(…)}` |
+| 2 | the first `<table>`'s `background="…"` of `home-blog_epoch2.html` | the first `<table>`'s `background="…"` of `home-blog-item_epoch2.html` |
+
+Epoch 3's rules are appended to the `{{THEME_COLORS}}` block (`splice_theme_colors()`), after the
+stylesheet, so they win. Epoch 2's attribute is swapped - or added when the template has none -
+by `set_table_background()` in `blog_list.c`; the theme's template keeps its own default, so an
+updated template, or a theme without the setting, renders as shipped.
 
 ### Epoch 3 logo font
 
@@ -153,8 +181,8 @@ Each theme ships **two** epoch 3 stylesheets:
 
 | File | Contents | Loaded on | Override |
 |---|---|---|---|
-| `styles_epoch3.css` | The public site: reset, navbar, banner, home, blog list, entry page and every content block, footer, language/theme pages, lightbox | Every epoch 3 page, linked by `layout_epoch3.html` | `themes.css_epoch3` |
-| `styles_admin_epoch3.css` | Login, dashboard, entry editor, media library, settings, analytics and charts | `/login` and `/dashboard*` only, **after** the public one | `themes.css_admin_epoch3` |
+| `styles_epoch3.css` | The public site: reset, navbar, banner, home, blog list, entry page and every content block, footer, language/theme pages, lightbox | Every epoch 3 page, linked by `layout_epoch3.html` | `themes.css_custom_epoch3` |
+| `styles_admin_epoch3.css` | Login, dashboard, entry editor, media library, settings, analytics and charts | `/login` and `/dashboard*` only, **after** the public one | `themes.css_admin_custom_epoch3` |
 
 Admin pages load both: they use the public navbar and footer, and the entry editor previews the
 public block markup. The admin `<link>` isn't in the layout: `page_layout_wrap()`
@@ -166,24 +194,33 @@ Both are **served dynamically**: `GET /themes/<key>/styles_epoch3.css` and
 `GET /themes/<key>/styles_admin_epoch3.css` are intercepted by `match_theme_css_url()` before the
 static file server and answer `cms_get_theme_css(key, sheet)`:
 
-1. the theme's override (`css_epoch3` / `css_admin_epoch3`) if non-empty;
-2. otherwise the theme's file on disk;
-3. for the admin stylesheet only, if the theme ships none: the admin stylesheet of
-   `configs/settings.conf`'s `theme`. A new theme with only public CSS still gets a styled
-   dashboard.
+1. the theme's file on disk - for the admin stylesheet, if the theme ships none, the admin
+   stylesheet of `configs/settings.conf`'s `theme` (`cms_get_theme_css_original()`), so a new
+   theme with only public CSS still gets a styled dashboard;
+2. then, if the admin saved one, a `/* ---- Customizations (dashboard) ---- */` comment and the
+   theme's **customization layer** (`css_custom_epoch3` / `css_admin_custom_epoch3`).
 
-The editor at `/dashboard/settings/themes/<key>/css` has a tab per stylesheet (**Public site**,
-**Admin**, the latter at `…/admin-css`):
+The layer is *added*, never a replacement: appended last, a customized rule wins over the
+original's at equal specificity, so it holds only what changed and every update of the shipped
+file still reaches the site. The consequences:
 
-- It shows the *effective* CSS in a full-file editor (128 KiB limit, `THEME_ASSET_HTML_MAX`).
-- `POST …/css` or `…/admin-css` saves that stylesheet's override; `POST …/restore` clears it, so
-  the shipped file is always the one-click "Restore original".
-- A broken public override no longer takes the dashboard down with it: the editor itself is
-  styled by the admin stylesheet.
-- Colors are still injected through `{{THEME_COLORS}}`, so an edited stylesheet keeps reacting to
-  the color panel as long as it keeps its `var(--br-color-…)` references.
-- A `css_epoch3` override saved before the split still holds the admin rules too. It keeps
-  working (the admin stylesheet loads after it); *Restore original* drops the duplicate.
+- A customization can override a rule (same or a more specific selector; `!important` only where
+  the original uses it; `revert`/`unset` to cancel a property) but not delete one. If an update
+  renames a class, a rule aimed at the old name silently stops applying.
+- The `css_epoch3` / `css_admin_epoch3` fields of earlier versions (full replacements) are no
+  longer read.
+- Colors are still injected through `{{THEME_COLORS}}`, so the original keeps reacting to the
+  color panel.
+
+The public layer is edited in the customizer's CSS drawer (§8); both have a page at
+`/dashboard/settings/themes/<key>/css` and `…/admin-css` (a tab each):
+
+- **Your changes**: the layer only, empty for a fresh theme, in the code editor (§6.2), 128 KiB
+  limit (`THEME_ASSET_HTML_MAX`). `POST …/css` or `…/admin-css` saves it.
+- **Original stylesheet**: the theme's file, read-only, folded below, to find and copy rules from.
+- *Discard my changes* (`POST …/restore`) saves an empty layer: the plain file again.
+- A broken public layer doesn't take the dashboard down with it: the editor itself is styled by
+  the admin stylesheet.
 
 ### 6.1 Admin tokens and components
 
@@ -221,28 +258,99 @@ today, only part 1 differs.
 Entry previews and the rich-text editor show the entry as the public site does, so they read the
 public palette directly (`home-content-text`, `link-normal`, `table-*`, `code-*`).
 
+### 6.2 Code editor
+
+Every raw-code field of the theme settings - the CSS layers, the banner and footer markup - is a
+plain `<textarea data-code-editor="css|html|javascript">` (optional `data-indent`, default 2
+spaces) that `html/assets/js/code-editor.js` turns into a code editor: line numbers, syntax
+colors, a current-line band and a status bar. No library and no server code: the textarea stays
+the form field, made transparent over a colored copy of its text, so forms post as before and
+undo, selection and find are the browser's own.
+
+- Colors: the same `boat-rudder-code-token--*` classes as `src/utils/code_highlight.c` (its rules
+  are mirrored line by line, plus `<style>`/`<script>` inside HTML), so the theme's code colors
+  apply. Its layout rules are the "Code editor" component of each `styles_admin_epoch3.css`; a
+  sheet without them lacks `--br-code-editor-ready` and the plain textarea stays.
+- Keys: Tab / Shift+Tab indent and outdent (the selected lines, if any); Esc then Tab leaves;
+  Enter keeps the indentation, one level more after `{ ( [` or an opening tag; `}` on a blank
+  indented line outdents it; Ctrl+S submits the form (`requestSubmit()`, so `csrf.js` adds the
+  token); Ctrl+/ toggles comments; Ctrl+G goes to a line. Brackets and quotes are never
+  auto-closed.
+- A `readonly` textarea gets the same view with only Ctrl+G.
+- Unsaved changes are flagged and leaving asks first. A page that saves the form by fetch
+  cancels the submit and fires `code-editor:saved` on the textarea afterwards.
+- Only the edited lines are re-tokenized, plus the following ones while the state carried across
+  lines (open comment, string, tag) differs; past 20,000 lines it falls back to plain text.
+
 ---
 
-## 7. Theme assets and WBMP conversion
+## 7. Theme uploads and WBMP conversion
 
-The banner/footer/logo editors upload images through `/dashboard/api/theme-assets/*`
-([routes.md](routes.md#theme-assets)) into
-`html/themes/<key>/assets/<component>/epoch<N>/`, where `component` ∈ `mainbanner`, `footer`,
-`menu` (the logo). The theme key always comes from the request, never from the admin's own
-active theme, so editing one theme can't write into another.
+The banner, footer, logo and home blog editors upload images through
+`/dashboard/api/theme-assets/*` ([routes.md](routes.md#theme-assets)) into
+`html/content/themes/<key>/<component>/epoch<N>/`, served as `/content/themes/...`, where
+`component` ∈ `banner`, `footer`, `logo`, `home-blog`. That is site content, like the media
+library's `html/content/posts/`: the theme's own `assets/` ship with Boat Rudder and an update
+overwrites them, so uploads never go there, and the widgets neither list nor delete the theme's
+images. The theme key always comes from the request, never from the admin's own active theme, so
+editing one theme can't write into another.
 
-- Allowed uploads: `.png .jpg .jpeg .gif`; for epoch −1, `.png .jpg .jpeg` only.
+- Allowed uploads: `.png .jpg .jpeg .gif`; for epoch −1, `.png` only.
 - Filenames are sanitized to `[A-Za-z0-9._-]` (spaces → `-`), no leading `.`, no `..`.
-- **Epoch −1 logo uploads** (`component=menu`, `epoch=-1`) are converted in place to WBMP by
-  `image_convert_to_wbmp(path, out, 200)` (`src/utils/image_convert/`): decoded with the
-  vendored `stb_image.h` (PNG/JPEG only), scaled down nearest-neighbor to fit 200×200 (never
-  upscaled), grayscale, flat 50 % threshold to 1-bit (no dithering), written by
-  `write_wbmp()` (`src/utils/wbmp_writer.c`, shared with the QR generator). The original is
-  deleted and the `.wbmp` name is returned to the form.
+- **Epoch −1, every component**: the PNG is kept - the source for later edits, and what the
+  customizer's WAP preview shows, since browsers can't read WBMP - and its WBMP twin with the same
+  base name (`logo.png` → `logo.wbmp`) is written next to it by
+  `image_convert_to_wbmp(path, out, 200)` (`src/utils/image_convert/`): decoded with the vendored
+  `stb_image.h`, transparency laid over white (a WAP screen's background), scaled down
+  nearest-neighbor to fit 200×200 (never upscaled), grayscale, flat 50 % threshold to 1-bit (no
+  dithering), written by `write_wbmp()` (`src/utils/wbmp_writer.c`, shared with the QR
+  generator). The `.wbmp` name is returned to the form; deleting either file removes both.
+
+The widgets (`html/assets/js/theme-assets.js`) show uploads as a file list - thumbnail, name,
+*Copy URL* (the path to paste into markup; on epoch −1 the `.wbmp`), *Delete*. Banner and footer
+list their directory; single-image fields (logo navbar/footer, home blog backgrounds) show their
+current file, and their *Delete* removes it, empties every field of the panel that used it and
+saves the form at once, so a setting never points at a missing file.
 
 ---
 
-## 8. Site name and preview
+## 8. Theme customizer, site name and preview
+
+### 8.1 Theme customizer
+
+`/dashboard/settings/themes/<key>/customize` (`site_settings_customize_page()`,
+`settings-customize_epoch3.html`, driven by `html/assets/js/theme-customizer.js`) is the one page
+for customizing a theme; the themes list links it as *Customize*, and the old per-theme page
+(`/dashboard/settings/themes/<key>`) redirects to it.
+
+- **Epoch first.** A −1…3 picker on top. The sidebar sections - Logo, Navbar, Banner, Content,
+  Home blog, Footer, Data colors - hold every epoch's panel (`data-epoch`) and every color row
+  (`data-epochs`, the epochs that read that color); only the chosen epoch's are shown, and a
+  section with nothing for it says so. The sections are an animated accordion. Epoch, open
+  section and drawer state are remembered per browser.
+- **Colors by section.** The color form's groups carry `data-section` and are moved into their
+  section - Navbar; Content (Body, Generic links, Home content); Home blog (blog list items);
+  Footer - each with its own *Save colors*; the fields stay in the one form via `form=""`. Data
+  colors keeps the table and code blocks. Each picker (`html/assets/js/color-field.js`) opens a
+  popover fixed to the window, so the scrolling sidebar can't clip it.
+- **Preview.** An iframe of the site with `?theme=<key>&preview_epoch=<N>` (§2, §8.2), kept on
+  every link followed inside it, with screen-size presets. The site's own theme switcher is
+  removed from it (it would switch themes, and `/theme/set` would change the admin's own cookie),
+  and epoch 0 - which has no colors - gets the admin theme's. Opening a section, and every reload,
+  scrolls the preview to that section's place (`data-scroll`: top, middle, bottom), the same in
+  every epoch, and only inside the preview.
+- **WAP preview.** Epoch −1 is WML, which no iframe renders: the deck is fetched and translated
+  into a phone-sized screen - text, links, `do` soft keys, cards, and images through the PNG next
+  to each WBMP. A deck that isn't well-formed XML is still shown, read by the HTML parser, under a
+  warning that a real phone may reject it.
+- **Saving.** Each panel keeps its own form and endpoint; the script posts it with fetch and
+  reloads the preview. Sections with unsaved edits are marked, and leaving asks first.
+- **Live, before saving (epoch 3).** A color change sets its `--br-color-*` variable inside the
+  preview; the CSS drawer's text is injected there as a `<style>`.
+- **CSS drawer.** The public stylesheet's customization layer and, beside it, the original
+  read-only (§6). The admin stylesheet keeps its own page.
+
+### 8.2 Site name and preview
 
 - `/dashboard/settings` edits `site_settings.site_name` (default `"Boat Rudder"`). Every
   `{{SITE_NAME}}` in titles and templates is replaced, HTML-escaped, by `page_layout_wrap()`.
@@ -262,7 +370,8 @@ All settings routes are epoch 3 and **admin only**.
    slug; it becomes the URL segment, the cookie value and the `themes.key`).
 2. **Rewrite hardcoded paths.** Theme templates reference their own assets by absolute path,
    e.g. `layout_epoch3.html` links `/themes/dark/styles_epoch3.css` and banners use
-   `/themes/dark/assets/...`. Replace `/themes/dark/` with `/themes/<key>/` throughout.
+   `/themes/dark/assets/...`. Replace `/themes/dark/` with `/themes/<key>/` throughout. (Images
+   uploaded from the dashboard live in `html/content/themes/<key>/`, not in the theme.)
 3. Keep the markers the code fills in: `{{CONTENT}}`, `{{PAGE_TITLE}}`, `{{THEME_COLORS}}`
    (epoch 3 layout), `{{COLOR_*}}` (epoch 1/2 layouts), `{{BODY_BACKGROUND}}`, `{{FOOTER}}`,
    `{{FOOTER_LOGO}}`, `{{LIGHTBOX}}`, `{{SITE_NAME}}`, and the `%s` slots of
@@ -290,12 +399,17 @@ All settings routes are epoch 3 and **admin only**.
 | `src/utils/generate_url_theme.c/h` | Theme → shared template fallback |
 | `src/db/cms_themes.c/h` | `themes` collection, defaults, hex/alpha helpers |
 | `src/db/cms_site_settings.c/h` | `site_settings` singleton |
-| `src/modules/site_settings_admin/` | All `/dashboard/settings*` pages |
+| `src/modules/site_settings_admin/` | All `/dashboard/settings*` pages, the theme customizer |
 | `src/modules/theme_page/` | Public `/theme` page |
 | `src/modules/menu/menu.c` | Navbar logo and theme selector |
-| `src/html_builder/page_layout.c` | Color, font, footer and site-name splicing |
+| `src/html_builder/page_layout.c` | Color, font, footer logo, home blog (epoch 3) and site-name splicing |
+| `src/modules/blog_list/blog_list.c` | Home blog backgrounds on epoch 2 (`set_table_background()`) |
 | `src/utils/image_convert/`, `src/utils/wbmp_writer.c` | WBMP conversion |
 | `html/templates/dashboard/settings/` | Admin templates |
+| `html/assets/js/theme-customizer.js` | The customizer: epochs, sections, preview, WAP translation, fetch saves, live colors/CSS |
+| `html/assets/js/theme-assets.js` | Upload widgets and file lists |
+| `html/assets/js/color-field.js` | Color pickers (popover, VGA palette, opacity) |
+| `html/assets/js/code-editor.js` | The code editor (§6.2) |
 
 ---
 

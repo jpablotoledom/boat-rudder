@@ -1,21 +1,27 @@
   <section class="boat-rudder-dashboard__settings-panel" data-component="%s" data-epoch="%s" data-theme="%s">
     <h2>%s</h2>
     <form method="POST" action="/dashboard/settings/themes/%s/%s/%s" class="boat-rudder-dashboard__form boat-rudder-card">
-      <div class="boat-rudder-dashboard__form-row">
-        <label class="boat-rudder-btn">
-          Upload navbar logo
-          <input type="file" class="boat-rudder-dashboard__asset-upload" data-target="navbar-image" accept="image/*" hidden>
-        </label>
+      <div class="boat-rudder-dashboard__asset-field">
+        <div class="boat-rudder-dashboard__asset-head">
+          <strong>Navbar logo</strong>
+          <label class="boat-rudder-btn boat-rudder-btn--sm">
+            Upload
+            <input type="file" class="boat-rudder-dashboard__asset-upload" data-target="navbar-image" accept="image/*" hidden>
+          </label>
+        </div>
         <input type="hidden" name="navbar-image" value="%s">
-        <span data-current-for="navbar-image">%s</span>
+        <ul class="boat-rudder-dashboard__asset-list" data-current-for="navbar-image"></ul>
       </div>
-      <div class="boat-rudder-dashboard__form-row">
-        <label class="boat-rudder-btn">
-          Upload footer logo
-          <input type="file" class="boat-rudder-dashboard__asset-upload" data-target="footer-image" accept="image/*" hidden>
-        </label>
+      <div class="boat-rudder-dashboard__asset-field">
+        <div class="boat-rudder-dashboard__asset-head">
+          <strong>Footer logo</strong>
+          <label class="boat-rudder-btn boat-rudder-btn--sm">
+            Upload
+            <input type="file" class="boat-rudder-dashboard__asset-upload" data-target="footer-image" accept="image/*" hidden>
+          </label>
+        </div>
         <input type="hidden" name="footer-image" value="%s">
-        <span data-current-for="footer-image">%s</span>
+        <ul class="boat-rudder-dashboard__asset-list" data-current-for="footer-image"></ul>
       </div>
       <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
     </form>

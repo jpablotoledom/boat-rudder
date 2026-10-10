@@ -1,0 +1,27 @@
+  <section class="boat-rudder-dashboard__settings-panel" data-component="home-blog" data-epoch="%1$s" data-theme="%2$s">
+    <form method="POST" action="/dashboard/settings/themes/%2$s/home-blog/%1$s" class="boat-rudder-dashboard__form">
+      <div class="boat-rudder-dashboard__asset-field">
+        <div class="boat-rudder-dashboard__asset-head">
+          <strong>Background image</strong>
+          <label class="boat-rudder-btn boat-rudder-btn--sm">
+            Upload
+            <input type="file" class="boat-rudder-dashboard__asset-upload" data-target="background" accept="image/*" hidden>
+          </label>
+        </div>
+        <input type="hidden" name="background" value="%3$s">
+        <ul class="boat-rudder-dashboard__asset-list" data-current-for="background"></ul>
+      </div>
+      <div class="boat-rudder-dashboard__asset-field">
+        <div class="boat-rudder-dashboard__asset-head">
+          <strong>Item background image</strong>
+          <label class="boat-rudder-btn boat-rudder-btn--sm">
+            Upload
+            <input type="file" class="boat-rudder-dashboard__asset-upload" data-target="item-background" accept="image/*" hidden>
+          </label>
+        </div>
+        <input type="hidden" name="item-background" value="%4$s">
+        <ul class="boat-rudder-dashboard__asset-list" data-current-for="item-background"></ul>
+      </div>
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
+    </form>
+  </section>

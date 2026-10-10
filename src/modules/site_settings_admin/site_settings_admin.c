@@ -68,27 +68,23 @@ static const int ALL_ASSET_EPOCHS[] = { -1, 0, 1, 2, 3 };
 
 // Shared by site_settings_banner_page()/site_settings_footer_page(): `key`
 // is the theme being edited (not necessarily the admin's own active theme -
-// see theme-scoped-personalization-plan.md §4); `settings_segment` is the
-// /dashboard/settings/themes/<key>/<segment>/<epoch> route
-// ("banner"/"footer"); `asset_component` is the theme-assets directory name
-// under html/themes/<key>/assets/ ("mainbanner"/"footer") - differs from its
-// own segment name because the on-disk directory predates this feature and
-// keeps its name; `epochs`/`epoch_count` is which epochs get a panel at all.
+// see theme-scoped-personalization-plan.md §4); `segment` is both the
+// /dashboard/settings/themes/<key>/<segment>/<epoch> route and the
+// theme-assets component the panel's upload widget uses ("banner"/"footer",
+// see http_router.c's theme_assets_dir()); `epochs`/`epoch_count` is which
+// epochs get a panel at all.
 // The logo editor no longer uses this - see site_settings_logo_page(), which
 // needs a different panel shape per epoch (text/image/radio) that this
 // one-textarea-plus-upload shape can't express.
-static char *asset_page(int epoch, const char *title, const char *key, const char *settings_segment,
-                         const char *asset_component, char *const values[EPOCH_COUNT],
-                         const int *epochs, size_t epoch_count) {
-    char *page_tpl  = load_template("dashboard/settings/settings-asset_epoch%d.html", epoch);
+// One panel per epoch in `epochs` (a textarea plus the upload widget), for
+// asset_page() and the theme customizer. Returns a malloc'd string, or NULL
+// on a missing template / allocation failure.
+static char *asset_panels(int epoch, const char *key, const char *segment,
+                          char *const values[EPOCH_COUNT], const int *epochs, size_t epoch_count) {
     char *panel_tpl = load_template("dashboard/settings/settings-asset-panel_epoch%d.html", epoch);
+    if (!panel_tpl) return NULL;
 
-    char *panels = NULL;
-    char *result = NULL;
-
-    if (!page_tpl || !panel_tpl) goto cleanup;
-
-    panels = strdup("");
+    char *panels = strdup("");
     for (size_t ei = 0; panels && ei < epoch_count; ei++) {
         int e = epochs[ei];
         int i = epoch_to_index(e);
@@ -96,42 +92,35 @@ static char *asset_page(int epoch, const char *title, const char *key, const cha
         snprintf(epoch_str, sizeof(epoch_str), "%d", e);
 
         char *encoded = html_encode_alloc(values[i] ? values[i] : "");
-        if (!encoded) {
-            free(panels);
-            panels = NULL;
-            break;
-        }
-
-        char *panel = render_template(panel_tpl, asset_component, epoch_str, key, EPOCH_LABELS[i],
-                                       key, settings_segment, epoch_str, encoded);
+        char *panel = encoded ? render_template(panel_tpl, segment, epoch_str, key, EPOCH_LABELS[i],
+                                                 key, segment, epoch_str, encoded)
+                              : NULL;
         free(encoded);
-        if (!panel) {
-            free(panels);
-            panels = NULL;
-            break;
-        }
-
-        panels = str_append(panels, panel);
+        panels = panel ? str_append(panels, panel) : (free(panels), NULL);
         free(panel);
     }
-    if (!panels) goto cleanup;
 
-    result = render_template(page_tpl, title, key, panels);
-
-cleanup:
-    free(page_tpl);
     free(panel_tpl);
+    return panels;
+}
+
+static char *asset_page(int epoch, const char *title, const char *key, const char *segment,
+                         char *const values[EPOCH_COUNT], const int *epochs, size_t epoch_count) {
+    char *page_tpl = load_template("dashboard/settings/settings-asset_epoch%d.html", epoch);
+    char *panels   = asset_panels(epoch, key, segment, values, epochs, epoch_count);
+    char *result   = page_tpl && panels ? render_template(page_tpl, title, key, panels) : NULL;
+    free(page_tpl);
     free(panels);
     return result;
 }
 
 char *site_settings_banner_page(int epoch, const char *key, char *const values[EPOCH_COUNT]) {
-    return asset_page(epoch, "Home banner", key, "banner", "mainbanner", values,
+    return asset_page(epoch, "Home banner", key, "banner", values,
                        ALL_ASSET_EPOCHS, ALL_ASSET_EPOCHS_COUNT);
 }
 
 char *site_settings_footer_page(int epoch, const char *key, char *const values[EPOCH_COUNT]) {
-    return asset_page(epoch, "Footer", key, "footer", "footer", values,
+    return asset_page(epoch, "Footer", key, "footer", values,
                        ALL_ASSET_EPOCHS, ALL_ASSET_EPOCHS_COUNT);
 }
 
@@ -219,7 +208,7 @@ static char *logo_panel(int page_epoch, int logo_epoch, const char *key, const C
     if (logo_epoch == 0) {
         char *tpl = load_template("dashboard/settings/settings-logo-panel_text-only_epoch%d.html", page_epoch);
         if (tpl) {
-            result = render_template(tpl, "menu", epoch_str, key, EPOCH_LABELS[i],
+            result = render_template(tpl, "logo", epoch_str, key, EPOCH_LABELS[i],
                                       key, "logo", epoch_str,
                                       epoch_str, epoch_str, encoded_text);
         }
@@ -230,7 +219,7 @@ static char *logo_panel(int page_epoch, int logo_epoch, const char *key, const C
             int is_image = cfg->mode == LOGO_MODE_IMAGE;
             char *font_options = build_logo_font_options(cfg->font);
             if (font_options) {
-                result = render_template(tpl, "menu", epoch_str, key, EPOCH_LABELS[i],
+                result = render_template(tpl, "logo", epoch_str, key, EPOCH_LABELS[i],
                                           key, "logo", epoch_str,
                                           is_image ? "" : "checked",
                                           is_image ? "checked" : "",
@@ -238,8 +227,7 @@ static char *logo_panel(int page_epoch, int logo_epoch, const char *key, const C
                                           epoch_str, epoch_str, encoded_text,
                                           epoch_str, epoch_str, font_options,
                                           is_image ? "" : "hidden disabled",
-                                          encoded_navbar, encoded_navbar,
-                                          encoded_footer, encoded_footer);
+                                          encoded_navbar, encoded_footer);
                 free(font_options);
             }
         }
@@ -247,10 +235,9 @@ static char *logo_panel(int page_epoch, int logo_epoch, const char *key, const C
     } else {
         char *tpl = load_template("dashboard/settings/settings-logo-panel_image-only_epoch%d.html", page_epoch);
         if (tpl) {
-            result = render_template(tpl, "menu", epoch_str, key, EPOCH_LABELS[i],
+            result = render_template(tpl, "logo", epoch_str, key, EPOCH_LABELS[i],
                                       key, "logo", epoch_str,
-                                      encoded_navbar, encoded_navbar,
-                                      encoded_footer, encoded_footer);
+                                      encoded_navbar, encoded_footer);
         }
         free(tpl);
     }
@@ -262,25 +249,23 @@ cleanup:
     return result;
 }
 
-char *site_settings_logo_page(int epoch, const char *key, const CmsLogoConfig configs[EPOCH_COUNT]) {
-    char *page_tpl = load_template("dashboard/settings/settings-logo_epoch%d.html", epoch);
-    if (!page_tpl) return NULL;
-
-    static const int LOGO_EPOCHS[] = { -1, 0, 1, 2, 3 };
+// Every epoch's logo panel (-1..3), for site_settings_logo_page() and the
+// theme customizer. Returns a malloc'd string, or NULL on a missing template
+// / allocation failure.
+static char *logo_panels(int epoch, const char *key, const CmsLogoConfig configs[EPOCH_COUNT]) {
     char *panels = strdup("");
-    for (size_t ei = 0; panels && ei < sizeof(LOGO_EPOCHS) / sizeof(LOGO_EPOCHS[0]); ei++) {
-        int e = LOGO_EPOCHS[ei];
+    for (int e = -1; panels && e <= 3; e++) {
         char *panel = logo_panel(epoch, e, key, &configs[epoch_to_index(e)]);
-        if (!panel) {
-            free(panels);
-            panels = NULL;
-            break;
-        }
-        panels = str_append(panels, panel);
+        panels = panel ? str_append(panels, panel) : (free(panels), NULL);
         free(panel);
     }
+    return panels;
+}
 
-    char *result = panels ? render_template(page_tpl, key, panels) : NULL;
+char *site_settings_logo_page(int epoch, const char *key, const CmsLogoConfig configs[EPOCH_COUNT]) {
+    char *page_tpl = load_template("dashboard/settings/settings-logo_epoch%d.html", epoch);
+    char *panels   = logo_panels(epoch, key, configs);
+    char *result   = page_tpl && panels ? render_template(page_tpl, key, panels) : NULL;
     free(page_tpl);
     free(panels);
     return result;
@@ -290,30 +275,33 @@ char *site_settings_preview_page(int epoch) {
     return load_template("dashboard/settings/preview_epoch%d.html", epoch);
 }
 
-char *site_settings_css_page(int epoch, const char *key, ThemeCssSheet sheet, const char *value) {
+char *site_settings_css_page(int epoch, const char *key, ThemeCssSheet sheet, const char *custom,
+                             const char *original) {
     char *page_tpl = load_template("dashboard/settings/settings-css_epoch%d.html", epoch);
     if (!page_tpl) return NULL;
 
-    char *stored = cms_get_theme_css_value(key, sheet);
-    const char *status = stored[0]
-        ? "Customized - showing your saved override below. \"Restore original\" discards it."
-        : "Showing the theme's original stylesheet - nothing customized yet.";
-    int is_customized = stored[0] != '\0';
-    free(stored);
+    int is_customized = custom && custom[0];
+    const char *status = is_customized
+        ? "Customized - the rules below are appended after the theme's original stylesheet, "
+          "so they win over it. \"Discard my changes\" removes them."
+        : "Nothing customized yet - the site uses the theme's original stylesheet. Add only "
+          "the rules you want to change; they are appended after the original, so they win "
+          "over it.";
 
-    char *encoded_css = html_encode_alloc(value ? value : "");
-    if (!encoded_css) {
-        free(page_tpl);
-        return NULL;
+    char *encoded_custom   = html_encode_alloc(custom ? custom : "");
+    char *encoded_original = html_encode_alloc(original ? original : "");
+    char *result = NULL;
+    if (encoded_custom && encoded_original) {
+        static const char *ACTIVE_TAB = " boat-rudder-tabs__tab--active";
+        int is_admin = sheet == THEME_CSS_ADMIN;
+        result = render_template(page_tpl, key,
+                                 is_admin ? "" : ACTIVE_TAB, is_admin ? ACTIVE_TAB : "",
+                                 status, is_admin ? "admin-css" : "css", encoded_custom,
+                                 is_customized ? "" : " hidden", encoded_original,
+                                 cms_theme_css_file(sheet));
     }
-
-    static const char *ACTIVE_TAB = " boat-rudder-tabs__tab--active";
-    int is_admin = sheet == THEME_CSS_ADMIN;
-    char *result = render_template(page_tpl, key,
-                                    is_admin ? "" : ACTIVE_TAB, is_admin ? ACTIVE_TAB : "",
-                                    status, is_admin ? "admin-css" : "css", encoded_css,
-                                    is_customized ? "" : " hidden");
-    free(encoded_css);
+    free(encoded_custom);
+    free(encoded_original);
     free(page_tpl);
     return result;
 }
@@ -403,20 +391,12 @@ cleanup:
     return result;
 }
 
-char *site_settings_theme_page(int epoch, const ThemeEntry *theme) {
-    char *page_tpl   = load_template("dashboard/settings/settings-theme_epoch%d.html", epoch);
-    char *panel_tpl  = load_template("dashboard/settings/settings-themes-panel_epoch%d.html", epoch);
-    char *active_tpl = load_template("dashboard/settings/settings-themes-active_epoch%d.html", epoch);
-
-    char *panel = NULL, *activate = NULL, *font_options = NULL;
-    char *result = NULL;
-
-    if (!page_tpl || !panel_tpl || !active_tpl) goto cleanup;
-
-    char return_to[128];
-    snprintf(return_to, sizeof(return_to), "/dashboard/settings/themes/%s", theme->key);
-    activate = activate_control(theme->key, theme->active, return_to, epoch);
-    if (!activate) goto cleanup;
+// The theme's color form (settings-themes-panel_epoch3.html): one palette
+// for every epoch, each field tagged with the epochs that use it. Returns a
+// malloc'd string, or NULL on a missing template / allocation failure.
+static char *colors_panel(int epoch, const ThemeEntry *theme) {
+    char *panel_tpl = load_template("dashboard/settings/settings-themes-panel_epoch%d.html", epoch);
+    if (!panel_tpl) return NULL;
 
     const CmsThemeColors *c = &theme->colors;
     BgColorForm navbar_bg     = split_bg(c->navbar_background);
@@ -427,19 +407,18 @@ char *site_settings_theme_page(int epoch, const ThemeEntry *theme) {
     BgColorForm footer_bg     = split_bg(c->footer_logo_background);
 
     char *logo_font = cms_get_theme_logo_font(theme->key);
-    font_options = build_font_options(logo_font);
+    char *font_options = build_font_options(logo_font);
     free(logo_font);
-    if (!font_options) goto cleanup;
 
-    panel = render_template(panel_tpl, theme->key,
+    char *panel = font_options ? render_template(panel_tpl, theme->key,
                              navbar_bg.rgb, navbar_bg.alpha, c->navbar_menu_normal,
                              c->navbar_menu_hover, c->navbar_menu_active,
                              c->navbar_logo, font_options,
-                             c->link_normal, c->link_hover, c->link_visited, c->link_active,
                              body_bg.rgb, body_bg.alpha, c->body_background_epoch1,
                              page_bg.rgb, page_bg.alpha,
                              c->body_text, c->body_text_muted, c->body_surface,
                              c->body_surface_raised, c->body_border,
+                             c->link_normal, c->link_hover, c->link_visited, c->link_active,
                              home_bg.rgb, home_bg.alpha, c->home_content_text,
                              blog_item_bg.rgb, blog_item_bg.alpha, c->blog_list_item_border,
                              c->blog_list_item_author, c->blog_list_item_categories,
@@ -448,18 +427,76 @@ char *site_settings_theme_page(int epoch, const ThemeEntry *theme) {
                              c->code_background, c->code_text, c->code_keyword,
                              c->code_string, c->code_comment, c->code_number,
                              c->code_variable, c->code_tag, c->code_line_number,
-                             c->footer_logo, footer_bg.rgb, footer_bg.alpha,
-                             theme->key, theme->key, theme->key, theme->key);
-    if (!panel) goto cleanup;
-
-    result = render_template(page_tpl, theme->key, theme->active ? active_tpl : "", activate, panel);
-
-cleanup:
-    free(page_tpl);
-    free(panel_tpl);
-    free(active_tpl);
-    free(activate);
+                             c->footer_logo, footer_bg.rgb, footer_bg.alpha)
+                       : NULL;
     free(font_options);
-    free(panel);
+    free(panel_tpl);
+    return panel;
+}
+
+// The home blog's background images panel for epoch 2 and 3 (the only ones
+// with them, see cms_themes.h): the list's and each item's. Returns a
+// malloc'd string, or NULL on a missing template / allocation failure.
+static char *home_blog_panels(int epoch, const char *key, char *const backgrounds[EPOCH_COUNT],
+                              char *const item_backgrounds[EPOCH_COUNT]) {
+    char *panel_tpl = load_template("dashboard/settings/settings-home-blog-panel_epoch%d.html", epoch);
+    if (!panel_tpl) return NULL;
+
+    static const int EPOCHS[] = { EPOCH_MIDDLE, EPOCH_MODERN };
+    char *panels = strdup("");
+    for (size_t ei = 0; panels && ei < sizeof(EPOCHS) / sizeof(EPOCHS[0]); ei++) {
+        int i = epoch_to_index(EPOCHS[ei]);
+        char epoch_str[4];
+        snprintf(epoch_str, sizeof(epoch_str), "%d", EPOCHS[ei]);
+
+        char *list_bg = html_encode_alloc(backgrounds[i] ? backgrounds[i] : "");
+        char *item_bg = html_encode_alloc(item_backgrounds[i] ? item_backgrounds[i] : "");
+        char *panel = list_bg && item_bg ? render_template(panel_tpl, epoch_str, key, list_bg, item_bg)
+                                         : NULL;
+        free(list_bg);
+        free(item_bg);
+        panels = panel ? str_append(panels, panel) : (free(panels), NULL);
+        free(panel);
+    }
+
+    free(panel_tpl);
+    return panels;
+}
+
+char *site_settings_customize_page(int epoch, const ThemeCustomizeData *data) {
+    const char *key = data->theme.key;
+    char *page_tpl   = load_template("dashboard/settings/settings-customize_epoch%d.html", epoch);
+    char *active_tpl = load_template("dashboard/settings/settings-themes-active_epoch%d.html", epoch);
+
+    char return_to[128];
+    snprintf(return_to, sizeof(return_to), "/dashboard/settings/themes/%s/customize", key);
+    char *status  = data->theme.active ? (active_tpl ? strdup(active_tpl) : NULL)
+                                       : activate_control(key, false, return_to, epoch);
+    char *logo    = logo_panels(epoch, key, data->logo);
+    char *banner  = asset_panels(epoch, key, "banner", data->banner, ALL_ASSET_EPOCHS,
+                                 ALL_ASSET_EPOCHS_COUNT);
+    char *blog    = home_blog_panels(epoch, key, data->home_blog_background,
+                                     data->home_blog_item_background);
+    char *footer  = asset_panels(epoch, key, "footer", data->footer, ALL_ASSET_EPOCHS,
+                                 ALL_ASSET_EPOCHS_COUNT);
+    char *colors  = colors_panel(epoch, &data->theme);
+    char *custom   = html_encode_alloc(data->css_custom ? data->css_custom : "");
+    char *original = html_encode_alloc(data->css_original ? data->css_original : "");
+
+    char *result = NULL;
+    if (page_tpl && status && logo && banner && blog && footer && colors && custom && original)
+        result = render_template(page_tpl, key, status, logo, banner, blog, footer, colors,
+                                 custom, original);
+
+    free(page_tpl);
+    free(active_tpl);
+    free(status);
+    free(logo);
+    free(banner);
+    free(blog);
+    free(footer);
+    free(colors);
+    free(custom);
+    free(original);
     return result;
 }

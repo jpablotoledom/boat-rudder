@@ -482,12 +482,14 @@ A media library for uploading and managing images used in entries. Requires a da
   form's `categories` multi-select, where each selected option shares `name="categories"`).
   Each returned `out_values[i]` is malloc'd; the caller frees them.
 - `match_theme_epoch_route(decoded_url, segment, key_out, …, epoch_out, …)`: matches
-  `/dashboard/settings/themes/<key>/<segment>/<epoch>` for the banner/footer/logo saves (the
-  epoch may be `-1`).
+  `/dashboard/settings/themes/<key>/<segment>/<epoch>` for the banner/footer/logo/home-blog
+  saves (the epoch may be `-1`).
 - `match_theme_css_url()`: matches `/themes/<key>/styles_epoch3.css` and `/themes/<key>/styles_admin_epoch3.css`.
 - `match_theme_css_editor()`: matches the CSS editor's `…/css` and `…/admin-css` routes (plus `/restore`).
 - `theme_assets_dir()`, `sanitize_asset_filename()`, `mkdir_recursive()`: validation and
-  filesystem helpers for the theme-assets and font uploads ([security.md](security.md#request-handling)).
+  filesystem helpers for the theme-assets and font uploads ([security.md](security.md#request-handling));
+  `theme_assets_dir()` resolves `html/content/themes/<key>/<component>/epoch<N>/`.
+- `wap_twin_name()`: an epoch −1 upload's PNG/WBMP twin name (`logo.png` ↔ `logo.wbmp`).
 - `parse_bg_color_field()`: joins a color picker and an opacity field into `#rrggbb[aa]`.
 - `viewer_can_preview_drafts()`: any valid session - lets `serve_cms_entry()` show drafts.
 
@@ -500,11 +502,11 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 | Page | What it edits | Stored in |
 |---|---|---|
 | `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere) | `site_settings.site_name` |
-| `/dashboard/settings/themes` | The list of directories under `html/themes/`: each one's name, *Active* or *Set active*, and *Edit* | `site_settings.active_theme` |
-| `…/themes/<key>` | One theme: *Set active* (unless it is), the 40 colors (backgrounds with opacity), the epoch 3 logo font, links to its banner/footer/logo/CSS editors | `themes.colors`, `themes.logo_font` |
-| `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) + image upload/browse | `themes.banner_html`, `themes.footer_html`, files in `html/themes/<key>/assets/` |
-| `…/themes/<key>/logo` | Per-epoch logo: text (0), image (−1, 1, 2; −1 auto-converted to WBMP) or either (3) | `themes.logo` |
-| `…/themes/<key>/css`, `…/admin-css` | Full epoch 3 stylesheets, public and admin (one tab each), with *Restore original* | `themes.css_epoch3`, `themes.css_admin_epoch3` |
+| `/dashboard/settings/themes` | The list of directories under `html/themes/`: each one's name, *Active* or *Set active*, and *Customize* | `site_settings.active_theme` |
+| `…/themes/<key>/customize` | The theme customizer: pick an epoch, then its logo, navbar, banner, content, home blog, footer and data colors, with a live preview (WML translated for epoch −1) and the public CSS layer in a bottom drawer. `…/themes/<key>` redirects here | everything below, plus `themes.home_blog_background`, `themes.home_blog_item_background` |
+| `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) in the code editor + the epoch's uploaded images | `themes.banner_html`, `themes.footer_html`, files in `html/content/themes/<key>/` |
+| `…/themes/<key>/logo` | Per-epoch logo: text (0), image (−1, 1, 2; −1 a PNG plus its WBMP twin) or either (3) | `themes.logo` |
+| `…/themes/<key>/css`, `…/admin-css` | A customization layer over each epoch 3 stylesheet, public and admin (one tab each), the original read-only below, *Discard my changes* | `themes.css_custom_epoch3`, `themes.css_admin_custom_epoch3` |
 | `/dashboard/settings/preview` | Nothing - an iframe of the site in any epoch and screen size (`?preview_epoch=`) | - |
 | `/dashboard/settings/fonts` | Uploaded font library ([fonts.md](fonts.md)) | `fonts`, `html/assets/fonts/` |
 

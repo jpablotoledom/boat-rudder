@@ -21,7 +21,6 @@ Ported from the-retro-center-old's `analytics.c`, adapted to Boat Rudder's route
 | `src/modules/analytics_view/analytics_charts.c/h` | Server-side SVG charts (donut, horizontal bars, columns) |
 | `src/modules/analytics_view/country_continent.c/h` | Country name → continent, for grouping |
 | `html/templates/dashboard/analytics/analytics_epoch3.html` | Report template |
-| `scripts/migrations/2026-10-03-merge-analytics.js` | Imports buckets from another database by summing counters |
 
 ---
 
@@ -183,16 +182,6 @@ differ per theme and were checked as a set against each theme's block surface (`
 `#0d0d0d` dark) for adjacent-pair colorblind separation, including the pair that meets where the
 ring closes. In the light theme four of the five are below 3:1 against the surface, which is why
 the donut always ships its legend with visible values.
-
----
-
-## Importing history
-
-`scripts/migrations/2026-10-03-merge-analytics.js` merges buckets restored into
-`page_visits_daily_import` / `entry_visits_daily_import` into the live collections by **adding**
-every numeric counter, so visits already recorded on the same days are kept. It drops the staging
-collections when done, so re-running it with nothing restored is a no-op. Usage:
-[migrations.md](migrations.md#2026-10-03-merge-analyticsjs).
 
 ---
 

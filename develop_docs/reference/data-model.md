@@ -44,10 +44,6 @@ collections). Nothing else in the code base opens a collection.
 | `page_visits_daily` | Site-wide analytics, one document per day | `analytics.c` (write), `analytics_view.c` (read) | both `.c` files |
 | `entry_visits_daily` | Per-entry analytics, one document per entry per day | `analytics.c` (write), `analytics_view.c` (read) | both `.c` files |
 
-Staging collections `page_visits_daily_import` / `entry_visits_daily_import` exist only
-transiently while running the `2026-10-03-merge-analytics.js` migration, which drops them when
-done (see [migrations.md](migrations.md)).
-
 ---
 
 ## Content
@@ -229,12 +225,20 @@ back to the theme's on-disk files or to `THEME_DEFAULTS` in `cms_themes.c`.
                 "navbar_image": "", "footer_image": "" }, ...
   },
   "logo_font": "MyFont",                 // epoch 3 navbar font from the Colors panel
-  "css_epoch3": "...",                   // full override of styles_epoch3.css; "" = use file
-  "css_admin_epoch3": "..."              // full override of styles_admin_epoch3.css; "" = use file
+  "home_blog_background":      { "epoch2": "grid.gif", "epoch3": "grid.jpg" },  // "" = theme's own
+  "home_blog_item_background": { "epoch2": "card.gif", "epoch3": "card.jpg" },
+  "css_custom_epoch3": "...",            // layer appended after styles_epoch3.css; "" = none
+  "css_admin_custom_epoch3": "..."       // layer appended after styles_admin_epoch3.css
 }
 ```
 
 `logo.<epoch>.mode` is the `CmsLogoMode` enum: `0` unset, `1` text, `2` image.
+
+Every image field (`logo.*.navbar_image` / `footer_image`, `home_blog_*background`) holds a bare
+filename under `html/content/themes/<key>/<logo|home-blog>/epoch<N>/`; on epoch −1 it is the
+`.wbmp`, with its `.png` twin beside it. Banner and footer markup reference their uploads by full
+`/content/themes/...` path. The `css_epoch3` / `css_admin_epoch3` fields of earlier versions
+(full stylesheet replacements) are no longer read.
 
 ### `fonts`
 

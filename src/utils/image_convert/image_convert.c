@@ -27,11 +27,24 @@ static unsigned char *resample_gray(const unsigned char *src, int sw, int sh, in
 
 int image_convert_to_wbmp(const char *in_path, const char *out_path, int max_dim) {
     int w, h, channels;
-    // desired_channels = 1: stb_image itself does the RGB/RGBA -> grayscale
+    // desired_channels = 2: stb_image itself does the RGB/RGBA -> grayscale
     // luma conversion (0.299r+0.587g+0.114b, the same weights used
-    // everywhere else in this codebase's image handling).
-    unsigned char *gray = stbi_load(in_path, &w, &h, &channels, 1);
-    if (!gray) return -1;
+    // everywhere else in this codebase's image handling), keeping alpha.
+    // Each pixel is then laid over white - a WAP screen's background - so a
+    // transparent area (a canvas export's usual (0,0,0,0)) comes out white,
+    // not black; opaque images are unaffected (alpha 255).
+    unsigned char *ga = stbi_load(in_path, &w, &h, &channels, 2);
+    if (!ga) return -1;
+    unsigned char *gray = malloc((size_t)w * h);
+    if (!gray) {
+        stbi_image_free(ga);
+        return -1;
+    }
+    for (size_t i = 0; i < (size_t)w * h; i++) {
+        unsigned g = ga[2 * i], a = ga[2 * i + 1];
+        gray[i] = (unsigned char)((g * a + 255u * (255u - a)) / 255u);
+    }
+    stbi_image_free(ga);
 
     int dw = w, dh = h;
     if (max_dim > 0 && (w > max_dim || h > max_dim)) {
@@ -52,7 +65,7 @@ int image_convert_to_wbmp(const char *in_path, const char *out_path, int max_dim
         scaled = resample_gray(gray, w, h, dw, dh);
         owns_scaled = 1;
         if (!scaled) {
-            stbi_image_free(gray);
+            free(gray);
             return -1;
         }
     }
@@ -69,6 +82,6 @@ int image_convert_to_wbmp(const char *in_path, const char *out_path, int max_dim
     }
 
     if (owns_scaled) free(scaled);
-    stbi_image_free(gray);
+    free(gray);
     return ret;
 }

@@ -40,9 +40,12 @@ the default until a site overrides it.
   WML paginated into single-packet pages.
 - **WAP 1.x gateway** (optional): serves the site as compiled WBXML over UDP to real WAP phones
   (via the external `trc-wap-relay`).
-- **Themes**: shared templates plus per-theme overrides, visitor theme selector, and
-  dashboard-editable colors, per-epoch banner/footer/logo (WBMP for WML), an editable epoch 3
-  stylesheet and a font library.
+- **Themes**: shared templates plus per-theme overrides and a visitor theme selector. A theme
+  customizer in the dashboard - pick an epoch, edit its logo, banner, colors, home blog
+  backgrounds and footer beside a live preview (WML translated for epoch −1) - plus a
+  customization layer over each epoch 3 stylesheet in a lightweight code editor, and a font
+  library. Uploads live in `html/content/themes/`, safe from updates; WML images are a PNG with
+  its WBMP twin.
 - **Analytics**: cookie-less per-day visit counts by epoch, browser, OS, country (optional
   GeoLite2) and route - no IP addresses stored.
 - **Dashboard** (modern browsers only): login with Argon2id, session cookies, two roles, an AJAX
@@ -144,13 +147,12 @@ boat-rudder/
 ├── html/                      # Static content root (CLI root directory)
 │   ├── templates/             # Shared templates
 │   ├── themes/<theme>/        # Per-theme templates, assets, public + admin epoch 3 CSS
-│   ├── assets/                # Site-wide assets (fonts, ...)
-│   └── content/               # Uploaded media, QR cache
+│   ├── assets/                # Site-wide assets (fonts, dashboard scripts)
+│   └── content/               # Uploaded media, theme uploads, QR cache
 ├── configs/settings.conf      # Runtime configuration
 ├── data/                      # Optional GeoLite2-Country.mmdb
 ├── ssl/                       # TLS certificate and key (optional)
-├── scripts/                   # Build/run/install scripts, systemd unit, logrotate,
-│   └── migrations/            # one-off mongosh data migrations
+├── scripts/                   # Build/run/install scripts, systemd unit, logrotate
 ├── CHANGELOG.md
 └── develop_docs/              # Project overview, reference docs, plans and diagrams
     ├── reference/             # Reference documentation (see below)
@@ -186,7 +188,7 @@ Reference (`develop_docs/reference/`):
 | [code-highlighting.md](develop_docs/reference/code-highlighting.md) | Server-side syntax highlighting |
 | [configuration.md](develop_docs/reference/configuration.md) | Every `configs/settings.conf` key |
 | [security.md](develop_docs/reference/security.md) | Every defense and the known gaps |
-| [scripts.md](develop_docs/reference/scripts.md) / [migrations.md](develop_docs/reference/migrations.md) | Build/deploy scripts; data migrations |
+| [scripts.md](develop_docs/reference/scripts.md) | Build/deploy scripts |
 | [third-party.md](develop_docs/reference/third-party.md) | Vendored, ported and linked code and data |
 | [style-guide.md](develop_docs/reference/style-guide.md) | C coding style and security rules (Google C++ Style Guide + SEI CERT C), and BEM CSS class names |
 

@@ -36,21 +36,20 @@ char *site_settings_footer_page(int epoch, const char *key, char *const values[E
 // NULL on a missing template / allocation failure.
 char *site_settings_logo_page(int epoch, const char *key, const CmsLogoConfig configs[EPOCH_COUNT]);
 
-// /dashboard/settings/themes/<key>/css and .../admin-css - a full-file
-// editor for one of that theme's epoch 3 stylesheets (`sheet`: the public
-// styles_epoch3.css or the admin styles_admin_epoch3.css, served dynamically
-// by cms_get_theme_css() - see http_router.c's match_theme_css_url()), with
-// a tab per stylesheet.
-// `value` is the *effective* CSS to pre-fill the textarea with (the DB
-// override if the theme has been customized, else the theme's own on-disk
-// file), not just the stored override: unlike banner/footer/logo's small
-// raw-markup snippets (fine to start empty), a full stylesheet editor needs
-// to start from something editable. The page also renders a small
-// "Restore original" form (posting to .../css/restore, which clears the
-// override back to that on-disk file) whenever a customization is stored.
-// Returns a malloc'd string, or NULL on a missing template / allocation
-// failure.
-char *site_settings_css_page(int epoch, const char *key, ThemeCssSheet sheet, const char *value);
+// /dashboard/settings/themes/<key>/css and .../admin-css - the editor of
+// one of that theme's epoch 3 stylesheets' customization layer (`sheet`: the
+// public styles_epoch3.css or the admin styles_admin_epoch3.css, served
+// dynamically by cms_get_theme_css() - see http_router.c's
+// match_theme_css_url()), with a tab per stylesheet.
+// `custom` is the stored layer (cms_get_theme_css_value(), "" if none) the
+// form edits and saves; `original` is the theme's on-disk file
+// (cms_get_theme_css_original()), shown read-only in a collapsible panel to
+// copy rules from. The page also renders a "Discard my changes" form
+// (posting to .../css/restore, which clears the layer) whenever one is
+// stored. Returns a malloc'd string, or NULL on a missing template /
+// allocation failure.
+char *site_settings_css_page(int epoch, const char *key, ThemeCssSheet sheet, const char *custom,
+                             const char *original);
 
 // /dashboard/settings/preview - a static control panel (epoch + screen size
 // pickers) driving an iframe of "/" via the ?preview_epoch=<N> override in
@@ -70,16 +69,32 @@ typedef struct {
 } ThemeEntry;
 
 // /dashboard/settings/themes - the list of discovered themes: each one's
-// name (a link to its own page), "Active" or a "Set active" button, and
-// "Edit". Returns a malloc'd string, or NULL on a missing template /
+// name, "Active" or a "Set active" button, and "Customize" (the theme
+// customizer). Returns a malloc'd string, or NULL on a missing template /
 // allocation failure.
 char *site_settings_themes_page(int epoch, const ThemeEntry *themes, size_t count);
 
-// /dashboard/settings/themes/<key> - one theme's options: "Set active"
-// (omitted for the active theme), a single color form that applies to every
-// epoch that has a color model, the epoch 3 logo font, and links to that
-// theme's banner/footer/logo/CSS editors. Returns a malloc'd string, or
-// NULL on a missing template / allocation failure.
-char *site_settings_theme_page(int epoch, const ThemeEntry *theme);
+// Everything the theme customizer edits for one theme, as stored (no file
+// fallbacks except css_original): the caller fills it, the page only renders.
+typedef struct {
+    ThemeEntry theme;
+    char *banner[EPOCH_COUNT];                // cms_get_theme_banner_values()
+    char *footer[EPOCH_COUNT];                // cms_get_theme_footer_values()
+    CmsLogoConfig logo[EPOCH_COUNT];          // cms_get_theme_logo_config()
+    char *home_blog_background[EPOCH_COUNT];       // epoch 2/3 only, NULL elsewhere
+    char *home_blog_item_background[EPOCH_COUNT];  // epoch 2/3 only, NULL elsewhere
+    char *css_custom;                         // cms_get_theme_css_value(PUBLIC)
+    char *css_original;                       // cms_get_theme_css_original(PUBLIC)
+} ThemeCustomizeData;
+
+// /dashboard/settings/themes/<key>/customize - the theme customizer: an
+// epoch picker, one sidebar section per part of the page (Logo, Banner, Home
+// blog, Footer, Colors) holding every epoch's panel - the same forms and
+// endpoints as the single-purpose editors above, each tagged with its epoch
+// so html/assets/js/theme-customizer.js shows only the chosen one's - a live
+// preview of the site in that theme and epoch, and the public stylesheet's
+// customization layer in a bottom drawer. Returns a malloc'd string, or NULL
+// on a missing template / allocation failure.
+char *site_settings_customize_page(int epoch, const ThemeCustomizeData *data);
 
 #endif // SITE_SETTINGS_ADMIN_H

@@ -389,8 +389,13 @@ char *menu(const char *current_url, int epoch) {
             char encoded_alt[512];
             html_encode(encoded_alt, site_name ? site_name : "", sizeof(encoded_alt));
             free(site_name);
-            char *img = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
-                                         request_theme(), epoch, cfg.navbar_image, encoded_alt);
+            // WML is XML: its <img> must close itself, or the deck is invalid.
+            // Epoch 1/2 browsers draw a link border around an image unless
+            // told not to (WML has no border attribute at all).
+            char *img = render_template("<img src=\"/content/themes/%s/logo/epoch%d/%s\" alt=\"%s\"%s%s>",
+                                         request_theme(), epoch, cfg.navbar_image, encoded_alt,
+                                         epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE ? " border=\"0\"" : "",
+                                         epoch == EPOCH_WML ? "/" : "");
             if (img) { free(logo); logo = img; }
         } else if (cfg.mode == LOGO_MODE_TEXT) {
             char *site_name = cms_get_site_name();
@@ -432,7 +437,7 @@ char *menu(const char *current_url, int epoch) {
             if (cfg3.mode == LOGO_MODE_IMAGE && cfg3.navbar_image[0]) {
                 char encoded_alt[512];
                 html_encode(encoded_alt, site_name ? site_name : "", sizeof(encoded_alt));
-                title_html = render_template("<img src=\"/themes/%s/assets/menu/epoch%d/%s\" alt=\"%s\">",
+                title_html = render_template("<img src=\"/content/themes/%s/logo/epoch%d/%s\" alt=\"%s\">",
                                               request_theme(), epoch, cfg3.navbar_image, encoded_alt);
             } else if (cfg3.mode == LOGO_MODE_TEXT) {
                 const char *text = cfg3.text[0] ? cfg3.text : (site_name ? site_name : "");

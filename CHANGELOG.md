@@ -11,6 +11,68 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *A
 
 ## v0.0.1
 
+### 2026-10-08 … 2026-10-09
+### Theme customizer
+
+**Added**
+- `/dashboard/settings/themes/<key>/customize`: one page to customize a theme. Pick an epoch
+  (−1…3) first; the sidebar - Logo, Navbar, Banner, Content, Home blog, Footer, Data colors, an
+  animated accordion - shows only what that epoch supports (epoch 1 gets its ~10 colors, not all
+  40), beside a live preview of the site in that theme and epoch with screen-size presets.
+  Every panel saves in place (fetch, same endpoints as before) and reloads the preview; on epoch
+  3 color changes and CSS show in the preview before saving. Opening a section scrolls the
+  preview to it (top, middle or bottom of the page, the same in every epoch). The site's own
+  theme switcher is hidden in the preview, and epoch 0 pages get the admin theme's colors there.
+- A WAP preview for epoch −1: the WML deck is fetched and translated into a phone-sized screen -
+  text, links, soft keys, cards, and images through the PNG next to each WBMP. A deck that isn't
+  well-formed XML is still shown, under a warning.
+- A lightweight code editor for every raw-code field (theme CSS, banner and footer markup):
+  line numbers, syntax colors from the theme's code palette, current line, Tab/Shift+Tab indent,
+  smart Enter, Ctrl+S save, Ctrl+/ comment, Ctrl+G go to line, unsaved-changes warning. No
+  library: `html/assets/js/code-editor.js` lays the textarea over a colored copy of its text.
+  Brackets and quotes are never auto-closed.
+- Home blog background images for epoch 2 and 3: one for the list and one for each item (over
+  its background color). `themes.home_blog_background` / `home_blog_item_background`.
+- Uploaded images show as a file list - thumbnail, name, *Copy URL*, *Delete* - on banner and
+  footer panels and on the single-image fields (logo, home blog); deleting a field's image also
+  clears and saves the field.
+
+**Changed**
+- An epoch 3 stylesheet is no longer replaced: the dashboard saves a **customization layer**
+  appended after the theme's file (`css_custom_epoch3` / `css_admin_custom_epoch3`), so it holds
+  only what changed and theme updates still reach the site. The CSS page shows the layer and,
+  read-only, the original; *Restore original* is now *Discard my changes*.
+- Theme uploads moved from the theme's `assets/` - overwritten by an update - to
+  `html/content/themes/<key>/<banner|footer|logo|home-blog>/epoch<N>/`. The upload widgets no
+  longer list or delete the images a theme ships.
+- Epoch −1 uploads (every component, not just the logo) take a PNG only; the server keeps it and
+  writes its WBMP twin (`logo.png` → `logo.wbmp`) for real devices.
+- The color form is split by section in the customizer (Navbar; Content: body, links, home
+  content; Home blog; Footer; Data colors: table and code blocks), each field shown only for the
+  epochs that use it.
+- `/dashboard/settings/themes/<key>` redirects to the customizer; the themes list links
+  *Customize*. Saving colors and *Set active* return there.
+- Banner/footer panels: *Save markup* under the editor, then an *Images* block with its own
+  *Upload*.
+
+**Fixed**
+- The epoch −1 logo `<img>` was not self-closed, so `/menu` and every page with a footer logo
+  were invalid WML.
+- An epoch −1 upload was named `logo.png.wbmp` and its PNG deleted.
+- Transparent pixels came out black in a WBMP; transparency is now laid over white.
+- Epoch 1/2 logo images (navbar and footer) get `border="0"`, so old browsers draw no link border.
+- The color picker's popover was clipped by scrolling containers; it is now fixed to the window.
+
+**Removed**
+- The `css_epoch3` / `css_admin_epoch3` fields (full replacements) are no longer read.
+- The one-theme page (`settings-theme_epoch3.html`, `site_settings_theme_page()`), now the
+  customizer.
+
+**Docs**
+- [themes.md](develop_docs/reference/themes.md): home blog backgrounds, the CSS layer, the code
+  editor, theme uploads and WBMP twins, the customizer. Routes, dashboard, data model, templates
+  catalog, security and README updated to match.
+
 ### 2026-10-06
 ### One page per theme
 

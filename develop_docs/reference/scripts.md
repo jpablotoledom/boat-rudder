@@ -243,7 +243,8 @@ project. The updater works on such an install with `BR_INSTALL_DIR` and `BR_SERV
 (`/usr/local/bin`, `/srv`, `/opt`...) and a non-empty directory that holds no Boat Rudder install
 (no `.boat-rudder/`). The directory is an argument rather than an environment variable on
 purpose: `sudo` drops the caller's environment, and a lost variable would have sent the install
-to the default directory, over the live site.
+to the default directory, over the live site. A caller that still sets `BR_INSTALL_DIR` or
+`BR_FILES_ONLY` gets an error and nothing installed.
 
 **Service name:** `boat-rudder`
 

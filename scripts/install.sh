@@ -31,8 +31,12 @@ while [ $# -gt 0 ]; do
         *) usage ;;
     esac
 done
+# A caller still passing the directory the old way (environment variables)
+# expects another directory: going on would install over the default one.
 if [ -n "${BR_INSTALL_DIR:-}${BR_FILES_ONLY:-}" ]; then
-    echo "Warning: BR_INSTALL_DIR / BR_FILES_ONLY are ignored - use --dir <path>."
+    echo "Error: BR_INSTALL_DIR / BR_FILES_ONLY are no longer read - pass --dir <path>."
+    echo "Nothing was installed (without --dir this would go to $DEFAULT_DIR)."
+    exit 1
 fi
 
 # --dir: a directory of its own. The default directory belongs to

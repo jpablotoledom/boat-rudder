@@ -8,7 +8,8 @@
 #include <string.h>
 
 static int is_valid_role(const char *role) {
-    return strcmp(role, "admin") == 0 || strcmp(role, "author") == 0;
+    return strcmp(role, "admin") == 0 || strcmp(role, "author") == 0 ||
+           strcmp(role, "viewer") == 0;
 }
 
 void cms_get_users(CmsUserAdminItem **out, size_t *out_count) {

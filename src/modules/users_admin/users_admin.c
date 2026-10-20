@@ -14,7 +14,9 @@ static char *load_template(const char *subpath_fmt, int epoch) {
 }
 
 static const char *role_label(const char *role) {
-    return strcmp(role, "admin") == 0 ? "Administrador" : "Autor";
+    if (strcmp(role, "admin") == 0) return "Administrador";
+    if (strcmp(role, "viewer") == 0) return "Observador";
+    return "Autor";
 }
 
 char *users_admin_list(int epoch, const char *error_message) {
@@ -92,7 +94,8 @@ char *users_admin_form(int epoch, const char *id, const char *name, const char *
     result = render_template(form_tpl, error_html ? error_html : "", action, name, email,
                               password_label,
                               strcmp(role, "admin") == 0 ? " selected" : "",
-                              strcmp(role, "author") == 0 ? " selected" : "");
+                              strcmp(role, "author") == 0 ? " selected" : "",
+                              strcmp(role, "viewer") == 0 ? " selected" : "");
 
 cleanup:
     free(form_tpl);

@@ -307,7 +307,8 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 - Always decrements the global `active_connections` counter on exit.
 
 ### `web_server/tls_context.c`
-- `tls_create_context(cert, key)` - loads PEM certificate and private key into a new `SSL_CTX`.
+- `tls_create_context(cert, key)` - loads the PEM certificate chain (the certificate, then its
+  intermediates) and private key into a new `SSL_CTX`, and checks they match.
 - Enforces **TLS 1.2 minimum** via `SSL_CTX_set_min_proto_version`.
 - Applies hardened cipher suites for both TLS 1.2 (ECDHE+AESGCM/ChaCha20) and TLS 1.3.
 - `tls_free_context(ctx)` - frees the context.

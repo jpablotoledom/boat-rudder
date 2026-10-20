@@ -4,6 +4,29 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+### HTTPS sends the whole certificate chain
+
+**Fixed**
+- `ssl_cert` was loaded with `SSL_CTX_use_certificate_file()`, which takes only the first
+  certificate of the file: with Let's Encrypt's `fullchain.pem` the intermediate was never sent.
+  Chrome fetches it by itself, so the site looked fine there, but curl, Android and other clients
+  that don't refused the connection. Now the whole chain is loaded and sent
+  (`SSL_CTX_use_certificate_chain_file()`), and a private key that doesn't match the certificate
+  stops the server at startup instead of failing every handshake.
+
+### Read-only role: Observador
+
+**Added**
+- A third role, **Observador** (`users.role: "viewer"`), for a public demo account: it opens
+  every dashboard page an Administrador opens and sees every value - menus, analytics, users,
+  settings, the entry editor - and can't change anything. Every dashboard write is a `POST`
+  through `require_dashboard_session()`, which refuses it for a viewer (`403`; JSON under
+  `/dashboard/api/`), so routes added later are covered too; the block preview and the
+  browser-rules dry run, which store nothing, stay open. Fails closed when the role can't be
+  read. Every dashboard page a viewer opens starts with a read-only notice
+  (`dashboard/readonly-notice_epoch3.html`). Chosen in the Users form as "Observador (solo
+  lectura)".
+
 ### Running behind a front
 
 What a site needs to run behind a layer-4 front (HAProxy in `mode tcp`) - several sites on one

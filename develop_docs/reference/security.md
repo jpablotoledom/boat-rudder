@@ -89,6 +89,12 @@ and TLS 1.3, no RC4/3DES/export ciphers. The handshake runs on the connection th
 accept-time checks. Retro browsers that can't do modern TLS use plain HTTP - by design, both
 listeners serve the same site.
 
+`ssl_cert` is read as a **chain** (`SSL_CTX_use_certificate_chain_file()`): the site's
+certificate followed by its intermediates, as in Let's Encrypt's `fullchain.pem` - all of it is
+sent in the handshake, which clients that don't fetch a missing intermediate themselves (curl,
+Android, many libraries) require. A key that doesn't match the certificate stops the server at
+startup (`SSL_CTX_check_private_key()`).
+
 ---
 
 ## Request handling
@@ -133,9 +139,19 @@ listeners serve the same site.
 |---|---|
 | `admin` (also: missing `role` field) | Everything |
 | `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, browse everything but upload into, rename, delete and move **only their own** directories and images |
+| `viewer` (Observador) | **Read-only**: opens every page an `admin` opens and sees every value - the entry editor included - but **changes nothing**. Meant for a public demo account whose password can be published |
 
 Guards are enforced per route in `http_router.c` (`require_admin_session()`,
-`require_dashboard_session_role()` + `can_edit_entry()`); the full matrix is in
+`require_dashboard_session_role()` + `can_edit_entry()`) - except the viewer's, which is one
+check for every route: every dashboard write is a `POST` through `require_dashboard_session()`
+(every `GET` only reads), and there, after the CSRF check, a session whose role is `viewer` gets
+`403` - JSON `{"ok":false,"error":"read-only account"}` under `/dashboard/api/`, else the error
+page. A route added later is covered without doing anything. Exempt are the two `POST`s that
+store nothing: `/dashboard/api/block-preview` and `/dashboard/api/browsers/preview`. The role is
+read from the database on every `POST`, and one that can't be read is refused (`503`) - fails
+closed. Since `/dashboard/users/<id>/edit` is a `POST` too, a viewer can't change its own
+password either. It can sign out (`POST /logout` isn't a dashboard route). It does see what an
+admin sees, including the users list with their email addresses. The full matrix is in
 [routes.md](routes.md#guards). The last admin can't be deleted or demoted, and nobody can delete
 their own account.
 

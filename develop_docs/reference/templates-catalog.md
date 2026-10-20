@@ -130,6 +130,7 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | Directory | Templates | Module |
 |---|---|---|
 | `.` | `dashboard` (all epochs; −1…2 are a bare welcome with no admin tools), `nav-admin`, `nav-author` (option groups in a `<details>` "Menu" dropdown, next to the **Log out** form in `dashboard`'s header) | `dashboard.c` |
+| `.` | `readonly-notice` (no args: the notice above every dashboard page a read-only Observador opens) | `page_layout.c` (`prepend_read_only_notice()`) |
 | `entries/` | `list`, `list-row`, `list-row-delete` (the admin-only Delete form, one `%s`: the id), `list-empty` (one `%s`: the empty message, plus a "+ New entry" button), `list-draft` (the "Draft" badge) | `entries_admin.c` |
 | `entries/` | `list` (the `/dashboard/entries` page) | `dashboard.c` |
 | `entries/editor/` | `container`, `meta`, `header`, `header-lang-tab`, `lang-tab-button`, `category-option`, `blocks` | `entry_editor.c` ([entry-editor.md](entry-editor.md)) |

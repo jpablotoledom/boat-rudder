@@ -4,8 +4,12 @@
 vintage phone or PDA - whose browser is hardwired to a long-dead operator gateway - browse the
 site as epoch −1 (WML), compiled to the binary **WBXML** format those devices actually expect.
 
-Whatever host the device asks for, it gets this site: the path of the requested URI is kept,
-the host is thrown away, and an empty path is the home page.
+The path of the requested URI is kept (an empty one is the home page) and its host goes along
+as the fetch's `Host` header. By default every page comes from this same server, which serves
+its own site whatever the host. With `wap_upstream` the pages come from another HTTP server
+instead - a front that routes by `Host` (HAProxy), so **one gateway serves every site on a
+machine**, each phone getting the site its URL names; `boat-rudder --wap-only` runs the gateway
+alone for that ([below](#several-sites-wap_upstream-and---wap-only)).
 
 Diagram: [diagrams/sequence-wap-gateway.puml](../diagrams/sequence-wap-gateway.puml)
 
@@ -65,8 +69,8 @@ recvfrom() ─► handle_datagram()
                 ├─ rate_allow(source IP)  ── over limit → silently dropped
                 └─ handle_get()
                      ├─ __page=N read from the URI, then removed
-                     ├─ local_path(): drop scheme://host and #fragment
-                     ├─ fetch_local(path + "preview_epoch=-1&wml_pages=all")  (≤ 3 redirects)
+                     ├─ local_path(): drop scheme://host and #fragment; uri_host(): keep the host
+                     ├─ fetch_page(host, path + "preview_epoch=-1&wml_pages=all")  (≤ 3 redirects)
                      ├─ 200 text/vnd.wap.wml  → wbxml_compile_page(page N) → WSP Reply (wmlc)
                      ├─ 200 image/vnd.wap.wbmp → WSP Reply (wbmp) as-is
                      ├─ 404 → "Not found" card
@@ -89,13 +93,15 @@ The WSP Reply is always: `0x04` (Reply), `0x20` (200 OK), headers length `1`, Co
 short integer - `0x94` for `application/vnd.wap.wmlc`, `0xA1` for `image/vnd.wap.wbmp` - then
 the body.
 
-### Loopback fetch
+### Page fetch
 
-`fetch_local()` opens a plain TCP connection to `127.0.0.1:http_port` and sends:
+`fetch_page()` opens a plain TCP connection to `fetch_target()` - `wap_upstream` when set, else
+this server's own listener (`listen_address` when bound to one, else `127.0.0.1`, on
+`http_port`) - and sends:
 
 ```
 GET <path>?preview_epoch=-1&wml_pages=all HTTP/1.0
-Host: 127.0.0.1
+Host: <the URI's host, or 127.0.0.1 when it has none>
 User-Agent: BoatRudder-WAP-Gateway
 Accept: text/vnd.wap.wml, image/vnd.wap.wbmp
 X-Forwarded-For: <phone's source IP>
@@ -105,14 +111,43 @@ X-Forwarded-For: <phone's source IP>
   what the epoch −1 templates produce over HTTP.
 - `wml_pages=all` asks for the whole deck unpaginated - the gateway paginates itself (below).
 - `X-Forwarded-For` is honored **only if `127.0.0.1` is in `trusted_proxies`**. Add it if you
-  want analytics, the HTTP rate limiter and GeoIP to see the phone's address rather than
-  loopback.
-- Limits: 10 s socket timeout, 1 MiB response, 3 redirect hops (each `Location`'s host is
-  discarded the same way).
+  want analytics and GeoIP to see the phone's address rather than loopback.
+- With `proxy_protocol=1` (a site behind a front) and the listener's address in
+  `trusted_proxies`, the request is preceded by a PROXY v1 header -
+  `PROXY TCP4 <phone> <listener> 0 <http_port>` - so the phone's address also reaches the per-IP
+  rate limiter. Without that trust the header would get the connection closed, so the gateway
+  sends none and the request is served as a direct loopback connection.
+- The host is `uri_host()` of the requested URI: lowercased, and only a plain DNS name or IPv4
+  address with an optional port - anything else (user info is dropped first) sends
+  `127.0.0.1`, so nothing but a host name can reach the header.
+- Limits: 10 s socket timeout, 1 MiB response, 3 redirect hops (an absolute `Location` sets the
+  host for the next hop; its path is kept the same way).
 
 Because the fetch is an ordinary HTTP request, it goes through the HTTP listener's own defenses
 (connection cap, per-IP rate limit) and is recorded by analytics like any other visit, with
 `epochwml` as its epoch.
+
+### Several sites: `wap_upstream` and `--wap-only`
+
+A phone's gateway setting is one IP and port, and `trc-wap-relay` forwards to one address, so
+on a machine with several sites one gateway has to serve them all. Every WAP request carries the
+full URL - `http://thejoyrobot.com/blog` - so the host it names is enough to route it:
+
+```
+phone ─UDP─► boat-rudder --wap-only ─HTTP, Host: thejoyrobot.com, PROXY v1 <phone>─►
+             wap_upstream (HAProxy, accept-proxy) ─by Host, send-proxy-v2─► that site
+```
+
+| Key | |
+|---|---|
+| `wap_upstream` | `<IPv4>:<port>` of the server pages are fetched from. Empty: this server |
+| `wap_upstream_proxy_protocol` | `1`: start each fetch with a PROXY v1 header carrying the phone's address (HAProxy's `accept-proxy` requires one, then passes the address on to the site) |
+
+`boat-rudder [-c <config>] --wap-only` starts the gateway alone - no HTTP listener, MongoDB or
+GeoIP - and requires `wap_gateway_enabled=1` and `wap_upstream`. The gateway only ever fetches
+from `wap_upstream`, never from the host a phone names, so it can't be used as an open proxy: a
+host the front doesn't know gets the front's default site. The multi-br project runs it this way,
+as one service shared by every site on the machine.
 
 ---
 
@@ -164,7 +199,8 @@ Recommendations:
 
 All keys are documented in [configuration.md](configuration.md#wap-gateway):
 `wap_gateway_enabled`, `wap_gateway_ips`, `wap_gateway_rover_port`, `wap_gateway_wsp_port`,
-`wap_gateway_rate_limit`. The gateway also depends on `http_port` and `trusted_proxies`.
+`wap_gateway_rate_limit`. The gateway also depends on `http_port`, `listen_address`,
+`trusted_proxies` and `proxy_protocol` - or, with `wap_upstream`, on that server alone.
 
 ---
 

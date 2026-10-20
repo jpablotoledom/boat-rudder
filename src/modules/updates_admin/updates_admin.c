@@ -446,23 +446,37 @@ static int write_file_atomic(const char *path, const char *content, mode_t mode)
     return 0;
 }
 
-// Starts `scripts/boat-rudder-update run-request` as the transient unit
-// boat-rudder-update.service - a unit of its own, so stopping this server's
+// The transient unit's name: BR_UPDATE_UNIT when this server's unit sets it
+// - one name per install, so installs sharing a host can each run an update
+// while one install still can't run two at once - else boat-rudder-update.
+static void updater_unit_name(char *out, size_t out_size) {
+    const char *unit = getenv("BR_UPDATE_UNIT");
+    if (unit && strlen(unit) < 80 && shell_safe(unit, "_.@-"))
+        snprintf(out, out_size, "%s", unit);
+    else
+        snprintf(out, out_size, "boat-rudder-update");
+}
+
+// Starts `scripts/boat-rudder-update run-request` as a transient unit (see
+// updater_unit_name()) - a unit of its own, so stopping this server's
 // service doesn't stop it, and a second one can't start while it runs.
-// BR_* variables of this server's environment (test setups) go with it. As
-// with curl, the exit status can't be read (main.c reaps every child): with
-// --quiet, systemd-run prints nothing unless it failed.
+// BR_* variables of this server's environment (BR_SERVICE and the like set
+// by its unit, test setups) go with it. As with curl, the exit status can't
+// be read (main.c reaps every child): with --quiet, systemd-run prints
+// nothing unless it failed.
 static bool launch_updater(void) {
     char cwd[512];
     if (!getcwd(cwd, sizeof(cwd)) || !shell_safe(cwd, "/._-")) {
         LOG_WARN("updates: install directory name not usable on a command line");
         return false;
     }
+    char unit[96];
+    updater_unit_name(unit, sizeof(unit));
     char command[4096];
     int n = snprintf(command, sizeof(command),
-                     "systemd-run %s--unit=boat-rudder-update --description='Boat Rudder update' "
+                     "systemd-run %s--unit=%s --description='Boat Rudder update' "
                      "--collect --quiet --setenv=BR_INSTALL_DIR='%s'",
-                     geteuid() == 0 ? "" : "--user ", cwd);
+                     geteuid() == 0 ? "" : "--user ", unit, cwd);
     extern char **environ;
     for (char **env = environ; *env && n > 0 && (size_t)n < sizeof(command) - 600; env++) {
         if (strncmp(*env, "BR_", 3) != 0 || strncmp(*env, "BR_INSTALL_DIR=", 15) == 0) continue;

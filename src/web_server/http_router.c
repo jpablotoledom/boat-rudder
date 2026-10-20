@@ -1397,9 +1397,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     ((connection_ctx_t *)ctx)->simple_response = is_http09_request(&req);
 
     // --- Determine real client IP ---
-    // Honor X-Real-IP / X-Forwarded-For only from trusted reverse proxies.
+    // A PROXY protocol header (read in connection_thread.c) wins; otherwise
+    // honor X-Real-IP / X-Forwarded-For only from trusted reverse proxies.
     char client_ip[INET6_ADDRSTRLEN] = "unknown";
-    {
+    if (((connection_ctx_t *)ctx)->proxy_client_ip[0]) {
+        snprintf(client_ip, sizeof(client_ip), "%s", ((connection_ctx_t *)ctx)->proxy_client_ip);
+    } else {
         connection_ctx_t *conn = (connection_ctx_t *)ctx;
         struct sockaddr_storage peer_addr;
         socklen_t peer_len = sizeof(peer_addr);

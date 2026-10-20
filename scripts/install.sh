@@ -4,7 +4,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
-INSTALL_DIR="/usr/local/bin/boat-rudder"
+DEFAULT_DIR="/usr/local/bin/boat-rudder"
+
+usage() {
+    echo "Usage: install.sh                 build and install as boat-rudder.service in $DEFAULT_DIR"
+    echo "       install.sh --dir <path>    build and install the files only into <path>: no systemd"
+    echo "                                  unit, logrotate rule or /usr/local/sbin/boat-rudder-update"
+    echo "                                  link - for a tool that runs and updates the install itself"
+    echo "                                  (several sites on one machine). The updater works on such"
+    echo "                                  an install with BR_INSTALL_DIR and BR_SERVICE set."
+    exit 2
+}
+
+# The directory is a command-line argument, never an environment variable:
+# `sudo` drops the caller's environment, and a variable lost that way would
+# silently send the install to the default directory - over a live site.
+INSTALL_DIR="$DEFAULT_DIR"
+FILES_ONLY=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dir)
+            [ -n "${2:-}" ] || usage
+            INSTALL_DIR="${2%/}"
+            FILES_ONLY=1
+            shift 2 ;;
+        *) usage ;;
+    esac
+done
+if [ -n "${BR_INSTALL_DIR:-}${BR_FILES_ONLY:-}" ]; then
+    echo "Warning: BR_INSTALL_DIR / BR_FILES_ONLY are ignored - use --dir <path>."
+fi
+
+# --dir: a directory of its own. The default directory belongs to
+# boat-rudder.service (installing only its files would leave the service
+# running the old binary); a system directory or one holding anything but a
+# Boat Rudder install would get files mixed into it.
+if [ "$FILES_ONLY" = "1" ]; then
+    if ! [[ "$INSTALL_DIR" =~ ^(/[A-Za-z0-9._-]+)+$ ]]; then
+        echo "Error: --dir '$INSTALL_DIR' must be an absolute path of a-z A-Z 0-9 . _ -"
+        exit 1
+    fi
+    case "$INSTALL_DIR" in
+        "$DEFAULT_DIR")
+            echo "Error: $DEFAULT_DIR is boat-rudder.service's install - run install.sh without --dir."
+            exit 1 ;;
+        /bin|/boot|/dev|/etc|/home|/lib|/lib64|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/usr/bin|/usr/sbin|/usr/lib|/usr/share|/usr/local|/usr/local/bin|/usr/local/sbin|/usr/local/lib|/usr/local/src|/var|/var/lib|/var/log)
+            echo "Error: --dir '$INSTALL_DIR' is a system directory - give the install a directory of its own."
+            exit 1 ;;
+    esac
+    if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR")" ] && [ ! -d "$INSTALL_DIR/.boat-rudder" ]; then
+        echo "Error: $INSTALL_DIR is not empty and holds no Boat Rudder install - refusing to install into it."
+        exit 1
+    fi
+fi
 SERVICE_NAME="boat-rudder"
 SERVICE_FILE="$SCRIPT_DIR/boat-rudder.service"
 SYSTEMD_DIR="/etc/systemd/system"
@@ -48,7 +100,7 @@ install -m 755 ./scripts/image-optimizer.sh "$INSTALL_DIR/scripts/image-optimize
 # /usr/local/sbin so `sudo boat-rudder-update ...` works from anywhere.
 install -m 755 ./scripts/manifest.sh "$INSTALL_DIR/scripts/manifest.sh"
 install -m 755 ./scripts/boat-rudder-update "$INSTALL_DIR/scripts/boat-rudder-update"
-ln -sfn "$INSTALL_DIR/scripts/boat-rudder-update" /usr/local/sbin/boat-rudder-update
+[ "$FILES_ONLY" = "1" ] || ln -sfn "$INSTALL_DIR/scripts/boat-rudder-update" /usr/local/sbin/boat-rudder-update
 for tool in magick jpegoptim gifsicle; do
     command -v "$tool" > /dev/null 2>&1 ||
         echo "Warning: '$tool' not found - media uploads will fail until it is installed."
@@ -139,6 +191,13 @@ if [ -f ./scripts/minisign.pub ]; then
     install -m 644 ./scripts/minisign.pub "$INSTALL_DIR/.boat-rudder/minisign.pub"
 fi
 echo "Installed version $(head -n1 ./VERSION) ($(wc -l < "$INSTALL_DIR/.boat-rudder/manifest.sha256") system files)."
+
+if [ "$FILES_ONLY" = "1" ]; then
+    source ./scripts/show/divbar
+    echo "Files installed in $INSTALL_DIR (--dir: no service registered)."
+    echo ""
+    exit 0
+fi
 
 # The service appends to /var/log/boat-rudder.log forever otherwise.
 if [ -d /etc/logrotate.d ]; then

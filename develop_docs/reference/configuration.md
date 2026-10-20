@@ -39,6 +39,8 @@ ssl_cert=./ssl/cert.pem
 ssl_key=./ssl/key.pem
 
 trusted_proxies=          # comma-separated IPs, e.g. 127.0.0.1,10.0.0.1
+listen_address=           # IPv4 address to bind; empty = every address
+proxy_protocol=0          # 1 behind a layer-4 front sending PROXY headers
 
 theme=dark                # last-resort theme fallback (see below)
 lang=Eng                  # content language fallback (see below)
@@ -67,6 +69,8 @@ wap_gateway_ips=               # listen addresses, comma-separated; empty = all
 wap_gateway_rover_port=49300   # Palm Neomar/Rover WTP framing; 0 disables
 wap_gateway_wsp_port=9200      # connectionless WSP framing; 0 disables
 wap_gateway_rate_limit=60      # requests/min per source IP; 0 = unlimited
+wap_upstream=                  # <IPv4>:<port> to fetch pages from; empty = this server
+wap_upstream_proxy_protocol=0  # 1: PROXY v1 header with the phone's address to wap_upstream
 
 # Updates (scripts.md)
 update_repo=jpablotoledom/boat-rudder   # GitHub owner/name of the releases
@@ -87,6 +91,8 @@ update_repo=jpablotoledom/boat-rudder   # GitHub owner/name of the releases
 | `ssl_cert` | string | `./ssl/cert.pem` | PEM certificate path, relative to the working directory. |
 | `ssl_key` | string | `./ssl/key.pem` | PEM private key path, relative to the working directory. |
 | `trusted_proxies` | string | *(empty)* | Comma-separated reverse-proxy IPs. `X-Real-IP` / `X-Forwarded-For` are honored **only** from these peers; every other connection uses its raw socket address. Empty means "trust no proxy headers" - the safe default when the server is exposed directly. Add `127.0.0.1` if the WAP gateway is enabled and you want analytics to see the phone's address instead of loopback (see [wap-gateway.md](wap-gateway.md)). |
+| `listen_address` | string | *(empty)* | IPv4 address both listeners bind to. Empty means every local address (`INADDR_ANY`). A site behind a front (several sites on one machine, as the multi-br project sets them up) binds `127.0.0.1`, so only the front is reachable from outside. The WAP gateway's loopback fetch and the updater's health check connect to this address. IPv6 is not supported here; let the front listen on both families. |
+| `proxy_protocol` | int | `0` | `1`: every connection may start with a [PROXY protocol](https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt) v1 or v2 header, read before TLS and HTTP, and its source address becomes the client's - for logging, analytics and the per-IP rate limit. A header is accepted **only from a `trusted_proxies` peer**; a loopback connection without one (WAP gateway, updater health check) is served as direct; any other connection without one, or with a malformed one, is closed. Meant for a site behind HAProxy in `mode tcp` with `send-proxy-v2`. See [security.md](security.md#client-ip-and-proxies). |
 
 ### Site and rendering
 
@@ -133,6 +139,8 @@ The UDP gateway that serves epoch -1 as compiled WBXML to real WAP 1.x devices. 
 | `wap_gateway_rover_port` | int | `49300` | UDP port for the Palm Neomar/Rover 1.5 WTP framing. `0` disables it. |
 | `wap_gateway_wsp_port` | int | `9200` | UDP port for standard WAP 1.x connectionless WSP. `0` disables it. Experimental: untested on real phones. |
 | `wap_gateway_rate_limit` | int | `60` | Maximum requests answered per minute per source IP; `0` = unlimited. Exists because UDP replies are ~20× the request size, so an unlimited gateway is a traffic amplifier for spoofed sources. |
+| `wap_upstream` | string | *(empty)* | `<IPv4>:<port>` of the HTTP server the gateway fetches pages from, with the requested URL's host as `Host`. Empty: this server's own listener. Set it to a front that routes by `Host` and one gateway serves every site on the machine; `boat-rudder --wap-only` runs the gateway alone for that ([wap-gateway.md](wap-gateway.md#several-sites-wap_upstream-and---wap-only)). |
+| `wap_upstream_proxy_protocol` | int | `0` | `1`: every fetch from `wap_upstream` starts with a PROXY v1 header carrying the phone's address (for a front with `accept-proxy`). |
 
 ### Updates
 

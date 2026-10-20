@@ -34,6 +34,7 @@
 #   BR_REPO          GitHub owner/name             (update_repo in settings.conf,
 #                                                  else jpablotoledom/boat-rudder)
 #   BR_SERVICE       systemd unit                  (boat-rudder)
+#   BR_SERVICE_LOG   where that unit logs, for messages (/var/log/boat-rudder.log)
 #   BR_SERVICECTL    service control command       (systemctl)
 #   BR_MINISIGN      minisign binary               (minisign)
 #   BR_HEALTH_BASE   base URL of the health check  (from configs/settings.conf)
@@ -50,6 +51,7 @@ set -euo pipefail
 INSTALL_DIR="${BR_INSTALL_DIR:-/usr/local/bin/boat-rudder}"
 REPO="${BR_REPO:-}"                            # else update_repo in settings.conf, below
 SERVICE="${BR_SERVICE:-boat-rudder}"
+SERVICE_LOG="${BR_SERVICE_LOG:-/var/log/boat-rudder.log}"
 SERVICECTL="${BR_SERVICECTL:-systemctl}"
 MINISIGN="${BR_MINISIGN:-minisign}"
 HEALTH_TIMEOUT="${BR_HEALTH_TIMEOUT:-30}"
@@ -141,11 +143,17 @@ confirm() {   # confirm <question>
 # lock and hold it for as long as it runs.
 service() { "$SERVICECTL" "$1" "$SERVICE" 9>&-; }
 
+# The site's own listener: listen_address when it is bound to one (a site
+# behind a front binds 127.0.0.1), else loopback. With proxy_protocol=1 a
+# loopback request without a PROXY header is still served as a direct
+# connection.
 health_base() {
     if [ -n "${BR_HEALTH_BASE:-}" ]; then printf '%s' "$BR_HEALTH_BASE"; return; fi
+    local host; host="$(cfg listen_address 127.0.0.1)"
+    [ "$host" != "0.0.0.0" ] || host="127.0.0.1"
     local port; port="$(cfg http_port 80)"
-    if [ "$port" != "0" ]; then printf 'http://127.0.0.1:%s' "$port"
-    else printf 'https://127.0.0.1:%s' "$(cfg https_port 443)"; fi
+    if [ "$port" != "0" ]; then printf 'http://%s:%s' "$host" "$port"
+    else printf 'https://%s:%s' "$host" "$(cfg https_port 443)"; fi
 }
 
 # The site answers like a working one: the home page and the active theme's
@@ -566,7 +574,7 @@ cmd_install() {
         die "update to $to failed (${HEALTH_DETAIL:-apply failed}) and was rolled back to $from (staging kept: $dir)"
     fi
     record install "$from" "$to" "$SOURCE" rollback-unhealthy "$name" "${HEALTH_DETAIL:-}"
-    die "update to $to failed, and $from isn't healthy after the rollback either - check 'journalctl -u $SERVICE' and /var/log/boat-rudder.log"
+    die "update to $to failed, and $from isn't healthy after the rollback either - check 'journalctl -u $SERVICE' and $SERVICE_LOG"
 }
 
 cmd_rollback() {
@@ -604,7 +612,7 @@ cmd_rollback() {
         progress done "Rollback" "Rolled back to $to."
     else
         record rollback "$from" "$to" "backup:$name" unhealthy "$name" "${HEALTH_DETAIL:-}"
-        die "rolled back to $to, but the site isn't healthy - check /var/log/boat-rudder.log"
+        die "rolled back to $to, but the site isn't healthy - check $SERVICE_LOG"
     fi
 }
 

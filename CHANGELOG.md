@@ -2,13 +2,43 @@
 
 All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is one release:
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
-Updates page shows them. Changes not released yet go under `## Unreleased` until the next
-release renames it. Dates are commit dates; older entries give commit hashes for reference.
+Updates page shows them. Changes not released yet go under `## Unreleased
 
-Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *Added*,
-*Changed*, *Fixed*, *Removed*, *Security*, *Docs*.
+### Running behind a front
 
----
+What a site needs to run behind a layer-4 front (HAProxy in `mode tcp`) - several sites on one
+machine, each its own install that knows nothing of the others, as the separate **multi-br**
+project sets them up. Nothing here is about several sites itself.
+
+**Added**
+- `listen_address`: the IPv4 address both listeners bind to (every address when empty).
+- `proxy_protocol`: reads a PROXY protocol v1/v2 header before TLS and HTTP
+  (`src/web_server/proxy_protocol.c`) and takes the client's address from it - for logging,
+  analytics and the per-IP rate limit. Accepted only from `trusted_proxies`; a loopback
+  connection without one (WAP gateway, updater health check) is served as direct; any other
+  connection without one, or with a malformed one, is closed. Unit tests in
+  `tests/proxy_protocol_test.c`.
+- WAP gateway: `wap_upstream` fetches pages from another HTTP server (a front routing by
+  `Host`), `wap_upstream_proxy_protocol` sends it the phone's address in a PROXY v1 header, and
+  `boat-rudder --wap-only` runs the gateway alone - one gateway for every site on a machine.
+- `install.sh --dir <path>`: installs the files into another directory, without a unit,
+  logrotate rule or updater link, for a tool that runs the install itself. Refuses the default
+  install's own directory, system directories and a non-empty directory holding no Boat Rudder
+  install.
+- Updater: `BR_UPDATE_UNIT` names the dashboard's transient update unit (so installs sharing a
+  machine can update at the same time), `BR_SERVICE_LOG` the log its messages point to.
+- `rundebug@<name>` runs with `./configs/<name>.conf`; `mongodb_dump.sh` and `mongodb_restore.sh`
+  take a `settings.conf` path.
+
+**Changed**
+- The WAP gateway sends the requested URL's host as `Host` (was `127.0.0.1`), and an absolute
+  redirect's host for the next hop. With `proxy_protocol=1` and its listener's address trusted
+  it also sends a PROXY v1 header with the phone's address.
+- The per-IP rate limit table holds IPv6 addresses too; with `proxy_protocol=1` a trusted peer
+  (the front) is not counted at `accept()` - the visitor's address from the header is, on the
+  connection thread.
+- The updater's health check connects to `listen_address`.
+- `rundebug` stops only a server running on the same config, not every `boat-rudder`.
 
 ## v0.0.6
 ### 2026-10-15

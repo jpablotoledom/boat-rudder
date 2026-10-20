@@ -69,6 +69,7 @@ boat-rudder/
 │   │   ├── server_listener.c/h          # Sockets, accept thread, anti-DDoS, IP-table cleanup thread
 │   │   ├── connection.c/h               # Unified read/write abstraction (plain + TLS)
 │   │   ├── connection_thread.c/h        # Per-connection POSIX thread (connection_io_timeout_secs)
+│   │   ├── proxy_protocol.c/h           # PROXY protocol v1/v2 parser, reader, v1 writer
 │   │   ├── tls_context.c/h              # OpenSSL context lifecycle
 │   │   ├── http_router.c/h              # HTTP read/parse, per-request state, analytics, dispatch
 │   │   ├── http_request_parser.c/h      # Raw HTTP/1.x (and 0.9) request parser
@@ -202,6 +203,12 @@ SHA-256 of every system file installed - the files an update may replace, and th
 `backups/`, `staging/`, `history.jsonl`, and the dashboard's `request.json`, `progress.json` and
 `last-run.log` ([scripts.md](scripts.md#scriptsboat-rudder-update)).
 
+One process serves one site. Several sites on one machine are several such installs behind a
+layer-4 front (HAProxy) that routes by `Host` / SNI without rewriting the request - managed by
+the separate **multi-br** project; Boat Rudder itself only offers what any server behind a proxy
+needs: `listen_address`, `proxy_protocol`, `install.sh --dir`, and a WAP gateway that can
+fetch from a front (`wap_upstream`, `--wap-only`).
+
 Also tracked but not part of the build or runtime: `design/` (`.xcf` image sources for theme
 artwork), `data/mongo_example.c` and `data/querys.json` (scratch examples), and `db_backup/`,
 `db_backup_clean/` (MongoDB dumps - see [security.md](security.md#known-gaps)).
@@ -234,7 +241,8 @@ artwork), `data/mongo_example.c` and `data/querys.json` (scratch examples), and 
 ## Component Descriptions
 
 ### `main.c`
-- Accepts `[-c <config>] <root_directory>` arguments.
+- Accepts `[-c <config>] <root_directory>` arguments, or `[-c <config>] --wap-only` to run only
+  the WAP gateway, fetching from `wap_upstream` ([wap-gateway.md](wap-gateway.md#several-sites-wap_upstream-and---wap-only)).
 - Loads configuration via `config_loader`.
 - Registers POSIX signal handlers (`SIGINT`, `SIGTERM` → graceful shutdown; `SIGCHLD` → zombie reap; `SIGPIPE` → ignored).
 - Uses `_Atomic int running` for the shutdown flag - formally correct for signal handler / main thread coordination.
@@ -254,12 +262,15 @@ artwork), `data/mongo_example.c` and `data/querys.json` (scratch examples), and 
 - `accept_loop_thread()`: a `select()` loop with a **1 s timeout** (closing the listening fds
   from another thread doesn't reliably wake a blocked `select()`, so the timeout bounds shutdown
   to ~1 s).
+- Binds both listeners to `listen_address` (every address when empty).
 - Enforces, at `accept()` time (all values from `settings.conf`, see
   [configuration.md](configuration.md#anti-ddos-and-timeouts)):
   - **Global connection limit** (`ddos_max_connections`, default 200) via a mutex-protected counter.
   - **Per-IP rate limiting** (`ddos_rate_limit` connections per `ddos_rate_window_secs`, default
     500 per 5 s) with a temporary block of 2 × the window and **LRU eviction** when the table is
-    full. The table is guarded by `ip_table_mutex`.
+    full. The table is guarded by `ip_table_mutex`. With `proxy_protocol=1` a trusted peer (the
+    front) is not counted here: `server_ip_rate_limited()` counts the visitor's address from the
+    PROXY header on the connection thread instead.
   - Rejected plain-HTTP connections get a best-effort **`429 Too Many Requests`**; rejected HTTPS
     connections are closed without a handshake (see [security.md](security.md#connection-level-defenses)).
 - `ip_table_cleanup_thread()`: every `ddos_cleanup_interval_secs`, lifts expired bans and frees
@@ -286,6 +297,11 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 - Sets `SO_RCVTIMEO`/`SO_SNDTIMEO` to `connection_io_timeout_secs` (default **5 s**). The
   timeout applies per read/write call, not to the whole transfer, so large uploads that keep
   moving are unaffected; a client that stalls longer is dropped (slow-loris defense).
+- With `proxy_protocol=1`, reads the PROXY protocol header first (`read_proxy_header()`,
+  `proxy_protocol_read()`) - before the TLS handshake, which never covers it - keeps the client's
+  address in `connection_ctx_t.proxy_client_ip`, and applies the per-IP rate limit to it. A header
+  from an untrusted peer, a missing header from a non-loopback peer, or a malformed one closes the
+  connection ([security.md](security.md#client-ip-and-proxies)).
 - Performs `SSL_accept()` if the connection is HTTPS.
 - Calls `http_route()` passing the appropriate `read_func_t`.
 - Always decrements the global `active_connections` counter on exit.
@@ -327,7 +343,7 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   and headers - while the static-file branch clears it, so files keep their headers.
 - **Full body reading**: after headers are parsed, reads the body to completion using `Content-Length` - allocates a buffer of the declared size and loops until all bytes are received. A declared length above `MAX_BODY_SIZE` (10 MiB) is answered `413` before reading. This supports both small form posts and large multipart file uploads.
 - Parses headers with `parse_http_request()`.
-- Extracts the real client IP: honors `X-Real-IP` / `X-Forwarded-For` **only when the peer IP matches the `trusted_proxies` config list**, falling back to the raw socket address for all other peers.
+- Extracts the real client IP: the PROXY protocol header's address when there was one; otherwise honors `X-Real-IP` / `X-Forwarded-For` **only when the peer IP matches the `trusted_proxies` config list**, falling back to the raw socket address for all other peers.
 - Validates the request line (400 Bad Request on failure).
 - `resolve_epoch(req)`: the configured `force_epoch` override (if in `-1..3`), otherwise a valid `?preview_epoch=N` anywhere in the query string (the dashboard preview), otherwise epoch 0 for a genuine HTTP/0.9 request (no `User-Agent` to classify), otherwise `detect_epoch(User-Agent)` - the browser detection rules ([epochs.md](epochs.md)).
 - `dashboard_allowed(req, epoch)`: the gate of `/login` and every `/dashboard*` route - epoch 3 **and** the `dashboard` flag the rules give the real `User-Agent`.
@@ -442,7 +458,7 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
 ### `utils/config_loader.c`
 - Reads `key=value` lines from the config file (path configurable via `-c` CLI flag).
 - Populates every key documented in [configuration.md](configuration.md): server, TLS and
-  logging; `trusted_proxies`, `theme`, `lang`, `force_epoch`, `public_url`; MongoDB and session
+  logging; `listen_address`, `proxy_protocol`, `trusted_proxies`, `theme`, `lang`, `force_epoch`, `public_url`; MongoDB and session
   TTL; the six `ddos_*` keys and `connection_io_timeout_secs`; the five `wap_gateway_*` keys.
 
 ### `utils/log.h`
@@ -581,6 +597,7 @@ The complete description, including known gaps, is [security.md](security.md). I
   charset-checked before touching the filesystem; `return`/`back` redirects only accept
   site-relative paths.
 - `X-Real-IP` / `X-Forwarded-For` are honored **only from trusted proxy IPs** configured in `trusted_proxies`; raw peer address is used for all other connections.
+- PROXY protocol headers (`proxy_protocol=1`) are accepted only from `trusted_proxies` peers; a non-loopback connection without one is closed.
 - `SIGPIPE` is ignored globally and suppressed at socket level (`SO_NOSIGPIPE` / `MSG_NOSIGNAL`).
 - Body reads are capped at `MAX_BODY_SIZE` (10 MiB, `413`); header buffer at `RAW_REQUEST_SIZE` (32 KiB, `431`).
 - TLS minimum version: TLS 1.2. Cipher suites are explicitly hardened (ECDHE+AESGCM, ChaCha20; no RC4, 3DES, export ciphers).

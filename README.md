@@ -30,7 +30,11 @@ the default until a site overrides it.
 - Optional HTTPS (TLS 1.2+, hardened cipher suites).
 - Configurable anti-DDoS: per-IP rate limiting with temporary bans, a global connection cap,
   `429` responses, slow-loris timeouts.
-- Trusted-proxy-aware `X-Real-IP` / `X-Forwarded-For` handling.
+- Trusted-proxy-aware `X-Real-IP` / `X-Forwarded-For` handling, and PROXY protocol v1/v2.
+- Runs behind a layer-4 front (HAProxy `mode tcp`): `listen_address`, PROXY protocol, and a WAP
+  gateway that can serve every site on a machine (`wap_upstream`, `--wap-only`). Several sites
+  on one machine - each its own install, unaware of the others - are managed by the separate
+  **multi-br** project.
 - **Retro-compatible CMS**: dynamic routes are classified into one of 5 browser "epochs" and
   assembled from epoch-specific templates:
   - **Text** (epoch 0, 1991-): HTTP/0.9 and up, a subset of HTML 2.0 that even a pre-HTML 2.0
@@ -95,6 +99,7 @@ By default the server listens on the port configured in `configs/settings.conf` 
 | `createcert` | Generate a self-signed TLS certificate for local development |
 | `install` | Compile for production and install as a systemd service (Linux, requires sudo) |
 | `uninstall` | Stop and remove the systemd service (Linux, requires sudo) |
+| `rundebug@<name>` | `rundebug` with `./configs/<name>.conf` (several configurations side by side) |
 
 Actions run left to right and can be combined:
 
@@ -206,8 +211,8 @@ Reference (`develop_docs/reference/`):
 | [style-guide.md](develop_docs/reference/style-guide.md) | C coding style and security rules (Google C++ Style Guide + SEI CERT C), and BEM CSS class names |
 
 - [develop_docs/plans/](develop_docs/plans/) - per-feature implementation plans (CMS entry
-  model, home blog list, login, site settings/personalization, theme system) and a retroactive
-  ADR for the WAP gateway and analytics.
+  model, home blog list, login, site settings/personalization, theme system, updates) and a
+  retroactive ADR for the WAP gateway and analytics.
 - [develop_docs/diagrams/](develop_docs/diagrams/) - PlantUML source for all diagrams.
 
 ---

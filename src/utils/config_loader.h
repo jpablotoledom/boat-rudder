@@ -14,6 +14,17 @@ extern bool ssl_enabled;
 extern char ssl_cert[256];
 extern char ssl_key[256];
 
+// IPv4 address both listeners bind to; empty means every local address.
+// An instance behind a front (multi-site hosting) binds 127.0.0.1.
+extern char listen_address[64];
+
+// Expect a PROXY protocol header (v1 or v2) at the start of every connection
+// from a trusted_proxies peer, and take the client's address from it - see
+// connection_thread.c and proxy_protocol.h. A loopback connection without one
+// (the WAP gateway, the updater's health check) is served as direct; any
+// other connection without one is closed.
+extern bool proxy_protocol;
+
 // Comma-separated list of trusted reverse-proxy IPs.
 // Only connections from these IPs have X-Real-IP / X-Forwarded-For honored.
 // Example: "127.0.0.1,10.0.0.1"
@@ -74,6 +85,12 @@ extern int  wap_gateway_wsp_port;
 // Max requests per minute answered per source IP (0 = unlimited) - see
 // wap_gateway.c's rate_allow().
 extern int  wap_gateway_rate_limit;
+// Where the gateway fetches pages: "<IPv4>:<port>" of an HTTP server - a
+// front routing by Host, so one gateway serves several sites - or empty for
+// this server's own listener. wap_upstream_proxy_protocol sends that server
+// a PROXY v1 header with the phone's address first.
+extern char wap_upstream[64];
+extern bool wap_upstream_proxy_protocol;
 
 // GitHub repository ("owner/name") whose releases /dashboard/settings/updates
 // lists - the same one scripts/boat-rudder-update installs from.

@@ -632,4 +632,49 @@
   if (saved.drawer) setDrawer(true);
   var start = typeof saved.epoch === 'number' && saved.epoch >= -1 && saved.epoch <= 3 ? saved.epoch : 3;
   setEpoch(start);
+
+  // "View images": the media library in a modal, browse-only (?browse=1 -
+  // no "Use selected", nothing to pick for here), so an image's URL can be
+  // copied into the banner or footer markup. Its own script comes with the
+  // fetched HTML and is re-created to run, as in the entry editor.
+  var mediaBtn = q('.' + PREFIX + 'media-btn');
+  var modalContainer = document.getElementById('modalContainer');
+
+  function mediaModal() {
+    return modalContainer && modalContainer.querySelector('.boat-rudder-modal');
+  }
+
+  function closeMediaModal() {
+    var modal = mediaModal();
+    if (modal) modal.remove();
+  }
+
+  if (mediaBtn && modalContainer) {
+    mediaBtn.addEventListener('click', function () {
+      mediaBtn.disabled = true;
+      fetch('/dashboard/api/media/modal?browse=1', { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (html) {
+          modalContainer.innerHTML = html;
+          modalContainer.querySelectorAll('script').forEach(function (old) {
+            var s = document.createElement('script');
+            s.textContent = old.textContent;
+            old.parentNode.replaceChild(s, old);
+          });
+          var overlay = modalContainer.querySelector('.boat-rudder-modal-overlay');
+          if (overlay) overlay.addEventListener('click', closeMediaModal);
+        })
+        .catch(function (err) { alert('Could not open the media library: ' + err.message); })
+        .then(function () { mediaBtn.disabled = false; });
+    });
+
+    // Escape closes it - unless the photo viewer is open on top, which
+    // closes first on its own Escape.
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !mediaModal()) return;
+      var viewer = document.getElementById('imageModal');
+      if (viewer && viewer.classList.contains('boat-rudder-modal--active')) return;
+      closeMediaModal();
+    });
+  }
 })();

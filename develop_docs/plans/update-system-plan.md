@@ -117,6 +117,9 @@ prerequisites itself, and nothing has needed a minimum version yet.)*
 7. **Plan**: comparing the installed manifest with the new one gives the files to **replace**,
    **add** and **delete** (system files the new version no longer ships). A file to replace whose
    SHA-256 differs from the installed manifest was **edited on the host**: listed in the report.
+   *(Added in 0.0.6: a file is deleted only if the installed version's official, signed package
+   shipped it - a site installed from its own repository has its own files in the manifest too.
+   See [scripts.md](../reference/scripts.md#scriptsboat-rudder-update).)*
 
 ---
 

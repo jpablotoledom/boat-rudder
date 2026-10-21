@@ -2,13 +2,169 @@
 
 All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is one release:
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
-Updates page shows them. Changes not released yet go under `## Unreleased` until the next
-release renames it. Dates are commit dates; older entries give commit hashes for reference.
+Updates page shows them. Changes not released yet go under `## Unreleased
 
-Format inspired by [Keep a Changelog](https://keepachangelog.com/). Sections: *Added*,
-*Changed*, *Fixed*, *Removed*, *Security*, *Docs*.
+## v0.0.6
+### 2026-10-21
 
----
+### Theme customizer: View images
+
+**Added**
+- A *View images* button in the theme customizer's sidebar, under *Data colors*, opens the media
+  library in a modal - browse, view, upload, and *Copy URL* to paste an image into the banner or
+  footer markup. Browse-only (no *Use selected*); closes with ×, Escape or a click outside.
+
+### Permanent usernames
+
+**Added**
+- Every user has a permanent **username** (`users.username`): set when the account is created
+  (3-32 characters of a-z, 0-9, dot, dash, underscore; unique) and read-only afterwards. It names
+  the user's media folder, `html/content/posts/<username>/`. Login stays by email.
+
+**Fixed**
+- The media folder used to be derived from the email, so changing a user's email moved it: every
+  thumbnail, *Copy URL* and new upload pointed at a folder that did not exist, and two emails
+  with the same prefix shared one folder. Now the email can change freely.
+
+**Upgrade**
+- At startup, accounts without a username get one: the folder under `html/content/posts/` that
+  already holds their media directories (so existing media URLs keep working), else the email's
+  prefix, lowercased and made unique. The log names each one. A unique index is created on
+  `users.username`. Nothing to run by hand: `boat-rudder-update` backs up the database and
+  restarts the service, and the migration runs on that start (a rollback to an older version
+  simply ignores the new field).
+- One case needs a hand: two users whose emails shared a prefix (`juan@a.com`, `juan@b.com`)
+  used to share one media folder. The older account keeps it; the other gets `juan-2`, and the
+  log warns (`WARN: users: ... move them to html/content/posts/juan-2/ ... by hand`) that its
+  directories are still in `posts/juan/`.
+
+### Media library: Copy URL
+
+**Added**
+- A *Copy URL* button in the media library and the editor's picker copies the full URL - domain
+  included - of each selected photo's `_full` variant, one per line. The domain is `public_url`
+  (as for QR codes), else the address the dashboard was opened at. Disabled with nothing
+  selected; works over plain HTTP too.
+
+### Dashboard text in English
+
+**Fixed**
+- The user roles read *Administrador* / *Autor* / *Observador (solo lectura)* in the Users list
+  and form, and several dashboard messages were in Spanish (user, language and site settings
+  errors, the "new password" label), while the rest of the dashboard is in English. They now
+  read *Administrator* / *Author* / *Viewer (read-only)*, and every message is in English.
+
+### Media library: no "Use selected" outside the picker
+
+**Fixed**
+- `/dashboard/media` showed the *Use selected* button, which only does something in the entry
+  editor's media picker (it hands the selection to the entry). It is now hidden on the media
+  library page and kept in the picker.
+- *Use selected*, *Move to…* and *Delete selected* are disabled while no photo is selected (in
+  the library and the picker alike).
+
+### Maintenance mode
+
+**Added**
+- A *Maintenance mode* panel on `/dashboard/settings`: pick a page entry (drafts included) and
+  turn the mode on, and every visitor gets the home page - its navigation bar and banner kept,
+  without the menu items or the blog list - with that page's content where the home content goes, on the home page, pages
+  and blog (`/`, `/page/*`, `/blog*`, `/menu`) in every epoch. Only a signed-in Administrador
+  sees the real site; `/login`, the dashboard and static files stay reachable. Stored as
+  `site_settings.under_construction` / `under_construction_page`; served with
+  `Cache-Control: no-store`.
+- While it is on, only Administrators can sign in: any other role gets "The site is under
+  maintenance: only administrators can sign in right now.", and a session of theirs already open
+  is ended on its next dashboard request.
+
+### Hide the home page's latest blog posts
+
+**Added**
+- A *Hide latest blog posts* checkbox on `/dashboard/settings` (*Home page* panel) removes the
+  "Latest Blog Posts" list from `/` in every epoch, without running its query. Stored as
+  `site_settings.hide_home_blog` (absent means shown); `/blog` is unaffected.
+
+### HTTPS sends the whole certificate chain
+
+**Fixed**
+- `ssl_cert` was loaded with `SSL_CTX_use_certificate_file()`, which takes only the first
+  certificate of the file: with Let's Encrypt's `fullchain.pem` the intermediate was never sent.
+  Chrome fetches it by itself, so the site looked fine there, but curl, Android and other clients
+  that don't refused the connection. Now the whole chain is loaded and sent
+  (`SSL_CTX_use_certificate_chain_file()`), and a private key that doesn't match the certificate
+  stops the server at startup instead of failing every handshake.
+
+### Read-only role: Observador
+
+**Added**
+- A third role, **Observador** (`users.role: "viewer"`), for a public demo account: it opens
+  every dashboard page an Administrador opens and sees every value - menus, analytics, users,
+  settings, the entry editor - and can't change anything. Every dashboard write is a `POST`
+  through `require_dashboard_session()`, which refuses it for a viewer (`403`; JSON under
+  `/dashboard/api/`), so routes added later are covered too; the block preview and the
+  browser-rules dry run, which store nothing, stay open. Fails closed when the role can't be
+  read. Every dashboard page a viewer opens starts with a read-only notice
+  (`dashboard/readonly-notice_epoch3.html`). Chosen in the Users form as "Observador (solo
+  lectura)".
+
+### Running behind a front
+
+What a site needs to run behind a layer-4 front (HAProxy in `mode tcp`) - several sites on one
+machine, each its own install that knows nothing of the others, as the separate **multi-br**
+project sets them up. Nothing here is about several sites itself.
+
+**Added**
+- `listen_address`: the IPv4 address both listeners bind to (every address when empty).
+- `proxy_protocol`: reads a PROXY protocol v1/v2 header before TLS and HTTP
+  (`src/web_server/proxy_protocol.c`) and takes the client's address from it - for logging,
+  analytics and the per-IP rate limit. Accepted only from `trusted_proxies`; a loopback
+  connection without one (WAP gateway, updater health check) is served as direct; any other
+  connection without one, or with a malformed one, is closed. Unit tests in
+  `tests/proxy_protocol_test.c`.
+- WAP gateway: `wap_upstream` fetches pages from another HTTP server (a front routing by
+  `Host`), `wap_upstream_proxy_protocol` sends it the phone's address in a PROXY v1 header, and
+  `boat-rudder --wap-only` runs the gateway alone - one gateway for every site on a machine.
+- `install.sh --dir <path>`: installs the files into another directory, without a unit,
+  logrotate rule or updater link, for a tool that runs the install itself. Refuses the default
+  install's own directory, system directories and a non-empty directory holding no Boat Rudder
+  install.
+- Updater: `BR_UPDATE_UNIT` names the dashboard's transient update unit (so installs sharing a
+  machine can update at the same time), `BR_SERVICE_LOG` the log its messages point to.
+- `rundebug@<name>` runs with `./configs/<name>.conf`; `mongodb_dump.sh` and `mongodb_restore.sh`
+  take a `settings.conf` path.
+
+**Changed**
+- The WAP gateway sends the requested URL's host as `Host` (was `127.0.0.1`), and an absolute
+  redirect's host for the next hop. With `proxy_protocol=1` and its listener's address trusted
+  it also sends a PROXY v1 header with the phone's address.
+- The per-IP rate limit table holds IPv6 addresses too; with `proxy_protocol=1` a trusted peer
+  (the front) is not counted at `accept()` - the visitor's address from the header is, on the
+  connection thread.
+- The updater's health check connects to `listen_address`.
+- `rundebug` stops only a server running on the same config, not every `boat-rudder`.
+
+
+### 2026-10-15
+
+### Updates never delete a site's own files
+
+**Fixed**
+- An update deleted every file of the installed manifest the new version no longer ships - and
+  a site installed from its own repository has its additions in that manifest too (uploaded
+  fonts, its own theme files), so updating it would have deleted them. Now a file is deleted
+  only if the installed version's official, signed package shipped it: the updater fetches that
+  release and checks. The site's own files are kept, listed as *this site's own*, and leave the
+  manifest; if the release can't be had, nothing is deleted.
+- `uninstall.sh` left `/usr/local/sbin/boat-rudder-update` (the updater's link) and
+  `/etc/logrotate.d/boat-rudder` behind; it removes both now.
+
+### Build warnings
+
+**Fixed**
+- The Release build (what `install.sh` and the updater compile) printed two `-Wformat-truncation`
+  warnings: in `tests/browser_detection_bson_test.c` (an error message, now capped to its
+  buffer) and in `updates_admin.c` (a backup name longer than a version is now skipped instead of
+  cut). Release and Debug builds are warning-free again.
 
 ## v0.0.5
 ### 2026-10-15

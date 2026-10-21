@@ -12,6 +12,8 @@ int  https_port       = 8443;
 bool ssl_enabled      = false;
 char ssl_cert[256]    = {0};
 char ssl_key[256]     = {0};
+char listen_address[64]   = {0};
+bool proxy_protocol       = false;
 char trusted_proxies[512] = {0};
 char theme[64]            = "dark";
 char lang[16]             = "Eng";
@@ -33,6 +35,8 @@ char wap_gateway_ips[256]   = {0};
 int  wap_gateway_rover_port = 49300;
 int  wap_gateway_wsp_port   = 9200;
 int  wap_gateway_rate_limit = 60;
+char wap_upstream[64]       = {0};
+bool wap_upstream_proxy_protocol = false;
 char update_repo[128]      = "jpablotoledom/boat-rudder";
 
 int load_config(const char *filename) {
@@ -68,6 +72,11 @@ int load_config(const char *filename) {
         } else if (strcmp(key, "ssl_key") == 0) {
             strncpy(ssl_key, value, sizeof(ssl_key) - 1);
             ssl_key[sizeof(ssl_key) - 1] = '\0';
+        } else if (strcmp(key, "listen_address") == 0) {
+            strncpy(listen_address, value, sizeof(listen_address) - 1);
+            listen_address[sizeof(listen_address) - 1] = '\0';
+        } else if (strcmp(key, "proxy_protocol") == 0) {
+            proxy_protocol = atoi(value) != 0;
         } else if (strcmp(key, "trusted_proxies") == 0) {
             strncpy(trusted_proxies, value, sizeof(trusted_proxies) - 1);
             trusted_proxies[sizeof(trusted_proxies) - 1] = '\0';
@@ -115,6 +124,11 @@ int load_config(const char *filename) {
             wap_gateway_wsp_port = atoi(value);
         } else if (strcmp(key, "wap_gateway_rate_limit") == 0) {
             wap_gateway_rate_limit = atoi(value);
+        } else if (strcmp(key, "wap_upstream") == 0) {
+            strncpy(wap_upstream, value, sizeof(wap_upstream) - 1);
+            wap_upstream[sizeof(wap_upstream) - 1] = '\0';
+        } else if (strcmp(key, "wap_upstream_proxy_protocol") == 0) {
+            wap_upstream_proxy_protocol = atoi(value) != 0;
         } else if (strcmp(key, "update_repo") == 0) {
             strncpy(update_repo, value, sizeof(update_repo) - 1);
             update_repo[sizeof(update_repo) - 1] = '\0';

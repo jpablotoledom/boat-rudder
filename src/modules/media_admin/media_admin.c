@@ -1,5 +1,7 @@
 #include "media_admin.h"
+#include "../../utils/config_loader.h"
 #include "../../utils/generate_url_theme.h"
+#include "../../utils/http_utils.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
@@ -81,17 +83,29 @@ char *media_admin_render_items(const CmsMediaItem *items, size_t count, int epoc
     return html;
 }
 
-char *media_admin_page(int epoch, const CmsMediaDirectory *dirs, size_t dir_count,
-                       const CmsMediaItem *items, size_t item_count) {
+// `picker`: the editor's modal (media_admin_modal()), whose "Use selected"
+// hands the selection to the entry being edited; /dashboard/media and the
+// theme customizer's browse-only modal have nothing to hand it to, so the
+// button is hidden there.
+static char *render_media(int epoch, const CmsMediaDirectory *dirs, size_t dir_count,
+                          const CmsMediaItem *items, size_t item_count, int picker) {
     char *tpl = load_template("dashboard/media/media_epoch%d.html", epoch);
     if (!tpl) return NULL;
 
     char *dirs_html = media_admin_render_directories(dirs, dir_count, epoch);
     char *items_html = media_admin_render_items(items, item_count, epoch);
 
+    // "Copy URL"'s base: configs/settings.conf's public_url, the same one
+    // QR codes use, so a copied link points at the public site rather than
+    // wherever the dashboard was opened from. Empty: the page's own origin.
+    char base[sizeof(public_url) * 6];
+    html_encode(base, public_url, sizeof(base));
+
     char *result = render_template(tpl,
         dirs_html ? dirs_html : "",
-        items_html ? items_html : "");
+        items_html ? items_html : "",
+        picker ? "" : " hidden",
+        base);
 
     free(dirs_html);
     free(items_html);
@@ -99,12 +113,17 @@ char *media_admin_page(int epoch, const CmsMediaDirectory *dirs, size_t dir_coun
     return result;
 }
 
+char *media_admin_page(int epoch, const CmsMediaDirectory *dirs, size_t dir_count,
+                       const CmsMediaItem *items, size_t item_count) {
+    return render_media(epoch, dirs, dir_count, items, item_count, 0);
+}
+
 char *media_admin_modal(int epoch, const CmsMediaDirectory *dirs, size_t dir_count,
-                        const CmsMediaItem *items, size_t item_count) {
+                        const CmsMediaItem *items, size_t item_count, int picker) {
     char *modal_tpl = load_template("dashboard/media/media-modal_epoch%d.html", epoch);
     if (!modal_tpl) return NULL;
 
-    char *page = media_admin_page(epoch, dirs, dir_count, items, item_count);
+    char *page = render_media(epoch, dirs, dir_count, items, item_count, picker);
     char *result = page ? render_template(modal_tpl, page) : NULL;
 
     free(page);

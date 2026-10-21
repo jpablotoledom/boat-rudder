@@ -36,4 +36,11 @@ char *buildBlogListWebSiteAtUrl(int epoch, const char *page_title, char *html_co
 char *buildEntryWebSiteAtUrl(int epoch, const char *page_title, char *html_content,
                               const char *current_url, char *category_menu_html);
 
+// The home page's layout - navigation bar, main banner, footer, backdrop -
+// with no menu items (menu_without_items()) and no blog list, and
+// `html_content` where the home content goes: the
+// page every visitor but an Administrador gets while the site is under
+// construction. Takes ownership of html_content.
+char *buildUnderConstructionWebSite(int epoch, const char *page_title, char *html_content);
+
 #endif // ORCHESTRATOR_H

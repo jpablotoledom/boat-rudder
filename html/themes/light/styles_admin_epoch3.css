@@ -95,6 +95,11 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s, filter 0.15s;
 }
 
+/* display above would otherwise outrank the hidden attribute. */
+.boat-rudder-btn[hidden] {
+  display: none;
+}
+
 .boat-rudder-btn:hover {
   color: var(--br-admin-text);
   border-color: var(--br-admin-accent);
@@ -246,6 +251,15 @@
 .boat-rudder-alert--error {
   color: var(--br-admin-danger);
   border-color: var(--br-admin-danger);
+}
+
+/* Read-only account (Observador): the notice above every dashboard page. */
+.boat-rudder-dashboard__read-only {
+  bottom: 0;
+  position: fixed;
+  margin-bottom: 0;
+  right: 0;
+  background-color: #ffe57b;
 }
 
 /* "No entries", "No data", "No other directories". */
@@ -690,8 +704,18 @@
   border-bottom: none;
 }
 
-.boat-rudder-customizer__section:last-child {
+/* last-of-type: the "View images" block after the last section is a <div>. */
+.boat-rudder-customizer__section:last-of-type {
   border-bottom: 1px solid var(--br-admin-border);
+}
+
+.boat-rudder-customizer__media {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 12px 0 4px;
 }
 
 .boat-rudder-customizer__section > summary {

@@ -339,6 +339,10 @@ for customizing a theme; the themes list links it as *Customize*, and the old pe
   and epoch 0 - which has no colors - gets the admin theme's. Opening a section, and every reload,
   scrolls the preview to that section's place (`data-scroll`: top, middle, bottom), the same in
   every epoch, and only inside the preview.
+- **View images.** A button under the sections opens the media library in a modal
+  (`/dashboard/api/media/modal?browse=1`, injected into `#modalContainer` with its script re-run,
+  as in the entry editor): browse, view, upload, and *Copy URL* to paste an image into the banner
+  or footer markup. Browse-only - no *Use selected*. Closes with ×, Escape or a click outside.
 - **WAP preview.** Epoch −1 is WML, which no iframe renders: the deck is fetched and translated
   into a phone-sized screen - text, links, `do` soft keys, cards, and images through the PNG next
   to each WBMP. A deck that isn't well-formed XML is still shown, read by the HTML parser, under a

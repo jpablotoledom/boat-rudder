@@ -27,6 +27,7 @@ Actions are independent and sequential. If an action fails, the script stops imm
 | `createcert` | Generate a self-signed TLS certificate | No |
 | `install` | Compile prod + install as systemd service | Yes |
 | `uninstall` | Stop and remove the systemd service | Yes |
+| `rundebug@<name>` | `rundebug` with `./configs/<name>.conf` | Auto (if port < 1024) |
 
 ---
 
@@ -118,7 +119,9 @@ run without recompiling.
 **What it does:**
 1. Verifies `bin/boat-rudder` exists.
 2. Creates `html/` if it does not exist.
-3. Sends `SIGTERM` to any running instance of `boat-rudder`.
+3. Sends `SIGTERM` to a `boat-rudder` already running **on the same config** - another one
+   started from its own config (`rundebug@<name>`, `./configs/<name>.conf`) keeps running, so
+   several configurations (each with its own ports) can run side by side.
 4. Reads `http_port`, `https_port`, and `ssl_enabled` from the config.
 5. On **Linux**: re-executes itself with `sudo` if any configured port is < 1024 and the current user is not root.
 6. Selects a debugger based on OS and availability:
@@ -226,7 +229,22 @@ Compiles the project for production and installs it as a **systemd service**.
    reinstall replaces the running old binary).
 6. Prints the service status and the log tail command.
 
-**Install path:** `/usr/local/bin/boat-rudder/`
+**Install path:** `/usr/local/bin/boat-rudder/`, or `--dir <path>`.
+
+**Another directory: `sudo ./scripts/install.sh --dir <path>`.** Builds and copies everything
+above (step 2, `.boat-rudder/` included) into `<path>` and stops there: no systemd unit, logrotate
+rule or `/usr/local/sbin/boat-rudder-update` link - `boat-rudder.service` always runs
+`/usr/local/bin/boat-rudder/`. It is for a tool that runs and updates the install itself: several
+sites on one machine, each its own install, are managed that way by the separate **multi-br**
+project. The updater works on such an install with `BR_INSTALL_DIR` and `BR_SERVICE` set (below).
+
+`<path>` must be absolute (`a-z A-Z 0-9 . _ -` only), and `install.sh` refuses
+`/usr/local/bin/boat-rudder` itself (that's `install.sh` without `--dir`), system directories
+(`/usr/local/bin`, `/srv`, `/opt`...) and a non-empty directory that holds no Boat Rudder install
+(no `.boat-rudder/`). The directory is an argument rather than an environment variable on
+purpose: `sudo` drops the caller's environment, and a lost variable would have sent the install
+to the default directory, over the live site. A caller that still sets `BR_INSTALL_DIR` or
+`BR_FILES_ONLY` gets an error and nothing installed.
 
 **Service name:** `boat-rudder`
 
@@ -268,10 +286,12 @@ Stops and completely removes the systemd service and all installed files.
 5. Removes `/usr/local/bin/boat-rudder/` recursively - **including** the host's
    `configs/settings.conf`, `ssl/`, `data/` and every uploaded file under `html/content/`. Back
    up first if any of it matters.
-6. Lists any remaining units matching `boat-rudder` for verification.
+6. Removes the updater's link `/usr/local/sbin/boat-rudder-update` (when it still points into the
+   install) and `/etc/logrotate.d/boat-rudder`.
+7. Lists any remaining units matching `boat-rudder` for verification.
 
-It does **not** remove `/etc/logrotate.d/boat-rudder` nor `/var/log/boat-rudder.log*`; delete
-them by hand if wanted.
+It does **not** remove `/var/log/boat-rudder.log*` nor the database; delete them by hand if
+wanted.
 
 **Delegates to:** `scripts/uninstall.sh`
 
@@ -408,9 +428,9 @@ These scripts are not meant to be called directly but can be if needed. All of t
 | `scripts/compile_debug.sh` | `compiledebug` | `./scripts/compile_debug.sh` |
 | `scripts/compile_prod.sh` | `compileprod`, `install` | `./scripts/compile_prod.sh` |
 | `scripts/clean.sh` | `clean` | `./scripts/clean.sh` |
-| `scripts/run_debug.sh` | `rundebug` | `./scripts/run_debug.sh` |
+| `scripts/run_debug.sh` | `rundebug`, `rundebug@<name>` | `./scripts/run_debug.sh [<name>]` |
 | `scripts/create_local_cert.sh` | `createcert` | `./scripts/create_local_cert.sh` |
-| `scripts/install.sh` | `install` | `sudo ./scripts/install.sh` |
+| `scripts/install.sh` | `install` | `sudo ./scripts/install.sh [--dir <path>]` - see [`install`](#install) |
 | `scripts/uninstall.sh` | `uninstall` | `sudo ./scripts/uninstall.sh` |
 | `scripts/image-optimizer.sh` | the server, via `popen()` on every media upload | `./scripts/image-optimizer.sh <in_dir> <out_dir> [file]` |
 | `scripts/manifest.sh` | `install` (`create`); manual on a host (`adopt`, `verify`) | `./scripts/manifest.sh create\|adopt\|verify …` |
@@ -418,8 +438,8 @@ These scripts are not meant to be called directly but can be if needed. All of t
 | `scripts/release.sh` | nothing (manual, by the maintainer) | `./scripts/release.sh <version> [--key <file>] [--publish]` |
 | `scripts/minisign.pub` | copied by `install` to `.boat-rudder/` | not executable - the public key releases are signed with |
 | `scripts/mongodb_start.sh` | nothing (manual) | `./scripts/mongodb_start.sh` |
-| `scripts/mongodb_dump.sh` | nothing (manual) | `./scripts/mongodb_dump.sh` |
-| `scripts/mongodb_restore.sh` | nothing (manual) | `./scripts/mongodb_restore.sh` |
+| `scripts/mongodb_dump.sh` | nothing (manual) | `./scripts/mongodb_dump.sh [<settings.conf>]` |
+| `scripts/mongodb_restore.sh` | nothing (manual) | `./scripts/mongodb_restore.sh [<settings.conf>]` |
 | `scripts/check_css_bem.py` | nothing (manual, before committing CSS/templates) | `./scripts/check_css_bem.py` - see [style-guide.md](style-guide.md#15-css-class-names-bem); needs `python3` |
 | `scripts/boat-rudder.service` | copied by `install` | not executable |
 | `scripts/boat-rudder.logrotate` | copied by `install` | not executable |
@@ -513,7 +533,13 @@ Stages of `install` - everything that can fail runs before the site is touched:
    package's `VERSION`. A failed build stops here, with the log; the service is never stopped.
 3. **Plan**: the installed manifest against the new one gives the files to replace, add and
    delete. A system file whose content differs from the installed manifest was edited on the host:
-   listed, replaced, kept in the backup. Files outside both manifests are never touched. Asks to
+   listed, replaced, kept in the backup. Files outside both manifests are never touched. A file
+   the new version no longer ships is deleted only if the **installed version's official package**
+   shipped it: the updater fetches that signed release and checks. The installed manifest lists
+   everything `install.sh` found in the tree it ran from, so a site installed from its own
+   repository has its additions there too - uploaded fonts, its own theme files - and those are
+   kept (*this site's own*) and leave the manifest. If that release can't be had - no network, a
+   version never released - nothing is deleted and the files are listed as unconfirmed. Asks to
    continue (unless `--yes`).
 4. **Backup** to `.boat-rudder/backups/<date>-<from>-to-<to>/`: the files to replace or delete,
    the list of files to add, the old manifest, `VERSION` and key, and a `mongodump` of the site
@@ -522,7 +548,8 @@ Stages of `install` - everything that can fail runs before the site is touched:
    deletes the removed ones, writes the new `manifest.sha256`, `VERSION` and key, starts the
    service.
 6. **Health check** (30 s): `/`, `/login` and the active theme's `styles_epoch3.css` must answer
-   `200`. If not, the update is **rolled back automatically** and recorded as failed.
+   `200`, asked of `listen_address` (else `127.0.0.1`) on `http_port` - without a PROXY header,
+   which a site with `proxy_protocol=1` serves as a direct loopback connection. If not, the update is **rolled back automatically** and recorded as failed.
 
 `rollback` restores the backup's files, deletes the ones the update added, restores manifest,
 `VERSION` and key, restarts and checks health. The database is restored only with
@@ -537,6 +564,9 @@ systemd-run --unit=boat-rudder-update --collect --quiet --setenv=BR_INSTALL_DIR=
             <install>/scripts/boat-rudder-update run-request
 ```
 
+The unit is named by `BR_UPDATE_UNIT` when the server's own unit sets it (one name per install,
+so installs sharing a machine can each run an update), else `boat-rudder-update`.
+
 A transient unit, so it lives outside `boat-rudder.service` - which the update stops and starts -
 and a second request can't start while one runs (the unit name is taken; the lock also holds).
 `run-request` validates every field of the request and deletes it before acting, runs
@@ -547,7 +577,9 @@ other way (`set -e`, a signal) is reported `failed` on exit. The server shows a 
 than 2 minutes, or a `running` one silent for 2 hours, as failed. No unit file is installed:
 `systemd-run` is enough. The server forwards its own `BR_*` variables, for test setups.
 
-Environment overrides, for testing: `BR_INSTALL_DIR`, `BR_REPO`, `BR_SERVICE`, `BR_SERVICECTL`,
+Environment overrides, for testing and for installs other than `/usr/local/bin/boat-rudder/`
+under `boat-rudder.service`: `BR_INSTALL_DIR`, `BR_REPO`, `BR_SERVICE`, `BR_SERVICE_LOG` (the
+unit's log, named in error messages), `BR_SERVICECTL`,
 `BR_MINISIGN`, `BR_HEALTH_BASE`, `BR_HEALTH_TIMEOUT`, `BR_KEEP_BACKUPS`, `BR_NO_DB_BACKUP`,
 `BR_ALLOW_NONROOT`.
 
@@ -560,7 +592,9 @@ Environment overrides, for testing: `BR_INSTALL_DIR`, `BR_REPO`, `BR_SERVICE`, `
 | `mongodb_restore.sh` | `mongorestore --drop` of `./db_backup/<db>/` back into the database. |
 
 Both dump and restore read the database name from `mongodb_db` in `configs/settings.conf`, so
-they follow whichever site this checkout is configured for - no database name is hardcoded.
+they follow whichever site this checkout is configured for - no database name is hardcoded. An
+optional argument names another `settings.conf` (another install's); a path that doesn't exist is
+an error, never a fallback to this checkout's database.
 `mongodb_restore.sh` **drops the existing collections** before restoring.
 
 > The dump directory `db_backup/` (and `db_backup_clean/`) is currently **tracked in git** and

@@ -79,7 +79,8 @@ Uploaded files are stored at:
 ```
 ./html/content/posts/<username>/<dirname>/<filename>
 ```
-where `<username>` is derived from the uploader's email (part before `@`, sanitized).
+where `<username>` is the uploader's permanent `users.username` (see
+[data-model.md](data-model.md#users)) - so changing a user's email no longer breaks their media.
 Files are served by the existing static file server at `/content/posts/...`.
 
 Physical directory operations (`mkdir`, `rename`, `rmdir`) are performed by `http_router.c`
@@ -183,14 +184,25 @@ All functions are declared on `window` so they remain available after `activateS
 - `upload()` - iterates selected files (JPEG, PNG, GIF, WebP only; the server re-checks), XHR POST to `/dashboard/api/media/upload` with progress bar per file; reloads directory on completion.
 - Drag-and-drop zone: `dragover`/`dragleave`/`drop` on `#drop-zone`; file-input `change` listener.
 
-**Bulk actions** (on the current selection):
+**Bulk actions** (on the current selection) - *Use selected* (picker only), *Copy URL*,
+*Move to…* and *Delete selected* are disabled
+while nothing is selected (`updateMediaSelectionButtons()`, called after a checkbox click, Escape,
+a grid reload and on load; it also closes an open *Move to…* list once the selection empties):
+- `copySelectedMediaUrls()` - *Copy URL*: copies the absolute URL of each selected photo's
+  `_full` variant, one per line in selection order. The base is `public_url`
+  (configuration.md; the same one QR codes use), rendered into the button's `data-base-url`
+  by `media_admin.c`, or the page's own origin when unset. `navigator.clipboard` where the page
+  is a secure context, else `execCommand('copy')` (a dashboard on plain HTTP over a LAN
+  address), else a `prompt()` showing the text.
 - `deleteSelectedMedia()` - confirm, POST `ids` (comma-separated) to `/dashboard/api/media/delete`.
 - `openMoveMediaPicker()` / `applyMoveMedia()` / `closeMoveMediaPicker()` - the *Move to…*
   directory list; POSTs `ids` + `dest_dir` to `/dashboard/api/media/move`.
 
 **Selection** (for the entry editor picker):
 - Click toggles `boat-rudder-media__photo--selected` + checkbox; Shift+click for range selection.
-- `getSelectedMediaIds()` - collects selected URLs in selection order; writes to:
+- `getSelectedMediaIds()` - the *Use selected* button, shown only in the editor's modal
+  (`media_admin_modal()`; `/dashboard/media` renders it `hidden`, having nothing to hand the
+  selection to). Collects selected URLs in selection order; writes to:
   - `header` type: `#headerImageUrl` input + header image preview
   - `image-block` type: all lang text fields of `window._galleryTargetBlock`
   - `gallery-block` type: all lang text fields + calls `renderGalleryThumbs()`

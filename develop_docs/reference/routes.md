@@ -33,8 +33,9 @@ traffic is not routed here directly - it re-enters this table over loopback HTTP
 | **E3** | `dashboard_allowed()`: `resolve_epoch() == 3` **and** the browser detection rules grant the real `User-Agent` the dashboard (factory: Chrome 111, Firefox 121, Safari 16.2) | Page routes: `302 /dashboard`. API routes (`/dashboard/api/*`): `403 Forbidden` (plain text). |
 | **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token |
 | **S+R** | `require_dashboard_session_role()`: session, role loaded (missing role = `admin`) | as **S** |
-| **A** | `require_admin_session()`: session with role `admin` | as **S**, plus `302 /dashboard` for an `author` |
-| **Own** | `can_edit_entry()`: `admin`, or `author` on a `blog` entry they created | `302 /dashboard` (page) or JSON `403` (API) |
+| **A** | `require_admin_session()`: session with role `admin` - or `viewer` (Observador), whose writes **S** already refused | as **S**, plus `302 /dashboard` for an `author` |
+| **Own** | `can_edit_entry()`: `admin` or `viewer`, or `author` on a `blog` entry they created | `302 /dashboard` (page) or JSON `403` (API) |
+| **RO** | Part of **S**: on any `POST` but `/dashboard/api/block-preview` and `/dashboard/api/browsers/preview`, a `viewer` session is refused - every dashboard write is a `POST` | `403`: JSON `{"ok":false,"error":"read-only account"}` under `/dashboard/api/`, else the error page |
 | **OwnMedia** | `media_can_manage()`: `admin`, or `author` on a media directory/item whose `author_id` is theirs | `403` (plain text) |
 | **Theme** | `theme_key_is_valid(<key>)`: `html/themes/<key>/` exists | `404` |
 
@@ -134,6 +135,8 @@ All **E3, A**. Detailed behavior in [themes.md](themes.md) and [fonts.md](fonts.
 | Method | Path | Handler | Notes |
 |---|---|---|---|
 | `GET`/`POST` | `/dashboard/settings` | `site_settings_general_page()` / `cms_update_site_name()` | Field `site_name`; GET query `error` (`favicon-type`, `favicon-16`, `favicon-size`, `favicon-write`) shows a favicon upload error |
+| `POST` | `/dashboard/settings/under-construction` | `cms_update_under_construction()` | Checkbox `under_construction` (absent means `false`) + `under_construction_page` (a `page` entry's `link`, drafts included; required when turning it on); `302` to `/dashboard/settings` |
+| `POST` | `/dashboard/settings/home` | `cms_update_hide_home_blog()` | Checkbox `hide_home_blog` (absent means `false`); `302` to `/dashboard/settings` |
 | `POST` | `/dashboard/settings/favicon` | `favicon_ico_problem()` + write to `html/favicon<N>.ico` | Multipart `epoch` (`2`/`3`), `file` (`.ico`, ≤ 256 KiB; epoch 2 needs a 16x16 image); `302` to `/dashboard/settings`, with `?error=` on a rejected file |
 | `POST` | `/dashboard/settings/favicon/delete` | `unlink()` | Field `epoch`: back to the theme's own favicon; `302` to `/dashboard/settings` |
 | `GET` | `/dashboard/settings/themes` | `site_settings_themes_page()` | List of the directories under `html/themes/`: name, *Active* or *Set active*, *Customize* |
@@ -194,7 +197,7 @@ Errors are plain text. Detailed in [media-admin.md](media-admin.md).
 |---|---|---|---|
 | `GET` | `/dashboard/api/media/contents` | `cms_get_media_items()` + `media_admin_render_items()` | JSON-wrapped HTML; query `directory`, `start`, `end` (page = `MEDIA_PAGE_SIZE` = 36) |
 | `GET` | `/dashboard/api/media/directory/item` | `media_admin_render_directory_item()` | JSON-wrapped HTML; query `id` |
-| `GET` | `/dashboard/api/media/modal` | `media_admin_modal()` | **HTML** - picker modal, newest uploads first |
+| `GET` | `/dashboard/api/media/modal` | `media_admin_modal()` | **HTML** - picker modal, newest uploads first; `?browse=1` (theme customizer) hides *Use selected* |
 | `POST` | `/dashboard/api/media/directory` | `cms_create_media_directory()` + `mkdir` | Field `newpath` (3-60 chars `[A-Za-z0-9_-]`, else `400`); always the caller's own; duplicate name `409` |
 | `POST` | `/dashboard/api/media/directory/rename` | `cms_rename_media_directory()` + `rename()` | Fields `id`, `newname` (same rule); current name and owner come from the DB. **OwnMedia**; `404` unknown id, `409` name taken |
 | `POST` | `/dashboard/api/media/directory/delete` | `cms_delete_media_directory()` + `rmdir()` | Field `id`. **OwnMedia**; `409` while it has images (or stray files on disk) |

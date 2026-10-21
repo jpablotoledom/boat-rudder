@@ -14,45 +14,55 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *buildHomeWebSite(int epoch, const char *lang) {
-    // Home's fragment, alongside the other three under page/: it is the one
-    // with four regions, which is why it cannot be the same file as the rest.
+// Home's page/page-home_epoch<N>.html, alongside the other three under page/:
+// it is the one with four regions (menu, main banner, content, blog list),
+// which is why it cannot be the same file as the rest. Takes ownership of
+// every region; NULL in any of them fails the page.
+static char *build_home_layout(int epoch, const char *page_title, char *html_menu,
+                               char *html_content, char *html_home_blog) {
     char *path = generate_url_theme("page/page-home_epoch%d.html", epoch);
     char *raw  = path ? read_file_to_string(path) : NULL;
     free(path);
 
-    char *html_menu         = menu("/", epoch);  // home is always "/"
-    char *html_mainbanner   = mainbanner(epoch);
-    char *html_home_content = home_content(epoch, lang);
-    char *html_home_blog    = home_blog(epoch, lang);
+    char *html_mainbanner = mainbanner(epoch);
 
     char *result = NULL;
-    if (raw && html_menu && html_mainbanner && html_home_content && html_home_blog) {
+    if (raw && page_title && html_menu && html_mainbanner && html_content && html_home_blog) {
         char *fragment = render_template(raw, html_menu, html_mainbanner,
-                                          html_home_content, html_home_blog);
-        // The site's own name (site_settings.site_name), not the hardcoded
-        // "Boat Rudder" - that's the software, not any particular site built
-        // with it (see the project README). cms_get_site_name() already
-        // falls back to "Boat Rudder" itself when unset, so this still
-        // reads that on a fresh install.
-        char *site_name = cms_get_site_name();
-        char *title = render_template("%s - Home", site_name ? site_name : "Boat Rudder");
-        free(site_name);
-        if (title) {
-            result = page_layout_wrap(fragment, title, epoch);
-        } else {
-            free(fragment);
-        }
-        free(title);
+                                          html_content, html_home_blog);
+        result = page_layout_wrap(fragment, page_title, epoch);
     }
 
     free(raw);
     free(html_menu);
     free(html_mainbanner);
-    free(html_home_content);
+    free(html_content);
     free(html_home_blog);
 
     return result;
+}
+
+char *buildHomeWebSite(int epoch, const char *lang) {
+    // The site's own name (site_settings.site_name), not the hardcoded
+    // "Boat Rudder" - that's the software, not any particular site built
+    // with it (see the project README). cms_get_site_name() already
+    // falls back to "Boat Rudder" itself when unset, so this still
+    // reads that on a fresh install.
+    char *site_name = cms_get_site_name();
+    char *title = render_template("%s - Home", site_name ? site_name : "Boat Rudder");
+    free(site_name);
+
+    // Hidden from /dashboard/settings: an empty region, and no entries query.
+    char *html_home_blog = cms_get_hide_home_blog() ? strdup("") : home_blog(epoch, lang);
+
+    char *result = build_home_layout(epoch, title, menu("/", epoch),  // home is always "/"
+                                     home_content(epoch, lang), html_home_blog);
+    free(title);
+    return result;
+}
+
+char *buildUnderConstructionWebSite(int epoch, const char *page_title, char *html_content) {
+    return build_home_layout(epoch, page_title, menu_without_items(epoch), html_content, strdup(""));
 }
 
 char *buildPageWebSiteAtUrl(int epoch, const char *page_title, char *html_content,

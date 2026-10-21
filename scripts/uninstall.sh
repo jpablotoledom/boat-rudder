@@ -37,6 +37,14 @@ else
     echo "2 - $INSTALL_DIR not found, skipping."
 fi
 
+# What install.sh put outside the install directory: the updater's link
+# (only if it still points into this install) and the logrotate rule.
+echo "3 - Removing the updater link and the logrotate rule ..."
+if [ "$(readlink /usr/local/sbin/boat-rudder-update 2>/dev/null)" = "$INSTALL_DIR/scripts/boat-rudder-update" ]; then
+    rm -f /usr/local/sbin/boat-rudder-update
+fi
+rm -f /etc/logrotate.d/boat-rudder
+
 source ./scripts/show/divbar
 echo "Uninstall complete."
 # Show remaining units matching the service name, if any

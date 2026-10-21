@@ -12,7 +12,7 @@
         <button id="btn-dir-delete" class="boat-rudder-media__dir-btn boat-rudder-btn--danger boat-rudder-btn boat-rudder-btn--sm" onclick="deleteDirectoryBtnHandler()" disabled>Delete</button>
       </div>
     </div>
-    %s
+    %1$s
   </div>
 
   <!-- Right: Content -->
@@ -32,9 +32,10 @@
     <div id="upload-feedback" class="boat-rudder-media__upload-feedback"></div>
 
     <div class="boat-rudder-media__grid-toolbar">
-      <button class="boat-rudder-media__select-btn boat-rudder-btn boat-rudder-btn--primary" onclick="getSelectedMediaIds()">Use selected</button>
-      <button class="boat-rudder-media__select-btn boat-rudder-btn boat-rudder-btn--primary" onclick="openMoveMediaPicker()">Move to...</button>
-      <button class="boat-rudder-media__select-btn boat-rudder-btn--danger boat-rudder-btn" onclick="deleteSelectedMedia()">Delete selected</button>
+      <button class="boat-rudder-media__select-btn boat-rudder-btn boat-rudder-btn--primary" id="btn-media-use" onclick="getSelectedMediaIds()" disabled%3$s>Use selected</button>
+      <button class="boat-rudder-media__select-btn boat-rudder-btn" id="btn-media-copy" onclick="copySelectedMediaUrls()" data-base-url="%4$s" disabled>Copy URL</button>
+      <button class="boat-rudder-media__select-btn boat-rudder-btn boat-rudder-btn--primary" id="btn-media-move" onclick="openMoveMediaPicker()" disabled>Move to...</button>
+      <button class="boat-rudder-media__select-btn boat-rudder-btn--danger boat-rudder-btn" id="btn-media-delete" onclick="deleteSelectedMedia()" disabled>Delete selected</button>
     </div>
 
     <div id="media-move-picker" class="boat-rudder-media__move-picker boat-rudder-card" style="display:none">
@@ -48,7 +49,7 @@
 
     <div id="media_content__charger" class="boat-rudder-media__grid-scroll">
       <div id="media-content-dynamically" class="boat-rudder-media__grid">
-        %s
+        %2$s
       </div>
     </div>
 
@@ -67,6 +68,18 @@
   // Photos per page. Keep in step with the server's MEDIA_PAGE_SIZE
   // (cms_media.h), which the modal's first page already uses.
   var MEDIA_PAGE = 36;
+
+  // "Use selected", "Copy URL", "Move to..." and "Delete selected" act on the
+  // selection, so they are disabled while nothing is selected. Called after every change to it:
+  // a checkbox click, Escape, and a grid reload (which drops it).
+  window.updateMediaSelectionButtons = function () {
+    var none = !document.querySelector('.boat-rudder-media__photo--selected');
+    ['btn-media-use', 'btn-media-copy', 'btn-media-move', 'btn-media-delete'].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (btn) btn.disabled = none;
+    });
+    if (none) closeMoveMediaPicker();
+  };
 
   // Selection tracking - this whole script re-runs every time the media
   // modal is (re)opened (loadMediaModal() re-fetches and re-injects it), but
@@ -134,6 +147,7 @@
         else { delete item.dataset.selectedAt; }
       }
       lastCheckedIndex = index;
+      window.updateMediaSelectionButtons();
     });
 
     // Capture phase on window runs before the lightbox's own Escape handler
@@ -150,6 +164,7 @@
         });
         lastCheckedIndex = null;
         selectionCounter = 0;
+        window.updateMediaSelectionButtons();
       }
     }, true);
   }
@@ -190,6 +205,7 @@
     document.getElementById('media-content-start').value = '0';
     document.getElementById('media-content-end').value = String(MEDIA_PAGE);
     document.getElementById('media-content-dynamically').innerHTML = '';
+    window.updateMediaSelectionButtons();
     return getMediaContents(directoryId, 0, MEDIA_PAGE);
   }
 
@@ -503,6 +519,54 @@
       .catch(function (err) { console.error('Error deleting media:', err); alert(err.message); });
   };
 
+  // "Copy URL" button: the absolute URL of each selected photo's _full
+  // variant (the size the lightbox shows), one per line in selection order,
+  // on the public_url base (data-base-url) or else this page's own origin.
+  window.copySelectedMediaUrls = function () {
+    var btn = document.getElementById('btn-media-copy');
+    var base = ((btn && btn.dataset.baseUrl) || window.location.origin).replace(/\/+$/, '');
+    var urls = Array.from(document.querySelectorAll('.boat-rudder-media__photo--selected'))
+      .sort(function (a, b) {
+        return parseInt(a.dataset.selectedAt || '0', 10) - parseInt(b.dataset.selectedAt || '0', 10);
+      })
+      .map(function (item) {
+        var path = item.querySelector('input[name="media-item-url"]').value
+                       .replace(/(\.[A-Za-z0-9]+)$/, '_full$1');
+        return base + path;
+      });
+    if (!urls.length) return;
+    var text = urls.join('\n');
+
+    var done = function () {
+      var feedbackEl = document.getElementById('upload-feedback');
+      if (!feedbackEl) return;
+      var note = document.createElement('div');
+      note.className = 'boat-rudder-media__progress-item';
+      note.textContent = urls.length === 1 ? 'Copied: ' + urls[0] : 'Copied ' + urls.length + ' URLs';
+      feedbackEl.appendChild(note);
+      setTimeout(function () { note.remove(); }, 3000);
+    };
+
+    // navigator.clipboard needs a secure context (HTTPS or localhost); a
+    // dashboard opened over plain HTTP on a LAN address falls back to the
+    // older execCommand('copy') through a hidden textarea.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, function (err) { alert('Could not copy: ' + err.message); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      if (ok) done(); else window.prompt('Copy the URL:', text);
+    }
+  };
+
   // "Use selected" button
   window.getSelectedMediaIds = function () {
     var selected = Array.from(
@@ -591,6 +655,9 @@
     });
     fileInput.addEventListener('change', function () { if (fileInput.files.length) upload(); });
   }
+
+  // A reopened modal may keep photos selected from last time.
+  window.updateMediaSelectionButtons();
 
   // Show back button on full media page
   if (window.location.pathname === '/dashboard/media') {

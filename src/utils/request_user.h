@@ -27,4 +27,17 @@ const char *request_user_name(void);
 // to a signed-in user. Never NULL; same lifetime as request_user_name().
 const char *request_csrf_token(void);
 
+// 1 if the session resolved by the last request_user_set() on this thread
+// belongs to a "viewer" (Observador): a read-only account that sees every
+// dashboard page an Administrador sees but can't change anything. Only for
+// presentation - page_layout_wrap() shows it a read-only notice; the writes
+// themselves are refused in require_dashboard_session() (http_router.c).
+int request_user_read_only(void);
+
+// 1 if the session resolved by the last request_user_set() on this thread
+// belongs to an Administrador ("admin" - not an Autor or an Observador): the
+// only visitors who see the real site while it is under construction (see
+// cms_get_under_construction()).
+int request_user_is_admin(void);
+
 #endif // REQUEST_USER_H

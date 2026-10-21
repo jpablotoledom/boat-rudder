@@ -1,7 +1,9 @@
 #include "wap_gateway.h"
 #include "wbxml.h"
 #include "../utils/config_loader.h"
+#include "../utils/http_utils.h"
 #include "../utils/log.h"
+#include "../web_server/proxy_protocol.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
@@ -88,7 +90,7 @@ static int read_uintvar(const unsigned char *d, size_t n, size_t *pos, unsigned 
     return -1;
 }
 
-// ---- Loopback fetch ----------------------------------------------------------------
+// ---- Page fetch ----------------------------------------------------------------
 
 typedef struct {
     int status;
@@ -118,11 +120,58 @@ static void header_value(const char *headers, const char *name, char *out, size_
     }
 }
 
-// GET `path` from this same server's plain-HTTP listener. `client_ip` rides
-// along as X-Forwarded-For (honored only if 127.0.0.1 is a trusted proxy),
-// so analytics and rate limiting see the phone rather than the gateway.
-static int fetch_local(const char *path, const char *client_ip, HttpResponse *r) {
+// Where pages are fetched from: wap_upstream ("a.b.c.d:port") when set -
+// a front that routes by Host to one of several sites, or any other HTTP
+// server - else this same server's plain-HTTP listener (listen_address when
+// it is bound to one, else loopback). Returns 0 and fills `addr`, or -1 for
+// an unusable wap_upstream.
+static int fetch_target(struct sockaddr_in *addr) {
+    *addr = (struct sockaddr_in){ .sin_family = AF_INET, .sin_port = htons((uint16_t)http_port) };
+    addr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (wap_upstream[0]) {
+        char host[64];
+        snprintf(host, sizeof(host), "%s", wap_upstream);
+        char *colon = strrchr(host, ':');
+        if (!colon) return -1;
+        *colon = '\0';
+        char *end;
+        long port = strtol(colon + 1, &end, 10);
+        if (*end || port < 1 || port > 65535 || inet_pton(AF_INET, host, &addr->sin_addr) != 1)
+            return -1;
+        addr->sin_port = htons((uint16_t)port);
+        return 0;
+    }
+    if (listen_address[0] && inet_pton(AF_INET, listen_address, &addr->sin_addr) != 1)
+        addr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (addr->sin_addr.s_addr == htonl(INADDR_ANY)) addr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    return 0;
+}
+
+// Whether the fetch starts with a PROXY v1 header carrying the phone's
+// address: on request for wap_upstream (wap_upstream_proxy_protocol - a
+// front that requires one, e.g. HAProxy's accept-proxy); for this server's
+// own listener when it reads them (proxy_protocol=1) and trusts the
+// gateway's address - untrusted, the header would get the connection
+// closed, so the request goes without one and is served as a direct
+// loopback connection (see connection_thread.c).
+static int fetch_sends_proxy_header(const char *server_ip) {
+    if (wap_upstream[0]) return wap_upstream_proxy_protocol;
+    return proxy_protocol && is_trusted_proxy(server_ip);
+}
+
+// GET `path` of `host` (the host the phone asked for; empty when it named
+// none) from fetch_target(). `client_ip` rides along as X-Forwarded-For
+// (honored only if the gateway's address is a trusted proxy) and, per
+// fetch_sends_proxy_header(), as a PROXY header, so analytics and rate
+// limiting see the phone rather than the gateway.
+static int fetch_page(const char *host, const char *path, const char *client_ip, HttpResponse *r) {
     memset(r, 0, sizeof(*r));
+    struct sockaddr_in addr;
+    if (fetch_target(&addr) != 0) {
+        LOG_ERROR("wap_upstream '%s' is not <IPv4>:<port>", wap_upstream);
+        return -1;
+    }
+
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return -1;
 
@@ -130,19 +179,26 @@ static int fetch_local(const char *path, const char *client_ip, HttpResponse *r)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
-    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons((uint16_t)http_port) };
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) { close(fd); return -1; }
 
+    char server_ip[INET_ADDRSTRLEN] = "127.0.0.1";
+    inet_ntop(AF_INET, &addr.sin_addr, server_ip, sizeof(server_ip));
+
     char req[2048];
-    int n = snprintf(req, sizeof(req),
+    size_t proxy_len = 0;
+    if (fetch_sends_proxy_header(server_ip))
+        proxy_len = proxy_protocol_format_v1(req, sizeof(req), client_ip, 0, server_ip,
+                                             ntohs(addr.sin_port));
+    int n = snprintf(req + proxy_len, sizeof(req) - proxy_len,
                      "GET %s HTTP/1.0\r\n"
-                     "Host: 127.0.0.1\r\n"
+                     "Host: %s\r\n"
                      "User-Agent: BoatRudder-WAP-Gateway\r\n"
                      "Accept: text/vnd.wap.wml, image/vnd.wap.wbmp\r\n"
                      "X-Forwarded-For: %s\r\n"
-                     "Connection: close\r\n\r\n", path, client_ip);
-    if (n <= 0 || n >= (int)sizeof(req) || send(fd, req, (size_t)n, 0) != n) { close(fd); return -1; }
+                     "Connection: close\r\n\r\n", path, host[0] ? host : "127.0.0.1", client_ip);
+    if (n <= 0 || (size_t)n >= sizeof(req) - proxy_len) { close(fd); return -1; }
+    n += (int)proxy_len;
+    if (send(fd, req, (size_t)n, 0) != n) { close(fd); return -1; }
 
     Bytes in = { .ok = 1 };
     char chunk[8192];
@@ -177,6 +233,34 @@ static int contains_ci(const char *haystack, const char *needle) {
     for (; *haystack; haystack++)
         if (!strncasecmp(haystack, needle, n)) return 1;
     return 0;
+}
+
+// The host (and port) of an absolute `uri`, lowercased: "http://Site.org:80/x"
+// -> "site.org:80". Empty for a relative URI, or a host that isn't a plain
+// DNS name or IPv4 address with an optional port - it goes out as the
+// fetch's Host header, so nothing else may reach it.
+static void uri_host(const char *uri, char *out, size_t out_size) {
+    out[0] = '\0';
+    const char *sep = strstr(uri, "://");
+    if (!sep) return;
+    const char *h = sep + 3;
+    size_t len = strcspn(h, "/?#");
+    const char *at = memchr(h, '@', len);          // drop any user:password@
+    if (at) { len -= (size_t)(at + 1 - h); h = at + 1; }
+    if (len == 0 || len > 253 || len >= out_size) return;
+
+    const char *colon = memchr(h, ':', len);
+    size_t name_len = colon ? (size_t)(colon - h) : len;
+    if (name_len == 0) return;
+    for (size_t i = 0; i < len; i++) {
+        char c = h[i];
+        int ok = i < name_len ? (isalnum((unsigned char)c) || c == '.' || c == '-')
+                              : (i == name_len || isdigit((unsigned char)c));
+        if (!ok) return;
+    }
+    if (colon && len - name_len < 2) return;        // "host:" with no port
+    for (size_t i = 0; i < len; i++) out[i] = (char)tolower((unsigned char)h[i]);
+    out[len] = '\0';
 }
 
 // Path and query of `uri` with its host thrown away ("http://anything/x?y"
@@ -272,6 +356,8 @@ static void handle_get(Bytes *out, const char *uri, const char *client_ip, size_
 
     char path[1100];
     local_path(page0, path, sizeof(path));
+    char host[256];
+    uri_host(page0, host, sizeof(host));
 
     HttpResponse resp = {0};
     int fetched = -1;
@@ -282,13 +368,17 @@ static void handle_get(Bytes *out, const char *uri, const char *client_ip, size_
         snprintf(req_path, sizeof(req_path), "%s%spreview_epoch=-1&wml_pages=all",
                  path, strchr(path, '?') ? "&" : "?");
         free(resp.raw);
-        fetched = fetch_local(req_path, client_ip, &resp);
+        fetched = fetch_page(host, req_path, client_ip, &resp);
         if (fetched != 0 || resp.status < 300 || resp.status >= 400 || !resp.location[0]) break;
+        // An absolute Location names the site the rest of the chain is on.
+        char next_host[256];
+        uri_host(resp.location, next_host, sizeof(next_host));
+        if (next_host[0]) snprintf(host, sizeof(host), "%s", next_host);
         local_path(resp.location, path, sizeof(path));
     }
 
     if (fetched != 0) {
-        LOG_WARN("WAP %s %s: site unreachable over loopback", label, uri);
+        LOG_WARN("WAP %s %s: site unreachable", label, uri);
         message_reply(out, "Error", "The site is not responding. Try again later.");
         return;
     }

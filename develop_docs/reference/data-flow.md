@@ -16,7 +16,8 @@ Diagrams: [startup-flow.puml](../diagrams/startup-flow.puml),
 main()
   │
   ├─ load_config("./configs/settings.conf")          (or -c <path>)
-  │     Reads every key in configuration.md: ports/TLS/logging, trusted_proxies,
+  │     Reads every key in configuration.md: ports/TLS/logging, listen_address,
+  │     proxy_protocol, trusted_proxies,
   │     theme, lang, public_url, force_epoch, mongodb_*, session_ttl_seconds,
   │     ddos_* + connection_io_timeout_secs, wap_gateway_*
   │
@@ -68,6 +69,7 @@ while (running):
   ├─ HTTP socket ready?
   │     accept() → client_socket
   │     too_many_connections(ip)?   ──yes──► write 429, close, continue
+  │       (skipped for a trusted peer when proxy_protocol=1 - checked in §3 instead)
   │     try_register_connection()?  ──no───► write 429, close, continue
   │     malloc(thread_args) { client_socket, root_dir, ssl=NULL }
   │     pthread_create(connection_thread, 2 MiB stack)   ─────────►  see §3
@@ -76,6 +78,7 @@ while (running):
   └─ HTTPS socket ready?
         accept() → client_socket
         too_many_connections(ip)?   ──yes──► close (no TLS handshake, no 429), continue
+          (skipped for a trusted peer when proxy_protocol=1 - checked in §3 instead)
         try_register_connection()?  ──no───► close, continue
         SSL_new(ssl_ctx) → ssl; SSL_set_fd(ssl, client_socket)
         malloc(thread_args) { client_socket, root_dir, ssl }
@@ -123,6 +126,15 @@ connection_thread(thread_args)
   │     per read/write call - a stalled client is dropped (slow-loris),
   │     a slow-but-steady upload is not
   │
+  ├─ [if proxy_protocol=1]  read_proxy_header() - before TLS, which never covers it
+  │     proxy_protocol_read(): MSG_PEEK until classified, then drain exactly the header
+  │     header from a trusted peer      → conn->proxy_client_ip = its source address
+  │     header from an untrusted peer   → goto cleanup
+  │     no header, loopback peer        → direct connection (WAP gateway, health check)
+  │     no header, other peer           → goto cleanup
+  │     malformed / incomplete / timeout→ goto cleanup
+  │     server_ip_rate_limited(proxy_client_ip)? → 429 (plain HTTP only), goto cleanup
+  │
   ├─ [if ssl != NULL]
   │     SSL_accept(ssl)  ← TLS handshake
   │     failure? → goto cleanup
@@ -167,8 +179,9 @@ http_route(read_func, ctx, root_directory)
   │     failure, or protocol present but not "HTTP/…" → 400
   │
   ├─ client_ip:
-  │     peer = getpeername()
-  │     is_trusted_proxy(peer) ? X-Real-IP → first X-Forwarded-For → peer : peer
+  │     PROXY header address (conn->proxy_client_ip, §3)?  → that address
+  │     else peer = getpeername()
+  │          is_trusted_proxy(peer) ? X-Real-IP → first X-Forwarded-For → peer : peer
   │
   ├─ url_parse(url) → route + QueryParam[];  url_decode(route) → decoded_url
   │
@@ -544,14 +557,16 @@ server nothing waits for them. The systemd unit allows 10 s (`TimeoutStopSec=10`
 
 ## 8. WAP Gateway Request
 
-A parallel entry point, on its own thread, that ends up back in §4 over loopback:
+A parallel entry point, on its own thread, that ends up back in §4 over loopback - or, with
+`wap_upstream`, in whichever site the front routes the URL's host to:
 
 ```
 UDP datagram (rover 49300 / wsp 9200)
   ├─ framing + PDU type check (GET-family only), URI ≤ 1000 bytes
   ├─ rate_allow(source ip)  ← wap_gateway_rate_limit per minute
-  ├─ fetch_local("<path>?preview_epoch=-1&wml_pages=all", X-Forwarded-For: <phone>)
-  │     → TCP 127.0.0.1:http_port → §2 → §3 → §4 (WML deck, unpaginated)
+  ├─ fetch_page(host of the URI, "<path>?preview_epoch=-1&wml_pages=all",
+  │             X-Forwarded-For: <phone>, [PROXY v1 <phone>])
+  │     → TCP 127.0.0.1:http_port (or wap_upstream) → §2 → §3 → §4 (WML deck, unpaginated)
   ├─ wbxml_compile_page(deck, page = __page) → ≤ 860-byte WBXML page
   └─ sendto(): WTP Result / WSP Reply with application/vnd.wap.wmlc
 ```
@@ -569,7 +584,8 @@ Details: [wap-gateway.md](wap-gateway.md).
 | `HttpRequest` | `http_request_parser.h` | Parsed HTTP request: method, url, protocol, headers[], body |
 | `HttpHeader` | `http_request_parser.h` | Single header key-value pair |
 | `QueryParam` | `url_parser.h` | Single URL query parameter key-value |
-| `ip_entry_t` | `server_listener.c` (internal) | Per-IP rate limiting state; array of `ddos_max_ips`, guarded by `ip_table_mutex` (accept + cleanup threads) |
+| `ip_entry_t` | `server_listener.c` (internal) | Per-IP rate limiting state, keyed by a 16-byte address; array of `ddos_max_ips`, guarded by `ip_table_mutex` (accept, connection and cleanup threads) |
+| `ProxyHeader` | `proxy_protocol.h` | A parsed PROXY protocol header: its length and the client's address and port |
 | `RateEntry` | `wap_gateway.c` (internal) | WAP gateway per-IP minute window (256 entries, gateway thread only) |
 | `WbxmlBuf` | `wap_gateway/wbxml.h` | Compiled WBXML page (`data`, `len`) |
 | `CmsEntry`, `CmsContentBlock` | `db/cms_entries.h` | An entry resolved to one language, for rendering |

@@ -37,7 +37,7 @@ collections). Nothing else in the code base opens a collection.
 | `media` | Uploaded image metadata | `cms_media.c` | `mongodb_manager.h` |
 | `media_directories` | Per-author media folders | `cms_media.c` | `mongodb_manager.h` |
 | `media_galleries` | Image lists behind `gallery` blocks | `cms_media_galleries.c` | `mongodb_manager.h` |
-| `site_settings` | Singleton: site name, active theme | `cms_site_settings.c` | `cms_site_settings.c` |
+| `site_settings` | Singleton: site name, active theme, home blog visibility, maintenance mode | `cms_site_settings.c` | `cms_site_settings.c` |
 | `themes` | Sparse per-theme overrides (colors, banner, footer, logo, CSS) | `cms_themes.c` | `cms_themes.c` |
 | `fonts` | Uploaded font library | `cms_fonts.c` | `cms_fonts.c` |
 | `short_links` | Short codes for QR codes | `short_links.c` | `short_links.c` |
@@ -136,7 +136,7 @@ Full behavior: [media-admin.md](media-admin.md).
 `name` is the bare filename (the optimizer's `_full` suffix stripped). Files live at
 `html/content/posts/<username>/<directory name>/<name>` plus the size variants
 `_full/_half/_small` (same extension) and `_medium/_micro` (always `.gif`); `<username>` is the
-part of the author's email before `@`. Listings join `users` and `media_directories` with an
+author's `users.username` (see [`users`](#users)). Listings join `users` and `media_directories` with an
 aggregation `$lookup`, run through `mongodb_manager_aggregate()` (see
 [Known driver issue](#known-driver-issue)).
 
@@ -167,9 +167,20 @@ entry is.
 ### `users`
 
 ```jsonc
-{ "_id": ObjectId, "name": "Jane", "email": "jane@example.org",
-  "password": "$argon2id$...", "role": "admin" | "author" }
+{ "_id": ObjectId, "name": "Jane", "username": "jane", "email": "jane@example.org",
+  "password": "$argon2id$...", "role": "admin" | "author" | "viewer" }
 ```
+
+`username` is permanent: set when the account is created (3-32 characters of `[a-z0-9._-]`, not
+dot-led, unique - index `username_unique`) and never changed, because it names the user's media
+folder `html/content/posts/<username>/`, which every stored media URL contains. Login stays by
+email, and changing the email no longer moves anything. Accounts from before the field existed
+get one at startup (`cms_users_ensure_usernames()`): the folder under `html/content/posts/` that
+already holds their media directories (it may keep a legacy capital), else the email's part
+before `@`, lowercased, with a `-2`, `-3`... suffix if taken. It runs on every start, in batches
+until no account is left without one, so an update needs no migration script. Two accounts whose
+emails shared a prefix used to share one folder: the older keeps it, and the log warns that the
+other's directories must be moved to its new folder by hand.
 
 `password` is a libsodium `crypto_pwhash_str()` (Argon2id) hash. A missing `role` means
 `admin` (backward compatibility). The last admin cannot be deleted or demoted. Roles are
@@ -199,11 +210,17 @@ Full behavior: [themes.md](themes.md) and [fonts.md](fonts.md).
 A singleton (always updated with filter `{}` and `upsert: true`).
 
 ```jsonc
-{ "_id": ObjectId, "site_name": "My Site", "active_theme": "dark" }
+{ "_id": ObjectId, "site_name": "My Site", "active_theme": "dark", "hide_home_blog": false,
+  "under_construction": false, "under_construction_page": "coming-soon" }
 ```
 
 `site_name` defaults to `"Boat Rudder"` and replaces the `{{SITE_NAME}}` token in titles and
-templates. `active_theme` is only honored if `html/themes/<key>/` exists.
+templates. `active_theme` is only honored if `html/themes/<key>/` exists. `hide_home_blog`
+(absent means `false`) hides the home page's "Latest Blog Posts" list. `under_construction`
+(absent means `false`) puts the site in maintenance mode (the code's historical name is "under
+construction"): every visitor but an Administrador gets
+the `page` entry whose `link` is `under_construction_page` (see
+[rendering.md](rendering.md#under-construction-mode)).
 
 ### `themes`
 

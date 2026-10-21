@@ -31,7 +31,11 @@ SSL_CTX *tls_create_context(const char *cert_path, const char *key_path) {
         LOG_WARN("Failed to set TLS 1.3 cipher suites; using OpenSSL defaults");
     }
 
-    if (SSL_CTX_use_certificate_file(ctx, cert_path, SSL_FILETYPE_PEM) <= 0) {
+    // The whole chain, not just the first certificate: a CA's certificate
+    // (Let's Encrypt's fullchain.pem) is followed by its intermediate, which
+    // the server must send - Chrome fetches a missing one by itself, but
+    // curl, Android and others reject the connection without it.
+    if (SSL_CTX_use_certificate_chain_file(ctx, cert_path) <= 0) {
         LOG_ERROR("Failed to load TLS certificate: %s", cert_path);
         SSL_CTX_free(ctx);
         return NULL;
@@ -39,6 +43,12 @@ SSL_CTX *tls_create_context(const char *cert_path, const char *key_path) {
 
     if (SSL_CTX_use_PrivateKey_file(ctx, key_path, SSL_FILETYPE_PEM) <= 0) {
         LOG_ERROR("Failed to load TLS private key: %s", key_path);
+        SSL_CTX_free(ctx);
+        return NULL;
+    }
+
+    if (SSL_CTX_check_private_key(ctx) != 1) {
+        LOG_ERROR("TLS private key %s doesn't match the certificate %s", key_path, cert_path);
         SSL_CTX_free(ctx);
         return NULL;
     }

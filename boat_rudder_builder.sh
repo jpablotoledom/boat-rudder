@@ -12,6 +12,8 @@
 #   install        Compile and install as a systemd service (Linux only)
 #   uninstall      Stop and remove the systemd service (Linux only)
 #
+#   rundebug@<name>  Run with ./configs/<name>.conf instead of settings.conf
+#
 # Actions can be combined:
 #   ./boat_rudder_builder.sh compiledebug rundebug
 #   ./boat_rudder_builder.sh createcert compiledebug rundebug
@@ -34,6 +36,8 @@ if [ $# -lt 1 ]; then
     echo "    install        Install as a systemd service  (Linux only, requires sudo)"
     echo "    uninstall      Remove the systemd service    (Linux only, requires sudo)"
     echo ""
+    echo "    rundebug@<name>  Run with ./configs/<name>.conf"
+    echo ""
     echo "  Examples:"
     echo "    $0 compiledebug rundebug"
     echo "    $0 createcert compiledebug rundebug"
@@ -43,6 +47,14 @@ if [ $# -lt 1 ]; then
 fi
 
 for action in "$@"; do
+    # "rundebug@<name>" - the config name goes to run_debug.sh.
+    instance=""
+    case "$action" in
+        *@*) instance="${action#*@}"; action="${action%%@*}" ;;
+    esac
+    if [ -n "$instance" ] && [ "$action" != "rundebug" ]; then
+        echo ""; echo "  '$action' takes no @<name>"; echo ""; exit 1
+    fi
     case "$action" in
         compiledebug)
             echo "Compiling (debug)..."
@@ -58,7 +70,7 @@ for action in "$@"; do
             ;;
         rundebug)
             echo "Running in debug mode..."
-            ./scripts/run_debug.sh
+            ./scripts/run_debug.sh ${instance:+"$instance"}
             ;;
         createcert)
             echo "Generating local TLS certificate..."
@@ -76,6 +88,7 @@ for action in "$@"; do
             echo ""
             echo "  Unknown action: '$action'"
             echo "  Valid actions: compiledebug, compileprod, clean, rundebug, createcert, install, uninstall"
+            echo "  (rundebug also takes @<name>: ./configs/<name>.conf)"
             echo ""
             exit 1
             ;;

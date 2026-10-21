@@ -2,6 +2,7 @@
 #include "connection_thread.h"
 #include "tls_context.h"
 #include "../utils/config_loader.h"
+#include "../utils/http_utils.h"
 #include "../utils/log.h"
 #include <arpa/inet.h>
 #include <errno.h>
@@ -43,8 +44,12 @@ void unregister_connection(void) {
 }
 
 // --- Per-IP rate limiting with LRU eviction ---
+// Keyed by the 16-byte IPv6 form of the address (IPv4 as ::ffff:a.b.c.d):
+// the socket's peer is always IPv4, but a PROXY protocol header (see
+// connection_thread.c) can carry an IPv6 client.
 typedef struct {
-    in_addr_t ip;
+    unsigned char ip[16];
+    int       used;
     time_t    last_conn;
     time_t    last_rejected;
     int       count;
@@ -52,22 +57,27 @@ typedef struct {
 } ip_entry_t;
 
 // malloc'd (calloc'd) in server_start() from ddos_max_ips, freed in
-// server_stop(). Touched by both the accept loop (this file's main thread)
-// and ip_table_cleanup_thread() below, so every access goes through
-// ip_table_mutex - unlike the original port of this table, which was only
-// ever read/written from the single accept-loop thread and had no lock.
+// server_stop(). Touched by the accept loop, connection threads (after a
+// PROXY header - server_ip_rate_limited()) and ip_table_cleanup_thread()
+// below, so every access goes through ip_table_mutex.
 static ip_entry_t     *ip_table = NULL;
 static pthread_mutex_t ip_table_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static int too_many_connections(struct in_addr client_ip) {
-    time_t    now = time(NULL);
-    in_addr_t ip  = client_ip.s_addr;
+static void ipv4_key(struct in_addr addr, unsigned char key[16]) {
+    memset(key, 0, 10);
+    key[10] = 0xFF;
+    key[11] = 0xFF;
+    memcpy(key + 12, &addr.s_addr, 4);
+}
+
+static int too_many_connections(const unsigned char key[16], const char *ip_text) {
+    time_t now = time(NULL);
 
     pthread_mutex_lock(&ip_table_mutex);
 
     for (int i = 0; i < ddos_max_ips; i++) {
         ip_entry_t *e = &ip_table[i];
-        if (e->ip != ip) continue;
+        if (!e->used || memcmp(e->ip, key, 16) != 0) continue;
 
         if (e->blocked) {
             if ((now - e->last_rejected) > ddos_rate_window_secs * 2) {
@@ -85,7 +95,7 @@ static int too_many_connections(struct in_addr client_ip) {
             if (e->count > ddos_rate_limit) {
                 e->blocked      = 1;
                 e->last_rejected = now;
-                LOG_WARN("Blocking IP %s for %d s", inet_ntoa(client_ip), ddos_rate_window_secs * 2);
+                LOG_WARN("Blocking IP %s for %d s", ip_text, ddos_rate_window_secs * 2);
                 pthread_mutex_unlock(&ip_table_mutex);
                 return 1;
             }
@@ -99,12 +109,13 @@ static int too_many_connections(struct in_addr client_ip) {
         return 0;
     }
 
+    ip_entry_t fresh = { .used = 1, .count = 1, .last_conn = now };
+    memcpy(fresh.ip, key, 16);
+
     // New IP - find an empty slot first
     for (int i = 0; i < ddos_max_ips; i++) {
-        if (ip_table[i].ip == 0) {
-            ip_table[i] = (ip_entry_t){
-                .ip = ip, .count = 1, .last_conn = now, .blocked = 0
-            };
+        if (!ip_table[i].used) {
+            ip_table[i] = fresh;
             pthread_mutex_unlock(&ip_table_mutex);
             return 0;
         }
@@ -120,11 +131,37 @@ static int too_many_connections(struct in_addr client_ip) {
         if (ip_table[i].last_conn < ip_table[oldest_idx].last_conn)
             oldest_idx = i;
     }
-    ip_table[oldest_idx] = (ip_entry_t){
-        .ip = ip, .count = 1, .last_conn = now, .blocked = 0
-    };
+    ip_table[oldest_idx] = fresh;
     pthread_mutex_unlock(&ip_table_mutex);
     return 0;
+}
+
+int server_ip_rate_limited(const char *ip_text) {
+    unsigned char key[16];
+    struct in_addr v4;
+    if (inet_pton(AF_INET, ip_text, &v4) == 1) ipv4_key(v4, key);
+    else if (inet_pton(AF_INET6, ip_text, key) != 1) return 0;
+    return too_many_connections(key, ip_text);
+}
+
+// Whether the accept loop leaves the per-IP check to the connection thread:
+// with proxy_protocol=1 a trusted peer is the front, whose own address
+// stands for every visitor - counted at accept(), the first busy minute
+// would ban all of them at once. The check runs instead against the address
+// in the PROXY header (connection_thread.c).
+static int rate_limit_after_header(struct in_addr peer) {
+    if (!proxy_protocol) return 0;
+    char text[INET_ADDRSTRLEN];
+    return inet_ntop(AF_INET, &peer, text, sizeof(text)) && is_trusted_proxy(text);
+}
+
+static int rate_limited_at_accept(struct in_addr peer) {
+    if (rate_limit_after_header(peer)) return 0;
+    unsigned char key[16];
+    char text[INET_ADDRSTRLEN] = "?";
+    ipv4_key(peer, key);
+    inet_ntop(AF_INET, &peer, text, sizeof(text));
+    return too_many_connections(key, text);
 }
 
 // Periodically frees ip_table entries that have gone quiet
@@ -156,7 +193,7 @@ static void *ip_table_cleanup_thread(void *arg) {
         pthread_mutex_lock(&ip_table_mutex);
         for (int i = 0; i < ddos_max_ips; i++) {
             ip_entry_t *e = &ip_table[i];
-            if (e->ip == 0) continue;
+            if (!e->used) continue;
 
             if (e->blocked && (now - e->last_rejected) > ddos_rate_window_secs * 2)
                 e->blocked = 0;
@@ -185,6 +222,10 @@ static int make_listener(int port) {
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port        = htons(port);
+    if (listen_address[0] && inet_pton(AF_INET, listen_address, &addr.sin_addr) != 1) {
+        LOG_ERROR("listen_address '%s' is not an IPv4 address", listen_address);
+        close(fd); return -1;
+    }
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         LOG_ERROR("bind(port=%d): %s", port, strerror(errno));
@@ -214,11 +255,16 @@ static const char RESPONSE_429[] =
     "\r\n"
     "Too Many Requests\n";
 
-static void reject_http_connection(int cs) {
+void server_send_429(int cs) {
     // Best-effort: SIGPIPE is already ignored (signal() call in
     // server_start()), so a client that has already hung up just makes this
     // write() fail (EPIPE) rather than crash - ignored either way.
-    write(cs, RESPONSE_429, sizeof(RESPONSE_429) - 1);
+    ssize_t ignored = write(cs, RESPONSE_429, sizeof(RESPONSE_429) - 1);
+    (void)ignored;
+}
+
+static void reject_http_connection(int cs) {
+    server_send_429(cs);
     close(cs);
 }
 
@@ -306,7 +352,7 @@ static void *accept_loop_thread(void *arg) {
         if (FD_ISSET(server_fd_http, &readfds)) {
             int cs = accept(server_fd_http, (struct sockaddr *)&addr, &addrlen);
             if (cs >= 0) {
-                if (too_many_connections(addr.sin_addr)) {
+                if (rate_limited_at_accept(addr.sin_addr)) {
                     LOG_WARN("Rate limit: dropping %s", inet_ntoa(addr.sin_addr));
                     reject_http_connection(cs);
                 } else if (!try_register_connection()) {
@@ -324,7 +370,7 @@ static void *accept_loop_thread(void *arg) {
         if (g_ssl_enabled && FD_ISSET(server_fd_https, &readfds)) {
             int cs = accept(server_fd_https, (struct sockaddr *)&addr, &addrlen);
             if (cs >= 0) {
-                if (too_many_connections(addr.sin_addr)) {
+                if (rate_limited_at_accept(addr.sin_addr)) {
                     LOG_WARN("Rate limit (TLS): dropping %s", inet_ntoa(addr.sin_addr));
                     close(cs);
                 } else if (!try_register_connection()) {
@@ -371,9 +417,14 @@ int server_start(const char *root_dir, int ssl_enabled,
     }
     cleanup_thread_started = 1;
 
+    const char *bind_text = listen_address[0] ? listen_address : "0.0.0.0";
+    if (proxy_protocol && !trusted_proxies[0])
+        LOG_WARN("proxy_protocol=1 with no trusted_proxies: every PROXY header will be refused");
+
     server_fd_http = make_listener(http_port);
     if (server_fd_http < 0) return -1;
-    LOG_INFO("HTTP listening on port %d", http_port);
+    LOG_INFO("HTTP listening on %s:%d%s", bind_text, http_port,
+             proxy_protocol ? " (PROXY protocol)" : "");
 
     if (ssl_enabled) {
         server_fd_https = make_listener(https_port);
@@ -381,7 +432,8 @@ int server_start(const char *root_dir, int ssl_enabled,
 
         ssl_ctx = tls_create_context(ssl_cert, ssl_key);
         if (!ssl_ctx) return -1;
-        LOG_INFO("HTTPS listening on port %d", https_port);
+        LOG_INFO("HTTPS listening on %s:%d%s", bind_text, https_port,
+                 proxy_protocol ? " (PROXY protocol)" : "");
     }
 
     g_root_dir    = root_dir;

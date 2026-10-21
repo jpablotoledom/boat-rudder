@@ -30,6 +30,7 @@
 #include "../modules/entry_editor/entry_editor.h"
 #include "../modules/entry_editor/entry_editor_blocks.h"
 #include "../modules/entry_page/entry_page.h"
+#include "../modules/home_content/home_content.h"
 #include "../modules/error/error.h"
 #include "../modules/fonts_admin/fonts_admin.h"
 #include "../modules/languages_admin/languages_admin.h"
@@ -653,6 +654,81 @@ static int is_safe_method(const char *method) {
            strcmp(method, "OPTIONS") == 0;
 }
 
+// 1 if `url`'s path (query string aside) is exactly `path`.
+static int url_path_is(const char *url, const char *path) {
+    size_t len = strlen(path);
+    return strncmp(url, path, len) == 0 && (url[len] == '\0' || url[len] == '?');
+}
+
+// The dashboard POSTs that change nothing - they compute something from the
+// request and return it - and so stay open to a viewer: the entry editor's
+// block preview and the browser-detection rules' dry run.
+static int is_read_only_post(const char *url) {
+    return url_path_is(url, "/dashboard/api/block-preview") ||
+           url_path_is(url, "/dashboard/api/browsers/preview");
+}
+
+// A viewer's (Observador's) attempt to change something: JSON for the
+// dashboard's AJAX endpoints, which their scripts read, else the error page
+// - which, being under /dashboard, carries the read-only notice too.
+static void send_read_only_refusal(void *ctx, HttpRequest *req, int epoch) {
+    if (strncmp(req->url, "/dashboard/api/", 15) == 0) {
+        char *response = build_json_response_status(
+            "{\"ok\":false,\"error\":\"read-only account\"}", "403 Forbidden");
+        send_or_error(ctx, response, req->method, epoch);
+        return;
+    }
+    char *content  = error_content(epoch, 403,
+        "This is a read-only account: it can open every page and see every value, but it can't "
+        "save changes.");
+    char *body     = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content) : NULL;
+    char *response = body ? build_epoch_response_status(body, "", epoch, "403 Forbidden") : NULL;
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
+}
+
+#define MAINTENANCE_LOGIN_MESSAGE \
+    "The site is under maintenance: only administrators can sign in right now."
+
+// Under construction mode (cms_get_under_construction()) closes the
+// dashboard to every role but an Administrador's - at sign-in, and for a
+// session already open when the mode was turned on. Fails closed: a role
+// that can't be read is locked out too.
+static int maintenance_locks_out(const char *user_id) {
+    bool under_construction = false;
+    cms_get_under_construction(&under_construction, NULL);
+    if (!under_construction) return 0;
+
+    char role[USER_ROLE_BUF_SIZE];
+    return cms_get_user_role(user_id, role, sizeof(role)) != 0 || strcmp(role, "admin") != 0;
+}
+
+// Ends `req`'s session (a non-admin's, see maintenance_locks_out()) and
+// answers 503: the login page with MAINTENANCE_LOGIN_MESSAGE, clearing the
+// cookie - JSON under /dashboard/api/, whose callers are scripts.
+static void send_maintenance_lockout(void *ctx, HttpRequest *req, int epoch) {
+    char token[SESSION_TOKEN_BUF_SIZE];
+    if (extract_session_token(get_header_value(req, "Cookie"), token, sizeof(token)))
+        destroy_session(token);
+    request_user_set(NULL); // the page below is a signed-out one: no user link, no CSRF token
+
+    if (strncmp(req->url, "/dashboard/api/", 15) == 0) {
+        char *response = build_json_response_status(
+            "{\"ok\":false,\"error\":\"" MAINTENANCE_LOGIN_MESSAGE "\"}", "503 Service Unavailable");
+        send_or_error(ctx, response, req->method, epoch);
+        return;
+    }
+
+    char clear_cookie[128];
+    build_session_clear_cookie_header(clear_cookie, sizeof(clear_cookie));
+    char *content  = login(epoch, MAINTENANCE_LOGIN_MESSAGE);
+    char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content);
+    char *response = body ? build_epoch_response_status(body, clear_cookie, epoch,
+                                                        "503 Service Unavailable") : NULL;
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
+}
+
 static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
     if (!mongodb_manager_is_ready()) {
         send_error_response(ctx, 503, "503 Service Unavailable", epoch);
@@ -663,6 +739,11 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
     if (validate_session_cookie(cookie, user_id_out) != 1) {
         char *response = build_redirect_response("/login", "", epoch);
         send_or_error(ctx, response, req->method, epoch);
+        return 0;
+    }
+
+    if (maintenance_locks_out(user_id_out)) {
+        send_maintenance_lockout(ctx, req, epoch);
         return 0;
     }
 
@@ -678,13 +759,36 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
             send_simple(ctx, "403 Forbidden", "Invalid or missing CSRF token. Reload the page and try again.");
             return 0;
         }
+
+        // A viewer reads everything and writes nothing. Every dashboard
+        // write is a POST through here (every GET only reads), so this one
+        // check covers every route, present and future. Fails closed: a
+        // role that can't be read can't write either.
+        if (!is_read_only_post(req->url)) {
+            char role[USER_ROLE_BUF_SIZE];
+            if (cms_get_user_role(user_id_out, role, sizeof(role)) != 0) {
+                send_error_response(ctx, 503, "503 Service Unavailable", epoch);
+                return 0;
+            }
+            if (strcmp(role, "viewer") == 0) {
+                LOG_INFO("Read-only account: %s %s refused", req->method, req->url);
+                send_read_only_refusal(ctx, req, epoch);
+                return 0;
+            }
+        }
     }
 
     return 1;
 }
 
+// Whether `role` sees what an Administrador sees: "admin", or "viewer" - the
+// read-only role, whose writes require_dashboard_session() refuses.
+static int role_sees_everything(const char *role) {
+    return strcmp(role, "admin") == 0 || strcmp(role, "viewer") == 0;
+}
+
 // require_dashboard_session() + cms_get_user_role(): role_out (>= USER_ROLE_BUF_SIZE
-// bytes) is "admin" or "author" (a missing `role` field, or a lookup error, defaults
+// bytes) is "admin", "author" or "viewer" (a missing `role` field, or a lookup error, defaults
 // to "admin" - same backward-compatible convention as cms_get_user_role()). Same
 // 0/1 return + ctx-write contract as require_dashboard_session().
 static int require_dashboard_session_role(void *ctx, HttpRequest *req, int epoch,
@@ -699,18 +803,96 @@ static int require_dashboard_session_role(void *ctx, HttpRequest *req, int epoch
     return 1;
 }
 
-// require_dashboard_session_role() + role != "admin" -> 302 /dashboard, return 0.
-// Used by routes reserved to Administrador (Users maintainer, entry deletion).
+// require_dashboard_session_role() + a role that doesn't see everything ->
+// 302 /dashboard, return 0. Used by routes reserved to Administrador (Users
+// maintainer, entry deletion, settings...) - which a viewer may open too,
+// since require_dashboard_session() already refused its writes.
 static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
     char role[USER_ROLE_BUF_SIZE];
     if (!require_dashboard_session_role(ctx, req, epoch, user_id_out, role, sizeof(role))) return 0;
 
-    if (strcmp(role, "admin") != 0) {
+    if (!role_sees_everything(role)) {
         char *response = build_redirect_response("/dashboard", "", epoch);
         send_or_error(ctx, response, req->method, epoch);
         return 0;
     }
 
+    return 1;
+}
+
+// Renders /dashboard/settings into a response: `site_name` in its form,
+// `error_message` above it, and the home page / under construction forms
+// showing `home` - or, when NULL, what site_settings holds now.
+static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, const char *lang,
+                                       const char *site_name, const SiteHomeSettings *home,
+                                       const char *error_message) {
+    SiteHomeSettings stored = { 0 };
+    char *stored_page = NULL;
+    if (!home) {
+        stored.hide_home_blog = cms_get_hide_home_blog();
+        cms_get_under_construction(&stored.under_construction, &stored_page);
+        stored.under_construction_page = stored_page ? stored_page : "";
+        home = &stored;
+    }
+
+    char *content  = site_settings_general_page(epoch, lang, site_name, home, error_message);
+    free(stored_page);
+    char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
+    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
+}
+
+// The routes that show the site's own content - home, pages, the blog and
+// the retro menu page - and so the ones the under-construction page stands
+// in for. Everything else stays reachable: /login and /dashboard, the
+// language/theme selectors, QR and gallery pages, CSS and static files (the
+// under-construction page's own images and styles among them).
+static int is_site_content_route(const char *url) {
+    return strcmp(url, "/") == 0 || strncmp(url, "/page/", 6) == 0 ||
+           strcmp(url, "/blog") == 0 || strncmp(url, "/blog/", 6) == 0 ||
+           strcmp(url, "/menu") == 0;
+}
+
+// While site_settings.under_construction is on, sends the home page with the
+// chosen page entry's content blocks (drafts too) in place of the home
+// content, and no menu or blog list - or, if the entry can't be found, the
+// 503 error content there, so the site stays closed - and returns 1. Returns 0, sending
+// nothing, when the mode is off. The caller skips this for an Administrador
+// (request_user_is_admin()). no-store, so nobody keeps it once the site opens.
+static int serve_under_construction(void *ctx, HttpRequest *req, const char *lang) {
+    bool enabled = false;
+    char *link = NULL;
+    cms_get_under_construction(&enabled, &link);
+    if (!enabled) {
+        free(link);
+        return 0;
+    }
+
+    int epoch = resolve_epoch(req);
+    char *title = NULL;
+    char *content = NULL;
+
+    CmsEntry entry = { 0 };
+    if (link && link[0] && cms_get_entry_by_link(link, lang, 1, &entry) &&
+        strcmp(entry.type, "page") == 0) {
+        title   = strdup(entry.header_title && entry.header_title[0] ? entry.header_title
+                                                                  : "{{SITE_NAME}}");
+        content = home_content_entry(&entry, epoch);
+    } else {
+        LOG_WARN("Maintenance mode: page '%s' not found", link ? link : "");
+        title   = strdup("{{SITE_NAME}} - Maintenance");
+        content = error_content(epoch, 503, NULL);
+    }
+    cms_entry_free(&entry);
+    free(link);
+
+    char *body = title && content ? buildUnderConstructionWebSite(epoch, title, content)
+                                  : (free(content), NULL);
+    char *response = body ? build_epoch_response(body, "Cache-Control: no-store\r\n", epoch) : NULL;
+    free(title);
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
     return 1;
 }
 
@@ -731,11 +913,12 @@ static int confirm_password(const HttpRequest *req, const char *user_id, char *e
     return ok;
 }
 
-// 1 if `role` is "admin", or `role` is "author" and `entry` is a "blog" entry
+// 1 if `role` is "admin" (or "viewer", who can open any entry in the editor
+// and save none of it), or `role` is "author" and `entry` is a "blog" entry
 // created by `user_id`. Gates the entry editor GET/POST routes - an Autor may
 // only edit their own blog entries.
 static int can_edit_entry(const char *role, const char *user_id, const CmsEntryEdit *entry) {
-    if (strcmp(role, "admin") == 0) return 1;
+    if (role_sees_everything(role)) return 1;
 
     return strcmp(role, "author") == 0 &&
            strcmp(entry->type, "blog") == 0 &&
@@ -1397,9 +1580,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     ((connection_ctx_t *)ctx)->simple_response = is_http09_request(&req);
 
     // --- Determine real client IP ---
-    // Honor X-Real-IP / X-Forwarded-For only from trusted reverse proxies.
+    // A PROXY protocol header (read in connection_thread.c) wins; otherwise
+    // honor X-Real-IP / X-Forwarded-For only from trusted reverse proxies.
     char client_ip[INET6_ADDRSTRLEN] = "unknown";
-    {
+    if (((connection_ctx_t *)ctx)->proxy_client_ip[0]) {
+        snprintf(client_ip, sizeof(client_ip), "%s", ((connection_ctx_t *)ctx)->proxy_client_ip);
+    } else {
         connection_ctx_t *conn = (connection_ctx_t *)ctx;
         struct sockaddr_storage peer_addr;
         socklen_t peer_len = sizeof(peer_addr);
@@ -1490,7 +1676,11 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         ThemeCssSheet css_sheet;
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
-            if (strcmp(decoded_url, "/") == 0) {
+            if (is_site_content_route(decoded_url) && !request_user_is_admin() &&
+                serve_under_construction(ctx, &req, content_lang)) {
+                // Sent: the under-construction page stands in for the site.
+
+            } else if (strcmp(decoded_url, "/") == 0) {
                 int epoch = resolve_epoch(&req);
 
                 char *body = buildHomeWebSite(epoch, content_lang);
@@ -1527,7 +1717,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     const char *cookie = get_header_value(&req, "Cookie");
 
-                    if (validate_session_cookie(cookie, user_id) == 1) {
+                    int signed_in = validate_session_cookie(cookie, user_id) == 1;
+                    if (signed_in && maintenance_locks_out(user_id)) {
+                        send_maintenance_lockout(ctx, &req, epoch);
+                    } else if (signed_in) {
                         char role[USER_ROLE_BUF_SIZE];
                         if (cms_get_user_role(user_id, role, sizeof(role)) != 0) {
                             strncpy(role, "admin", sizeof(role) - 1);
@@ -1756,13 +1949,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         for (size_t i = 0; error_code && i < sizeof(ERRORS) / sizeof(ERRORS[0]); i++)
                             if (strcmp(error_code, ERRORS[i].code) == 0) error_message = ERRORS[i].message;
 
-                        char *name     = cms_get_site_name();
-                        char *content  = site_settings_general_page(epoch, name, error_message);
+                        char *name = cms_get_site_name();
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL,
+                                                   error_message);
                         free(name);
-                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
-                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                        free(body);
-                        send_or_error(ctx, response, req.method, epoch);
                     }
                 }
 
@@ -2117,7 +2307,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
-                        char *content  = users_admin_form(epoch, "", "", "", "author", NULL);
+                        char *content  = users_admin_form(epoch, "", "", "", "", "author", NULL);
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -2138,7 +2328,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char role[USER_ROLE_BUF_SIZE];
                         if (cms_get_user_values(id, email, sizeof(email), role, sizeof(role)) == 0) {
                             char *name = cms_get_user_name_by_id(id);
-                            char *content  = users_admin_form(epoch, id, name ? name : "", email, role, NULL);
+                            char username[USERNAME_BUF_SIZE];
+                            cms_get_username_by_id(id, username, sizeof(username));
+                            char *content  = users_admin_form(epoch, id, name ? name : "", username,
+                                                              email, role, NULL);
                             free(name);
                             char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                             char *response = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -2291,7 +2484,11 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         size_t item_count = 0;
                         cms_get_media_items(NULL, 0, MEDIA_PAGE_SIZE, &items, &item_count);
 
-                        char *html = media_admin_modal(epoch, dirs, dir_count, items, item_count);
+                        // ?browse=1: the theme customizer's "View images" -
+                        // nothing to pick for, so no "Use selected".
+                        const char *browse = get_query_param(params, param_count, "browse");
+                        char *html = media_admin_modal(epoch, dirs, dir_count, items, item_count,
+                                                       !(browse && browse[0] == '1'));
                         if (html) {
                             char header_buf[128];
                             snprintf(header_buf, sizeof(header_buf),
@@ -2955,7 +3152,18 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 char *user_id = auth_login_user(email, password);
                 char *response = NULL;
 
-                if (user_id) {
+                // Checked only once the password is right, so the message
+                // tells nothing to someone who doesn't know it.
+                if (user_id && maintenance_locks_out(user_id)) {
+                    LOG_INFO("Sign-in refused (maintenance mode, not an administrator): %s", email);
+                    free(user_id);
+                    char *content  = login(epoch, MAINTENANCE_LOGIN_MESSAGE);
+                    char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Login", content);
+                    response       = body ? build_epoch_response_status(body, "", epoch,
+                                                                        "503 Service Unavailable") : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else if (user_id) {
                     char *token = generate_session_token();
                     if (token && create_session(user_id, token, session_ttl_seconds) == 0) {
                         char cookie_header[256];
@@ -3646,12 +3854,82 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *response = build_redirect_response("/dashboard/settings", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        char *content  = site_settings_general_page(epoch, name,
-                            name[0] ? "No se pudo guardar el nombre del sitio." : "El nombre del sitio no puede estar vacio.");
-                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
-                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                        free(body);
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL,
+                            name[0] ? "Could not save the site name." : "The site name cannot be empty.");
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/home") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (!dashboard_allowed(&req, epoch)) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    // An unchecked checkbox sends no field at all.
+                    char hide_str[8];
+                    bool hide = parse_urlencoded_field(req.body, req.body_length, "hide_home_blog",
+                                                       hide_str, sizeof(hide_str)) != 0;
+
+                    if (cms_update_hide_home_blog(hide) == 0) {
+                        char *response = build_redirect_response("/dashboard/settings", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
+                    } else {
+                        bool under_construction = false;
+                        char *page = NULL;
+                        cms_get_under_construction(&under_construction, &page);
+                        SiteHomeSettings home = { hide, under_construction, page ? page : "" };
+                        char *name = cms_get_site_name();
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
+                            "Could not save the home page settings.");
+                        free(name);
+                        free(page);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/settings/under-construction") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (!dashboard_allowed(&req, epoch)) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    // An unchecked checkbox sends no field at all.
+                    char enabled_str[8];
+                    bool enabled = parse_urlencoded_field(req.body, req.body_length, "under_construction",
+                                                          enabled_str, sizeof(enabled_str)) != 0;
+                    char page[256];
+                    parse_urlencoded_field(req.body, req.body_length, "under_construction_page",
+                                           page, sizeof(page));
+
+                    // Turning it on needs a page to show: a "page" entry, drafts included.
+                    const char *error_message = NULL;
+                    if (enabled) {
+                        CmsEntry entry = { 0 };
+                        int found = page[0] && cms_get_entry_by_link(page, content_lang, 1, &entry) &&
+                                    strcmp(entry.type, "page") == 0;
+                        cms_entry_free(&entry);
+                        if (!found) error_message = "Choose the page to show while the site is in maintenance.";
+                    }
+                    if (!error_message && cms_update_under_construction(enabled, page) != 0)
+                        error_message = "Could not save the maintenance mode.";
+
+                    if (!error_message) {
+                        char *response = build_redirect_response("/dashboard/settings", "", epoch);
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else {
+                        SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page };
+                        char *name = cms_get_site_name();
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
+                                                   error_message);
+                        free(name);
                     }
                 }
             }
@@ -4006,7 +4284,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *response = build_redirect_response("/dashboard/languages", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        char *content  = languages_admin(epoch, "Idioma desconocido o ya agregado.");
+                        char *content  = languages_admin(epoch, "Unknown language, or already added.");
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -4046,7 +4324,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *response = build_redirect_response("/dashboard/languages", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        char *content  = languages_admin(epoch, "No se puede eliminar el idioma predeterminado o el ultimo idioma.");
+                        char *content  = languages_admin(epoch, "The default language, or the last one, cannot be removed.");
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -4064,16 +4342,25 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
                 if (require_admin_session(ctx, &req, epoch, user_id)) {
-                    char name[256], email[256], password[256], role[USER_ROLE_BUF_SIZE];
+                    char name[256], username[USERNAME_BUF_SIZE], email[256], password[256];
+                    char role[USER_ROLE_BUF_SIZE];
                     parse_urlencoded_field(req.body, req.body_length, "name", name, sizeof(name));
+                    parse_urlencoded_field(req.body, req.body_length, "username", username, sizeof(username));
                     parse_user_form(&req, email, sizeof(email), password, sizeof(password), role, sizeof(role));
 
                     char *response;
-                    if (cms_create_user(name, email, password, role) == 0) {
+                    int created = cms_create_user(name, username, email, password, role);
+                    if (created == 0) {
                         response = build_redirect_response("/dashboard/users", "", epoch);
                     } else {
-                        char *content  = users_admin_form(epoch, "", name, email, role,
-                                              "No se pudo crear el usuario. Verifica el email y la contrasena.");
+                        const char *error_message =
+                            created == CMS_USER_USERNAME_INVALID
+                                ? "The username must be 3-32 characters: a-z, 0-9, dot, dash or underscore, not starting with a dot."
+                            : created == CMS_USER_USERNAME_TAKEN
+                                ? "That username is already taken."
+                                : "Could not create the user. Check the email and the password.";
+                        char *content  = users_admin_form(epoch, "", name, username, email, role,
+                                                          error_message);
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -4095,19 +4382,22 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char name[256], email[256], password[256], role[USER_ROLE_BUF_SIZE];
                     parse_urlencoded_field(req.body, req.body_length, "name", name, sizeof(name));
                     parse_user_form(&req, email, sizeof(email), password, sizeof(password), role, sizeof(role));
+                    // Fixed at creation: whatever the form sends, the stored one.
+                    char username[USERNAME_BUF_SIZE];
+                    cms_get_username_by_id(id, username, sizeof(username));
 
                     char *response;
                     if (strcmp(id, user_id) == 0 && strcmp(role, "admin") != 0 && cms_count_admins() == 1) {
-                        char *content  = users_admin_form(epoch, id, name, email, role,
-                                              "No puedes quitarte el unico rol de administrador.");
+                        char *content  = users_admin_form(epoch, id, name, username, email, role,
+                                              "You are the only administrator: you cannot remove your own administrator role.");
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     } else if (cms_update_user(id, name, email, role, password) == 0) {
                         response = build_redirect_response("/dashboard/users", "", epoch);
                     } else {
-                        char *content  = users_admin_form(epoch, id, name, email, role,
-                                              "No se pudo actualizar el usuario. Verifica el email.");
+                        char *content  = users_admin_form(epoch, id, name, username, email, role,
+                                              "Could not update the user. Check the email.");
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -4130,13 +4420,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char *response;
 
                     if (strcmp(id, user_id) == 0) {
-                        char *content  = users_admin_list(epoch, "No puedes eliminar tu propia cuenta.");
+                        char *content  = users_admin_list(epoch, "You cannot delete your own account.");
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     } else if (cms_get_user_role(id, target_role, sizeof(target_role)) == 0 &&
                                strcmp(target_role, "admin") == 0 && cms_count_admins() == 1) {
-                        char *content  = users_admin_list(epoch, "No se puede eliminar el ultimo administrador.");
+                        char *content  = users_admin_list(epoch, "The last administrator cannot be deleted.");
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);

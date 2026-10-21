@@ -65,7 +65,8 @@ static int parse_json(const char *json, BrowserDetection *out, char *error, size
     bson_t doc;
     bson_error_t bson_error;
     if (!bson_init_from_json(&doc, json, -1, &bson_error)) {
-        snprintf(error, size, "not JSON: %s", bson_error.message);
+        // Callers' buffers are 160 bytes: keep the message to what fits.
+        snprintf(error, size, "not JSON: %.140s", bson_error.message);
         return -2;
     }
     int rc = browser_detection_from_bson(&doc, out, error, size);

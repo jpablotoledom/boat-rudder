@@ -222,13 +222,14 @@ static char *user_menu_item_mobile(int epoch) {
     return user_link(epoch, "menu/menu-user-mobile_epoch%d.html");
 }
 
-char *menu(const char *current_url, int epoch) {
+// menu() and menu_without_items(): `with_items` 0 leaves the menu items out.
+static char *build_menu(const char *current_url, int epoch, int with_items) {
     // WML: every page's first screen is one ~860-byte packet (see
     // wap_gateway/wbxml.h), and the full menu - logo, every section, the
     // language link with its return URL - took over half of it, leaving the
     // page's own content for screen 2. So pages carry a single "[Menu]" link
     // instead, to /menu, which shows the full menu (below) and a way back.
-    if (epoch == EPOCH_WML && strcmp(request_path(), "/menu") != 0) {
+    if (epoch == EPOCH_WML && with_items && strcmp(request_path(), "/menu") != 0) {
         char *path = generate_url_theme("menu/menu-compact_epoch%d.html", epoch);
         char *tpl  = path ? read_file_to_string(path) : NULL;
         free(path);
@@ -264,11 +265,11 @@ char *menu(const char *current_url, int epoch) {
 
     CmsMenuItem *db_items = NULL;
     size_t db_count = 0;
-    if (mongodb_manager_is_ready())
+    if (with_items && mongodb_manager_is_ready())
         cms_get_menu_items(request_lang(), &db_items, &db_count);
 
     const CmsMenuItem *menu_items = db_count > 0 ? db_items : FALLBACK_ITEMS;
-    size_t item_count = db_count > 0 ? db_count : FALLBACK_ITEM_COUNT;
+    size_t item_count = !with_items ? 0 : db_count > 0 ? db_count : FALLBACK_ITEM_COUNT;
 
     items = strdup("");
     if (!items) {
@@ -378,7 +379,7 @@ char *menu(const char *current_url, int epoch) {
     // cms_get_theme_banner()) - so a theme untouched by either panel, or
     // only ever edited through the old one, renders exactly as before.
     char *logo = strdup("");
-    int at_home = strcmp(request_path(), "/") == 0;
+    int at_home = !with_items || strcmp(request_path(), "/") == 0;
     if ((epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE || epoch == EPOCH_WML ||
          epoch == EPOCH_PRESTANDARD) && !at_home) {
         CmsLogoConfig cfg;
@@ -417,6 +418,12 @@ char *menu(const char *current_url, int epoch) {
     }
 
     char *lang_html = language_selector(epoch);
+    // Epoch 0 and WML's menu-lang template opens with the "|" that separates
+    // it from the items before it; with no items it would lead the bar alone.
+    if (lang_html && !with_items) {
+        const char *p = lang_html + strspn(lang_html, " \t\r\n");
+        if (*p == '|') memmove(lang_html, p + 1, strlen(p + 1) + 1);
+    }
     // Epoch 3 draws its own title in the nav bar; by default that's the
     // personalizable site name, but the logo panel
     // (site_settings_logo_page()) lets an admin switch it to either custom
@@ -509,4 +516,12 @@ cleanup:
     free(menu_tpl);
     free(items);
     return result;
+}
+
+char *menu(const char *current_url, int epoch) {
+    return build_menu(current_url, epoch, 1);
+}
+
+char *menu_without_items(int epoch) {
+    return build_menu("/", epoch, 0);
 }

@@ -6,12 +6,24 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// /dashboard/settings - the site name form, the epoch 2 and epoch 3 favicons
+// The values of /dashboard/settings' "Home page" and "Under construction"
+// forms (site_settings.hide_home_blog / under_construction /
+// under_construction_page).
+typedef struct {
+    bool        hide_home_blog;
+    bool        under_construction;
+    const char *under_construction_page; // entries.link of a "page" entry, "" for none
+} SiteHomeSettings;
+
+// /dashboard/settings - the site name form, the home page and under
+// construction forms (`home`; the page picker lists every "page" entry,
+// drafts included, titled in `lang`), the epoch 2 and epoch 3 favicons
 // (html/favicon2.ico / favicon3.ico, see page_layout.h), plus links to Themes,
-// Fonts and Preview. `error_message` is shown above the form if non-NULL/non-empty.
-// Returns a malloc'd string, or NULL on a missing template / allocation
-// failure.
-char *site_settings_general_page(int epoch, const char *site_name, const char *error_message);
+// Fonts and Preview. `error_message` is shown above the form if
+// non-NULL/non-empty. Returns a malloc'd string, or NULL on a missing
+// template / allocation failure.
+char *site_settings_general_page(int epoch, const char *lang, const char *site_name,
+                                 const SiteHomeSettings *home, const char *error_message);
 
 // /dashboard/settings/themes/<key>/banner and .../footer - one <textarea>
 // + asset upload/browse widget per epoch (-1..3) for theme `key`

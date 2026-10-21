@@ -62,22 +62,15 @@ static char *render_static_items(int epoch) {
     return items;
 }
 
-char *home_content(int epoch, const char *lang) {
+// Wraps `items` (taken; NULL fails) in home-content/home-content_epoch<N>.html.
+static char *wrap_content(int epoch, char *items) {
     char *content_path = generate_url_theme("home-content/home-content_epoch%d.html", epoch);
     char *content_tpl  = content_path ? read_file_to_string(content_path) : NULL;
     free(content_path);
-    if (!content_tpl) return NULL;
-
-    char *items = NULL;
-
-    CmsEntry entry;
-    if (cms_get_entry_by_link("/", lang, 0, &entry)) {
-        items = entry_page_render_content(&entry, epoch);
-        cms_entry_free(&entry);
+    if (!content_tpl) {
+        free(items);
+        return NULL;
     }
-
-    if (!items)
-        items = render_static_items(epoch);
 
     // Epoch 2 only: its container has a bgcolor attribute with no CSS to
     // lean on (epoch 3's equivalent is transparent, showing the body's own
@@ -98,4 +91,23 @@ char *home_content(int epoch, const char *lang) {
     free(content_tpl);
     free(items);
     return result;
+}
+
+char *home_content(int epoch, const char *lang) {
+    char *items = NULL;
+
+    CmsEntry entry;
+    if (cms_get_entry_by_link("/", lang, 0, &entry)) {
+        items = entry_page_render_content(&entry, epoch);
+        cms_entry_free(&entry);
+    }
+
+    if (!items)
+        items = render_static_items(epoch);
+
+    return wrap_content(epoch, items);
+}
+
+char *home_content_entry(const CmsEntry *entry, int epoch) {
+    return wrap_content(epoch, entry_page_render_content(entry, epoch));
 }

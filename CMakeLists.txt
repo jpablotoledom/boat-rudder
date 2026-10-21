@@ -51,6 +51,7 @@ set(SOURCES
     src/web_server/tls_context.c
     src/web_server/http_router.c
     src/web_server/http_request_parser.c
+    src/web_server/proxy_protocol.c
 
     # Web server utilities
     src/web_server/utils/url_parser.c
@@ -199,6 +200,10 @@ add_executable(browser_detection_bson_test tests/browser_detection_bson_test.c
                src/db/browser_detection_bson.c src/utils/detect_epoch.c)
 target_link_libraries(browser_detection_bson_test PkgConfig::MONGOC Threads::Threads)
 add_test(NAME browser_detection_bson COMMAND browser_detection_bson_test)
+
+add_executable(proxy_protocol_test tests/proxy_protocol_test.c src/web_server/proxy_protocol.c)
+target_link_libraries(proxy_protocol_test Threads::Threads)
+add_test(NAME proxy_protocol COMMAND proxy_protocol_test)
 
 add_executable(css_compat_test tests/css_compat_test.c src/utils/css_compat.c src/utils/detect_epoch.c)
 target_link_libraries(css_compat_test Threads::Threads)

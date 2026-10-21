@@ -4,16 +4,75 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
-### Under construction mode
+### Theme customizer: View images
 
 **Added**
-- An *Under construction* panel on `/dashboard/settings`: pick a page entry (drafts included) and
+- A *View images* button in the theme customizer's sidebar, under *Data colors*, opens the media
+  library in a modal - browse, view, upload, and *Copy URL* to paste an image into the banner or
+  footer markup. Browse-only (no *Use selected*); closes with ×, Escape or a click outside.
+
+### Permanent usernames
+
+**Added**
+- Every user has a permanent **username** (`users.username`): set when the account is created
+  (3-32 characters of a-z, 0-9, dot, dash, underscore; unique) and read-only afterwards. It names
+  the user's media folder, `html/content/posts/<username>/`. Login stays by email.
+
+**Fixed**
+- The media folder used to be derived from the email, so changing a user's email moved it: every
+  thumbnail, *Copy URL* and new upload pointed at a folder that did not exist, and two emails
+  with the same prefix shared one folder. Now the email can change freely.
+
+**Upgrade**
+- At startup, accounts without a username get one: the folder under `html/content/posts/` that
+  already holds their media directories (so existing media URLs keep working), else the email's
+  prefix, lowercased and made unique. The log names each one. A unique index is created on
+  `users.username`. Nothing to run by hand: `boat-rudder-update` backs up the database and
+  restarts the service, and the migration runs on that start (a rollback to an older version
+  simply ignores the new field).
+- One case needs a hand: two users whose emails shared a prefix (`juan@a.com`, `juan@b.com`)
+  used to share one media folder. The older account keeps it; the other gets `juan-2`, and the
+  log warns (`WARN: users: ... move them to html/content/posts/juan-2/ ... by hand`) that its
+  directories are still in `posts/juan/`.
+
+### Media library: Copy URL
+
+**Added**
+- A *Copy URL* button in the media library and the editor's picker copies the full URL - domain
+  included - of each selected photo's `_full` variant, one per line. The domain is `public_url`
+  (as for QR codes), else the address the dashboard was opened at. Disabled with nothing
+  selected; works over plain HTTP too.
+
+### Dashboard text in English
+
+**Fixed**
+- The user roles read *Administrador* / *Autor* / *Observador (solo lectura)* in the Users list
+  and form, and several dashboard messages were in Spanish (user, language and site settings
+  errors, the "new password" label), while the rest of the dashboard is in English. They now
+  read *Administrator* / *Author* / *Viewer (read-only)*, and every message is in English.
+
+### Media library: no "Use selected" outside the picker
+
+**Fixed**
+- `/dashboard/media` showed the *Use selected* button, which only does something in the entry
+  editor's media picker (it hands the selection to the entry). It is now hidden on the media
+  library page and kept in the picker.
+- *Use selected*, *Move to…* and *Delete selected* are disabled while no photo is selected (in
+  the library and the picker alike).
+
+### Maintenance mode
+
+**Added**
+- A *Maintenance mode* panel on `/dashboard/settings`: pick a page entry (drafts included) and
   turn the mode on, and every visitor gets the home page - its navigation bar and banner kept,
   without the menu items or the blog list - with that page's content where the home content goes, on the home page, pages
   and blog (`/`, `/page/*`, `/blog*`, `/menu`) in every epoch. Only a signed-in Administrador
   sees the real site; `/login`, the dashboard and static files stay reachable. Stored as
   `site_settings.under_construction` / `under_construction_page`; served with
   `Cache-Control: no-store`.
+- While it is on, only Administrators can sign in: any other role gets "The site is under
+  maintenance: only administrators can sign in right now.", and a session of theirs already open
+  is ended on its next dashboard request.
 
 ### Hide the home page's latest blog posts
 

@@ -36,7 +36,7 @@
   </section>
 
   <section class="boat-rudder-dashboard__panel">
-    <h2>Under construction</h2>
+    <h2>Maintenance mode</h2>
     <form method="POST" action="/dashboard/settings/under-construction" class="boat-rudder-dashboard__site-name boat-rudder-card">
       <label for="under_construction_page">Page shown instead of the site</label>
       <div class="boat-rudder-dashboard__site-name-row">
@@ -47,14 +47,14 @@
       <div class="boat-rudder-dashboard__site-name-row">
         <label class="boat-rudder-dashboard__asset-check">
           <input type="checkbox" name="under_construction" value="1"%6$s>
-          Site under construction
+          Site in maintenance
         </label>
         <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
       </div>
       <p class="boat-rudder-dashboard__hint">While it is on, every visitor gets the home page with
          this page's content in place of the home content, and no menu items or blog list, wherever they
-         go on the site (home, pages, blog); only a signed-in Administrador sees the real site.
-         Drafts can be chosen too.</p>
+         go on the site (home, pages, blog). Only Administrators can sign in, and only a signed-in
+         Administrator sees the real site. Drafts can be chosen too.</p>
     </form>
   </section>
 

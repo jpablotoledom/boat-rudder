@@ -268,7 +268,7 @@ accepted forever.
 | No CSRF tokens (relied on `SameSite=Lax` only) | Session-bound token checked in `require_dashboard_session()` - [CSRF protection](#csrf-protection) |
 | Expired sessions never purged | TTL index + startup purge (`session_manager_ensure_indexes()`) |
 | `GET /logout` let a third-party page sign a visitor out | `POST /logout` with the session's CSRF token; `GET` → `405` |
-| Optimizer `popen()` quoting could be broken by a `'` in a path component | All components are charset-restricted (usernames were already mapped by `cms_get_username_by_id()`; directory names are now validated on rename too) |
+| Optimizer `popen()` quoting could be broken by a `'` in a path component | All components are charset-restricted (usernames are `[a-z0-9._-]`, validated at creation - `cms_username_valid()` - and legacy ones were already mapped; directory names are now validated on rename too) |
 
 ---
 

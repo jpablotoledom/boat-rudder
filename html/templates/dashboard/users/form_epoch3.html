@@ -10,6 +10,13 @@
       <input class="boat-rudder-input" type="text" id="name" name="name" value="%s" required>
     </div>
     <div class="boat-rudder-dashboard__form-row">
+      <label for="username">Username</label>
+      <input class="boat-rudder-input" type="text" id="username" name="username" value="%s"
+             minlength="3" maxlength="32" pattern="[a-z0-9_\-][a-z0-9._\-]{2,31}" autocapitalize="none"
+             spellcheck="false" required%s>
+      <p class="boat-rudder-dashboard__hint">%s</p>
+    </div>
+    <div class="boat-rudder-dashboard__form-row">
       <label for="email">Email</label>
       <input class="boat-rudder-input" type="email" id="email" name="email" value="%s" required>
     </div>
@@ -20,9 +27,9 @@
     <div class="boat-rudder-dashboard__form-row">
       <label for="role">Role</label>
       <select class="boat-rudder-input" id="role" name="role">
-        <option value="admin"%s>Administrador</option>
-        <option value="author"%s>Autor</option>
-        <option value="viewer"%s>Observador (solo lectura)</option>
+        <option value="admin"%s>Administrator</option>
+        <option value="author"%s>Author</option>
+        <option value="viewer"%s>Viewer (read-only)</option>
       </select>
     </div>
     <div class="boat-rudder-dashboard__button-container">

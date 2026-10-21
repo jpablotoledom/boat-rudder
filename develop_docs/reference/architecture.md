@@ -127,7 +127,7 @@ boat-rudder/
 │   │   ├── cms_languages.c/h            # languages collection + default resolution
 │   │   ├── language_catalog.c/h         # Curated list of addable languages (code/name/native/abbr)
 │   │   ├── cms_menu.c/h                 # menu collection CRUD
-│   │   ├── cms_users_admin.c/h          # users CRUD + cms_get_username_by_id()
+│   │   ├── cms_users_admin.c/h          # users CRUD, permanent username + startup migration
 │   │   ├── cms_media.c/h                # media + media_directories collections
 │   │   ├── cms_media_galleries.c/h      # media_galleries collection (gallery blocks)
 │   │   ├── cms_site_settings.c/h        # site_settings singleton (site name, active theme)

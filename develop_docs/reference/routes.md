@@ -197,7 +197,7 @@ Errors are plain text. Detailed in [media-admin.md](media-admin.md).
 |---|---|---|---|
 | `GET` | `/dashboard/api/media/contents` | `cms_get_media_items()` + `media_admin_render_items()` | JSON-wrapped HTML; query `directory`, `start`, `end` (page = `MEDIA_PAGE_SIZE` = 36) |
 | `GET` | `/dashboard/api/media/directory/item` | `media_admin_render_directory_item()` | JSON-wrapped HTML; query `id` |
-| `GET` | `/dashboard/api/media/modal` | `media_admin_modal()` | **HTML** - picker modal, newest uploads first |
+| `GET` | `/dashboard/api/media/modal` | `media_admin_modal()` | **HTML** - picker modal, newest uploads first; `?browse=1` (theme customizer) hides *Use selected* |
 | `POST` | `/dashboard/api/media/directory` | `cms_create_media_directory()` + `mkdir` | Field `newpath` (3-60 chars `[A-Za-z0-9_-]`, else `400`); always the caller's own; duplicate name `409` |
 | `POST` | `/dashboard/api/media/directory/rename` | `cms_rename_media_directory()` + `rename()` | Fields `id`, `newname` (same rule); current name and owner come from the DB. **OwnMedia**; `404` unknown id, `409` name taken |
 | `POST` | `/dashboard/api/media/directory/delete` | `cms_delete_media_directory()` + `rmdir()` | Field `id`. **OwnMedia**; `409` while it has images (or stray files on disk) |

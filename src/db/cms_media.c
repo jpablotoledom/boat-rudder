@@ -1,5 +1,6 @@
 #define _XOPEN_SOURCE 700
 #include "cms_media.h"
+#include "cms_users_admin.h"
 #include "mongodb_manager.h"
 #include "../utils/log.h"
 #include <bson/bson.h>
@@ -249,25 +250,18 @@ static void fill_media_item_from_doc(CmsMediaItem *item, const bson_t *doc) {
         bson_oid_to_string(bson_iter_oid(&iter), item->author_id);
 
     if (bson_iter_init_find(&iter, doc, "author_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {
+        // The author's media folder, users.username - read the same way as
+        // cms_get_username_by_id(), which named the directory the upload was
+        // written to: the two must agree for the item's files to be found
+        // (and this ends up in paths and in the media grid's <img src>).
         bson_iter_t sub;
-        if (bson_iter_recurse(&iter, &sub) && bson_iter_find(&sub, "email") && BSON_ITER_HOLDS_UTF8(&sub)) {
-            const char *email = bson_iter_utf8(&sub, NULL);
-            const char *at = email ? strchr(email, '@') : NULL;
-            size_t len = at ? (size_t)(at - email) : (email ? strlen(email) : 0);
-            if (len >= sizeof(item->author_username)) len = sizeof(item->author_username) - 1;
-            if (len > 0) memcpy(item->author_username, email, len);
-            item->author_username[len] = '\0';
-
-            // Same mapping as cms_get_username_by_id(), which named the
-            // directory the upload was written to - the two must agree for
-            // the item's files to be found (and this ends up in paths and
-            // in the media grid's <img src>).
-            for (size_t i = 0; i < len; i++) {
-                char c = item->author_username[i];
-                if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                      (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.'))
-                    item->author_username[i] = '-';
-            }
+        if (bson_iter_recurse(&iter, &sub) && bson_iter_find(&sub, "username") &&
+            BSON_ITER_HOLDS_UTF8(&sub) && bson_iter_utf8(&sub, NULL)[0]) {
+            copy_str(item->author_username, sizeof(item->author_username), &sub);
+        } else if (bson_iter_recurse(&iter, &sub) && bson_iter_find(&sub, "email") &&
+                   BSON_ITER_HOLDS_UTF8(&sub)) {
+            cms_username_from_email(bson_iter_utf8(&sub, NULL), item->author_username,
+                                    sizeof(item->author_username));
         }
     }
     if (bson_iter_init_find(&iter, doc, "dir_info") && BSON_ITER_HOLDS_DOCUMENT(&iter)) {

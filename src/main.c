@@ -2,6 +2,7 @@
 
 #include "db/cms_browser_detection.h"
 #include "db/cms_languages.h"
+#include "db/cms_users_admin.h"
 #include "db/mongodb_manager.h"
 #include "db/session_manager.h"
 #include "modules/analytics/geoip.h"
@@ -159,6 +160,7 @@ int main(int argc, char *argv[]) {
     } else {
         cms_languages_ensure_seeded();
         session_manager_ensure_indexes();
+        cms_users_ensure_usernames();
         cms_browser_detection_reload();   // without MongoDB the factory rules apply
     }
 

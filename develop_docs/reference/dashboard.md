@@ -148,12 +148,12 @@ epoch 3 browser below that floor sees "needs a more recent browser" on `/login` 
 | `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session()` - any role; writes also `require_dashboard_session_role()` + `media_can_manage()` (an `author` only touches their own directories/images). See [media-admin.md](media-admin.md). |
 | `/dashboard/settings`, `/dashboard/settings/themes*`, `/dashboard/settings/preview`, `/dashboard/settings/fonts*`, `/dashboard/settings/browsers*`, `/dashboard/settings/updates*`, `/dashboard/api/theme-assets/*`, `/dashboard/api/browsers*` | `GET`/`POST` | **`EPOCH_MODERN` only**, `require_admin_session()`. Site name, themes (activate, colors, banner, footer, logo, CSS), epoch preview, font library. See [themes.md](themes.md), [fonts.md](fonts.md) and the full list in [routes.md](routes.md#settings-themes-fonts-preview). |
 | `/dashboard/analytics` | `GET` | **`EPOCH_MODERN` only**, `require_admin_session()`. Visit report by period. See [analytics.md](analytics.md#the-report). |
-| `/dashboard/users` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()`. Renders `users_admin_list(epoch, NULL)`: every `users` document sorted by email, with its role label ("Administrador"/"Autor" - a missing `role` field reads as `"admin"`/"Administrador"). |
-| `/dashboard/users/new` | `GET` | Same guards. Renders `users_admin_form(epoch, "", "", "author", NULL)`. |
-| `/dashboard/users/new` | `POST` | Same guards. `parse_user_form()` reads `email`/`password`/`role` (an absent `role` defaults to `"author"`); `cms_create_user()` hashes the password and inserts `{email, password, role}`. On success, `302 /dashboard/users`; on failure (duplicate email, invalid role, DB error), re-renders `users_admin_form()` (`200`) with "No se pudo crear el usuario. Verifica el email y la contrasena." |
-| `/dashboard/users/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `users_admin_form()` pre-filled via `cms_get_user_values()` (password field always empty). |
-| `/dashboard/users/<id>/edit` | `POST` | Same guards. `parse_user_form()`; if `<id> == user_id` (editing yourself), the new role is not `"admin"` and `cms_count_admins() == 1`, re-renders the form with "No puedes quitarte el unico rol de administrador." Otherwise `cms_update_user(id, email, role, password)` (`$set`s `email`/`role`, and `password` only if non-empty - a blank password leaves the stored hash unchanged). On success, `302 /dashboard/users`; on failure, re-renders the form with "No se pudo actualizar el usuario. Verifica el email." |
-| `/dashboard/users/<id>/delete` | `POST` | Same guards. If `<id> == user_id`, `users_admin_list(epoch, "No puedes eliminar tu propia cuenta.")`. Else if the target user's role is `"admin"` and `cms_count_admins() == 1`, `users_admin_list(epoch, "No se puede eliminar el ultimo administrador.")`. Otherwise `cms_delete_user(id)`, `302 /dashboard/users`. |
+| `/dashboard/users` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()`. Renders `users_admin_list(epoch, NULL)`: every `users` document sorted by email, with its username and role label ("Administrator"/"Author"/"Viewer" - a missing `role` field reads as `"admin"`/"Administrator"). |
+| `/dashboard/users/new` | `GET` | Same guards. Renders `users_admin_form(epoch, "", "", "", "", "author", NULL)`. |
+| `/dashboard/users/new` | `POST` | Same guards. `parse_user_form()` reads `email`/`password`/`role` (an absent `role` defaults to `"author"`), plus `name` and `username`; `cms_create_user()` hashes the password and inserts `{name, username, email, password, role}`. On success, `302 /dashboard/users`; on failure re-renders `users_admin_form()` (`200`) with "The username must be 3-32 characters: ..." (invalid username), "That username is already taken." or, for a duplicate email / invalid role / DB error, "Could not create the user. Check the email and the password." |
+| `/dashboard/users/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `users_admin_form()` pre-filled via `cms_get_user_values()` and `cms_get_username_by_id()` (username read-only, password field always empty). |
+| `/dashboard/users/<id>/edit` | `POST` | Same guards. `parse_user_form()`; a `username` field is ignored (the stored one is kept and shown). If `<id> == user_id` (editing yourself), the new role is not `"admin"` and `cms_count_admins() == 1`, re-renders the form with "You are the only administrator: you cannot remove your own administrator role." Otherwise `cms_update_user(id, email, role, password)` (`$set`s `email`/`role`, and `password` only if non-empty - a blank password leaves the stored hash unchanged). On success, `302 /dashboard/users`; on failure, re-renders the form with "Could not update the user. Check the email." |
+| `/dashboard/users/<id>/delete` | `POST` | Same guards. If `<id> == user_id`, `users_admin_list(epoch, "You cannot delete your own account.")`. Else if the target user's role is `"admin"` and `cms_count_admins() == 1`, `users_admin_list(epoch, "The last administrator cannot be deleted.")`. Otherwise `cms_delete_user(id)`, `302 /dashboard/users`. |
 | `/dashboard/entries` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`), `require_dashboard_session_role()`. `dashboard_entries()`: the full entries table (`dashboard/entries/list_epoch3.html`), published and unpublished, same role filter as `/dashboard`; an unpublished entry's title carries a **Draft** badge (`entries/list-draft_epoch3.html`). |
 | `/logout` | `POST` | `POST` only (`GET` → `405`). When a session cookie is present the CSRF token must match it (`csrf_token` field or `X-CSRF-Token` header), else `403`; then `destroy_session()` (if MongoDB is up). Responds `302 /` with a `Set-Cookie` that clears the cookie (`Max-Age=0`) - also with no or an expired session. Posted by the **Log out** button next to "Welcome back" on the dashboard home (`dashboard/dashboard_epoch3.html`). |
 
@@ -411,21 +411,24 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
   lookup error) - used by `require_dashboard_session_role()` and `/dashboard`.
 - `cms_count_admins()`: `db.users.countDocuments({$or: [{role:"admin"}, {role:{$exists:false}}]})`
   - used by the router to block removing/demoting the last admin.
-- `cms_create_user(name, email, password, role)`: hashes `password` with `crypto_pwhash_str()`
-  (Argon2id, same as `auth.c`) and inserts `{name, email, password, role}`. Fails (`-1`) on a
+- `cms_create_user(name, username, email, password, role)`: hashes `password` with `crypto_pwhash_str()`
+  (Argon2id, same as `auth.c`) and inserts `{name, username, email, password, role}`. Returns
+  `CMS_USER_USERNAME_INVALID` / `CMS_USER_USERNAME_TAKEN` for the username; fails (`-1`) on a
   duplicate email, an invalid `role` (must be `"admin"`, `"author"` or `"viewer"`), or a DB error.
-- `cms_update_user(id_hex, name, email, role, new_password)`: `$set`s `name`/`email`/`role`, plus
+- `cms_update_user(id_hex, name, email, role, new_password)`: `$set`s `name`/`email`/`role` (never `username`), plus
   a freshly hashed `password` only if `new_password != ""` (a blank password leaves the stored
   hash unchanged). Fails on the same conditions as `cms_create_user()`, plus "not found".
 - `cms_delete_user(id_hex)`: `db.users.deleteOne({_id})`. Self-delete and last-admin protection are enforced by the router (`/dashboard/users/<id>/delete`), not here.
-- `cms_get_username_by_id(id_hex, out, out_size)`: reads the user's `email` and returns the part before `@`, sanitized to alphanumeric/dash/underscore/dot. Used by the media admin to build the physical directory path `html/content/posts/<username>/`.
+- `cms_get_username_by_id(id_hex, out, out_size)`: the user's `username` (falling back to the old email-derived name, `cms_username_from_email()`, for an account the startup migration has not reached). Used by the media admin to build the physical directory path `html/content/posts/<username>/`.
+- `cms_username_valid()`: 3-32 characters of `[a-z0-9._-]`, not dot-led - the rule for a new username.
+- `cms_users_ensure_usernames()`: startup migration (from `main.c`, after `session_manager_ensure_indexes()`) - see [data-model.md](data-model.md#users) - plus the unique `username_unique` index.
 - `src/modules/users_admin/users_admin.c`:
   - `users_admin_list(epoch, error_message)` -> `dashboard/users/list_epoch<N>.html` (+
-    `list-row_epoch<N>.html` per user with a "Role" column - "Administrador"/"Autor"/"Observador" - or
+    `list-row_epoch<N>.html` per user with "Username", "Email" and "Role" columns - "Administrator"/"Author"/"Viewer" - or
     `list-empty_epoch<N>.html`, + `list-error_epoch<N>.html` if `error_message`).
-  - `users_admin_form(epoch, id, name, email, role, error_message)` -> `dashboard/users/form_epoch<N>.html`
-    (name input, email input, always-empty password input, a 3-option `role` `<select>`
-    ("Administrador"/"Autor"/"Observador (solo lectura)"), + `form-error_epoch<N>.html` if
+  - `users_admin_form(epoch, id, name, username, email, role, error_message)` -> `dashboard/users/form_epoch<N>.html`
+    (name input, username input - `readonly` when editing -, email input, always-empty password input, a 3-option `role` `<select>`
+    ("Administrator"/"Author"/"Viewer (read-only)"), + `form-error_epoch<N>.html` if
     `error_message`). `id == ""` for
     "new user"; action is `/dashboard/users/new` or `/dashboard/users/<id>/edit`.
     The `name` field is read from the POST body directly by the router
@@ -449,7 +452,7 @@ A media library for uploading and managing images used in entries. Requires a da
 | `GET /dashboard/media` | Full media admin page |
 | `GET /dashboard/api/media/contents` | Paginated photo grid (HTML fragment, `MEDIA_PAGE_SIZE` = 36) |
 | `GET /dashboard/api/media/directory/item` | One directory tile (after creating it) |
-| `GET /dashboard/api/media/modal` | Media picker modal (for entry editor) |
+| `GET /dashboard/api/media/modal` | Media picker modal (for entry editor); `?browse=1`: browse-only, for the theme customizer's *View images* |
 | `POST /dashboard/api/media/directory` | Create directory |
 | `POST /dashboard/api/media/directory/rename` | Rename own directory + physical folder (`id`, `newname`) |
 | `POST /dashboard/api/media/directory/delete` | Delete own directory (`id`); refused while it has images |
@@ -515,7 +518,7 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 
 | Page | What it edits | Stored in |
 |---|---|---|
-| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere), the *Hide latest blog posts* home page checkbox, the *Under construction* mode (a page entry picker + checkbox), and the epoch 2 / epoch 3 favicons; shows the running version (`BOAT_RUDDER_VERSION`) with a link to *Updates* | `site_settings.site_name`, `site_settings.hide_home_blog`, `site_settings.under_construction`/`under_construction_page`; `html/favicon2.ico`, `html/favicon3.ico` |
+| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere), the *Hide latest blog posts* home page checkbox, the *Maintenance mode* (a page entry picker + checkbox), and the epoch 2 / epoch 3 favicons; shows the running version (`BOAT_RUDDER_VERSION`) with a link to *Updates* | `site_settings.site_name`, `site_settings.hide_home_blog`, `site_settings.under_construction`/`under_construction_page`; `html/favicon2.ico`, `html/favicon3.ico` |
 | `/dashboard/settings/themes` | The list of directories under `html/themes/`: each one's name, *Active* or *Set active*, and *Customize* | `site_settings.active_theme` |
 | `…/themes/<key>/customize` | The theme customizer: pick an epoch, then its logo, navbar, banner, content, home blog, footer and data colors, with a live preview (WML translated for epoch −1) and the public CSS layer in a bottom drawer. `…/themes/<key>` redirects here | everything below, plus `themes.home_blog_background`, `themes.home_blog_item_background`, `themes.home_blog_item_color` |
 | `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) in the code editor + the epoch's uploaded images | `themes.banner_html`, `themes.footer_html`, files in `html/content/themes/<key>/` |

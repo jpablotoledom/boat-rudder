@@ -1,4 +1,5 @@
 #include "site_settings_admin.h"
+#include "../../db/cms_entries.h"
 #include "../../db/cms_fonts.h"
 #include "../../html_builder/page_layout.h"
 #include "../../utils/generate_url_theme.h"
@@ -68,13 +69,52 @@ static char *favicon_panels(int epoch) {
     return panels;
 }
 
-char *site_settings_general_page(int epoch, const char *site_name, const char *error_message) {
+// The under-construction form's <option>s: every "page" entry (drafts too -
+// a page made only for this needn't be published), `selected_link` selected.
+// Returns a malloc'd string ("" with no pages), or NULL on a missing template
+// / allocation failure.
+static char *page_options(int epoch, const char *lang, const char *selected_link) {
+    char *option_tpl = load_template("dashboard/settings/settings-page-option_epoch%d.html", epoch);
+    if (!option_tpl) return NULL;
+
+    CmsBlogListItem *items = NULL;
+    size_t count = 0;
+    cms_get_admin_entries(lang, "page", NULL, false, &items, &count);
+
+    char *options = strdup("");
+    for (size_t i = 0; options && i < count; i++) {
+        const char *title = items[i].header_title && items[i].header_title[0]
+                                ? items[i].header_title : items[i].link;
+        char *label = render_template("%s - /page/%s%s", title, items[i].link,
+                                      items[i].enabled ? "" : " [Draft]");
+        char *encoded_label = label ? html_encode_alloc(label) : NULL;
+        char *encoded_link  = html_encode_alloc(items[i].link);
+        char *option = encoded_label && encoded_link
+            ? render_template(option_tpl, encoded_link,
+                              strcmp(items[i].link, selected_link) == 0 ? " selected" : "",
+                              encoded_label)
+            : NULL;
+        free(label);
+        free(encoded_label);
+        free(encoded_link);
+        options = option ? str_append(options, option) : (free(options), NULL);
+        free(option);
+    }
+
+    cms_blog_list_free(items, count);
+    free(option_tpl);
+    return options;
+}
+
+char *site_settings_general_page(int epoch, const char *lang, const char *site_name,
+                                 const SiteHomeSettings *home, const char *error_message) {
     char *page_tpl  = load_template("dashboard/settings/settings_epoch%d.html", epoch);
     char *error_tpl = load_template("dashboard/settings/settings-error_epoch%d.html", epoch);
 
     char *error_html = NULL;
     char *encoded_name = NULL;
     char *favicons = NULL;
+    char *pages = NULL;
     char *result = NULL;
 
     if (!page_tpl) goto cleanup;
@@ -84,10 +124,12 @@ char *site_settings_general_page(int epoch, const char *site_name, const char *e
 
     encoded_name = html_encode_alloc(site_name ? site_name : "");
     favicons = favicon_panels(epoch);
-    if (!encoded_name || !favicons) goto cleanup;
+    pages = page_options(epoch, lang, home->under_construction_page);
+    if (!encoded_name || !favicons || !pages) goto cleanup;
 
     result = render_template(page_tpl, error_html ? error_html : "", encoded_name, favicons,
-                             BOAT_RUDDER_VERSION);
+                             BOAT_RUDDER_VERSION, home->hide_home_blog ? " checked" : "",
+                             home->under_construction ? " checked" : "", pages);
 
 cleanup:
     free(page_tpl);
@@ -95,6 +137,7 @@ cleanup:
     free(error_html);
     free(encoded_name);
     free(favicons);
+    free(pages);
     return result;
 }
 

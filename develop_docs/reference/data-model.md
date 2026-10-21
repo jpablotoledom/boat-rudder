@@ -37,7 +37,7 @@ collections). Nothing else in the code base opens a collection.
 | `media` | Uploaded image metadata | `cms_media.c` | `mongodb_manager.h` |
 | `media_directories` | Per-author media folders | `cms_media.c` | `mongodb_manager.h` |
 | `media_galleries` | Image lists behind `gallery` blocks | `cms_media_galleries.c` | `mongodb_manager.h` |
-| `site_settings` | Singleton: site name, active theme | `cms_site_settings.c` | `cms_site_settings.c` |
+| `site_settings` | Singleton: site name, active theme, home blog visibility, under construction mode | `cms_site_settings.c` | `cms_site_settings.c` |
 | `themes` | Sparse per-theme overrides (colors, banner, footer, logo, CSS) | `cms_themes.c` | `cms_themes.c` |
 | `fonts` | Uploaded font library | `cms_fonts.c` | `cms_fonts.c` |
 | `short_links` | Short codes for QR codes | `short_links.c` | `short_links.c` |
@@ -199,11 +199,16 @@ Full behavior: [themes.md](themes.md) and [fonts.md](fonts.md).
 A singleton (always updated with filter `{}` and `upsert: true`).
 
 ```jsonc
-{ "_id": ObjectId, "site_name": "My Site", "active_theme": "dark" }
+{ "_id": ObjectId, "site_name": "My Site", "active_theme": "dark", "hide_home_blog": false,
+  "under_construction": false, "under_construction_page": "coming-soon" }
 ```
 
 `site_name` defaults to `"Boat Rudder"` and replaces the `{{SITE_NAME}}` token in titles and
-templates. `active_theme` is only honored if `html/themes/<key>/` exists.
+templates. `active_theme` is only honored if `html/themes/<key>/` exists. `hide_home_blog`
+(absent means `false`) hides the home page's "Latest Blog Posts" list. `under_construction`
+(absent means `false`) puts the site under construction: every visitor but an Administrador gets
+the `page` entry whose `link` is `under_construction_page` (see
+[rendering.md](rendering.md#under-construction-mode)).
 
 ### `themes`
 

@@ -4,6 +4,24 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+### Under construction mode
+
+**Added**
+- An *Under construction* panel on `/dashboard/settings`: pick a page entry (drafts included) and
+  turn the mode on, and every visitor gets the home page - its navigation bar and banner kept,
+  without the menu items or the blog list - with that page's content where the home content goes, on the home page, pages
+  and blog (`/`, `/page/*`, `/blog*`, `/menu`) in every epoch. Only a signed-in Administrador
+  sees the real site; `/login`, the dashboard and static files stay reachable. Stored as
+  `site_settings.under_construction` / `under_construction_page`; served with
+  `Cache-Control: no-store`.
+
+### Hide the home page's latest blog posts
+
+**Added**
+- A *Hide latest blog posts* checkbox on `/dashboard/settings` (*Home page* panel) removes the
+  "Latest Blog Posts" list from `/` in every epoch, without running its query. Stored as
+  `site_settings.hide_home_blog` (absent means shown); `/blog` is unaffected.
+
 ### HTTPS sends the whole certificate chain
 
 **Fixed**

@@ -21,6 +21,44 @@
   </section>
 
   <section class="boat-rudder-dashboard__panel">
+    <h2>Home page</h2>
+    <form method="POST" action="/dashboard/settings/home" class="boat-rudder-dashboard__site-name boat-rudder-card">
+      <div class="boat-rudder-dashboard__site-name-row">
+        <label class="boat-rudder-dashboard__asset-check">
+          <input type="checkbox" name="hide_home_blog" value="1"%5$s>
+          Hide latest blog posts
+        </label>
+        <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
+      </div>
+      <p class="boat-rudder-dashboard__hint">Removes the "Latest Blog Posts" list from the home
+         page in every epoch. The blog itself stays at <code>/blog</code>.</p>
+    </form>
+  </section>
+
+  <section class="boat-rudder-dashboard__panel">
+    <h2>Under construction</h2>
+    <form method="POST" action="/dashboard/settings/under-construction" class="boat-rudder-dashboard__site-name boat-rudder-card">
+      <label for="under_construction_page">Page shown instead of the site</label>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <select class="boat-rudder-input" id="under_construction_page" name="under_construction_page">
+          <option value="">- Choose a page -</option>
+%7$s        </select>
+      </div>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <label class="boat-rudder-dashboard__asset-check">
+          <input type="checkbox" name="under_construction" value="1"%6$s>
+          Site under construction
+        </label>
+        <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
+      </div>
+      <p class="boat-rudder-dashboard__hint">While it is on, every visitor gets the home page with
+         this page's content in place of the home content, and no menu items or blog list, wherever they
+         go on the site (home, pages, blog); only a signed-in Administrador sees the real site.
+         Drafts can be chosen too.</p>
+    </form>
+  </section>
+
+  <section class="boat-rudder-dashboard__panel">
     <h2>Favicon</h2>
     <p class="boat-rudder-dashboard__hint boat-rudder-dashboard__favicon-intro">Saved as
        <code>favicon2.ico</code> and <code>favicon3.ico</code> in the site root; without one,

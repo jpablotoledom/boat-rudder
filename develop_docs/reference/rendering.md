@@ -738,10 +738,37 @@ To keep the first page useful, WML pages carry a single `[Menu]` link (to `/menu
 full nav bar, and a single `[Categories]` link (to `/blog/categories`) instead of the category bar
 - see "Menu" and "Category menu" below.
 
+### Under construction mode
+
+While `site_settings.under_construction` is `true`, the router's first GET/HEAD branch answers
+every **site content route** - `/`, `/page/*`, `/blog`, `/blog/*`, `/menu`
+(`is_site_content_route()`) - with `serve_under_construction()`, unless the request carries the
+session of an Administrador (`request_user_is_admin()`, `users.role == "admin"`; an Autor or an
+Observador gets the page too):
+
+- The **home page layout** (`buildUnderConstructionWebSite()`, which shares
+  `build_home_layout()` with `buildHomeWebSite()`): navigation bar, main banner, footer and
+  backdrop as usual, but the bar **without menu items** (`menu_without_items()`: logo, language
+  and theme selectors and user link stay, `#navbarMenu` is empty; WML shows this bar instead of
+  its compact `[Menu]` link) and **no blog list**, and in the home content region the content blocks of the
+  `page` entry whose `link` is `site_settings.under_construction_page` (drafts included) - in
+  the same `home-content` wrapper the `/` entry gets (`home_content_entry()`). Its title is the
+  entry's, or the site name when it has none.
+- If that entry is gone (or is no longer a `page`), the 503 error content in that region, so
+  the site stays closed.
+- Always `200` with `Cache-Control: no-store`, so nobody keeps the page once the site opens.
+
+Everything else stays reachable: `/login`, `/dashboard/*`, `/language`, `/theme`, the QR and
+gallery pages, theme CSS and static files (the page's own images and styles). The WAP gateway
+fetches over HTTP like any visitor, so phones get the page too. If MongoDB is unreachable the mode
+reads as off. Set from `/dashboard/settings` (*Under construction* panel).
+
 ### Home blog list (`/`)
 
 The home page's "Latest Blog Posts" gallery (`modules/blog_list/blog_list.c`) lists `entries`
-documents with `type == "blog"`:
+documents with `type == "blog"`. When `site_settings.hide_home_blog` is `true` (the *Hide latest
+blog posts* checkbox on `/dashboard/settings`), `buildHomeWebSite()` skips `home_blog()` entirely
+and fills its region with `""`, in every epoch:
 
 ```
 home_blog(epoch, lang)                          ── src/modules/blog_list/blog_list.c

@@ -30,6 +30,7 @@
 #include "../modules/entry_editor/entry_editor.h"
 #include "../modules/entry_editor/entry_editor_blocks.h"
 #include "../modules/entry_page/entry_page.h"
+#include "../modules/home_content/home_content.h"
 #include "../modules/error/error.h"
 #include "../modules/fonts_admin/fonts_admin.h"
 #include "../modules/languages_admin/languages_admin.h"
@@ -769,6 +770,82 @@ static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *u
         return 0;
     }
 
+    return 1;
+}
+
+// Renders /dashboard/settings into a response: `site_name` in its form,
+// `error_message` above it, and the home page / under construction forms
+// showing `home` - or, when NULL, what site_settings holds now.
+static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, const char *lang,
+                                       const char *site_name, const SiteHomeSettings *home,
+                                       const char *error_message) {
+    SiteHomeSettings stored = { 0 };
+    char *stored_page = NULL;
+    if (!home) {
+        stored.hide_home_blog = cms_get_hide_home_blog();
+        cms_get_under_construction(&stored.under_construction, &stored_page);
+        stored.under_construction_page = stored_page ? stored_page : "";
+        home = &stored;
+    }
+
+    char *content  = site_settings_general_page(epoch, lang, site_name, home, error_message);
+    free(stored_page);
+    char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
+    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
+}
+
+// The routes that show the site's own content - home, pages, the blog and
+// the retro menu page - and so the ones the under-construction page stands
+// in for. Everything else stays reachable: /login and /dashboard, the
+// language/theme selectors, QR and gallery pages, CSS and static files (the
+// under-construction page's own images and styles among them).
+static int is_site_content_route(const char *url) {
+    return strcmp(url, "/") == 0 || strncmp(url, "/page/", 6) == 0 ||
+           strcmp(url, "/blog") == 0 || strncmp(url, "/blog/", 6) == 0 ||
+           strcmp(url, "/menu") == 0;
+}
+
+// While site_settings.under_construction is on, sends the home page with the
+// chosen page entry's content blocks (drafts too) in place of the home
+// content, and no menu or blog list - or, if the entry can't be found, the
+// 503 error content there, so the site stays closed - and returns 1. Returns 0, sending
+// nothing, when the mode is off. The caller skips this for an Administrador
+// (request_user_is_admin()). no-store, so nobody keeps it once the site opens.
+static int serve_under_construction(void *ctx, HttpRequest *req, const char *lang) {
+    bool enabled = false;
+    char *link = NULL;
+    cms_get_under_construction(&enabled, &link);
+    if (!enabled) {
+        free(link);
+        return 0;
+    }
+
+    int epoch = resolve_epoch(req);
+    char *title = NULL;
+    char *content = NULL;
+
+    CmsEntry entry = { 0 };
+    if (link && link[0] && cms_get_entry_by_link(link, lang, 1, &entry) &&
+        strcmp(entry.type, "page") == 0) {
+        title   = strdup(entry.header_title && entry.header_title[0] ? entry.header_title
+                                                                  : "{{SITE_NAME}}");
+        content = home_content_entry(&entry, epoch);
+    } else {
+        LOG_WARN("Under construction: page '%s' not found", link ? link : "");
+        title   = strdup("{{SITE_NAME}} - Under construction");
+        content = error_content(epoch, 503, NULL);
+    }
+    cms_entry_free(&entry);
+    free(link);
+
+    char *body = title && content ? buildUnderConstructionWebSite(epoch, title, content)
+                                  : (free(content), NULL);
+    char *response = body ? build_epoch_response(body, "Cache-Control: no-store\r\n", epoch) : NULL;
+    free(title);
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
     return 1;
 }
 
@@ -1552,7 +1629,11 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         ThemeCssSheet css_sheet;
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
-            if (strcmp(decoded_url, "/") == 0) {
+            if (is_site_content_route(decoded_url) && !request_user_is_admin() &&
+                serve_under_construction(ctx, &req, content_lang)) {
+                // Sent: the under-construction page stands in for the site.
+
+            } else if (strcmp(decoded_url, "/") == 0) {
                 int epoch = resolve_epoch(&req);
 
                 char *body = buildHomeWebSite(epoch, content_lang);
@@ -1818,13 +1899,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         for (size_t i = 0; error_code && i < sizeof(ERRORS) / sizeof(ERRORS[0]); i++)
                             if (strcmp(error_code, ERRORS[i].code) == 0) error_message = ERRORS[i].message;
 
-                        char *name     = cms_get_site_name();
-                        char *content  = site_settings_general_page(epoch, name, error_message);
+                        char *name = cms_get_site_name();
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL,
+                                                   error_message);
                         free(name);
-                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
-                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                        free(body);
-                        send_or_error(ctx, response, req.method, epoch);
                     }
                 }
 
@@ -3708,12 +3786,82 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *response = build_redirect_response("/dashboard/settings", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        char *content  = site_settings_general_page(epoch, name,
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL,
                             name[0] ? "No se pudo guardar el nombre del sitio." : "El nombre del sitio no puede estar vacio.");
-                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
-                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                        free(body);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/home") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (!dashboard_allowed(&req, epoch)) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    // An unchecked checkbox sends no field at all.
+                    char hide_str[8];
+                    bool hide = parse_urlencoded_field(req.body, req.body_length, "hide_home_blog",
+                                                       hide_str, sizeof(hide_str)) != 0;
+
+                    if (cms_update_hide_home_blog(hide) == 0) {
+                        char *response = build_redirect_response("/dashboard/settings", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
+                    } else {
+                        bool under_construction = false;
+                        char *page = NULL;
+                        cms_get_under_construction(&under_construction, &page);
+                        SiteHomeSettings home = { hide, under_construction, page ? page : "" };
+                        char *name = cms_get_site_name();
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
+                            "No se pudo guardar la configuracion de la pagina de inicio.");
+                        free(name);
+                        free(page);
+                    }
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   strcmp(decoded_url, "/dashboard/settings/under-construction") == 0) {
+            int epoch = resolve_epoch(&req);
+
+            if (!dashboard_allowed(&req, epoch)) {
+                char *response = build_redirect_response("/dashboard", "", epoch);
+                send_or_error(ctx, response, req.method, epoch);
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    // An unchecked checkbox sends no field at all.
+                    char enabled_str[8];
+                    bool enabled = parse_urlencoded_field(req.body, req.body_length, "under_construction",
+                                                          enabled_str, sizeof(enabled_str)) != 0;
+                    char page[256];
+                    parse_urlencoded_field(req.body, req.body_length, "under_construction_page",
+                                           page, sizeof(page));
+
+                    // Turning it on needs a page to show: a "page" entry, drafts included.
+                    const char *error_message = NULL;
+                    if (enabled) {
+                        CmsEntry entry = { 0 };
+                        int found = page[0] && cms_get_entry_by_link(page, content_lang, 1, &entry) &&
+                                    strcmp(entry.type, "page") == 0;
+                        cms_entry_free(&entry);
+                        if (!found) error_message = "Elige la pagina que se mostrara mientras el sitio esta en construccion.";
+                    }
+                    if (!error_message && cms_update_under_construction(enabled, page) != 0)
+                        error_message = "No se pudo guardar el modo en construccion.";
+
+                    if (!error_message) {
+                        char *response = build_redirect_response("/dashboard/settings", "", epoch);
+                        send_or_error(ctx, response, req.method, epoch);
+                    } else {
+                        SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page };
+                        char *name = cms_get_site_name();
+                        send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
+                                                   error_message);
+                        free(name);
                     }
                 }
             }

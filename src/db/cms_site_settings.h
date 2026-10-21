@@ -1,6 +1,8 @@
 #ifndef CMS_SITE_SETTINGS_H
 #define CMS_SITE_SETTINGS_H
 
+#include <stdbool.h>
+
 // site_settings is a singleton holding what's genuinely site-wide, not
 // theme-specific: the site's name and which theme is currently active.
 // Banner/footer content and colors are theme-scoped and live in `themes`
@@ -28,5 +30,27 @@ char *cms_get_active_theme_key(void);
 // true}). Returns 0 on success, -1 if html/themes/<key>/ does not exist,
 // on a DB error, or if mongodb is not ready.
 int cms_set_active_theme(const char *key);
+
+// site_settings.hide_home_blog: true hides the "Latest Blog Posts" list on
+// the home page (every epoch). false if unset/unreachable - the list shows
+// by default.
+bool cms_get_hide_home_blog(void);
+
+// db.site_settings.updateOne({}, {$set: {hide_home_blog}}, {upsert: true}).
+// Returns 0 on success, -1 on a DB error or if mongodb is not ready.
+int cms_update_hide_home_blog(bool hide);
+
+// "Under construction" mode: while site_settings.under_construction is true,
+// every visitor but an Administrador gets the page entry whose link is
+// site_settings.under_construction_page instead of the site's content (see
+// http_router.c's serve_under_construction()). Fills *enabled (false if
+// unset/unreachable) and, if page_link is non-NULL, *page_link with a
+// malloc'd copy of the link ("" if unset; NULL only on allocation failure).
+void cms_get_under_construction(bool *enabled, char **page_link);
+
+// db.site_settings.updateOne({}, {$set: {under_construction,
+// under_construction_page}}, {upsert: true}). Returns 0 on success, -1 on a
+// DB error or if mongodb is not ready.
+int cms_update_under_construction(bool enabled, const char *page_link);
 
 #endif // CMS_SITE_SETTINGS_H

@@ -97,3 +97,64 @@ int cms_set_active_theme(const char *key) {
     bson_append_utf8(set_doc, "active_theme", -1, key, -1);
     return upsert_set(set_doc);
 }
+
+bool cms_get_hide_home_blog(void) {
+    mongoc_collection_t *collection = mongodb_manager_get_collection(SITE_SETTINGS_COLLECTION);
+    if (!collection) return false;
+
+    bson_t *query = bson_new();
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    bool result = false;
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        bson_iter_t iter;
+        if (bson_iter_init_find(&iter, doc, "hide_home_blog") && BSON_ITER_HOLDS_BOOL(&iter))
+            result = bson_iter_bool(&iter);
+    }
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    return result;
+}
+
+int cms_update_hide_home_blog(bool hide) {
+    bson_t *set_doc = bson_new();
+    bson_append_bool(set_doc, "hide_home_blog", -1, hide);
+    return upsert_set(set_doc);
+}
+
+void cms_get_under_construction(bool *enabled, char **page_link) {
+    *enabled = false;
+    char *link = NULL;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(SITE_SETTINGS_COLLECTION);
+    if (collection) {
+        bson_t *query = bson_new();
+        mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+        const bson_t *doc;
+        if (mongoc_cursor_next(cursor, &doc)) {
+            bson_iter_t iter;
+            if (bson_iter_init_find(&iter, doc, "under_construction") && BSON_ITER_HOLDS_BOOL(&iter))
+                *enabled = bson_iter_bool(&iter);
+            if (page_link && bson_iter_init_find(&iter, doc, "under_construction_page") &&
+                BSON_ITER_HOLDS_UTF8(&iter))
+                link = strdup(bson_iter_utf8(&iter, NULL));
+        }
+
+        bson_destroy(query);
+        mongoc_cursor_destroy(cursor);
+        mongoc_collection_destroy(collection);
+    }
+
+    if (page_link) *page_link = link ? link : strdup("");
+}
+
+int cms_update_under_construction(bool enabled, const char *page_link) {
+    bson_t *set_doc = bson_new();
+    bson_append_bool(set_doc, "under_construction", -1, enabled);
+    bson_append_utf8(set_doc, "under_construction_page", -1, page_link, -1);
+    return upsert_set(set_doc);
+}

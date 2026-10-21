@@ -36,15 +36,51 @@ static void sigchld_handler(int s) {
     errno = saved;
 }
 
+// --wap-only: the WAP gateway alone - no HTTP listener, MongoDB or GeoIP -
+// fetching every page from wap_upstream. One such process can serve every
+// site on a machine from behind a front that routes by Host (see
+// wap_gateway.h).
+static int run_wap_only(const char *config_path) {
+    if (load_config(config_path) != 0) {
+        fprintf(stderr, "Error loading config: %s\n", config_path);
+        return EXIT_FAILURE;
+    }
+    log_level = verbose_level;
+    LOG_INFO("Boat Rudder %s starting (WAP gateway only)", BOAT_RUDDER_VERSION);
+    LOG_INFO("Config         : %s", config_path);
+    if (!wap_gateway_enabled || !wap_upstream[0]) {
+        LOG_ERROR("--wap-only needs wap_gateway_enabled=1 and wap_upstream=<IPv4>:<port>");
+        return EXIT_FAILURE;
+    }
+    LOG_INFO("Upstream       : %s%s", wap_upstream,
+             wap_upstream_proxy_protocol ? " (PROXY protocol)" : "");
+
+    signal(SIGINT,  handle_shutdown);
+    signal(SIGTERM, handle_shutdown);
+    signal(SIGCHLD, sigchld_handler);
+
+    if (wap_gateway_start() != 0) {
+        LOG_ERROR("WAP gateway could not start");
+        return EXIT_FAILURE;
+    }
+    while (atomic_load(&running)) sleep(1);
+
+    LOG_INFO("Shutting down...");
+    wap_gateway_stop();
+    return EXIT_SUCCESS;
+}
+
 static void print_usage(const char *prog) {
     fprintf(stderr,
             "Usage: %s [-c <config>] <root_directory>\n"
+            "       %s [-c <config>] --wap-only\n"
             "       %s --version\n"
             "\n"
             "  -c <config>      Path to config file (default: ./configs/settings.conf)\n"
             "  <root_directory> Directory to serve\n"
+            "  --wap-only       Run only the WAP gateway, fetching from wap_upstream\n"
             "  --version        Print the version and exit\n",
-            prog, prog);
+            prog, prog, prog);
 }
 
 int main(int argc, char *argv[]) {
@@ -52,6 +88,7 @@ int main(int argc, char *argv[]) {
 
     const char *config_path  = "./configs/settings.conf";
     const char *root_arg     = NULL;
+    int         wap_only     = 0;
 
     // Parse arguments: optional -c <path> before the mandatory root_directory,
     // or --version alone (the updater's smoke test of a fresh build).
@@ -60,7 +97,9 @@ int main(int argc, char *argv[]) {
             printf("boat-rudder %s\n", BOAT_RUDDER_VERSION);
             return EXIT_SUCCESS;
         }
-        if (strcmp(argv[i], "-c") == 0) {
+        if (strcmp(argv[i], "--wap-only") == 0) {
+            wap_only = 1;
+        } else if (strcmp(argv[i], "-c") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "Error: -c requires a path argument\n");
                 print_usage(argv[0]);
@@ -75,6 +114,9 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
     }
+
+    if (wap_only)
+        return run_wap_only(config_path);
 
     if (!root_arg) {
         print_usage(argv[0]);

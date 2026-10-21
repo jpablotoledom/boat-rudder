@@ -248,6 +248,11 @@
   border-color: var(--br-admin-danger);
 }
 
+/* Read-only account (Observador): the notice above every dashboard page. */
+.boat-rudder-dashboard__read-only {
+  margin: 0 0 16px;
+}
+
 /* "No entries", "No data", "No other directories". */
 .boat-rudder-empty {
   font-size: var(--br-admin-font-sm);

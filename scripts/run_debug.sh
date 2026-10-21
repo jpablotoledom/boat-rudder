@@ -3,9 +3,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
+# run_debug.sh          - ./configs/settings.conf
+# run_debug.sh <name>   - ./configs/<name>.conf, so several configurations can
+#                         run side by side; each needs its own ports (and
+#                         usually its own mongodb_db)
 BINARY="./bin/boat-rudder"
 HTML_DIR="./html"
 CONFIG="./configs/settings.conf"
+if [ -n "${1:-}" ]; then
+    if ! [[ "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]]; then
+        echo "Error: '$1' is not a config name."
+        exit 1
+    fi
+    CONFIG="./configs/$1.conf"
+    if [ ! -f "$CONFIG" ]; then
+        echo "Error: $CONFIG not found."
+        exit 1
+    fi
+fi
 
 source ./scripts/show/divbar
 echo "Starting Boat Rudder in debug mode..."
@@ -27,10 +42,11 @@ fi
 # No syncing needed: the server is started from the project root with
 # -c ./configs/settings.conf and ./html, so it always reads the live files.
 
-# Kill any existing instance
-if pkill -0 -f "bin/boat-rudder" 2>/dev/null; then
+# Stop the one already running on this config - only that one, so another
+# started from its own config keeps running.
+if pkill -0 -f "bin/boat-rudder -c $CONFIG " 2>/dev/null; then
     echo "Stopping existing instance..."
-    pkill -TERM -f "bin/boat-rudder" 2>/dev/null || true
+    pkill -TERM -f "bin/boat-rudder -c $CONFIG " 2>/dev/null || true
     sleep 1
 fi
 

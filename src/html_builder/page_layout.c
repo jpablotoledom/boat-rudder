@@ -432,10 +432,13 @@ static char *splice_csrf_token(char *html, int epoch) {
 // use both. Decided by the request path, not the session: a signed-in admin
 // browsing the public site doesn't download the admin rules. Spliced here
 // rather than through a layout marker, so a theme's layout needs no change.
+static int is_dashboard_path(const char *path) {
+    return strcmp(path, "/dashboard") == 0 || strncmp(path, "/dashboard/", 11) == 0;
+}
+
 static char *splice_admin_styles(char *html, int epoch) {
     const char *path = request_path();
-    int is_admin_page = strcmp(path, "/login") == 0 || strcmp(path, "/dashboard") == 0 ||
-                        strncmp(path, "/dashboard/", 11) == 0;
+    int is_admin_page = strcmp(path, "/login") == 0 || is_dashboard_path(path);
     if (!html || epoch != EPOCH_MODERN || !is_admin_page || !strstr(html, "</head>")) return html;
 
     char tag[160];
@@ -443,6 +446,26 @@ static char *splice_admin_styles(char *html, int epoch) {
              request_theme(), cms_theme_css_file(THEME_CSS_ADMIN));
     char *result = str_replace_first(html, "</head>", tag);
     free(html);
+    return result;
+}
+
+// On epoch 3 dashboard pages, for a read-only account (an Observador - see
+// request_user_read_only()), dashboard/readonly-notice_epoch3.html goes
+// before the page's own content, so every page it opens says that nothing
+// will be saved. Takes ownership of `fragment`; NULL only on allocation
+// failure (a missing template leaves the page as it is).
+static char *prepend_read_only_notice(char *fragment, int epoch) {
+    if (!fragment || epoch != EPOCH_MODERN || !request_user_read_only() ||
+        !is_dashboard_path(request_path()))
+        return fragment;
+
+    char *path   = generate_url_theme("dashboard/readonly-notice_epoch%d.html", epoch);
+    char *notice = path ? read_file_to_string(path) : NULL;
+    free(path);
+    if (!notice) return fragment;
+
+    char *result = str_append(notice, fragment);
+    free(fragment);
     return result;
 }
 
@@ -631,6 +654,12 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch) {
     if (with_colors) with_colors = splice_favicon(with_colors, epoch);
     if (!with_colors) {
         free(fragment_html);
+        return NULL;
+    }
+
+    fragment_html = prepend_read_only_notice(fragment_html, epoch);
+    if (!fragment_html) {
+        free(with_colors);
         return NULL;
     }
 

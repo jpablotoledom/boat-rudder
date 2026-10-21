@@ -26,8 +26,8 @@ Implemented in `src/web_server/server_listener.c` and `connection_thread.c`, tun
 | Defense | Mechanism | Default |
 |---|---|---|
 | **Global connection cap** | Mutex-protected `active_connections` counter checked at `accept()` (`try_register_connection()`) | `ddos_max_connections` = 200 |
-| **Per-IP rate limit** | `too_many_connections()`: connections from one IPv4 address less than `ddos_rate_window_secs` apart are counted; above `ddos_rate_limit` the IP is **blocked for 2 × window** | 500 per 5 s → 10 s ban |
-| **IP table** | `ip_entry_t[ddos_max_ips]`, `calloc`'d in `server_start()`, guarded by `ip_table_mutex` (accept thread + cleanup thread). Full table → least-recently-seen entry evicted (LRU) | 1024 entries |
+| **Per-IP rate limit** | `too_many_connections()`: connections from one address less than `ddos_rate_window_secs` apart are counted; above `ddos_rate_limit` the IP is **blocked for 2 × window**. Checked at `accept()` against the socket peer - or, with `proxy_protocol=1` and a trusted peer, on the connection thread against the PROXY header's address (`server_ip_rate_limited()`) | 500 per 5 s → 10 s ban |
+| **IP table** | `ip_entry_t[ddos_max_ips]` keyed by the 16-byte IPv6 form of the address (IPv4 as `::ffff:a.b.c.d`), `calloc`'d in `server_start()`, guarded by `ip_table_mutex` (accept thread, connection threads, cleanup thread). Full table → least-recently-seen entry evicted (LRU) | 1024 entries |
 | **Cleanup thread** | `ip_table_cleanup_thread()` wakes every `ddos_cleanup_interval_secs`, lifts expired bans and frees entries idle for `ddos_ip_stale_secs`, so a long-running process doesn't fill the table with dead IPs | 60 s / 300 s |
 | **`429` on rejection** | Rejected **plain-HTTP** connections get a best-effort `429 Too Many Requests` (`Retry-After: 10`) before close. Rejected **HTTPS** connections are just closed: answering would require completing the TLS handshake - exactly the CPU cost the rejection exists to avoid | - |
 | **Slow-loris** | `SO_RCVTIMEO`/`SO_SNDTIMEO` on every client socket. Per read/write call, not per transfer, so slow-but-steady uploads still work | `connection_io_timeout_secs` = 5 s |
@@ -37,8 +37,13 @@ Implemented in `src/web_server/server_listener.c` and `connection_thread.c`, tun
 | **Thread stack** | 2 MiB per connection thread; no thread pool, so the connection cap is the memory bound | - |
 | **SIGPIPE** | Ignored process-wide and per thread; `SO_NOSIGPIPE` where available | - |
 
-The per-IP limiter only sees the **socket peer address**. Behind a reverse proxy every client
-shares the proxy's IP, so put rate limiting in the proxy too (or raise the limits).
+Without `proxy_protocol`, the per-IP limiter only sees the **socket peer address**: behind an
+HTTP reverse proxy every client shares the proxy's IP, so put rate limiting in the proxy too (or
+raise the limits). With `proxy_protocol=1` the accept loop skips the per-IP check for trusted
+peers - the front, whose address stands for every visitor - and the connection thread applies it
+to the visitor's own address once the PROXY header is read; a blocked visitor gets the same
+best-effort `429` (plain HTTP) or plain close (HTTPS). The global connection cap stays at
+`accept()`.
 
 ---
 
@@ -46,11 +51,34 @@ shares the proxy's IP, so put rate limiting in the proxy too (or raise the limit
 
 `X-Real-IP` / `X-Forwarded-For` are honored **only** when the TCP peer is listed in
 `trusted_proxies` (`is_trusted_proxy()`); otherwise the socket address is used. The resulting
-`client_ip` feeds logging and the analytics country lookup. The connection-level limiter always
-uses the socket address, never a header.
+`client_ip` feeds logging and the analytics country lookup. The connection-level limiter never
+uses these headers.
 
-The WAP gateway's loopback fetches carry the phone's address in `X-Forwarded-For`; it is honored
-only if `127.0.0.1` is a trusted proxy.
+**PROXY protocol** (`proxy_protocol=1`, `src/web_server/proxy_protocol.c`, read in
+`connection_thread.c` before `SSL_accept()` and the HTTP parser). A site behind HAProxy in
+`mode tcp` - several sites on one machine, as the multi-br project sets them up - gets the
+client's bytes untouched, prefixed with a PROXY v2 header carrying the client's address.
+The header's address wins over `X-Real-IP` / `X-Forwarded-For` and is what the per-IP limiter
+counts.
+
+| Connection | Outcome |
+|---|---|
+| PROXY header from a `trusted_proxies` peer | Accepted; its source address is the client's (v2 `LOCAL`, v1 `UNKNOWN` and non-IP families keep the socket address) |
+| PROXY header from any other peer | Closed - it could claim any address |
+| No header, loopback peer | Served as a direct connection (the WAP gateway, the updater's health check) |
+| No header, any other peer | Closed - it bypassed the front |
+| Malformed, longer than 528 bytes, or not complete within `connection_io_timeout_secs` | Closed |
+
+Only the first header is read, so a client can't forge one through the front: the front's own
+header always comes first, and a second `PROXY ...` line is just the start of a malformed HTTP
+request. The header is peeked (`MSG_PEEK`) before anything is consumed, so a connection without
+one reaches the HTTP parser or the TLS handshake byte for byte. A site behind a front binds `127.0.0.1`
+(`listen_address`) so no outside peer can reach it directly in the first place.
+
+The WAP gateway's loopback fetches carry the phone's address in `X-Forwarded-For`, honored only
+if `127.0.0.1` is a trusted proxy; with `proxy_protocol=1` and its listener's address trusted
+the gateway sends a PROXY v1 header with the phone's address instead (see
+[wap-gateway.md](wap-gateway.md)).
 
 ---
 
@@ -60,6 +88,12 @@ only if `127.0.0.1` is a trusted proxy.
 and TLS 1.3, no RC4/3DES/export ciphers. The handshake runs on the connection thread after the
 accept-time checks. Retro browsers that can't do modern TLS use plain HTTP - by design, both
 listeners serve the same site.
+
+`ssl_cert` is read as a **chain** (`SSL_CTX_use_certificate_chain_file()`): the site's
+certificate followed by its intermediates, as in Let's Encrypt's `fullchain.pem` - all of it is
+sent in the handshake, which clients that don't fetch a missing intermediate themselves (curl,
+Android, many libraries) require. A key that doesn't match the certificate stops the server at
+startup (`SSL_CTX_check_private_key()`).
 
 ---
 
@@ -105,9 +139,19 @@ listeners serve the same site.
 |---|---|
 | `admin` (also: missing `role` field) | Everything |
 | `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, browse everything but upload into, rename, delete and move **only their own** directories and images |
+| `viewer` (Observador) | **Read-only**: opens every page an `admin` opens and sees every value - the entry editor included - but **changes nothing**. Meant for a public demo account whose password can be published |
 
 Guards are enforced per route in `http_router.c` (`require_admin_session()`,
-`require_dashboard_session_role()` + `can_edit_entry()`); the full matrix is in
+`require_dashboard_session_role()` + `can_edit_entry()`) - except the viewer's, which is one
+check for every route: every dashboard write is a `POST` through `require_dashboard_session()`
+(every `GET` only reads), and there, after the CSRF check, a session whose role is `viewer` gets
+`403` - JSON `{"ok":false,"error":"read-only account"}` under `/dashboard/api/`, else the error
+page. A route added later is covered without doing anything. Exempt are the two `POST`s that
+store nothing: `/dashboard/api/block-preview` and `/dashboard/api/browsers/preview`. The role is
+read from the database on every `POST`, and one that can't be read is refused (`503`) - fails
+closed. Since `/dashboard/users/<id>/edit` is a `POST` too, a viewer can't change its own
+password either. It can sign out (`POST /logout` isn't a dashboard route). It does see what an
+admin sees, including the users list with their email addresses. The full matrix is in
 [routes.md](routes.md#guards). The last admin can't be deleted or demoted, and nobody can delete
 their own account.
 
@@ -208,7 +252,7 @@ accepted forever.
 
 | Gap | Impact | Possible fix |
 |---|---|---|
-| **Service runs as `root`** (`scripts/boat-rudder.service`) | Any future file-write or command-injection bug gets full control of the host | Dedicated user owning `html/content` and `html/assets`, `AmbientCapabilities=CAP_NET_BIND_SERVICE` for ports 80/443, systemd sandboxing (`ProtectSystem=strict`, `ReadWritePaths=`); check what the WAP gateway's sockets need first |
+| **Service runs as `root`** (`scripts/boat-rudder.service`) | Any future file-write or command-injection bug gets full control of the host | Dedicated user owning `html/content` and `html/assets`, `AmbientCapabilities=CAP_NET_BIND_SERVICE` for ports 80/443 (not needed by a site behind a front, which listens on high ports), systemd sandboxing (`ProtectSystem=strict`, `ReadWritePaths=`); check what the WAP gateway's sockets and the updater need first |
 | Login CSRF | A third-party page can (only from a browser that ignores `SameSite`) sign a visitor into an attacker's account | Origin check or a pre-session token on `/login` |
 | No login throttling | Online password guessing is limited only by the connection rate limit | Per-account/IP failure counter |
 | Analytics writes are synchronous | Each counted page view costs two MongoDB round-trips on the request thread | Batch or async writes |

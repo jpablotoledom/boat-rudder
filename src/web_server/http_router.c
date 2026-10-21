@@ -653,6 +653,39 @@ static int is_safe_method(const char *method) {
            strcmp(method, "OPTIONS") == 0;
 }
 
+// 1 if `url`'s path (query string aside) is exactly `path`.
+static int url_path_is(const char *url, const char *path) {
+    size_t len = strlen(path);
+    return strncmp(url, path, len) == 0 && (url[len] == '\0' || url[len] == '?');
+}
+
+// The dashboard POSTs that change nothing - they compute something from the
+// request and return it - and so stay open to a viewer: the entry editor's
+// block preview and the browser-detection rules' dry run.
+static int is_read_only_post(const char *url) {
+    return url_path_is(url, "/dashboard/api/block-preview") ||
+           url_path_is(url, "/dashboard/api/browsers/preview");
+}
+
+// A viewer's (Observador's) attempt to change something: JSON for the
+// dashboard's AJAX endpoints, which their scripts read, else the error page
+// - which, being under /dashboard, carries the read-only notice too.
+static void send_read_only_refusal(void *ctx, HttpRequest *req, int epoch) {
+    if (strncmp(req->url, "/dashboard/api/", 15) == 0) {
+        char *response = build_json_response_status(
+            "{\"ok\":false,\"error\":\"read-only account\"}", "403 Forbidden");
+        send_or_error(ctx, response, req->method, epoch);
+        return;
+    }
+    char *content  = error_content(epoch, 403,
+        "This is a read-only account: it can open every page and see every value, but it can't "
+        "save changes.");
+    char *body     = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content) : NULL;
+    char *response = body ? build_epoch_response_status(body, "", epoch, "403 Forbidden") : NULL;
+    free(body);
+    send_or_error(ctx, response, req->method, epoch);
+}
+
 static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
     if (!mongodb_manager_is_ready()) {
         send_error_response(ctx, 503, "503 Service Unavailable", epoch);
@@ -678,13 +711,36 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
             send_simple(ctx, "403 Forbidden", "Invalid or missing CSRF token. Reload the page and try again.");
             return 0;
         }
+
+        // A viewer reads everything and writes nothing. Every dashboard
+        // write is a POST through here (every GET only reads), so this one
+        // check covers every route, present and future. Fails closed: a
+        // role that can't be read can't write either.
+        if (!is_read_only_post(req->url)) {
+            char role[USER_ROLE_BUF_SIZE];
+            if (cms_get_user_role(user_id_out, role, sizeof(role)) != 0) {
+                send_error_response(ctx, 503, "503 Service Unavailable", epoch);
+                return 0;
+            }
+            if (strcmp(role, "viewer") == 0) {
+                LOG_INFO("Read-only account: %s %s refused", req->method, req->url);
+                send_read_only_refusal(ctx, req, epoch);
+                return 0;
+            }
+        }
     }
 
     return 1;
 }
 
+// Whether `role` sees what an Administrador sees: "admin", or "viewer" - the
+// read-only role, whose writes require_dashboard_session() refuses.
+static int role_sees_everything(const char *role) {
+    return strcmp(role, "admin") == 0 || strcmp(role, "viewer") == 0;
+}
+
 // require_dashboard_session() + cms_get_user_role(): role_out (>= USER_ROLE_BUF_SIZE
-// bytes) is "admin" or "author" (a missing `role` field, or a lookup error, defaults
+// bytes) is "admin", "author" or "viewer" (a missing `role` field, or a lookup error, defaults
 // to "admin" - same backward-compatible convention as cms_get_user_role()). Same
 // 0/1 return + ctx-write contract as require_dashboard_session().
 static int require_dashboard_session_role(void *ctx, HttpRequest *req, int epoch,
@@ -699,13 +755,15 @@ static int require_dashboard_session_role(void *ctx, HttpRequest *req, int epoch
     return 1;
 }
 
-// require_dashboard_session_role() + role != "admin" -> 302 /dashboard, return 0.
-// Used by routes reserved to Administrador (Users maintainer, entry deletion).
+// require_dashboard_session_role() + a role that doesn't see everything ->
+// 302 /dashboard, return 0. Used by routes reserved to Administrador (Users
+// maintainer, entry deletion, settings...) - which a viewer may open too,
+// since require_dashboard_session() already refused its writes.
 static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
     char role[USER_ROLE_BUF_SIZE];
     if (!require_dashboard_session_role(ctx, req, epoch, user_id_out, role, sizeof(role))) return 0;
 
-    if (strcmp(role, "admin") != 0) {
+    if (!role_sees_everything(role)) {
         char *response = build_redirect_response("/dashboard", "", epoch);
         send_or_error(ctx, response, req->method, epoch);
         return 0;
@@ -731,11 +789,12 @@ static int confirm_password(const HttpRequest *req, const char *user_id, char *e
     return ok;
 }
 
-// 1 if `role` is "admin", or `role` is "author" and `entry` is a "blog" entry
+// 1 if `role` is "admin" (or "viewer", who can open any entry in the editor
+// and save none of it), or `role` is "author" and `entry` is a "blog" entry
 // created by `user_id`. Gates the entry editor GET/POST routes - an Autor may
 // only edit their own blog entries.
 static int can_edit_entry(const char *role, const char *user_id, const CmsEntryEdit *entry) {
-    if (strcmp(role, "admin") == 0) return 1;
+    if (role_sees_everything(role)) return 1;
 
     return strcmp(role, "author") == 0 &&
            strcmp(entry->type, "blog") == 0 &&
@@ -1397,9 +1456,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
     ((connection_ctx_t *)ctx)->simple_response = is_http09_request(&req);
 
     // --- Determine real client IP ---
-    // Honor X-Real-IP / X-Forwarded-For only from trusted reverse proxies.
+    // A PROXY protocol header (read in connection_thread.c) wins; otherwise
+    // honor X-Real-IP / X-Forwarded-For only from trusted reverse proxies.
     char client_ip[INET6_ADDRSTRLEN] = "unknown";
-    {
+    if (((connection_ctx_t *)ctx)->proxy_client_ip[0]) {
+        snprintf(client_ip, sizeof(client_ip), "%s", ((connection_ctx_t *)ctx)->proxy_client_ip);
+    } else {
         connection_ctx_t *conn = (connection_ctx_t *)ctx;
         struct sockaddr_storage peer_addr;
         socklen_t peer_len = sizeof(peer_addr);

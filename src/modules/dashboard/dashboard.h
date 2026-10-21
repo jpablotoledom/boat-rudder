@@ -2,7 +2,8 @@
 #define DASHBOARD_H
 
 // Loads the "/dashboard" content fragment for `epoch`. For EPOCH_MODERN,
-// dashboard_epoch<N>.html is populated based on `role` ("admin"/"author"):
+// dashboard_epoch<N>.html is populated based on `role` ("admin"/"author"/"viewer" -
+// a viewer gets the admin's page, read-only):
 //   - the option groups: dashboard/nav-admin_epoch3.html (Content, Site,
 //     Administration, Account) for an Administrador, nav-author_epoch3.html
 //     (Content, Account) for an Autor - both end with "Log out";

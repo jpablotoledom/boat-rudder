@@ -376,10 +376,15 @@ Basic CRUD over `menu` (`MENU_COLLECTION`), already read (read-only, `enabled: t
 
 ### Roles and privileges (`users.role`, `entries.created_by`)
 
-Two roles: **Administrador** (`users.role == "admin"`, full access - everything described in
-this document) and **Autor** (`users.role == "author"`, can only create/edit their own
+Three roles: **Administrador** (`users.role == "admin"`, full access - everything described in
+this document), **Autor** (`users.role == "author"`, can only create/edit their own
 `type:"blog"` entries - no Categories/Languages/Menu/Users, no `type:"page"` entries, and can
-never delete entries). A `users` document with no `role` field (the original seed account) is
+never delete entries) and **Observador** (`users.role == "viewer"`, read-only: sees exactly what
+an Administrador sees - every menu, the analytics summary, every entry, the entry editor, every
+settings page - and can change nothing; for a public demo account). A viewer's writes are
+refused in one place, `require_dashboard_session()` (see [security.md](security.md#roles)), and
+every dashboard page it opens starts with `dashboard/readonly-notice_epoch3.html`, put there by
+`page_layout_wrap()` when `request_user_read_only()` says so. A `users` document with no `role` field (the original seed account) is
 treated as `"admin"` everywhere it's read - no migration is required, and an admin can open that
 user in `/dashboard/users/<id>/edit` and Save to persist `role: "admin"` explicitly.
 
@@ -389,8 +394,8 @@ user in `/dashboard/users/<id>/edit` and Save to persist `role: "admin"` explici
 have no `created_by`, so they are only ever editable by an Administrador.
 
 `can_edit_entry(role, user_id, entry)` (`http_router.c`) is the single ownership gate used by
-every entry editor route: `true` if `role == "admin"`, or if `role == "author"` and
-`entry->type == "blog"` and `entry->created_by == user_id`.
+every entry editor route: `true` if `role == "admin"` or `"viewer"` (whose saves are refused
+anyway), or if `role == "author"` and `entry->type == "blog"` and `entry->created_by == user_id`.
 
 ### Users CRUD (`src/db/cms_users_admin.c`, `src/modules/users_admin/`)
 
@@ -408,7 +413,7 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
   - used by the router to block removing/demoting the last admin.
 - `cms_create_user(name, email, password, role)`: hashes `password` with `crypto_pwhash_str()`
   (Argon2id, same as `auth.c`) and inserts `{name, email, password, role}`. Fails (`-1`) on a
-  duplicate email, an invalid `role` (must be `"admin"` or `"author"`), or a DB error.
+  duplicate email, an invalid `role` (must be `"admin"`, `"author"` or `"viewer"`), or a DB error.
 - `cms_update_user(id_hex, name, email, role, new_password)`: `$set`s `name`/`email`/`role`, plus
   a freshly hashed `password` only if `new_password != ""` (a blank password leaves the stored
   hash unchanged). Fails on the same conditions as `cms_create_user()`, plus "not found".
@@ -416,11 +421,12 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
 - `cms_get_username_by_id(id_hex, out, out_size)`: reads the user's `email` and returns the part before `@`, sanitized to alphanumeric/dash/underscore/dot. Used by the media admin to build the physical directory path `html/content/posts/<username>/`.
 - `src/modules/users_admin/users_admin.c`:
   - `users_admin_list(epoch, error_message)` -> `dashboard/users/list_epoch<N>.html` (+
-    `list-row_epoch<N>.html` per user with a "Role" column - "Administrador"/"Autor" - or
+    `list-row_epoch<N>.html` per user with a "Role" column - "Administrador"/"Autor"/"Observador" - or
     `list-empty_epoch<N>.html`, + `list-error_epoch<N>.html` if `error_message`).
   - `users_admin_form(epoch, id, name, email, role, error_message)` -> `dashboard/users/form_epoch<N>.html`
-    (name input, email input, always-empty password input, a 2-option `role` `<select>`
-    ("Administrador"/"Autor"), + `form-error_epoch<N>.html` if `error_message`). `id == ""` for
+    (name input, email input, always-empty password input, a 3-option `role` `<select>`
+    ("Administrador"/"Autor"/"Observador (solo lectura)"), + `form-error_epoch<N>.html` if
+    `error_message`). `id == ""` for
     "new user"; action is `/dashboard/users/new` or `/dashboard/users/<id>/edit`.
     The `name` field is read from the POST body directly by the router
     (`parse_urlencoded_field(..., "name", ...)`), not by `parse_user_form()`.
@@ -461,13 +467,16 @@ A media library for uploading and managing images used in entries. Requires a da
 
 - `require_dashboard_session(ctx, req, epoch, user_id_out)`: shared by every `/dashboard/*`
   sub-route - `503` if mongodb is not ready, `302 /login` if the session cookie is
-  missing/invalid, else returns `1` with `user_id_out` filled.
+  missing/invalid; on a `POST`, `403` for a wrong CSRF token and - except the read-only
+  `POST`s (`is_read_only_post()`) - for a `viewer` session (`send_read_only_refusal()`); else
+  returns `1` with `user_id_out` filled.
 - `require_dashboard_session_role(ctx, req, epoch, user_id_out, role_out, role_size)`:
-  `require_dashboard_session()` + `cms_get_user_role()`; `role_out` is `"admin"` or `"author"`
+  `require_dashboard_session()` + `cms_get_user_role()`; `role_out` is `"admin"`, `"author"` or `"viewer"`
   (a missing `role` field, or a lookup error, defaults to `"admin"`). Used by
   `/dashboard/entries/new` and the entry editor routes.
 - `require_admin_session(ctx, req, epoch, user_id_out)`: `require_dashboard_session_role()` +
-  `302 /dashboard` (returning `0`) if `role != "admin"`. Used by `/dashboard/users*`,
+  `302 /dashboard` (returning `0`) unless `role` is `"admin"` or `"viewer"`
+  (`role_sees_everything()`). Used by `/dashboard/users*`,
   `/dashboard/categories*`, `/dashboard/languages*`, `/dashboard/menu*`,
   `/dashboard/settings*` (including fonts), `/dashboard/analytics`,
   `/dashboard/api/theme-assets/*` and `/dashboard/entries/<id>/delete`.

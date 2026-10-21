@@ -1,16 +1,24 @@
 #ifndef WAP_GATEWAY_H
 #define WAP_GATEWAY_H
 
-// A WAP 1.x gateway that answers every request with this site, rendered as
+// A WAP 1.x gateway that answers every request with a page rendered as
 // epoch -1 (WML) and compiled to WBXML (see wbxml.h) - so a vintage phone
 // or PDA whose browser is hardwired to a long-dead operator gateway browses
-// this site instead, whatever host it asks for (the path is kept; an empty
-// one is the home page). Off unless configs/settings.conf says otherwise:
+// the web through it. Off unless configs/settings.conf says otherwise:
 //
 //   wap_gateway_enabled=1
 //   wap_gateway_ips=                             # listen addresses; empty = all
 //   wap_gateway_rover_port=49300                 # 0 disables
 //   wap_gateway_wsp_port=9200                    # 0 disables
+//   wap_upstream=                                # <IPv4>:<port>; empty = this server
+//   wap_upstream_proxy_protocol=0                # 1: PROXY v1 header to wap_upstream
+//
+// The host the phone asks for goes along as the Host header, and the path
+// is kept (an empty one is the home page). By default every page comes from
+// this same server, which serves its own site whatever the host. With
+// wap_upstream the pages come from there instead - a front that routes by
+// Host serves each host's own site, so one gateway serves every site on the
+// machine; `boat-rudder --wap-only` runs the gateway alone for that.
 //
 // Two framings, one per port:
 //   - rover (49300): WTP over UDP as the Palm Neomar/Rover 1.5 browser speaks
@@ -20,8 +28,8 @@
 //     the WSP PDU, no WTP). Per the spec, untested on real phones; phones
 //     that insist on connection-oriented WSP (9201) aren't supported.
 //
-// Pages are fetched from this same server over loopback HTTP with
-// ?preview_epoch=-1, so they're exactly what the WML epoch renders.
+// Pages are fetched over HTTP with ?preview_epoch=-1, so they're exactly
+// what the WML epoch renders.
 //
 // The client's dead operator gateway IP never reaches this server: the
 // device connects through a PC running trc-wap-relay, which claims that IP

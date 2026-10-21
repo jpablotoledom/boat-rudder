@@ -7,7 +7,7 @@
 // /dashboard/users listing.
 #define USERS_LIST_LIMIT 100
 
-// "admin" | "author" + NUL.
+// "admin" | "author" | "viewer" + NUL.
 #define USER_ROLE_BUF_SIZE 16
 
 // One "users" document, for the /dashboard/users admin listing.
@@ -15,7 +15,7 @@ typedef struct {
     char *id;    // hex ObjectId (24 chars + NUL)
     char *name;
     char *email;
-    char *role;  // "admin" | "author" (missing field -> "admin")
+    char *role;  // "admin" | "author" | "viewer" (missing field -> "admin")
 } CmsUserAdminItem;
 
 // db.users.find().sort({email: 1}).limit(USERS_LIST_LIMIT). On success, *out
@@ -48,13 +48,13 @@ int cms_count_admins(void);
 
 // Hashes `password` (crypto_pwhash_str, Argon2id) and inserts
 // {name, email, password, role}. Returns 0 on success, -1 if email already
-// exists, role is not "admin"/"author", or on a DB error.
+// exists, role is not "admin"/"author"/"viewer", or on a DB error.
 int cms_create_user(const char *name, const char *email, const char *password, const char *role);
 
 // db.users.updateOne({_id: id_hex}, {$set: {name, email, role[, password]}}).
 // `new_password`, if non-empty, is hashed and included in the update.
 // Returns 0 on success, -1 if id_hex is invalid/not found, email belongs to
-// another user, role is not "admin"/"author", or on a DB error.
+// another user, role is not "admin"/"author"/"viewer", or on a DB error.
 int cms_update_user(const char *id_hex, const char *name, const char *email, const char *role,
                      const char *new_password);
 

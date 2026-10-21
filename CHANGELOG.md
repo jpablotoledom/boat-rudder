@@ -4,6 +4,9 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+## v0.0.6
+### 2026-10-21
+
 ### Theme customizer: View images
 
 **Added**
@@ -140,7 +143,7 @@ project sets them up. Nothing here is about several sites itself.
 - The updater's health check connects to `listen_address`.
 - `rundebug` stops only a server running on the same config, not every `boat-rudder`.
 
-## v0.0.6
+
 ### 2026-10-15
 
 ### Updates never delete a site's own files

@@ -87,11 +87,15 @@ h3 {
 
 .boat-rudder-navbar__title {
   font-family: var(--br-font-navbar-logo, Milonga), Georgia, serif;
-  transition: all 1s;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(0);
   padding: 20px;
   font-size: 28px;
   width: max-content;
-  margin-right: 300px;
+  white-space: nowrap;
+  transition: top 0.8s ease, left 0.8s ease, transform 0.8s ease, font-size 0.8s ease;
 }
 
 .boat-rudder-navbar__title a {
@@ -100,29 +104,36 @@ h3 {
 }
 
 .boat-rudder-navbar__title--onslidelogo {
-  position: absolute;
-  color: var(--br-color-navbar-logo, #ffffff);
+  top: 10vh;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 6vw;
   z-index: 2;
-  margin: 13vh auto;
-  transition: all 1s;
 }
 
 .boat-rudder-navbar__menu {
   display: flex;
   justify-content: center;
   padding: 16px;
-  transition: all 1s;
-  width: 350px;
+  margin-left: 250px;
+  transition: margin-left 0.8s ease, top 1s;
   z-index: 2;
-  position: absolute;
-  margin-left: 300px;
 }
 
 .boat-rudder-navbar__menu--onslidelogo {
-  transition: all 1s;
-  position: relative;
   margin-left: 0;
+}
+
+/* Under construction (menu_without_items()): #navbarMenu holds only the
+   mobile user link, hidden at desktop widths, so there is no menu to make
+   room for - drop its margin and keep the title centred in both states. */
+.boat-rudder-navbar__content:not(:has(.boat-rudder-navbar__menu-item:not(.boat-rudder-navbar__menu-item--user))) .boat-rudder-navbar__menu {
+  margin-left: 0;
+}
+
+.boat-rudder-navbar__content:not(:has(.boat-rudder-navbar__menu-item:not(.boat-rudder-navbar__menu-item--user))) .boat-rudder-navbar__title {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .boat-rudder-navbar__separator {
@@ -836,8 +847,7 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 /* RESPONSIVE */
 @media (max-width: 1200px) {
   .boat-rudder-navbar__title--onslidelogo {
-    margin-left: -8vw;
-    margin-top: 13vw;
+    top: 11vw;
   }
   .boat-rudder-home-blog, 
   .boat-rudder-footer {
@@ -846,13 +856,11 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 }
 
 @media (max-width: 960px) {
+  /* No menu beside it here (it is behind the hamburger), so the title
+     stays centred in both states and only moves up and shrinks. */
   .boat-rudder-navbar__title {
-    margin-right: 0;
-  }
-
-  .boat-rudder-navbar__title--onslidelogo {
-    font-size: 6vw;
-    margin: 10vh auto;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .boat-rudder-navbar__content {
@@ -871,13 +879,6 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     margin-left: 0;
     width: 100%;
     padding: 0;
-    /* display: none; */
-    /* left: 0;
-    width: 100%;
-    margin-left: 0;
-    flex-direction: column;
-    background-color: #000000;
-    z-index: 999; */
   }
 
   .boat-rudder-navbar__menu--open {
@@ -940,6 +941,10 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 
 @media (max-width: 768px) {
   .boat-rudder-youtube-embed__video iframe { width: 450px; height: 253px; }
+  .boat-rudder-navbar__title--onslidelogo {
+    top: 13vw;
+    font-size: 40px;
+  }
 }
 
 /* Below 600px the theme and language selectors live inside the hamburger
@@ -988,13 +993,9 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     padding-top: 45%;
   }
 
-  .boat-rudder-navbar__title {
-    margin-left: 35px;
-  }
-
   .boat-rudder-navbar__title--onslidelogo {
-    margin-top: 22%;
-    font-size: 28px;
+    top: 20vw;
+    font-size: 38px;
   }
 
   .boat-rudder-youtube-embed__video iframe { width: auto; height: auto; }

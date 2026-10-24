@@ -4,6 +4,22 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+## v0.0.7
+### 2026-10-24
+
+### Navbar: animated title on scroll
+
+**Changed**
+- On the home page (dark and light themes, epoch 3) the big site title over the banner now
+  slides up and shrinks into the navbar as you scroll, while the menu glides to the right to
+  make room for it; scrolling back to the top plays it in reverse. It used to jump between the
+  two positions. Below 960px, where the menu lives behind the hamburger, the title stays centred
+  and only moves up and shrinks.
+
+**Fixed**
+- In maintenance mode the navbar has no menu items, but the title was still pushed off-centre
+  by the room reserved for them. It is now centred, both over the banner and in the bar.
+
 ## v0.0.6
 ### 2026-10-21
 

@@ -53,6 +53,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | Path | Query | Module / handler | Response |
 |---|---|---|---|
 | `/` | - | `buildHomeWebSite()` (orchestrator: banner, home content, blog list) | Home page |
+| `/` *(no `Host`, no `?site=`, `site_directory` set)* | `site` | `site_page()` | Site chooser for `Host`-less browsers behind a multi-site front (see `site_key` in [configuration.md](configuration.md)) |
 | `/blog` | - | `blog_list()` + `category_menu_render()` + `buildBlogListWebSiteAtUrl()` | Blog listing (≤ `BLOG_LIST_LIMIT` = 50) |
 | `/blog/category/<slug>` | - | `blog_list_category()`; `<slug>` matched against `slugify(category name)` | Filtered listing, `404` if no category matches |
 | `/blog/categories` | `return` | `category-menu/category-menu-page_epoch<N>.html` | Full category menu + back link. Only epochs with that template (today: −1); others `404` |

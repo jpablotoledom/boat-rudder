@@ -7,6 +7,16 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-24
 
+### Several sites on one address: old browsers can choose
+
+**Added**
+- Behind a front that serves several sites on one address (multi-br), a browser too old to
+  send a `Host` header used to land on the default site with no way to reach the others. Now,
+  asking for `/`, it gets a list of every site. Once it picks one, every link, image and
+  redirect it receives carries `?site=<name>`, so it stays on that site, just as `?lang=` and
+  `?theme=` keep its language and theme. New settings `site_key` and `site_directory`, written
+  by multi-br. A browser that sends `Host` sees no change.
+
 ### Navbar: animated title on scroll
 
 **Changed**

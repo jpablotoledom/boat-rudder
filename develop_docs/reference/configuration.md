@@ -45,6 +45,8 @@ proxy_protocol=0          # 1 behind a layer-4 front sending PROXY headers
 theme=dark                # last-resort theme fallback (see below)
 lang=Eng                  # content language fallback (see below)
 public_url=               # absolute base for QR-code URLs, e.g. https://example.org
+site_key=                 # behind a multi-site front: this site's ?site= key for Host-less browsers
+site_directory=           # behind a multi-site front: "key|Title;key|Title" chooser for Host-less "/"
 
 #force_epoch=3            # force a browser epoch (-1..3); omit to auto-detect
 
@@ -101,6 +103,8 @@ update_repo=jpablotoledom/boat-rudder   # GitHub owner/name of the releases
 | `theme` | string | `dark` | **Last-resort theme fallback**, not "the active theme". Per request the theme is resolved as `?theme=` → `theme` cookie → `site_settings.active_theme` (set from `/dashboard/settings/themes`) → this key (`src/utils/request_theme.h`). Each template path is then looked up first in `html/themes/<theme>/...` and, if the theme doesn't override it, in the shared `html/templates/...` (`generate_url_theme()`). See [themes.md](themes.md). |
 | `lang` | string | `Eng` | Content language **fallback**. Used only when MongoDB is unavailable or no `languages` document has `is_default:true`; otherwise the content language comes from the `languages` collection (`/dashboard/languages`), then per visitor from `?lang=` / the `lang` cookie. |
 | `public_url` | string | *(empty)* | Public base URL of the site, without trailing slash. Used to build the absolute URLs encoded in QR codes (`/gallery/<id>` for epochs -1/0, `/image-qr/<code>`), so a phone scanning the code reaches the public host rather than whatever `Host` the retro browser used. When empty, the URL is built from the request's own `Host` header. See [qr-and-short-links.md](qr-and-short-links.md). |
+| `site_key` | string | *(empty)* | Behind a front that serves several sites on one address (multi-br). A browser that sends no `Host` header (HTTP/0.9, early HTTP/1.0) names no site, so the front routes it by `?site=<key>` in the request line. When set, every page, image and redirect served to a request **without `Host`** carries `site=<site_key>` on its in-site URLs, keeping the visitor on this site; a request with `Host` never gets it. 1-32 of `a-z 0-9 _ -`. Set by multi-br. See `src/utils/request_site.h`. |
+| `site_directory` | string | *(empty)* | The sites a `Host`-less visitor can choose from, `key\|Title;key\|Title;...`. With `site_key` set, a `Host`-less request for `/` with no `?site=` gets this list (links to `/?site=<key>`) instead of the home page. Titles can't contain `< > " &`. Set by multi-br. See `src/modules/site_page/`. |
 | `force_epoch` | int | *(unset = auto-detect)* | Forces the browser epoch (`-1`=WML, `0`=pre-standard, `1`=early, `2`=middle, `3`=modern) for **every** request, bypassing both `?preview_epoch=` and `detect_epoch()`. Any value outside `-1..3` keeps auto-detection. Useful for checking a retro layout from a modern browser - but note it also locks the dashboard out unless set to `3`, since the dashboard is epoch 3 only. |
 
 ### Database and sessions

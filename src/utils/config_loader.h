@@ -48,6 +48,20 @@ extern int force_epoch;
 // they are built from the request's Host header.
 extern char public_url[256];
 
+// Behind a front that serves several sites on one address (multi-br), a
+// browser that sends no Host header names no site, so the front routes it
+// by a `?site=<site_key>` query parameter instead. When this is set, every
+// page served to such a request carries `site=<site_key>` on its in-site
+// links, images and redirects, so the visitor stays on this site - see
+// utils/request_site.h. Empty (the default): a site on its own, nothing added.
+extern char site_key[64];
+
+// The sites a Host-less visitor can choose from, "key|Title;key|Title;..."
+// (a key is the other site's own site_key). When set together with
+// site_key, a Host-less request for "/" with no ?site= gets this list
+// instead of the home page. Empty: no list, the home page as always.
+extern char site_directory[1024];
+
 // MongoDB connection URI and database name (login/sessions, epoch3 only).
 extern char mongodb_uri[256];
 extern char mongodb_db[64];

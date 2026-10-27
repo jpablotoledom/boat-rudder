@@ -35,6 +35,7 @@
 #include "../modules/fonts_admin/fonts_admin.h"
 #include "../modules/languages_admin/languages_admin.h"
 #include "../modules/language_page/language_page.h"
+#include "../modules/site_page/site_page.h"
 #include "../modules/theme_page/theme_page.h"
 #include "../modules/login/login.h"
 #include "../modules/media_admin/media_admin.h"
@@ -55,6 +56,7 @@
 #include "../utils/request_wml.h"
 #include "../utils/request_lang.h"
 #include "../utils/request_theme.h"
+#include "../utils/request_site.h"
 #include "../utils/theme_catalog.h"
 #include "../utils/request_user.h"
 #include "../utils/config_loader.h"
@@ -1650,6 +1652,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         request_user_set(get_header_value(&req, "Cookie"));
         request_theme_set(get_header_value(&req, "Cookie"),
                            get_query_param(params, param_count, "theme"));
+        request_site_set(get_header_value(&req, "Host"));
         // Independent of resolve_epoch() below: that resolves which
         // templates render (honoring force_epoch/preview_epoch overrides),
         // this resolves what the *real* visiting browser can decode, off
@@ -1676,7 +1679,21 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         ThemeCssSheet css_sheet;
 
         if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
-            if (is_site_content_route(decoded_url) && !request_user_is_admin() &&
+            if (strcmp(decoded_url, "/") == 0 &&
+                site_page_applies(get_query_param(params, param_count, "site"))) {
+                // No Host, so no site named yet: the front sent this here
+                // only because this is its default site (see
+                // modules/site_page/site_page.h). Before the
+                // under-construction check - this page is about choosing a
+                // site, not this site's content.
+                int epoch = resolve_epoch(&req);
+                char *content = site_page(epoch);
+                char *body = content ? buildPageWebSite(epoch, "Sites", content) : NULL;
+                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                free(body);
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (is_site_content_route(decoded_url) && !request_user_is_admin() &&
                 serve_under_construction(ctx, &req, content_lang)) {
                 // Sent: the under-construction page stands in for the site.
 

@@ -18,6 +18,8 @@ char trusted_proxies[512] = {0};
 char theme[64]            = "dark";
 char lang[16]             = "Eng";
 char public_url[256]      = {0};
+char site_key[64]         = {0};
+char site_directory[1024] = {0};
 int  force_epoch          = -2;
 char mongodb_uri[256]     = "mongodb://localhost:27017";
 char mongodb_db[64]       = "boat_rudder";
@@ -89,6 +91,12 @@ int load_config(const char *filename) {
         } else if (strcmp(key, "public_url") == 0) {
             strncpy(public_url, value, sizeof(public_url) - 1);
             public_url[sizeof(public_url) - 1] = '\0';
+        } else if (strcmp(key, "site_key") == 0) {
+            strncpy(site_key, value, sizeof(site_key) - 1);
+            site_key[sizeof(site_key) - 1] = '\0';
+        } else if (strcmp(key, "site_directory") == 0) {
+            strncpy(site_directory, value, sizeof(site_directory) - 1);
+            site_directory[sizeof(site_directory) - 1] = '\0';
         } else if (strcmp(key, "force_epoch") == 0) {
             force_epoch = atoi(value);
         } else if (strcmp(key, "mongodb_uri") == 0) {

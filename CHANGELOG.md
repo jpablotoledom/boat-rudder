@@ -17,6 +17,15 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   `?theme=` keep its language and theme. New settings `site_key` and `site_directory`, written
   by multi-br. A browser that sends `Host` sees no change.
 
+**Fixed**
+- The *Hide/Show line numbers* button of code blocks in epoch 2 (a JavaScript button, not a
+  link) lost the visitor's theme on click, and behind multi-br sent a browser without `Host` to
+  the default site. It now keeps `?theme=` and `?site=` like every other link.
+- Browsers older than HTML 2.0, like Cello, send a link's `&amp;` and `#fragment` exactly as
+  written. Every parameter after the first was lost, so *Hide line numbers*, the language and
+  the theme didn't stick, and behind multi-br the click landed on the default site. The server
+  now reads `&amp;` as `&` and ignores a `#fragment` in the request.
+
 ### Navbar: animated title on scroll
 
 **Changed**

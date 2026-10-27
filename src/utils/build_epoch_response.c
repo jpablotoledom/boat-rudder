@@ -106,17 +106,18 @@ static char *utf8_to_latin1(const char *utf8) {
 // (protocol-relative), "http(s)://...", "mailto:", "javascript:" and
 // "#fragment" links are left alone. A link that already carries this param
 // (e.g. epoch 1's own direct "?lang=xx"/"?theme=xx" switch links) is left
-// untouched rather than double-tagged. `attr` is the attribute to tag,
-// "href" for links or "src" for images (see request_site.h's ?site=).
-static char *inject_query_param_into_attr(const char *html, const char *attr,
+// untouched rather than double-tagged. `marker` is what opens the URL to
+// tag, up to and including its opening quote, which also closes it:
+// "href=\"" for links, "src=\"" for images (see request_site.h's ?site=),
+// "location.href='" for epoch 2's JavaScript buttons.
+static char *inject_query_param_into_attr(const char *html, const char *marker_text,
                                           const char *param, const char *value) {
     size_t param_len = strlen(param);
     size_t value_len = strlen(value);
     size_t extra_per_link = 5 + param_len + 1 + value_len; // worst case: "&amp;" + param + "=" + value
 
-    char marker_text[16];
-    snprintf(marker_text, sizeof(marker_text), "%s=\"", attr);
     size_t marker_len = strlen(marker_text);
+    char quote = marker_text[marker_len - 1];
 
     size_t link_count = 0;
     for (const char *p = html; (p = strstr(p, marker_text)) != NULL; p += marker_len) link_count++;
@@ -145,7 +146,7 @@ static char *inject_query_param_into_attr(const char *html, const char *attr,
         w += marker_len;
 
         const char *val_start = marker + marker_len;
-        const char *val_end = strchr(val_start, '"');
+        const char *val_end = strchr(val_start, quote);
         if (!val_end) {
             strcpy(w, val_start);
             w += strlen(val_start);
@@ -194,15 +195,22 @@ static char *inject_query_param_into_attr(const char *html, const char *attr,
             w += val_len - base_len;
         }
 
-        *w++ = '"';
+        *w++ = quote;
         p = val_end + 1;
     }
 
     return out;
 }
 
+// Every link: href attributes, and the JavaScript navigations epoch 2's
+// buttons make instead (code-text's "Hide line numbers") - a link all the
+// same, which otherwise drops ?theme= and a Host-less request's ?site=.
 static char *inject_query_param_into_links(const char *html, const char *param, const char *value) {
-    return inject_query_param_into_attr(html, "href", param, value);
+    char *hrefs = inject_query_param_into_attr(html, "href=\"", param, value);
+    if (!hrefs) return NULL;
+    char *out = inject_query_param_into_attr(hrefs, "location.href='", param, value);
+    free(hrefs);
+    return out;
 }
 
 // WML is strict XML: a literal, author-typed "<br>" - not run through
@@ -289,9 +297,9 @@ static char *retrofit_body_for_epoch(const char *body, int epoch) {
     const char *cur = body;
 
     if (site) {
-        char *tagged = inject_query_param_into_attr(cur, "href", "site", site);
+        char *tagged = inject_query_param_into_links(cur, "site", site);
         if (tagged) { free(step); step = tagged; cur = step; }
-        tagged = inject_query_param_into_attr(cur, "src", "site", site);
+        tagged = inject_query_param_into_attr(cur, "src=\"", "site", site);
         if (tagged) { free(step); step = tagged; cur = step; }
     }
     if (epoch > EPOCH_MIDDLE) return step;

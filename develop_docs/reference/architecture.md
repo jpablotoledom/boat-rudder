@@ -42,6 +42,7 @@ own documents:
 | [fonts.md](fonts.md) | The uploaded font library used by the epoch 3 logo |
 | [analytics.md](analytics.md) | Visit tracking, GeoIP, the `/dashboard/analytics` report |
 | [wap-gateway.md](wap-gateway.md) | The UDP WAP 1.x gateway and WBXML compiler |
+| [extensions.md](extensions.md) / [creating-an-extension.md](creating-an-extension.md) | Extensions: separate programs that add pages to the dashboard - protocol, SDK, how to build one |
 | [qr-and-short-links.md](qr-and-short-links.md) | QR codes for retro epochs and `/qr/<code>` short links |
 | [code-highlighting.md](code-highlighting.md) | Server-side syntax highlighting for `code-text` blocks |
 | [templates-catalog.md](templates-catalog.md) | Inventory of every template, its arguments and markers |
@@ -79,6 +80,8 @@ boat-rudder/
 │   │       ├── url_parser.c/h           # URL path / query-string splitter + QueryParam
 │   │       ├── multipart_parser.c/h     # multipart/form-data body parser (file uploads)
 │   │       └── memmem_compat.h          # Portable memmem() shim (used by multipart parser)
+│   ├── extensions/                      # Extensions: registry, supervisor, forwarding (see extensions.md)
+│   │   └── extensions.c/h
 │   ├── wap_gateway/                     # WAP 1.x gateway (see wap-gateway.md)
 │   │   ├── wap_gateway.c/h              # UDP sockets, WTP/WSP framings, rate limit, loopback fetch
 │   │   └── wbxml.c/h                    # WML parser, WBXML compiler, single-packet pagination
@@ -191,6 +194,10 @@ boat-rudder/
 ├── data/
 │   └── GeoLite2-Country.mmdb            # Optional GeoIP database (analytics.md)
 ├── ssl/                                 # TLS certificate and key (optional)
+├── sdk/
+│   └── brext.h / brext.c                # C SDK compiled into every extension (extensions.md)
+├── extensions/<name>/                   # Installed extensions: extension.conf + program (gitignored)
+├── run/extensions/<name>.sock           # Their sockets, created at runtime (gitignored)
 ├── boat_rudder_builder.sh               # Entry point for every script (scripts.md)
 ├── VERSION                              # The version: --version, the startup log, the updater
 └── CMakeLists.txt                       # Build definition
@@ -320,6 +327,18 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   (`wbxml.c`) in single-packet pages of `WAP_PAGE_BYTES` = 860 bytes, and replies.
 - Its own thread; per-source-IP rate limit against UDP amplification.
 - Full description: [wap-gateway.md](wap-gateway.md).
+
+### `extensions/`
+- Finds extensions in `extensions/<name>/extension.conf`, keeps which are enabled
+  (`cms_extensions.c`, collection `extensions`), and runs a **supervisor thread** that starts the
+  program of every enabled one, restarts it with backoff and stops it on disable/shutdown
+  (`extensions_start()`/`extensions_stop()` from `main.c`).
+- `extensions_forward()` sends a `/dashboard/ext/<name>/…` request to the extension's Unix
+  socket (`run/extensions/<name>.sock`) with the verified user in `X-BR-*` headers; the router's
+  `serve_extension()` turns the answer into a page, a redirect or JSON.
+- The extension side is `sdk/brext.{h,c}`, compiled into each extension.
+- Full description: [extensions.md](extensions.md); diagram:
+  [extensions-components.puml](../diagrams/extensions-components.puml).
 
 ### `modules/analytics/` and `modules/analytics_view/`
 - `analytics_track_visit()` (called by the router for every request) increments per-day

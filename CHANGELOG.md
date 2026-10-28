@@ -7,6 +7,24 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-28
 
+### Extensions
+
+**Added**
+- Extensions: separate programs, installed under `extensions/<name>/`, that add pages to the
+  dashboard. Boat Rudder finds each one by its `extension.conf`, lists it in
+  **Dashboard → Administration → Extensions** (`/dashboard/settings/extensions`) disabled until
+  an admin enables it, runs the program of every enabled one (restarting it if it exits, giving
+  up after 5 exits in a minute) and stops it when disabled or when the server stops. Its pages
+  live at `/dashboard/ext/<name>/` behind every dashboard guard - session, CSRF, epoch 3, a
+  viewer's writes refused - and are forwarded to it over a Unix socket with the signed-in user's
+  id, name and role; the HTML it answers is shown inside the site's layout. An enabled extension
+  can add a link to a new *Extensions* group of the dashboard menu, for every role.
+- `sdk/brext.h` / `sdk/brext.c`: the C SDK an extension compiles in - socket server, routing,
+  form/query fields, the user's identity, HTML/JSON/redirect answers.
+- Reference for extension authors: `develop_docs/reference/extensions.md`, a step-by-step guide
+  in `develop_docs/reference/creating-an-extension.md`, and the design in
+  `develop_docs/plans/adr-extensions.md`.
+
 ### Absolute-form requests
 
 **Fixed**

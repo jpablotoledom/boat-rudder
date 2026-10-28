@@ -5,6 +5,7 @@
 #include "db/cms_users_admin.h"
 #include "db/mongodb_manager.h"
 #include "db/session_manager.h"
+#include "extensions/extensions.h"
 #include "modules/analytics/geoip.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
@@ -181,9 +182,14 @@ int main(int argc, char *argv[]) {
     if (wap_gateway_start() != 0)
         LOG_WARN("WAP gateway could not start - continuing without it");
 
+    // After the listener too: an extension may call back into the site.
+    // Without MongoDB nothing is enabled, so nothing starts.
+    extensions_start();
+
     while (atomic_load(&running)) sleep(1);
 
     LOG_INFO("Shutting down...");
+    extensions_stop();
     wap_gateway_stop();
     server_stop();
     geoip_cleanup();

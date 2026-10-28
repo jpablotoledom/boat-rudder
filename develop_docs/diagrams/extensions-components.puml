@@ -1,0 +1,71 @@
+@startuml extensions-components
+
+title Boat Rudder - Extensions: components
+
+skinparam backgroundColor #FAFAFA
+skinparam componentStyle rectangle
+skinparam component {
+    BackgroundColor #E8F5E9
+    BorderColor #2E7D32
+}
+skinparam database {
+    BackgroundColor #FFF9C4
+    BorderColor #F9A825
+}
+skinparam folder {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+actor "Browser\n(epoch 3)" as BROWSER
+actor "Admin" as ADMIN
+
+package "boat-rudder process" {
+    component "http_router\nserve_extension()" as ROUTER
+    component "dashboard guards\nsession · CSRF · role · epoch 3" as GUARDS
+    component "extensions_admin\n/dashboard/settings/extensions\nmenu group" as ADMINMOD
+    component "extensions registry\n(src/extensions/extensions.c)" as REG
+    component "supervisor thread\nstart · watch · restart · stop" as SUP
+    component "forwarder\nextensions_forward()" as FWD
+    component "orchestrator\nbuildPageWebSite()" as LAYOUT
+    component "cms_extensions" as CMSEXT
+}
+
+folder "extensions/<name>/" as EXTDIR {
+    file "extension.conf" as MANIFEST
+    file "bin/<program>" as BIN
+}
+
+folder "run/extensions/" as RUNDIR {
+    file "<name>.sock" as SOCK
+}
+
+package "extension process (one per enabled extension)" {
+    component "brext SDK\nbrext_serve()" as SDK
+    component "handler\n(the extension's code)" as HANDLER
+}
+
+database "MongoDB\n(site database)" as MONGO {
+    file "extensions\n{name, enabled}" as COLEXT
+    file "ext_<name>_*\n(extension data)" as COLDATA
+}
+
+BROWSER --> ROUTER : /dashboard/ext/<name>/...
+ROUTER --> GUARDS
+ROUTER --> FWD
+FWD --> SOCK : HTTP/1.1 +\nX-BR-* identity
+SOCK --> SDK
+SDK --> HANDLER
+HANDLER --> COLDATA
+ROUTER --> LAYOUT : HTML fragment
+
+ADMIN --> ADMINMOD : enable / disable
+ADMINMOD --> REG
+REG --> MANIFEST : discover, validate
+REG --> CMSEXT
+CMSEXT --> COLEXT
+SUP --> REG
+SUP --> BIN : fork + exec\n(BR_* env)
+SUP ..> SOCK : liveness probe
+
+@enduml

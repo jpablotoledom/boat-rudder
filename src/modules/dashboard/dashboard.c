@@ -5,6 +5,7 @@
 #include "../../utils/template_utils.h"
 #include "../analytics_view/analytics_view.h"
 #include "../entries_admin/entries_admin.h"
+#include "../extensions_admin/extensions_admin.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,8 +37,13 @@ char *dashboard(int epoch, const char *lang, const char *user_id, const char *ro
     int is_admin = strcmp(role, "admin") == 0 || strcmp(role, "viewer") == 0;
 
     // An Autor's option list only has the content options it can use.
-    char *nav  = load_template(is_admin ? "dashboard/nav-admin_epoch%d.html"
-                                        : "dashboard/nav-author_epoch%d.html", epoch);
+    char *nav_tpl = load_template(is_admin ? "dashboard/nav-admin_epoch%d.html"
+                                           : "dashboard/nav-author_epoch%d.html", epoch);
+    // Enabled extensions add their own group, for every role.
+    char *ext_nav = extensions_admin_nav(epoch);
+    char *nav = (nav_tpl && ext_nav) ? render_template(nav_tpl, ext_nav) : NULL;
+    free(nav_tpl);
+    free(ext_nav);
     char *rows = role_entries_rows(epoch, lang, user_id, is_admin, true);
     // /dashboard/analytics is admin-only, and so is its summary (shown above
     // the pending entries).

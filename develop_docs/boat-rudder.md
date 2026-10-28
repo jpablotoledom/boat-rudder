@@ -33,6 +33,7 @@ illustrated with diagrams. For deeper detail see:
 - [reference/themes.md](reference/themes.md) and [reference/fonts.md](reference/fonts.md) - themes, site settings, font library.
 - [reference/analytics.md](reference/analytics.md) - visit tracking, GeoIP and the report.
 - [reference/wap-gateway.md](reference/wap-gateway.md) - the UDP WAP gateway and WBXML.
+- [reference/extensions.md](reference/extensions.md) - extensions: separate programs that add pages to the dashboard (protocol, SDK), and [reference/creating-an-extension.md](reference/creating-an-extension.md), a step-by-step guide to building one.
 - [reference/qr-and-short-links.md](reference/qr-and-short-links.md), [reference/code-highlighting.md](reference/code-highlighting.md), [reference/templates-catalog.md](reference/templates-catalog.md).
 - [reference/configuration.md](reference/configuration.md) - every `configs/settings.conf` key.
 - [reference/security.md](reference/security.md) - every defense and the known gaps.

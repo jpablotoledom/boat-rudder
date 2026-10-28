@@ -40,6 +40,7 @@ collections). Nothing else in the code base opens a collection.
 | `site_settings` | Singleton: site name, active theme, home blog visibility, maintenance mode | `cms_site_settings.c` | `cms_site_settings.c` |
 | `themes` | Sparse per-theme overrides (colors, banner, footer, logo, CSS) | `cms_themes.c` | `cms_themes.c` |
 | `fonts` | Uploaded font library | `cms_fonts.c` | `cms_fonts.c` |
+| `extensions` | Which installed extensions are enabled | `cms_extensions.c` | `cms_extensions.c` |
 | `short_links` | Short codes for QR codes | `short_links.c` | `short_links.c` |
 | `browser_detection` | Singleton: browser detection rules and test cases | `cms_browser_detection.c`, `browser_detection_bson.c` | `cms_browser_detection.c` |
 | `page_visits_daily` | Site-wide analytics, one document per day | `analytics.c` (write), `analytics_view.c` (read) | both `.c` files |
@@ -267,6 +268,19 @@ filename under `html/content/themes/<key>/<logo|home-blog>/epoch<N>/`; on epoch 
 
 Files live under `html/assets/fonts/`. `name` is both the display name and the CSS
 `font-family` value, so it is restricted to `[A-Za-z0-9 _-]` on upload.
+
+### `extensions`
+
+One document per extension an admin ever enabled or disabled (`/dashboard/settings/extensions`);
+an installed extension with no document is disabled. See [extensions.md](extensions.md).
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | The extension's directory name under `extensions/` |
+| `enabled` | bool | Read at startup (`extensions_start()`); written by `cms_extensions_set_enabled()` (upsert) |
+
+Extensions keep their own data in collections named `ext_<name>_*` in the same database (e.g.
+`ext_notes_notes`); Boat Rudder never reads them.
 
 ### `browser_detection`
 

@@ -43,6 +43,8 @@
 #include "../modules/site_settings_admin/site_settings_admin.h"
 #include "../modules/browser_detection_admin/browser_detection_admin.h"
 #include "../modules/updates_admin/updates_admin.h"
+#include "../modules/extensions_admin/extensions_admin.h"
+#include "../extensions/extensions.h"
 #include "../db/cms_browser_detection.h"
 #include "../modules/users_admin/users_admin.h"
 #include "../db/cms_media.h"
@@ -820,6 +822,125 @@ static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *u
     }
 
     return 1;
+}
+
+// The reason phrase for an extension's status code - only the code comes
+// from the extension, so nothing it sends lands in the status line.
+static const char *extension_status_line(int status) {
+    switch (status) {
+    case 200: return "200 OK";
+    case 201: return "201 Created";
+    case 204: return "204 No Content";
+    case 400: return "400 Bad Request";
+    case 403: return "403 Forbidden";
+    case 404: return "404 Not Found";
+    case 409: return "409 Conflict";
+    case 413: return "413 Content Too Large";
+    case 422: return "422 Unprocessable Content";
+    case 503: return "503 Service Unavailable";
+    default:  return status >= 500 ? "500 Internal Server Error"
+                   : status >= 400 ? "400 Bad Request" : "200 OK";
+    }
+}
+
+// /dashboard/ext/<name>[/...]: an enabled extension's pages (see
+// extensions/extensions.h). Same gate as every dashboard page - epoch 3, a
+// session, CSRF on writes, a viewer's writes refused - then the request goes
+// to the extension with the user it was verified for, and its answer comes
+// back as: an HTML fragment wrapped in the site's layout, a redirect kept
+// under the extension's mount, or JSON passed through.
+static void serve_extension(void *ctx, HttpRequest *req, const char *decoded_url) {
+    int epoch = resolve_epoch(req);
+    if (!dashboard_allowed(req, epoch)) {
+        char *response = build_redirect_response("/dashboard", "", epoch);
+        send_or_error(ctx, response, req->method, epoch);
+        return;
+    }
+
+    char user_id[USER_ID_HEX_BUF_SIZE];
+    char role[USER_ROLE_BUF_SIZE];
+    if (!require_dashboard_session_role(ctx, req, epoch, user_id, role, sizeof(role))) return;
+
+    const char *rest = decoded_url + strlen(EXTENSION_ROUTE_PREFIX);
+    size_t name_len = strcspn(rest, "/");
+    char name[EXTENSION_NAME_MAX + 1];
+    ExtensionInfo info;
+    if (name_len == 0 || name_len >= sizeof(name)) {
+        send_error_response(ctx, 404, "404 Not Found", epoch);
+        return;
+    }
+    memcpy(name, rest, name_len);
+    name[name_len] = '\0';
+    if (!extensions_get(name, &info) || !info.enabled) {
+        send_error_response(ctx, 404, "404 Not Found", epoch);
+        return;
+    }
+
+    // The target as the browser sent it (still encoded, query included),
+    // minus the mount. The name is [a-z0-9_-], so it reads the same encoded.
+    char mount[sizeof(EXTENSION_ROUTE_PREFIX) + EXTENSION_NAME_MAX + 1];
+    snprintf(mount, sizeof(mount), EXTENSION_ROUTE_PREFIX "%s", name);
+    const char *tail = req->url + strlen(mount);
+    char target[2048];
+    snprintf(target, sizeof(target), "%s%s", tail[0] == '/' ? "" : "/", tail);
+
+    ExtensionRequest rq = {
+        .method = req->method,
+        .mount = mount,
+        .target = target,
+        .content_type = get_header_value(req, "Content-Type"),
+        .body = req->body,
+        .body_len = req->body ? (size_t)req->body_length : 0,
+        .user_id = user_id,
+        .user_name = request_user_name(),
+        .role = role,
+        .lang = request_lang(),
+        .theme = request_theme(),
+        .epoch = epoch,
+    };
+    ExtensionResponse rs;
+    int rc = extensions_forward(name, &rq, &rs);
+    if (rc != 0) {
+        send_error_response(ctx, rc == -2 ? 502 : 503,
+                            rc == -2 ? "502 Bad Gateway" : "503 Service Unavailable", epoch);
+        return;
+    }
+
+    if (rs.status >= 300 && rs.status < 400) {
+        // Only a path inside the mount: an extension can't send the browser
+        // off-site, nor elsewhere on this one.
+        if (rs.location[0] == '/' && rs.location[1] != '/' && !strchr(rs.location, '\\')) {
+            char location[sizeof(mount) + sizeof(rs.location)];
+            snprintf(location, sizeof(location), "%s%s", mount, rs.location);
+            send_or_error(ctx, build_redirect_response(location, "", epoch), req->method, epoch);
+        } else {
+            LOG_WARN("Extension %s: redirect outside its mount refused: %s", name, rs.location);
+            send_error_response(ctx, 502, "502 Bad Gateway", epoch);
+        }
+    } else if (strncasecmp(rs.content_type, "text/html", 9) == 0) {
+        char title[sizeof(rs.title) + 32];
+        snprintf(title, sizeof(title), "{{SITE_NAME}} - %s", rs.title[0] ? rs.title : info.title);
+        char *body = buildPageWebSite(epoch, title, rs.body);   // takes rs.body
+        rs.body = NULL;
+        char *response = body ? build_epoch_response_status(body, "", epoch,
+                                                            extension_status_line(rs.status)) : NULL;
+        free(body);
+        send_or_error(ctx, response, req->method, epoch);
+    } else if (strncasecmp(rs.content_type, "application/json", 16) == 0) {
+        char *response = build_json_response_status(rs.body, extension_status_line(rs.status));
+        if (response) {
+            connection_write(ctx, response, strcmp(req->method, "HEAD") == 0
+                                             ? (size_t)(strstr(response, "\r\n\r\n") + 4 - response)
+                                             : strlen(response));
+            free(response);
+        } else {
+            send_error_response(ctx, 500, "500 Internal Server Error", epoch);
+        }
+    } else {
+        LOG_WARN("Extension %s: unsupported Content-Type \"%s\"", name, rs.content_type);
+        send_error_response(ctx, 502, "502 Bad Gateway", epoch);
+    }
+    free(rs.body);
 }
 
 // Renders /dashboard/settings into a response: `site_name` in its form,
@@ -1678,7 +1799,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         char theme_epoch_str[8];
         ThemeCssSheet css_sheet;
 
-        if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
+        if (strncmp(decoded_url, EXTENSION_ROUTE_PREFIX, strlen(EXTENSION_ROUTE_PREFIX)) == 0 &&
+            (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0 ||
+             strcmp(req.method, "POST") == 0)) {
+            serve_extension(ctx, &req, decoded_url);
+
+        } else if (strcmp(req.method, "GET") == 0 || strcmp(req.method, "HEAD") == 0) {
             if (strcmp(decoded_url, "/") == 0 &&
                 site_page_applies(get_query_param(params, param_count, "site"))) {
                 // No Host, so no site named yet: the front sent this here
@@ -2136,6 +2262,25 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         connection_write(ctx, response, strlen(response));
                         free(response);
                         connection_close(ctx);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/settings/extensions") == 0) {
+                int epoch = resolve_epoch(&req);
+
+                if (!dashboard_allowed(&req, epoch)) {
+                    char *response = build_redirect_response("/dashboard", "", epoch);
+                    send_or_error(ctx, response, req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                        extensions_rescan();
+                        const char *error = get_query_param(params, param_count, "error");
+                        char *content  = extensions_admin_page(epoch, error);
+                        char *body     = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Extensions", content) : NULL;
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
                     }
                 }
 
@@ -3197,6 +3342,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);
                 }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   (match_id_route(decoded_url, "/dashboard/settings/extensions", "/enable", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/settings/extensions", "/disable", id, sizeof(id)))) {
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            if (require_admin_session(ctx, &req, epoch, user_id)) {
+                int enable = strcmp(decoded_url + strlen(decoded_url) - strlen("/enable"), "/enable") == 0;
+                int rc = extensions_set_enabled(id, enable);
+                const char *target = rc == 0  ? "/dashboard/settings/extensions"
+                                   : rc == -1 ? "/dashboard/settings/extensions?error=That+extension+can%27t+be+enabled+-+see+its+problem+below."
+                                              : "/dashboard/settings/extensions?error=Could+not+save+the+change+-+database+error.";
+                send_or_error(ctx, build_redirect_response(target, "", epoch), req.method, epoch);
             }
 
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/logout") == 0) {

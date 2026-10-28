@@ -53,6 +53,11 @@ if (wap_gateway_enabled?) then (yes)
     end note
 endif
 
+:extensions_start()
+read extensions/*/extension.conf + enabled ones,
+pthread_create(supervisor)
+(launches every enabled extension);
+
 fork
     partition "accept thread" {
         repeat
@@ -90,6 +95,8 @@ fork again
         ->SIGINT / SIGTERM;
     }
 end fork
+
+:extensions_stop()\njoin supervisor, SIGTERM extensions\n(SIGKILL after 3 s);
 
 :wap_gateway_stop()\njoin gateway thread, close UDP sockets;
 

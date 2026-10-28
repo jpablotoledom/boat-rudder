@@ -113,6 +113,7 @@ set(SOURCES
     src/modules/site_settings_admin/site_settings_admin.c
     src/modules/browser_detection_admin/browser_detection_admin.c
     src/modules/updates_admin/updates_admin.c
+    src/modules/extensions_admin/extensions_admin.c
     src/modules/fonts_admin/fonts_admin.c
     src/modules/analytics/analytics.c
     src/modules/analytics/geoip.c
@@ -140,6 +141,8 @@ set(SOURCES
     src/db/browser_detection_bson.c
     src/db/cms_browser_detection.c
     src/db/cms_themes.c
+    src/db/cms_extensions.c
+    src/extensions/extensions.c
     src/db/cms_fonts.c
     src/db/language_catalog.c
     src/db/session_manager.c

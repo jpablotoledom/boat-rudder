@@ -462,7 +462,7 @@ static int media_folder_of(mongoc_collection_t *users, const bson_oid_t *user_oi
         for (size_t i = 0; i < dir_count; i++) {
             char path[512];
             struct stat st;
-            snprintf(path, sizeof(path), "%s/%s/%s", MEDIA_POSTS_ROOT, folder, dir_names[i]);
+            snprintf(path, sizeof(path), "%s/%.255s/%.127s", MEDIA_POSTS_ROOT, folder, dir_names[i]);
             if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) hits++;
         }
         if (hits > 0 && username_taken(users, folder) != 0) {

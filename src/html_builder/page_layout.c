@@ -570,25 +570,6 @@ char *page_layout_favicon_url(int epoch, int *is_custom) {
     return result;
 }
 
-// {{BODY_BACKDROP}}: unlike the other markers, what it asks for is not
-// spliced where it stands - it is the <body>'s attributes, which live in the
-// layout - so it is removed from `*fragment` and the theme's
-// layout/body-backdrop_epoch<N>.html is returned for {{BODY_BACKGROUND}}.
-// "" without the marker or the file; NULL only on allocation failure.
-static char *take_body_backdrop(char **fragment, int epoch) {
-    if (!strstr(*fragment, "{{BODY_BACKDROP}}")) return strdup("");
-
-    char *without = str_replace_first(*fragment, "{{BODY_BACKDROP}}", "");
-    if (!without) return NULL;
-    free(*fragment);
-    *fragment = without;
-
-    char *path = generate_url_theme("layout/body-backdrop_epoch%d.html", epoch);
-    char *backdrop = path ? read_file_to_string(path) : NULL;
-    free(path);
-    return backdrop ? backdrop : strdup("");
-}
-
 char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch) {
     if (!fragment_html) return NULL;
 
@@ -628,16 +609,7 @@ char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch) {
         return NULL;
     }
 
-    char *backdrop = take_body_backdrop(&fragment_html, epoch);
-    char *with_bg = backdrop ? str_replace_first(titled, "{{BODY_BACKGROUND}}", backdrop) : NULL;
-    free(backdrop);
-    free(titled);
-    if (!with_bg) {
-        free(fragment_html);
-        return NULL;
-    }
-
-    char *with_retro_colors = splice_retro_colors(with_bg, epoch);
+    char *with_retro_colors = splice_retro_colors(titled, epoch);
     if (!with_retro_colors) {
         free(fragment_html);
         return NULL;

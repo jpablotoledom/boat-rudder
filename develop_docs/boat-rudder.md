@@ -317,7 +317,7 @@ skinparam package {
 
 package "html/themes/<theme>/ (per theme)" {
     object "layout/layout_epoch<N>.html" as LAYOUT {
-      {{PAGE_TITLE}}, {{CONTENT}}, {{BODY_BACKGROUND}}
+      {{PAGE_TITLE}}, {{CONTENT}}
       epoch 3: {{THEME_COLORS}}
       epoch 1/2: {{COLOR_*}}
     }

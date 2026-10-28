@@ -30,8 +30,6 @@ and which `{{MARKERS}}` it carries. How templates are resolved is in
 | `{{FOOTER}}` | `splice_footer()` | Theme footer (DB override or `layout/footer_epoch<N>.html`) |
 | `{{FOOTER_LOGO}}` | `splice_footer_logo()` | Footer logo image/text or `layout/footer-logo_epoch<N>.html` |
 | `{{LIGHTBOX}}` | `splice_part()` | `layout/lightbox_epoch<N>.html` (epoch 3 only) |
-| `{{BODY_BACKDROP}}` | `take_body_backdrop()` | Removed from the fragment that carries it (epoch 2 `page-home`, `page-blog`); asks for `layout/body-backdrop_epoch<N>.html` |
-| `{{BODY_BACKGROUND}}` | `page_layout_wrap()` | In the layout's `<body>`: the theme's `layout/body-backdrop_epoch<N>.html` when the fragment carries `{{BODY_BACKDROP}}`, else nothing |
 | `{{THEME_COLORS}}` | `splice_theme_colors()` | Epoch 3 `<style>` with `--br-color-*` and logo font |
 | `{{COLOR_*}}` | `splice_retro_colors()` | Epoch 1/2 hex colors (see [themes.md](themes.md#42-how-colors-reach-each-epoch)) |
 
@@ -44,11 +42,10 @@ shipped themes (`dark`, `light`) contain the same set.
 
 | Directory | Template | Epochs | Args | Markers | Used by |
 |---|---|---|---|---|---|
-| `layout/` | `layout` | −1…3 | 0 | `CONTENT PAGE_TITLE BODY_BACKGROUND THEME_COLORS(3) COLOR_*(1,2)` | `page_layout_wrap()` - the outer document |
+| `layout/` | `layout` | −1…3 | 0 | `CONTENT PAGE_TITLE THEME_COLORS(3) COLOR_*(1,2)` | `page_layout_wrap()` - the outer document |
 | | `footer` | −1…3 | 0 | `FOOTER_LOGO SITE_NAME` | `splice_footer()` fallback |
 | | `footer-logo` | 2 | 0 | `SITE_NAME` | `splice_footer_logo()` fallback |
 | | `lightbox` | 3 | 0 | | `splice_part()` |
-| | `body-backdrop` | 2 | 0 | | `take_body_backdrop()` - the `<body>` attributes (` background="..."`) of pages whose fragment carries `{{BODY_BACKDROP}}`; optional, none = plain body |
 | `menu/` | `menu` | −1…3 | 3/4/5 | | `menu()` container |
 | | `menu-item`, `menu-item-selected` | −1…3 | 3/4 | | one nav item (selected = current section) |
 | | `menu-item-separator` | −1…3 | 0 | | between items |

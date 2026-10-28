@@ -22,9 +22,6 @@
 // when present and dropped when the file is missing:
 //   {{FOOTER}}      the site footer
 //   {{LIGHTBOX}}    epoch 3 gallery viewer (page, page-entry)
-// and one that is removed from the fragment instead, its file going into the
-// layout's {{BODY_BACKGROUND}} (the attributes of epoch 2's <body>):
-//   {{BODY_BACKDROP}}  the page backdrop (page-home, page-blog on epoch 2)
 //
 // Takes ownership of `fragment_html` and frees it. Returns NULL on failure.
 char *page_layout_wrap(char *fragment_html, const char *page_title, int epoch);

@@ -7,13 +7,33 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-28
 
+### No page-wide backdrop on epoch 2
+
+**Removed**
+- Epoch 2's home and blog listing also put the listing's grid image on the whole `<body>`
+  (`layout/body-backdrop_epoch2.html`, asked for with `{{BODY_BACKDROP}}` and spliced into
+  the layout's `{{BODY_BACKGROUND}}`). The image was drawn for the listing, which already sets
+  it on its own `<table>` (`home-blog_epoch2.html`), so the page around it now shows only the
+  theme's background color. The file, both markers and `take_body_backdrop()` are gone; a
+  third-party theme should delete its `body-backdrop_epoch2.html` and the
+  `{{BODY_BACKGROUND}}` / `{{BODY_BACKDROP}}` markers from its templates, which would
+  otherwise reach the browser as literal text.
+
 ### Uploaded logo laid out like the default one
 
 **Fixed**
 - An uploaded navbar logo for epoch -1 (WAP) was a bare `<img>`: no link home and no line
-  break, so the first menu item ran on right after the picture. It now has the same shape as
-  the theme's default logo - `<a href="/">` around the image, then `<br>` - and on epoch 2 the
-  same link home its default has. Epoch 1's default is a bare image, as before.
+  break, so the first menu item ran on right after the picture. It is now wrapped in
+  `<a href="/">` like the theme's default logo, and on epoch 2 gets the same link home its
+  default has. Epoch 1's default is a bare image, as before.
+
+**Changed**
+- The WAP menu's line break after the logo now comes from `menu()` itself, for every kind of
+  logo (uploaded image, text, legacy raw markup or the theme's default), and only when there
+  is a logo - the home page, which has none, does not start with an empty line. The default
+  `menu-logo_epoch-1.html` of both themes no longer carries its own `<br>`; a third-party
+  theme's template should drop it too (one ending in `<br>` is left as is, never doubled).
+- Silenced a `-Wformat-truncation` warning in the release build (`cms_users_admin.c`).
 
 ### 2026-10-24
 

@@ -112,16 +112,13 @@ Everything around it is identical for every page of an epoch, so it lives once p
 | `layout/layout_epoch<N>.html` | doctype, head, `<body>`, `{{PAGE_TITLE}}`, `{{CONTENT}}` |
 | `layout/footer_epoch<N>.html` | the site footer |
 | `layout/lightbox_epoch3.html` | epoch 3 gallery viewer |
-| `layout/body-backdrop_epoch2.html` | the `<body>` backdrop attribute, for the pages that ask for it |
 
 `page_layout_wrap()` (`src/html_builder/page_layout.c`) does the assembly. A fragment opts into a
 part by carrying its marker - `{{FOOTER}}`, `{{LIGHTBOX}}` - and a part with no
 file for that epoch resolves to nothing, so the retro epochs drop the epoch-3 viewers without
-needing an empty file each. The one part that is not spliced where its marker stands is the
-epoch-2 backdrop: it is an attribute of the layout's `<body>`, so a fragment asks for it with
-`{{BODY_BACKDROP}}` (home and the blog listing do, content pages don't), the marker is removed,
-and the theme's `layout/body-backdrop_epoch2.html` fills the layout's `{{BODY_BACKGROUND}}`.
-Which pages carry a backdrop, and which image, is template content - nothing in C names either.
+needing an empty file each. The `<body>` itself carries no background image: a background
+belongs to the element it was drawn for (epoch 2's blog listing sets its own on its `<table>`,
+`home-blog_epoch2.html`), not to the whole page.
 
 Two practical consequences. Adding a part to every page of an epoch is a one-file edit, not
 fourteen. And because the `layout/` files are substituted textually rather than through
@@ -751,8 +748,8 @@ session of an Administrador (`request_user_is_admin()`, `users.role == "admin"`;
 Observador gets the page too):
 
 - The **home page layout** (`buildUnderConstructionWebSite()`, which shares
-  `build_home_layout()` with `buildHomeWebSite()`): navigation bar, main banner, footer and
-  backdrop as usual, but the bar **without menu items** (`menu_without_items()`: logo, language
+  `build_home_layout()` with `buildHomeWebSite()`): navigation bar, main banner and footer
+  as usual, but the bar **without menu items** (`menu_without_items()`: logo, language
   and theme selectors and user link stay, `#navbarMenu` is empty; WML shows this bar instead of
   its compact `[Menu]` link) and **no blog list**, and in the home content region the content blocks of the
   `page` entry whose `link` is `site_settings.under_construction_page` (drafts included) - in
@@ -928,7 +925,8 @@ Besides the items, `menu()` assembles:
   [themes.md](themes.md#5-banner-footer-and-logo-per-theme-per-epoch)), falling back to the
   legacy raw logo, then to `menu-logo_epoch<N>.html`; on epoch 3 the title is text (site name or
   custom text in a chosen font) or an image. Omitted on the home page, where the banner stands
-  in for it.
+  in for it. On WML, `menu()` itself puts a `<br>` after any non-empty logo (unless it already
+  ends in one), so `menu-logo_epoch-1.html` must not carry its own.
 - **Language control** (`menu-lang*`) and **theme control** (`menu-theme*`, only when there are
   at least two themes; epoch 3 drop-down, epoch 1/2 link to `/theme`, none on 0/−1).
 - **Signed-in user** (`menu-user*`, epoch 3) from `request_user_name()`.

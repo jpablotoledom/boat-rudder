@@ -16,6 +16,7 @@
 #include "../../utils/theme_catalog.h"
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 // Used when the `menu` collection is empty, unreachable, or mongodb is not
 // ready, so the nav bar is never empty.
@@ -223,6 +224,20 @@ static char *user_menu_item_mobile(int epoch) {
 }
 
 // menu() and menu_without_items(): `with_items` 0 leaves the menu items out.
+// True when `html` ends (trailing whitespace aside) in <br>, <br/> or <br />.
+static int ends_with_br(const char *html) {
+    size_t n = strlen(html);
+    while (n > 0 && strchr(" \t\r\n", html[n - 1]))
+        n--;
+    static const char *const forms[] = { "<br>", "<br/>", "<br />" };
+    for (size_t i = 0; i < sizeof(forms) / sizeof(forms[0]); i++) {
+        size_t len = strlen(forms[i]);
+        if (n >= len && strncasecmp(html + n - len, forms[i], len) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static char *build_menu(const char *current_url, int epoch, int with_items) {
     // WML: every page's first screen is one ~860-byte packet (see
     // wap_gateway/wbxml.h), and the full menu - logo, every section, the
@@ -399,13 +414,9 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
                                          epoch == EPOCH_WML ? "/" : "");
             // Same shape as the theme's own menu-logo_epoch<N>.html, so an
             // uploaded logo sits in the menu exactly like the default one:
-            // epoch 2 and WML link it home, and WML puts the menu items on
-            // the next line (build_epoch_response() turns the <br> into
-            // WML's <br/>). Epoch 1's default is the bare image.
+            // epoch 2 and WML link it home. Epoch 1's default is the bare image.
             char *wrapped = NULL;
-            if (img && epoch == EPOCH_WML)
-                wrapped = render_template("<a href=\"/\">%s</a>\n<br>", img);
-            else if (img && epoch == EPOCH_MIDDLE)
+            if (img && (epoch == EPOCH_WML || epoch == EPOCH_MIDDLE))
                 wrapped = render_template("<a href=\"/\">%s</a>", img);
             if (wrapped) { free(img); img = wrapped; }
             if (img) { free(logo); logo = img; }
@@ -426,6 +437,20 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
                 free(logo_html);
             }
         }
+    }
+
+    // WML: the menu items start on the line after the logo, whatever drew
+    // it (upload, text, raw markup or the theme's menu-logo_epoch-1.html,
+    // which therefore carries no <br> of its own). Only when there is a logo
+    // - home has none and must not open with a blank line - and not twice
+    // for raw markup saved with its own trailing break.
+    // build_epoch_response() turns the <br> into WML's <br/>.
+    if (epoch == EPOCH_WML && logo && logo[0] && !ends_with_br(logo)) {
+        size_t n = strlen(logo);
+        while (n > 0 && strchr(" \t\r\n", logo[n - 1]))
+            logo[--n] = '\0';
+        char *with_br = render_template("%s\n<br>", logo);
+        if (with_br) { free(logo); logo = with_br; }
     }
 
     char *lang_html = language_selector(epoch);

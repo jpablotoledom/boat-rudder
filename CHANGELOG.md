@@ -7,6 +7,17 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-28
 
+### Absolute-form requests
+
+**Fixed**
+- A request naming the full URL - `GET http://thejoyrobot.com/ HTTP/1.1`, the absolute form
+  a client sends to a proxy (RFC 9112 3.2.2) - got a 404: the scheme and host were taken as
+  part of the path. A phone whose connection profile names a proxy (UC Browser on Java ME)
+  passes its requests on that way, so every public site came up blank while a LAN address,
+  reached directly, worked. `parse_http_request()` now reduces the target to its path and
+  query (`/` when there is none) and takes the host from it, in place of any `Host` header,
+  or as one when the client sent none.
+
 ### Rich text that WAP browsers can read
 
 **Fixed**

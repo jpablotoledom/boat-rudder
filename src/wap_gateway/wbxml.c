@@ -198,6 +198,19 @@ static int is_void_tag(const char *name) {
            !strcasecmp(name, "input") || !strcasecmp(name, "meta");
 }
 
+// True when `parent` holds text and its last child is an element other than
+// <br> - the left side of a gap between two inline siblings.
+static int inline_gap(const Node *parent) {
+    static const char *const text_parents[] = { "p", "a", "anchor", "b", "i", "u", "em",
+                                                "strong", "big", "small", "td" };
+    if (!parent->name || parent->nk == 0) return 0;
+    const Node *last = parent->kids[parent->nk - 1];
+    if (!last->name || !strcasecmp(last->name, "br")) return 0;
+    for (size_t k = 0; k < sizeof(text_parents) / sizeof(text_parents[0]); k++)
+        if (!strcasecmp(parent->name, text_parents[k])) return 1;
+    return 0;
+}
+
 // A tolerant XML reader for this server's own WML: prolog, DOCTYPE and
 // comments skipped; a stray close tag pops back to its match (or is ignored).
 static Node *parse_wml(const char *s, size_t n) {
@@ -213,6 +226,12 @@ static Node *parse_wml(const char *s, size_t n) {
             size_t j = i;
             while (j < n && s[j] != '<') j++;
             char *t = make_text(s + i, j - i);
+            // A blank run between two inline siblings ("</a> <img", "</b> <i>")
+            // is a word gap the reader sees, not markup layout - kept as one
+            // space. Elsewhere (between cards and paragraphs, after a <br/>,
+            // before a close tag) it is dropped.
+            if (!t && j < n && s[j + 1] != '/' && inline_gap(stack[sp]))
+                t = strdup(" ");
             if (t) {
                 Node *tn = node_new(NULL);
                 if (tn) { tn->text = t; node_add(stack[sp], tn); } else free(t);

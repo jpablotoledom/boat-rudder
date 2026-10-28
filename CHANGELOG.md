@@ -7,6 +7,22 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-28
 
+### Rich text that WAP browsers can read
+
+**Fixed**
+- A paragraph written in the dashboard's rich-text editor went out to WAP (epoch -1) as the
+  editor's HTML - `<p>` inside the template's own `<p>`, `<span>`, `<ul data-...>`, `style`
+  and `data-*` attributes - none of which WML 1.1 has. A strict client such as UC Browser on
+  Java ME showed a blank screen for the whole page (the live thejoyrobot.com home did). For
+  WML the paragraph is now rebuilt from WML's own vocabulary (`render_paragraph()`,
+  entry_page.c): b/i/u/em/strong/big/small without attributes, `<a>` with its `href` only,
+  `<img>` with `src`/`alt`, self-closed; the end of a block (p, div, h1-h6, blockquote, li)
+  becomes `<br/>`, list items start with "- "; any other tag is dropped and its text kept; a
+  `$` is doubled, since a lone one opens a WML variable. Checked against the WML 1.1 DTD.
+- The WML paginator and the WAP gateway's WBXML compiler dropped a blank run between two
+  inline elements, so `</a> <img` or `</b> <i>` lost their word gap. It is now kept as one
+  space when it sits between two siblings inside text (wbxml.c's `parse_wml()`).
+
 ### No page-wide backdrop on epoch 2
 
 **Removed**

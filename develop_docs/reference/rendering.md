@@ -687,6 +687,16 @@ future WML template: `<a>` may only contain `#PCDATA`, `br`, or `img` - never `<
 emphasis tags nested inside it (the reverse nesting, `<b><a>...</a></b>`, is fine, since `<b>`'s
 own content model does allow an anchor).
 
+The dashboard's rich-text editor, though, stores whatever HTML it produces - `<p>` (which would
+land inside the paragraph template's own `<p>`), `<span>`, `<div>`, headings, `style`/`data-*`
+attributes - and a strict client (UC Browser on Java ME) shows a blank screen for a whole deck
+with any of it. So a paragraph block is rebuilt for WML before it reaches the template
+(`wml_safe_paragraph_text()`, `entry_page.c`): b/i/u/em/strong/big/small without attributes
+(and not inside an `<a>`), `<a>` with `href` only, `<img>` with `src`/`alt`, self-closed; the end
+of a block becomes `<br/>`, `<li>` becomes `"- "`; any other tag and comments are dropped, their
+text kept; `$` is doubled (a lone one opens a WML variable reference). The two fixups above stay
+for the markup that does not come from a paragraph block.
+
 ### The response layer
 
 `build_epoch_response()` (`src/utils/build_epoch_response.c`) is the last step of every HTML/WML

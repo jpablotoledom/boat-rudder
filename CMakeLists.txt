@@ -114,6 +114,7 @@ set(SOURCES
     src/modules/browser_detection_admin/browser_detection_admin.c
     src/modules/updates_admin/updates_admin.c
     src/modules/extensions_admin/extensions_admin.c
+    src/modules/search_page/search_page.c
     src/modules/fonts_admin/fonts_admin.c
     src/modules/analytics/analytics.c
     src/modules/analytics/geoip.c
@@ -142,6 +143,7 @@ set(SOURCES
     src/db/cms_browser_detection.c
     src/db/cms_themes.c
     src/db/cms_extensions.c
+    src/db/cms_search.c
     src/extensions/extensions.c
     src/db/cms_fonts.c
     src/db/language_catalog.c

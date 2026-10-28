@@ -845,6 +845,58 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder-theme__item:hover { background: #e2e2e4; color: #1a1a1a; }
 .boat-rudder-theme__item--active { color: var(--br-color-navbar-menu-active, #3800aa); font-weight: bold; }
 
+/* Search - a magnifier just left of the theme switcher (menu-search_epoch3.html);
+   it opens a search box below it, submitted to /search. */
+.boat-rudder-navbar-search { position: relative; display: inline-block; }
+.boat-rudder-navbar-search__btn {
+  background: none; border: 1px solid transparent; line-height: 0;
+  color: var(--br-color-navbar-menu-normal, #680072);
+  padding: 5px 8px; cursor: pointer; border-radius: 3px;
+}
+.boat-rudder-navbar-search__btn:hover {
+  color: var(--br-color-navbar-menu-hover, #006d49);
+}
+.boat-rudder-navbar-search__form {
+  display: none; position: absolute; right: 0; top: 100%; z-index: 50;
+  background: #f4f4f5; border: 1px solid #d6d6d8; border-radius: 4px;
+  padding: 6px;
+}
+.boat-rudder-navbar-search--open .boat-rudder-navbar-search__form { display: block; }
+.boat-rudder-navbar-search__input {
+  width: 240px; padding: 6px 8px; font: inherit; font-size: 15px;
+  color: #1a1a1a; background: #ffffff;
+  border: 1px solid #c8c8cc; border-radius: 3px;
+}
+
+/* Search page (/search, search/search_epoch3.html). */
+.boat-rudder-search { max-width: 760px; margin: 40px auto; }
+.boat-rudder-search__form { display: flex; gap: 8px; margin: 16px 0; }
+.boat-rudder-search__input {
+  flex: 1; min-width: 0; padding: 8px 10px; font: inherit;
+  color: #1a1a1a; background: #ffffff;
+  border: 1px solid #c8c8cc; border-radius: 3px;
+}
+.boat-rudder-search__btn {
+  padding: 8px 18px; font: inherit; font-weight: bold; cursor: pointer;
+  color: #ffffff; background: var(--br-color-navbar-menu-active, #3800aa);
+  border: none; border-radius: 3px;
+}
+.boat-rudder-search__summary { color: #5f5f66; }
+.boat-rudder-search__results { list-style: none; margin: 0; padding: 0; }
+.boat-rudder-search-result {
+  padding: 14px 0; border-bottom: 1px solid var(--br-color-table-border, #d6d6d8);
+}
+.boat-rudder-search-result__title { font-size: 1.15em; font-weight: bold; }
+.boat-rudder-search-result__meta {
+  margin: 2px 0 6px; font-size: 0.85em;
+  color: var(--br-color-blog-list-item-date, #5f5f66);
+}
+.boat-rudder-search-result__snippet { margin: 0; }
+.boat-rudder-search-result__mark {
+  background: none; font-weight: bold;
+  color: var(--br-color-navbar-menu-active, #3800aa);
+}
+
 /*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
 /* RESPONSIVE */
 @media (max-width: 1200px) {
@@ -969,8 +1021,12 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     font-size: 16px; padding: 6px 12px; border-color: currentColor;
   }
   .boat-rudder-navbar__menu-options .boat-rudder-navbar-lang__menu,
-  .boat-rudder-navbar__menu-options .boat-rudder-navbar-theme__menu {
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-theme__menu,
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-search__form {
     right: auto; left: 50%; transform: translateX(-50%);
+  }
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-search__btn {
+    padding: 8px 12px; border-color: currentColor;
   }
 
   .boat-rudder-home-blog-item {

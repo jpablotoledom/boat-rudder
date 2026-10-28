@@ -939,6 +939,9 @@ Besides the items, `menu()` assembles:
   ends in one), so `menu-logo_epoch-1.html` must not carry its own.
 - **Language control** (`menu-lang*`) and **theme control** (`menu-theme*`, only when there are
   at least two themes; epoch 3 drop-down, epoch 1/2 link to `/theme`, none on 0/−1).
+- **Search control** (`menu-search*`, `search_link()`), first of the options (before the
+  language and theme controls; after the language link on epoch 0/−1) - see
+  [Search](#search-search).
 - **Signed-in user** (`menu-user*`, epoch 3) from `request_user_name()`.
 - **WML compact mode** - on epoch −1 every page except `/menu` gets `menu-compact_epoch-1.html`,
   a single `[Menu]` link to `/menu?return=<current path>`; `/menu` renders the full menu plus a
@@ -951,6 +954,43 @@ Besides the items, `menu()` assembles:
 - Blog list (`/blog`) and all blog entries pass `"/blog"` - entries use the section URL so the Blog item stays highlighted.
 - Pages pass `"/page/<link>"` - matches menu items that point to that specific page.
 - Dashboard and other internal routes pass `"/"` (no menu item is highlighted).
+
+### Search (`/search`)
+
+`GET /search?q=…`, every epoch (`search_page()`, `src/modules/search_page/`; query in
+`cms_search_entries()`, `src/db/cms_search.c`). Closed like the rest of the site's content while
+the site is under construction.
+
+**What is searched**: entries with `enabled: true` and `type` `blog` or `page` (drafts never), in
+their title, summary, and `title`/`paragraph`/`list` blocks - in the reader's language, with the
+same fallback to English the entry page uses, so a result never comes from a translation the
+reader can't see. Case-insensitive for ASCII and Latin-1 letters; the query is taken literally
+(no wildcards); 2 to 100 bytes.
+
+**How**: MongoDB pre-selects up to 200 candidates with a case-insensitive regex on those fields
+(the reader's language and English), newest first; each candidate is then read as the reader
+would (`cms_get_entry_by_link()`), rich text reduced to plain text (tags dropped, entities
+decoded), and kept only if the query is really there - so `<span` never matches markup. The
+first place it appears gives the excerpt: about 70 bytes before and 110 after, cut on words,
+the match wrapped in `search-mark_epoch<N>.html`. At most 30 results. A page whose `link` is `/`
+(the home entry) links to `/`.
+
+**Forms on old browsers**: pages for epoch 0/1 and WML go out in ISO-8859-1, so their forms
+come back in it; a query that isn't valid UTF-8 is read as Latin-1. A form's `action` isn't
+re-tagged like links are (see [Language selection](#language-selection-and-persistence)), so
+the page adds hidden `lang` (epoch 0/1), `theme` (epoch 1/2) and `site` (Host-less) fields;
+WML's `<go href>` is a link and gets them from the response layer.
+
+**Entry points** (`menu-search_epoch<N>.html`, first of the options bar):
+
+| Epoch | Control |
+|---|---|
+| 3 | A magnifier button; it opens a search box below it (`boat-rudder-navbar-search--open`, script in `menu_epoch3.html`), Enter submits to `/search`, an empty box submits nothing. Inside the hamburger menu below 600px |
+| 2, 1 | `assets/menu/search.gif` linking to `/search`, before the language and theme links |
+| 0, −1 | a `Search` text link after the language link (WML: in the full `/menu`; the compact `[Menu]` bar is unchanged) |
+
+The results page has its own form, so a search can be refined from there on every epoch; it is
+built with `buildPageWebSiteAtUrl(…, "/search")`, so no menu item is highlighted.
 
 ---
 

@@ -7,6 +7,18 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-28
 
+### Site search
+
+**Added**
+- Search, on every epoch: `/search?q=` lists the published blog entries and pages (never drafts)
+  whose title, summary or text contain the words, in the reader's language, each with an
+  excerpt around the first match. The results page has its own search form.
+- A magnifier in the menu, first of the options (before language and theme): on epoch 3 it opens a search box
+  (Enter searches); on epoch 1/2 it is a small icon (`assets/menu/search.gif`, one per theme)
+  linking to the search page; on epoch 0 and WAP, a "Search" link.
+- Themes: `menu/menu-search_epoch<N>.html` and `assets/menu/search.gif` in both shipped themes;
+  a third-party theme without them simply shows no search control (the page still works).
+
 ### Extensions
 
 **Added**

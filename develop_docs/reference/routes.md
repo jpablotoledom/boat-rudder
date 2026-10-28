@@ -61,6 +61,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |
 | `/menu` | `return` | `menu/menu-page_epoch<N>.html` | Full nav menu + back link - the target of WML's compact `[Menu]` link. Only epochs with that template (today: −1); others `404` |
+| `/search` | `q` | `search_page()` | Search form and the published blog entries and pages matching `q` ([rendering.md](rendering.md#search-search)) |
 | `/language` | `return` | `language_page()` | Language picker page |
 | `/language/set` | `code`, `return` | inline | `302` to `return` (sanitized, absolute URL) with `Set-Cookie: lang=<code>; Max-Age=31536000` when `code` is a configured language |
 | `/theme` | `return` | `theme_page()` | Theme picker page. Templates exist for epochs 1-3 only; others get `500` |

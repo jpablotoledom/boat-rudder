@@ -36,6 +36,7 @@
 #include "../modules/languages_admin/languages_admin.h"
 #include "../modules/language_page/language_page.h"
 #include "../modules/site_page/site_page.h"
+#include "../modules/search_page/search_page.h"
 #include "../modules/theme_page/theme_page.h"
 #include "../modules/login/login.h"
 #include "../modules/media_admin/media_admin.h"
@@ -974,7 +975,7 @@ static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, c
 static int is_site_content_route(const char *url) {
     return strcmp(url, "/") == 0 || strncmp(url, "/page/", 6) == 0 ||
            strcmp(url, "/blog") == 0 || strncmp(url, "/blog/", 6) == 0 ||
-           strcmp(url, "/menu") == 0;
+           strcmp(url, "/menu") == 0 || strcmp(url, "/search") == 0;
 }
 
 // While site_settings.under_construction is on, sends the home page with the
@@ -2734,6 +2735,19 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 char *response = build_redirect_response(abs_return ? abs_return : safe_return,
                                                           extra, epoch);
                 free(abs_return);
+                send_or_error(ctx, response, req.method, epoch);
+
+            } else if (strcmp(decoded_url, "/search") == 0) {
+                // Every epoch: the form, and the published blog entries and
+                // pages matching ?q= (see search_page.h).
+                int epoch = resolve_epoch(&req);
+                const char *raw_q = get_query_param(params, param_count, "q");
+                char query[512] = "";
+                if (raw_q && strlen(raw_q) < sizeof(query)) url_decode(query, raw_q);
+                char *content = search_page(epoch, query);
+                char *body    = content ? buildPageWebSiteAtUrl(epoch, "{{SITE_NAME}} - Search", content, "/search") : NULL;
+                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                free(body);
                 send_or_error(ctx, response, req.method, epoch);
 
             } else if (strcmp(decoded_url, "/language") == 0) {

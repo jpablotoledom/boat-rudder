@@ -54,6 +54,7 @@ shipped themes (`dark`, `light`) contain the same set.
 | | `menu-lang-item` | 3 | 4 | | epoch 3 drop-down entry |
 | | `menu-theme` | 1, 2, 3 | 2 | | theme control (epoch 1/2: link to `/theme`) |
 | | `menu-theme-item` | 3 | 4 | | epoch 3 drop-down entry |
+| | `menu-search` | −1…3 | 0 | | search control, first of the options: epoch 3 magnifier opening a search box, epoch 1/2 `assets/menu/search.gif` linking to `/search`, epoch 0/−1 a text link |
 | | `menu-user`, `menu-user-mobile` | 3 | 1 | | signed-in user's name |
 | | `menu-compact` | −1 | 1 | | WML: single `[Menu]` link (arg: return path) |
 | | `menu-page` | −1 | 1 | | `/menu` page body (arg: return path) |
@@ -86,6 +87,9 @@ shipped themes (`dark`, `light`) contain the same set.
 | `login/` | `login` | −1…3 | 0-1 | | `/login` (epoch 3 form; other epochs "not available") |
 | | `login-error` | 3 | 1 | | error line |
 | `language/` | `language`, `language-item` | −1…3 | 2 / 3-4 | | `/language` page |
+| `search/` | `search` | −1…3 | 4 (`%1$s` query, `%2$s` summary, `%3$s` results, `%4$s` hidden fields) | | `/search` page: form, summary, results |
+| | `search-item` | −1…3 | 4 (`%1$s` URL, `%2$s` title, `%3$s` "Blog - date" / "Page", `%4$s` excerpt) | | one result |
+| | `search-mark` | −1…3 | 1 | | the matched words inside an excerpt (no trailing newline) |
 | `theme/` | `theme`, `theme-item` | 1, 2, 3 | 2 / 3-4 | | `/theme` page (no WML/epoch 0 variant) |
 
 ### Content blocks (`elements/`)

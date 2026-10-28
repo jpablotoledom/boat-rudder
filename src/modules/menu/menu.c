@@ -397,6 +397,17 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
                                          request_theme(), epoch, cfg.navbar_image, encoded_alt,
                                          epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE ? " border=\"0\"" : "",
                                          epoch == EPOCH_WML ? "/" : "");
+            // Same shape as the theme's own menu-logo_epoch<N>.html, so an
+            // uploaded logo sits in the menu exactly like the default one:
+            // epoch 2 and WML link it home, and WML puts the menu items on
+            // the next line (build_epoch_response() turns the <br> into
+            // WML's <br/>). Epoch 1's default is the bare image.
+            char *wrapped = NULL;
+            if (img && epoch == EPOCH_WML)
+                wrapped = render_template("<a href=\"/\">%s</a>\n<br>", img);
+            else if (img && epoch == EPOCH_MIDDLE)
+                wrapped = render_template("<a href=\"/\">%s</a>", img);
+            if (wrapped) { free(img); img = wrapped; }
             if (img) { free(logo); logo = img; }
         } else if (cfg.mode == LOGO_MODE_TEXT) {
             char *site_name = cms_get_site_name();

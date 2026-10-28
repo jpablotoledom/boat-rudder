@@ -5,6 +5,16 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## v0.0.7
+### 2026-10-28
+
+### Uploaded logo laid out like the default one
+
+**Fixed**
+- An uploaded navbar logo for epoch -1 (WAP) was a bare `<img>`: no link home and no line
+  break, so the first menu item ran on right after the picture. It now has the same shape as
+  the theme's default logo - `<a href="/">` around the image, then `<br>` - and on epoch 2 the
+  same link home its default has. Epoch 1's default is a bare image, as before.
+
 ### 2026-10-24
 
 ### Several sites on one address: old browsers can choose

@@ -138,7 +138,7 @@ startup (`SSL_CTX_check_private_key()`).
 | Role | Can |
 |---|---|
 | `admin` (also: missing `role` field) | Everything |
-| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, browse everything but upload into, rename, delete and move **only their own** directories and images |
+| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, see, upload into, rename, delete and move **only their own** directories and images |
 | `viewer` (Observador) | **Read-only**: opens every page an `admin` opens and sees every value - the entry editor included - but **changes nothing**. Meant for a public demo account whose password can be published |
 | `moderator` | The dashboard home and `/dashboard/comments` only: reviews every blog comment and approves or rejects it - no deleting, no blocking, no drafts preview |
 | `commenter` | **Never signs in**: a blog commenter ([comments.md](comments.md)), created by the comment form with no password. `auth_login_user()` refuses the role even with a password, and making someone a commenter ends their sessions |
@@ -171,6 +171,11 @@ the caller's own). Images move only between directories of **their own author** 
 `html/content/posts/<author>/`, so another author's directory is not a valid target, for admins
 either. A directory is deleted only when it has no `media` records (`409` otherwise) and the
 record is removed only after `rmdir()` succeeds (or the directory never existed on disk).
+
+Reads are scoped the same way by `media_scope()`: an `admin` and the read-only `viewer` see every
+author's directories and images; an `author` only their own - the library page, its listing
+(`/dashboard/api/media/contents`), the editor's picker (`/dashboard/api/media/modal`), and
+`/dashboard/api/media/directory/item` (`404` for another author's directory).
 
 ### CSRF protection
 

@@ -61,17 +61,36 @@ typedef struct {
 
 // Stores the comment (and the commenter, new or updated). On
 // COMMENT_SUBMIT_VERIFY, token_out gets the confirmation token
-// (COMMENT_TOKEN_HEX hex + NUL). commenter_id_out (25) is filled when stored.
+// (COMMENT_TOKEN_HEX hex + NUL). commenter_id_out and comment_id_out (25) are
+// filled when stored.
 CommentSubmitResult cms_comments_submit(const CommentSubmission *s, char token_out[COMMENT_TOKEN_HEX + 1],
-                                        char commenter_id_out[25]);
+                                        char commenter_id_out[25], char comment_id_out[25]);
 
 // 1 if `token` is a live confirmation token (for the confirm page).
 int cms_comments_token_valid(const char *token);
 
 // Confirms the comment behind `token`: comment -> pending, commenter's email
-// confirmed, token spent. Fills commenter_id_out (25) and entry_link_out.
-// Returns 1, or 0 if the token is unknown/expired.
-int cms_comments_verify(const char *token, char commenter_id_out[25], char *entry_link_out, size_t link_size);
+// confirmed, token spent. Fills commenter_id_out, comment_id_out (25) and
+// entry_link_out. Returns 1, or 0 if the token is unknown/expired.
+int cms_comments_verify(const char *token, char commenter_id_out[25], char comment_id_out[25],
+                        char *entry_link_out, size_t link_size);
+
+// What the author of an entry is told when a comment on it waits for
+// moderation. Every string malloc'd (cms_comments_notice_free()).
+typedef struct {
+    char *author_email;
+    char *author_name;           // name, else username
+    char *commenter_name;
+    char *text;
+    char *entry_title;           // in `lang`
+    char *entry_link;
+} CommentNotice;
+
+// Fills *out for `comment_id` (24 hex). Returns 1 when the entry's author
+// (header.author_id, else entries.created_by) should be told: a team member with an email, other
+// than the commenter. 0 when no one is to be told, -1 on a bad id or DB error.
+int cms_comments_notice(const char *comment_id, const char *lang, CommentNotice *out);
+void cms_comments_notice_free(CommentNotice *n);
 
 // 1 if `commenter_id` (24 hex) is a commenter whose email was confirmed and
 // who isn't blocked.

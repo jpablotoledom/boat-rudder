@@ -21,7 +21,7 @@ static void copy_str(char *dst, size_t dst_size, const bson_iter_t *iter) {
 
 // ---- directories ----
 
-void cms_get_media_directories(CmsMediaDirectory **out, size_t *out_count) {
+void cms_get_media_directories(const char *author_id, CmsMediaDirectory **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
 
@@ -29,6 +29,15 @@ void cms_get_media_directories(CmsMediaDirectory **out, size_t *out_count) {
     if (!col) return;
 
     bson_t *query = bson_new();
+    if (author_id) {
+        // An id that isn't one matches nothing rather than everything.
+        bson_oid_t aoid;
+        if (strlen(author_id) == 24 && bson_oid_is_valid(author_id, 24))
+            bson_oid_init_from_string(&aoid, author_id);
+        else
+            memset(&aoid, 0, sizeof(aoid));
+        BSON_APPEND_OID(query, "author_id", &aoid);
+    }
     bson_t *opts = BCON_NEW("sort", "{", "_id", BCON_INT32(1), "}",
                             "limit", BCON_INT64(MEDIA_LIST_LIMIT));
 
@@ -277,7 +286,7 @@ static void fill_media_item_from_doc(CmsMediaItem *item, const bson_t *doc) {
         bson_oid_to_string(bson_iter_oid(&iter), item->dir_id);
 }
 
-void cms_get_media_items(const char *dir_id, int skip, int limit,
+void cms_get_media_items(const char *dir_id, const char *author_id, int skip, int limit,
                          CmsMediaItem **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
@@ -346,6 +355,21 @@ void cms_get_media_items(const char *dir_id, int skip, int limit,
         BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
         BSON_APPEND_DOCUMENT_BEGIN(&s, "$match", &m);
         BSON_APPEND_OID(&m, "dir_id", &doid);
+        bson_append_document_end(&s, &m);
+        bson_append_document_end(pipeline, &s);
+    }
+    // $match author_id (if specified; an id that isn't one matches nothing)
+    if (author_id) {
+        snprintf(idx, sizeof(idx), "%d", stage++);
+        bson_oid_t aoid;
+        if (strlen(author_id) == 24 && bson_oid_is_valid(author_id, 24))
+            bson_oid_init_from_string(&aoid, author_id);
+        else
+            memset(&aoid, 0, sizeof(aoid));
+        bson_t s, m;
+        BSON_APPEND_DOCUMENT_BEGIN(pipeline, idx, &s);
+        BSON_APPEND_DOCUMENT_BEGIN(&s, "$match", &m);
+        BSON_APPEND_OID(&m, "author_id", &aoid);
         bson_append_document_end(&s, &m);
         bson_append_document_end(pipeline, &s);
     }

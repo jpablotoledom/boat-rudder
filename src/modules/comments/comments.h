@@ -36,7 +36,9 @@ typedef enum {
 } CommentPostResult;
 
 // Handles POST /blog/<link>/comments: every check (honeypot, challenge,
-// fields, limits, name ownership, block), then storage and the email.
+// fields, limits, name ownership, block), then storage and the email - to
+// the commenter to confirm it, or, once it waits for moderation, to the
+// entry's author.
 // `base_url` ("https://host") builds the confirmation link. Fills *form with
 // what was sent (for COMMENT_POST_FORM).
 CommentPostResult comments_post(const char *link, const char *lang, const char *body, int body_len,
@@ -52,9 +54,11 @@ int comments_resend(const char *comment_id, const char *lang, const char *base_u
 // expired"). Returns a malloc'd fragment.
 char *comments_verify_page(int epoch, const char *token);
 
-// POST /comments/verify: confirms. Returns a malloc'd fragment; on success
+// POST /comments/verify: confirms, and tells the entry's author (title in
+// `lang`, links from `base_url`). Returns a malloc'd fragment; on success
 // *set_cookie gets a malloc'd "Set-Cookie: ...\r\n" header line (remember
 // this browser), else NULL.
-char *comments_verify_post(int epoch, const char *token, char **set_cookie);
+char *comments_verify_post(int epoch, const char *token, const char *lang, const char *base_url,
+                           char **set_cookie);
 
 #endif // COMMENTS_H

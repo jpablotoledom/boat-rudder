@@ -459,9 +459,9 @@ static CommentSubmitResult commenter_for(const CommentSubmission *s, char id_hex
 }
 
 CommentSubmitResult cms_comments_submit(const CommentSubmission *s, char token_out[COMMENT_TOKEN_HEX + 1],
-                                        char commenter_id_out[25]) {
+                                        char commenter_id_out[25], char comment_id_out[25]) {
     token_out[0] = '\0';
-    commenter_id_out[0] = '\0';
+    commenter_id_out[0] = comment_id_out[0] = '\0';
     bson_oid_t entry_oid;
     if (!parse_oid(s->entry_id, &entry_oid)) return COMMENT_SUBMIT_ERROR;
 
@@ -493,6 +493,7 @@ CommentSubmitResult cms_comments_submit(const CommentSubmission *s, char token_o
     if (col) mongoc_collection_destroy(col);
     if (!stored) return COMMENT_SUBMIT_ERROR;
     memcpy(commenter_id_out, cid, 25);
+    bson_oid_to_string(&comment_oid, comment_id_out);
     if (remembered) return COMMENT_SUBMIT_PENDING;
 
     // The token itself goes only into the email; the database keeps its hash.
@@ -544,8 +545,9 @@ int cms_comments_token_valid(const char *token) {
     return token_comment(token, &oid, hash);
 }
 
-int cms_comments_verify(const char *token, char commenter_id_out[25], char *entry_link_out, size_t link_size) {
-    commenter_id_out[0] = '\0';
+int cms_comments_verify(const char *token, char commenter_id_out[25], char comment_id_out[25],
+                        char *entry_link_out, size_t link_size) {
+    commenter_id_out[0] = comment_id_out[0] = '\0';
     if (link_size) entry_link_out[0] = '\0';
     bson_oid_t comment_oid;
     char hash[65];
@@ -601,6 +603,7 @@ int cms_comments_verify(const char *token, char commenter_id_out[25], char *entr
         mongoc_collection_destroy(commenters);
     }
     bson_oid_to_string(&commenter_oid, commenter_id_out);
+    bson_oid_to_string(&comment_oid, comment_id_out);
 
     mongoc_collection_t *entries = mongodb_manager_get_collection(ENTRIES_COLLECTION);
     if (entries && link_size) {
@@ -617,6 +620,81 @@ int cms_comments_verify(const char *token, char commenter_id_out[25], char *entr
     }
     if (entries) mongoc_collection_destroy(entries);
     return 1;
+}
+
+// The first document of `collection` with _id `oid`, copied (bson_destroy()), or NULL.
+static bson_t *find_by_id(const char *collection, const bson_oid_t *oid) {
+    mongoc_collection_t *col = mongodb_manager_get_collection(collection);
+    if (!col) return NULL;
+    bson_t *filter = BCON_NEW("_id", BCON_OID(oid));
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(col, filter, NULL, NULL);
+    const bson_t *doc;
+    bson_t *copy = mongoc_cursor_next(cursor, &doc) ? bson_copy(doc) : NULL;
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(filter);
+    mongoc_collection_destroy(col);
+    return copy;
+}
+
+static int get_oid(const bson_t *doc, const char *key, bson_oid_t *out) {
+    bson_iter_t it;
+    if (!doc || !bson_iter_init_find(&it, doc, key) || !BSON_ITER_HOLDS_OID(&it)) return 0;
+    bson_oid_copy(bson_iter_oid(&it), out);
+    return 1;
+}
+
+int cms_comments_notice(const char *comment_id, const char *lang, CommentNotice *out) {
+    memset(out, 0, sizeof(*out));
+    bson_oid_t oid, entry_oid, commenter_oid, author_oid;
+    memset(&commenter_oid, 0, sizeof(commenter_oid));
+    if (!parse_oid(comment_id, &oid)) return -1;
+    bson_t *comment = find_by_id(COMMENTS_COLLECTION, &oid);
+    if (!comment) return -1;
+    bson_t *entry = get_oid(comment, "entry_id", &entry_oid) ? find_by_id(ENTRIES_COLLECTION, &entry_oid) : NULL;
+    // The entry's published author (header.author_id), else whoever created it:
+    // older entries carry only the first.
+    bson_t *author = NULL;
+    bson_iter_t it, h;
+    if (entry && bson_iter_init(&it, entry) && bson_iter_find_descendant(&it, "header.author_id", &h) &&
+        BSON_ITER_HOLDS_OID(&h)) {
+        bson_oid_copy(bson_iter_oid(&h), &author_oid);
+        author = find_by_id(USERS_COLLECTION, &author_oid);
+    }
+    if (!author && get_oid(entry, "created_by", &author_oid)) author = find_by_id(USERS_COLLECTION, &author_oid);
+    bson_t *commenter = get_oid(comment, "commenter_id", &commenter_oid) ? find_by_id(USERS_COLLECTION, &commenter_oid) : NULL;
+
+    int rc = 0;
+    if (author) {
+        char *role = dup_utf8(author, "role");
+        out->author_email = dup_utf8(author, "email");
+        out->author_name = dup_utf8(author, "name");
+        if (!out->author_name[0]) { free(out->author_name); out->author_name = dup_utf8(author, "username"); }
+        char *commenter_email = commenter ? dup_utf8(commenter, "email") : strdup("");
+        // A commenter can't moderate; and nobody is told about their own comment.
+        rc = strcmp(role, "commenter") != 0 && out->author_email[0] &&
+             strcasecmp(out->author_email, commenter_email) != 0 &&
+             bson_oid_compare(&author_oid, &commenter_oid) != 0;
+        free(role);
+        free(commenter_email);
+    }
+    if (rc) {
+        out->commenter_name = dup_utf8(comment, "name");
+        out->text = dup_utf8(comment, "text");
+        out->entry_title = entry_title(entry, lang);
+        out->entry_link = dup_utf8(entry, "link");
+    }
+    bson_destroy(comment);
+    if (entry) bson_destroy(entry);
+    if (author) bson_destroy(author);
+    if (commenter) bson_destroy(commenter);
+    if (!rc) cms_comments_notice_free(out);
+    return rc;
+}
+
+void cms_comments_notice_free(CommentNotice *n) {
+    free(n->author_email); free(n->author_name); free(n->commenter_name);
+    free(n->text); free(n->entry_title); free(n->entry_link);
+    memset(n, 0, sizeof(*n));
 }
 
 int cms_comments_commenter_verified(const char *commenter_id) {

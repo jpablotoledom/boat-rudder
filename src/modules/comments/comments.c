@@ -359,6 +359,38 @@ static int queue_confirmation(const CommentForm *form, const char *title, const 
     return rc;
 }
 
+// Tells the entry's author that `comment_id` waits for moderation. Best
+// effort: the comment is stored either way.
+static void notify_author(const char *comment_id, const char *lang, const char *base_url) {
+    CommentNotice n;
+    if (cms_comments_notice(comment_id, lang, &n) != 1) return;
+    char *site = cms_get_site_name();
+    const char *title = n.entry_title[0] ? n.entry_title : "your blog entry";
+    // Subjects stop at 200 bytes (mailer_enqueue()): a long title is cut,
+    // never inside a UTF-8 character.
+    size_t cut = strlen(title);
+    if (cut > 150) {
+        cut = 150;
+        while (cut > 0 && ((unsigned char)title[cut] & 0xC0) == 0x80) cut--;
+    }
+    char subject[200];
+    snprintf(subject, sizeof(subject), "New comment on \"%.*s%s\"", (int)cut, title, title[cut] ? "..." : "");
+    char *text = render_template(
+        "Hello %s,\n\n"
+        "%s left a comment on \"%s\" at %s:\n\n"
+        "%s\n\n"
+        "It is waiting for moderation - approve or reject it here:\n"
+        "%s/dashboard/comments\n\n"
+        "The entry: %s/blog/%s\n",
+        n.author_name, n.commenter_name, title, site ? site : "the site", n.text,
+        base_url, base_url, n.entry_link);
+    if (!text || mailer_enqueue(n.author_email, subject, text) != 0)
+        LOG_ERROR("Comment %s: the author's notice was not queued", comment_id);
+    free(text);
+    free(site);
+    cms_comments_notice_free(&n);
+}
+
 int comments_resend(const char *comment_id, const char *lang, const char *base_url) {
     char token[COMMENT_TOKEN_HEX + 1];
     char *email = NULL, *name = NULL, *title = NULL;
@@ -438,14 +470,17 @@ CommentPostResult comments_post(const char *link, const char *lang, const char *
         int has_cookie = remembered_commenter(cookie_header, remembered);
         CommentSubmission s = { entry_id, form->name, form->email, form->text, hash,
                                 has_cookie ? remembered : NULL };
-        char confirm_token[COMMENT_TOKEN_HEX + 1], commenter_id[25];
-        switch (cms_comments_submit(&s, confirm_token, commenter_id)) {
+        char confirm_token[COMMENT_TOKEN_HEX + 1], commenter_id[25], comment_id[25];
+        switch (cms_comments_submit(&s, confirm_token, commenter_id, comment_id)) {
         case COMMENT_SUBMIT_VERIFY:
             if (queue_confirmation(form, title, base_url, confirm_token) == 0) result = COMMENT_POST_VERIFY;
             else error = "We couldn't send the confirmation email - please try again later.";
             sodium_memzero(confirm_token, sizeof(confirm_token));
             break;
-        case COMMENT_SUBMIT_PENDING:    result = COMMENT_POST_PENDING; break;
+        case COMMENT_SUBMIT_PENDING:
+            result = COMMENT_POST_PENDING;
+            notify_author(comment_id, lang, base_url);
+            break;
         case COMMENT_SUBMIT_NAME_TAKEN: error = "That name is already used by someone else - please choose another."; break;
         case COMMENT_SUBMIT_BLOCKED:    error = "Comments from this email address are not accepted."; break;
         default:                        error = "Your comment could not be saved - please try again later."; break;
@@ -490,15 +525,17 @@ char *comments_verify_page(int epoch, const char *token) {
                            token);
 }
 
-char *comments_verify_post(int epoch, const char *token, char **set_cookie) {
+char *comments_verify_post(int epoch, const char *token, const char *lang, const char *base_url,
+                           char **set_cookie) {
     *set_cookie = NULL;
-    char commenter_id[25], link[256];
+    char commenter_id[25], comment_id[25], link[256];
     if (!token_shape(token) || !mongodb_manager_is_ready() ||
-        !cms_comments_verify(token, commenter_id, link, sizeof(link)))
+        !cms_comments_verify(token, commenter_id, comment_id, link, sizeof(link)))
         return verify_fragment(epoch, "Link expired",
                                "This link has expired or was already used. Comments must be confirmed within 24 hours.",
                                NULL);
     *set_cookie = remember_cookie_header(commenter_id);
+    notify_author(comment_id, lang, base_url);
     char message[600];
     char *link_enc = html_encode_alloc(link);
     snprintf(message, sizeof(message),

@@ -26,11 +26,16 @@ typedef struct {
     char parent[20];
     char author_id[25];
     char author_name[64];
+    // Shown after the name - "Me" or the owner's name - when the viewer
+    // sees every author's directories; "" otherwise. Set by the caller
+    // (http_router.c), never stored.
+    char owner_label[96];
 } CmsMediaDirectory;
 
 // Directories ---
 
-void cms_get_media_directories(CmsMediaDirectory **out, size_t *out_count);
+// Every directory, or only `author_id`'s (24 hex) when non-NULL.
+void cms_get_media_directories(const char *author_id, CmsMediaDirectory **out, size_t *out_count);
 void cms_media_directories_free(CmsMediaDirectory *items, size_t count);
 
 bool cms_get_media_directory_by_id(const char *id_hex, CmsMediaDirectory *out);
@@ -53,7 +58,9 @@ int64_t cms_count_media_in_directory(const char *dir_id_hex);
 
 // Media items ---
 
-void cms_get_media_items(const char *dir_id, int skip, int limit,
+// Newest first, in `dir_id` when non-NULL, and only `author_id`'s (24 hex)
+// when non-NULL.
+void cms_get_media_items(const char *dir_id, const char *author_id, int skip, int limit,
                          CmsMediaItem **out, size_t *out_count);
 void cms_media_items_free(CmsMediaItem *items, size_t count);
 

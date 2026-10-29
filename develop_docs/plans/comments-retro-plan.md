@@ -17,7 +17,8 @@ stages:
 
 1. **Epochs 1 and 2** (HTML 3.2 / HTML 4: Mosaic, Netscape 2-4, IE 3-6...) - this plan.
 2. Epoch 0 (text browsers) - later, with a text challenge instead of an image.
-3. Epoch −1 (WAP) - later or never: the WAP gateway only sends GETs.
+3. Epoch −1 (WAP) - done later (2026-10-29): a two-step form on pages of its own, a WBMP
+   challenge, and WSP Post in the WAP gateway - see [comments.md](../reference/comments.md).
 
 Everything else stays as it is: the same checks, email confirmation, moderation, limits and
 remembered browsers.

@@ -51,6 +51,30 @@ static void date_str(const bson_t *doc, const char *key, char out[17]) {
     }
 }
 
+// The `reply` sub-document's name, text and date; "" when there is none.
+static void read_reply(const bson_t *doc, char **name, char **text, char date[17], bool *by_author) {
+    bson_iter_t it;
+    *name = *text = NULL;
+    date[0] = '\0';
+    if (by_author) *by_author = false;
+    if (bson_iter_init_find(&it, doc, "reply") && BSON_ITER_HOLDS_DOCUMENT(&it)) {
+        uint32_t len;
+        const uint8_t *data;
+        bson_iter_document(&it, &len, &data);
+        bson_t r;
+        if (bson_init_static(&r, data, len)) {
+            *name = dup_utf8(&r, "name");
+            *text = dup_utf8(&r, "text");
+            date_str(&r, "created_at", date);
+            bson_iter_t b;
+            if (by_author && bson_iter_init_find(&b, &r, "by_author") && BSON_ITER_HOLDS_BOOL(&b))
+                *by_author = bson_iter_bool(&b);
+        }
+    }
+    if (!*name) *name = strdup("");
+    if (!*text) *text = strdup("");
+}
+
 // Lower-cases ASCII and Latin-1 capitals: names compare without case.
 static void fold_case(char *s) {
     for (unsigned char *p = (unsigned char *)s; *p; p++) {
@@ -735,6 +759,7 @@ int cms_comments_approved(const char *entry_id, CmsComment **out) {
         list[n].browser = dup_utf8(doc, "browser");
         list[n].os = dup_utf8(doc, "os");
         list[n].user_agent = dup_utf8(doc, "user_agent");
+        read_reply(doc, &list[n].reply_name, &list[n].reply_text, list[n].reply_date, &list[n].reply_by_author);
         n++;
     }
     if (mongoc_cursor_error(cursor, NULL)) { cms_comments_free(list, n); list = NULL; n = -1; }
@@ -751,6 +776,7 @@ void cms_comments_free(CmsComment *list, int count) {
     for (int i = 0; i < count; i++) {
         free(list[i].name); free(list[i].text);
         free(list[i].browser); free(list[i].os); free(list[i].user_agent);
+        free(list[i].reply_name); free(list[i].reply_text);
     }
     free(list);
 }
@@ -788,17 +814,14 @@ static void mail_state(const char *email, int64_t since, CmsCommentAdmin *c) {
     mongoc_collection_destroy(col);
 }
 
-int cms_comments_admin_list(const char *status, const char *owner_id, const char *lang, CmsCommentAdmin **out) {
+// The comments matching `filter`, newest first, as the moderation list shows
+// them. Returns the count or -1.
+static int admin_query(const bson_t *filter, const char *lang, CmsCommentAdmin **out) {
     *out = NULL;
-    bson_t filter;
-    bson_init(&filter);
-    BSON_APPEND_UTF8(&filter, "status", status);
-    if (scope_to_owner(&filter, owner_id) != 0) { bson_destroy(&filter); return -1; }
-
     mongoc_collection_t *col = mongodb_manager_get_collection(COMMENTS_COLLECTION);
-    if (!col) { bson_destroy(&filter); return -1; }
+    if (!col) return -1;
     bson_t *opts = BCON_NEW("sort", "{", "created_at", BCON_INT32(-1), "}", "limit", BCON_INT64(COMMENT_ADMIN_LIST_LIMIT));
-    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(col, &filter, opts, NULL);
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(col, filter, opts, NULL);
     CmsCommentAdmin *list = calloc(COMMENT_ADMIN_LIST_LIMIT, sizeof(CmsCommentAdmin));
     bson_oid_t *entry_ids = calloc(COMMENT_ADMIN_LIST_LIMIT, sizeof(bson_oid_t));
     int64_t *created_at = calloc(COMMENT_ADMIN_LIST_LIMIT, sizeof(int64_t));
@@ -819,7 +842,8 @@ int cms_comments_admin_list(const char *status, const char *owner_id, const char
         c->browser = dup_utf8(doc, "browser");
         c->os = dup_utf8(doc, "os");
         c->user_agent = dup_utf8(doc, "user_agent");
-        c->epoch = bson_iter_init_find(&it, doc, "epoch") && BSON_ITER_HOLDS_INT32(&it) ? bson_iter_int32(&it) : -1;
+        c->epoch = bson_iter_init_find(&it, doc, "epoch") && BSON_ITER_HOLDS_INT32(&it) ? bson_iter_int32(&it) : COMMENT_EPOCH_NONE;
+        read_reply(doc, &c->reply_name, &c->reply_text, c->reply_date, NULL);
         if (bson_iter_init_find(&it, doc, "created_at") && BSON_ITER_HOLDS_DATE_TIME(&it))
             created_at[n] = bson_iter_date_time(&it);
         n++;
@@ -827,7 +851,6 @@ int cms_comments_admin_list(const char *status, const char *owner_id, const char
     if (n >= 0 && mongoc_cursor_error(cursor, NULL)) n = -1;
     mongoc_cursor_destroy(cursor);
     bson_destroy(opts);
-    bson_destroy(&filter);
     mongoc_collection_destroy(col);
 
     // Entry link/title and commenter email/blocked, one lookup each (a list
@@ -872,12 +895,35 @@ int cms_comments_admin_list(const char *status, const char *owner_id, const char
     return n;
 }
 
+int cms_comments_admin_list(const char *status, const char *owner_id, const char *lang, CmsCommentAdmin **out) {
+    *out = NULL;
+    bson_t filter;
+    bson_init(&filter);
+    BSON_APPEND_UTF8(&filter, "status", status);
+    int n = scope_to_owner(&filter, owner_id) == 0 ? admin_query(&filter, lang, out) : -1;
+    bson_destroy(&filter);
+    return n;
+}
+
+CmsCommentAdmin *cms_comments_admin_one(const char *comment_id, const char *lang) {
+    bson_oid_t oid;
+    if (!parse_oid(comment_id, &oid)) return NULL;
+    bson_t *filter = BCON_NEW("_id", BCON_OID(&oid));
+    CmsCommentAdmin *c = NULL;
+    int n = admin_query(filter, lang, &c);
+    bson_destroy(filter);
+    if (n == 1) return c;
+    cms_comments_admin_free(c, n > 0 ? n : 0);
+    return NULL;
+}
+
 void cms_comments_admin_free(CmsCommentAdmin *list, int count) {
     if (!list) return;
     for (int i = 0; i < count; i++) {
         free(list[i].entry_link); free(list[i].entry_title); free(list[i].name);
         free(list[i].email); free(list[i].text); free(list[i].mail_error);
         free(list[i].browser); free(list[i].os); free(list[i].user_agent);
+        free(list[i].reply_name); free(list[i].reply_text);
     }
     free(list);
 }
@@ -946,6 +992,128 @@ int cms_comments_delete(const char *comment_id) {
     bson_destroy(filter);
     mongoc_collection_destroy(col);
     return rc;
+}
+
+// ---- Replies ------------------------------------------------------------------------
+
+// 1 if `user` is the entry's published author (header.author_id) or its creator.
+static int is_entry_author(const bson_t *entry, const bson_oid_t *user) {
+    bson_iter_t it, h;
+    bson_oid_t id;
+    if (bson_iter_init(&it, entry) && bson_iter_find_descendant(&it, "header.author_id", &h) &&
+        BSON_ITER_HOLDS_OID(&h) && bson_oid_equal(bson_iter_oid(&h), user))
+        return 1;
+    return get_oid(entry, "created_by", &id) && bson_oid_equal(&id, user);
+}
+
+int cms_comments_set_reply(const char *comment_id, const char *user_id, const char *text,
+                           int *first_out, int *approved_out) {
+    *first_out = *approved_out = 0;
+    bson_oid_t oid, uid, entry_oid;
+    if (!parse_oid(comment_id, &oid) || !parse_oid(user_id, &uid) || !text || !text[0]) return -1;
+    bson_t *comment = find_by_id(COMMENTS_COLLECTION, &oid);
+    if (!comment) return -1;
+    char *status = dup_utf8(comment, "status");
+    bson_iter_t it;
+    int had = bson_iter_init_find(&it, comment, "reply") && BSON_ITER_HOLDS_DOCUMENT(&it);
+    bson_t *entry = get_oid(comment, "entry_id", &entry_oid) ? find_by_id(ENTRIES_COLLECTION, &entry_oid) : NULL;
+    bson_t *user = find_by_id(USERS_COLLECTION, &uid);
+    int pending = strcmp(status, "pending") == 0;
+    int rc = -1;
+    mongoc_collection_t *col = (pending || strcmp(status, "approved") == 0) && user
+        ? mongodb_manager_get_collection(COMMENTS_COLLECTION) : NULL;
+    if (col) {
+        char *name = dup_utf8(user, "name");
+        if (!name[0]) { free(name); name = dup_utf8(user, "username"); }
+        bool by_author = entry && is_entry_author(entry, &uid);
+        int64_t now = now_ms();
+        // Written again, it keeps its first date and says when it changed.
+        bson_t *update = had
+            ? BCON_NEW("$set", "{", "reply.text", BCON_UTF8(text), "reply.user_id", BCON_OID(&uid),
+                       "reply.name", BCON_UTF8(name), "reply.by_author", BCON_BOOL(by_author),
+                       "reply.updated_at", BCON_DATE_TIME(now), "}")
+            : BCON_NEW("$set", "{", "reply", "{", "text", BCON_UTF8(text), "user_id", BCON_OID(&uid),
+                       "name", BCON_UTF8(name), "by_author", BCON_BOOL(by_author),
+                       "created_at", BCON_DATE_TIME(now), "}", "}");
+        bson_t *filter = BCON_NEW("_id", BCON_OID(&oid), "status", BCON_UTF8(status));
+        bson_t reply;
+        if (mongoc_collection_update_one(col, filter, update, NULL, &reply, NULL)) {
+            bson_iter_t m;
+            rc = bson_iter_init_find(&m, &reply, "matchedCount") && bson_iter_as_int64(&m) > 0 ? 0 : -1;
+        }
+        bson_destroy(&reply);
+        bson_destroy(filter);
+        bson_destroy(update);
+        mongoc_collection_destroy(col);
+        free(name);
+    }
+    if (rc == 0) {
+        *first_out = !had;
+        if (pending && cms_comments_set_status(comment_id, "approved", user_id) == 0) *approved_out = 1;
+    }
+    free(status);
+    bson_destroy(comment);
+    if (entry) bson_destroy(entry);
+    if (user) bson_destroy(user);
+    return rc;
+}
+
+int cms_comments_delete_reply(const char *comment_id) {
+    bson_oid_t oid;
+    if (!parse_oid(comment_id, &oid)) return -1;
+    mongoc_collection_t *col = mongodb_manager_get_collection(COMMENTS_COLLECTION);
+    if (!col) return -1;
+    bson_t *filter = BCON_NEW("_id", BCON_OID(&oid));
+    bson_t *update = BCON_NEW("$unset", "{", "reply", BCON_UTF8(""), "}");
+    int rc = mongoc_collection_update_one(col, filter, update, NULL, NULL, NULL) ? 0 : -1;
+    bson_destroy(update);
+    bson_destroy(filter);
+    mongoc_collection_destroy(col);
+    return rc;
+}
+
+int cms_comments_reply_notice(const char *comment_id, const char *lang, ReplyNotice *out) {
+    memset(out, 0, sizeof(*out));
+    bson_oid_t oid, entry_oid, commenter_oid, replier_oid;
+    if (!parse_oid(comment_id, &oid)) return -1;
+    bson_t *comment = find_by_id(COMMENTS_COLLECTION, &oid);
+    if (!comment) return -1;
+    bson_iter_t it, r;
+    int replied = bson_iter_init(&it, comment) && bson_iter_find_descendant(&it, "reply.user_id", &r) &&
+                  BSON_ITER_HOLDS_OID(&r);
+    if (replied) bson_oid_copy(bson_iter_oid(&r), &replier_oid);
+    bson_t *commenter = replied && get_oid(comment, "commenter_id", &commenter_oid)
+        ? find_by_id(USERS_COLLECTION, &commenter_oid) : NULL;
+
+    int rc = 0;
+    if (commenter) {
+        bson_iter_t f;
+        bool blocked = bson_iter_init_find(&f, commenter, "blocked") && BSON_ITER_HOLDS_BOOL(&f) && bson_iter_bool(&f);
+        bool verified = bson_iter_init_find(&f, commenter, "email_verified_at");
+        out->commenter_email = dup_utf8(commenter, "email");
+        // Nobody is told about their own reply.
+        rc = !blocked && verified && out->commenter_email[0] && !bson_oid_equal(&commenter_oid, &replier_oid);
+    }
+    if (rc) {
+        bson_t *entry = get_oid(comment, "entry_id", &entry_oid) ? find_by_id(ENTRIES_COLLECTION, &entry_oid) : NULL;
+        char date[17];
+        out->commenter_name = dup_utf8(comment, "name");
+        out->comment_text = dup_utf8(comment, "text");
+        read_reply(comment, &out->replier_name, &out->reply_text, date, NULL);
+        out->entry_title = entry ? entry_title(entry, lang) : strdup("");
+        out->entry_link = entry ? dup_utf8(entry, "link") : strdup("");
+        if (entry) bson_destroy(entry);
+    }
+    bson_destroy(comment);
+    if (commenter) bson_destroy(commenter);
+    if (!rc) cms_comments_reply_notice_free(out);
+    return rc;
+}
+
+void cms_comments_reply_notice_free(ReplyNotice *n) {
+    free(n->commenter_email); free(n->commenter_name); free(n->comment_text);
+    free(n->replier_name); free(n->reply_text); free(n->entry_title); free(n->entry_link);
+    memset(n, 0, sizeof(*n));
 }
 
 int cms_comments_block(const char *commenter_id, bool block, bool delete_all) {

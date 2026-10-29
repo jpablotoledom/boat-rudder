@@ -915,6 +915,14 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder-comment__date { font-size: 0.85em; color: var(--br-color-blog-list-item-date, #a0a0a0); }
 .boat-rudder-comment__client { vertical-align: -3px; margin-right: 2px; }
 .boat-rudder-comment__text { margin: 0; overflow-wrap: anywhere; }
+.boat-rudder-comment__reply {
+  margin: 10px 0 0 24px; padding: 4px 0 4px 12px;
+  border-left: 3px solid var(--br-color-table-border, #3a3a3a);
+}
+.boat-rudder-comment__badge {
+  font-size: 0.75em; padding: 1px 6px; border-radius: 3px;
+  background: #2c2c30; color: #a0a0a8;
+}
 .boat-rudder-comments__form { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
 .boat-rudder-comments__form-title { margin: 0; }
 .boat-rudder-comments__row { display: flex; flex-direction: column; gap: 4px; }

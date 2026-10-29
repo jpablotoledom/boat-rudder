@@ -10,7 +10,9 @@
 //                   password, can't sign in): name, name_key, email,
 //                   email_verified_at, blocked. A team member commenting
 //                   with their own address is themselves.
-//   comments        status "unverified" -> "pending" -> "approved"/"rejected"
+//   comments        status "unverified" -> "pending" -> "approved"/"rejected";
+//                   at most one `reply` from the team (text, user_id, name,
+//                   by_author, created_at, updated_at)
 //   comment_tokens  SHA-256 of each email-confirmation token, TTL 24 h
 //   captcha_used    nonces of answered challenges, TTL (single use)
 //
@@ -20,7 +22,9 @@
 #define COMMENT_NAME_MIN      2      // bytes, after trimming
 #define COMMENT_NAME_MAX      40
 #define COMMENT_TEXT_MAX      2000
+#define COMMENT_REPLY_MAX     2000
 #define COMMENT_UA_MAX        256
+#define COMMENT_EPOCH_NONE    (-99)  // CmsCommentAdmin.epoch of a comment older than that record
 #define COMMENT_VERIFY_HOURS  24
 #define COMMENT_LIMIT_PER_IP_HOUR     5
 #define COMMENT_LIMIT_PER_EMAIL_DAY   10
@@ -61,7 +65,7 @@ typedef struct {
     // Where it was written from, for showing it later (an icon): ua_parser.h's
     // "Browser/version" and "OS/version", the User-Agent itself (printable
     // ASCII, at most COMMENT_UA_MAX bytes, so it can be classified again),
-    // and the epoch (0-3).
+    // and the epoch (-1-3).
     const char *browser;
     const char *os;
     const char *user_agent;
@@ -113,6 +117,11 @@ typedef struct {
     char *browser;               // where it was written from ("" before that was recorded)
     char *os;
     char *user_agent;
+    // The team's reply: reply_text is "" when there is none.
+    char *reply_name;
+    char *reply_text;
+    char  reply_date[17];
+    bool  reply_by_author;       // the entry's author, else an Administrador
 } CmsComment;
 
 // The approved comments of an entry, oldest first (at most 500). Returns the
@@ -136,11 +145,15 @@ typedef struct {
     // and its last error ("" if none).
     char  mail_status[12];
     char *mail_error;
-    // Where it was written from ("" / -1 for comments older than this).
+    // Where it was written from ("" / COMMENT_EPOCH_NONE for comments older than this).
     char *browser;
     char *os;
     char *user_agent;
     int   epoch;
+    // The team's reply ("" when none).
+    char *reply_name;
+    char *reply_text;
+    char  reply_date[17];
 } CmsCommentAdmin;
 
 // Moderation list: comments with `status` ("unverified", "pending",
@@ -148,6 +161,11 @@ typedef struct {
 // non-NULL (an author). Titles in `lang`. Returns the count or -1.
 int cms_comments_admin_list(const char *status, const char *owner_id, const char *lang, CmsCommentAdmin **out);
 void cms_comments_admin_free(CmsCommentAdmin *list, int count);
+
+// One comment as the moderation list shows it, whatever its status (titles
+// in `lang`). Returns a malloc'd record (cms_comments_admin_free(c, 1)), or
+// NULL when there is none.
+CmsCommentAdmin *cms_comments_admin_one(const char *comment_id, const char *lang);
 
 // Pending comments (on owner_id's entries when non-NULL). -1 on a DB error.
 long cms_comments_pending_count(const char *owner_id);
@@ -172,6 +190,34 @@ int cms_comments_delete(const char *comment_id);
 // unverified any more, or on a DB error.
 int cms_comments_renew_token(const char *comment_id, const char *lang, char token_out[COMMENT_TOKEN_HEX + 1],
                              char **email, char **name, char **title_out);
+
+// The reply to a comment - one per comment: `text` (validated) becomes
+// user_id's reply, replacing an earlier one. Only a pending or approved
+// comment can be replied to; a pending one is approved by it. *first_out is
+// 1 when the comment had no reply before, *approved_out 1 when it was
+// pending. Returns 0, or -1 (bad id, another status, DB error).
+int cms_comments_set_reply(const char *comment_id, const char *user_id, const char *text,
+                           int *first_out, int *approved_out);
+// Removes the reply. Returns 0 or -1.
+int cms_comments_delete_reply(const char *comment_id);
+
+// What a commenter is told when the team replies. Strings malloc'd
+// (cms_comments_reply_notice_free()).
+typedef struct {
+    char *commenter_email;
+    char *commenter_name;
+    char *comment_text;
+    char *replier_name;
+    char *reply_text;
+    char *entry_title;           // in `lang`
+    char *entry_link;
+} ReplyNotice;
+
+// Fills *out for `comment_id`. Returns 1 when the commenter should be told:
+// their email confirmed, not blocked, and not the one who replied. 0 when no
+// one is to be told, -1 on a bad id or DB error.
+int cms_comments_reply_notice(const char *comment_id, const char *lang, ReplyNotice *out);
+void cms_comments_reply_notice_free(ReplyNotice *n);
 
 // Blocks (or unblocks) a commenter; with delete_all, also deletes every
 // comment they wrote. Returns 0 or -1.

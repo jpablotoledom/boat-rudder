@@ -67,6 +67,8 @@ int main(void) {
     expect_ua("Links (2.29; DOS; text)", "text", "Links 2", "dos", "MS-DOS");
     expect_ua("xChaos_Arachne/5.1.89;GPL,386+", "arachne", "Arachne", "dos", "MS-DOS");
     expect_ua("Mozilla/5.0 (webOS/1.4.0; U; en-US) AppleWebKit/532.2 Version/1.0 Safari/532.2", "safari", "Safari 1", NULL, NULL);
+    expect_ua("Nokia7110/1.0 (04.94)", "wap", "Nokia", NULL, NULL);
+    expect_ua("BoatRudder-WAP-Gateway", "wap", "WAP phone", NULL, NULL);
     expect_ua("w3m/0.5.3", "text", "w3m", NULL, NULL);
     expect_ua("Mozilla/5.0 (FreeBSD 14.0; amd64) Firefox/120.0", "firefox", "Firefox 120", "bsd", "FreeBSD 14");
 

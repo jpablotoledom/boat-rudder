@@ -29,7 +29,8 @@
 //     that insist on connection-oriented WSP (9201) aren't supported.
 //
 // Pages are fetched over HTTP with ?preview_epoch=-1, so they're exactly
-// what the WML epoch renders.
+// what the WML epoch renders. A form (WSP Post) is posted there as an HTTP
+// POST with the phone's User-Agent, when it fits one datagram.
 //
 // The client's dead operator gateway IP never reaches this server: the
 // device connects through a PC running trc-wap-relay, which claims that IP

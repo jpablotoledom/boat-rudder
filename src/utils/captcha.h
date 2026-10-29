@@ -7,8 +7,9 @@
 // Boat Rudder's own challenge for the comment form: 5 characters drawn
 // here (a built-in 5x7 font, each glyph scaled, slanted and shifted, the
 // whole image waved, crossed by lines and sprinkled with dots) and encoded
-// as a PNG (inline, epoch 3), a GIF (served by URL, epochs 1-2) or text art
-// (inline in a <pre>, epoch 0's text browsers) with no image library.
+// as a PNG (inline, epoch 3), a GIF (served by URL, epochs 1-2), a WBMP
+// (served by URL, WAP phones) or text art (inline in a <pre>, epoch 0's text
+// browsers) with no image library.
 //
 // Stateless: the form carries a token "nonce.issued.mac". The answer is
 // derived from it under the key - HMAC-SHA256(key, "captcha-text|nonce|
@@ -25,6 +26,8 @@
 #define CAPTCHA_TOKEN_MAX  128
 #define CAPTCHA_WIDTH      200
 #define CAPTCHA_HEIGHT     70
+#define CAPTCHA_WBMP_WIDTH   96    // a phone's screen; both below 128 (one-byte WBMP sizes)
+#define CAPTCHA_WBMP_HEIGHT  32
 
 typedef struct {
     char  token[CAPTCHA_TOKEN_MAX];
@@ -59,6 +62,11 @@ CaptchaResult captcha_check(const unsigned char key[32], const char *token, cons
 // token is the key's own and not expired at `now`.
 unsigned char *captcha_token_gif(const unsigned char key[32], const char *token, time_t now, size_t *len);
 
+// The image of `token` as a black-and-white WBMP of CAPTCHA_WBMP_WIDTH x
+// CAPTCHA_WBMP_HEIGHT for WAP phones, on the same terms as
+// captcha_token_gif().
+unsigned char *captcha_token_wbmp(const unsigned char key[32], const char *token, time_t now, size_t *len);
+
 // The image of `token` as text art for a <pre> (malloc'd, 9 lines of at
 // most 80 columns, no character that needs HTML escaping), on the same
 // terms as captcha_token_gif(): NULL unless genuine and not expired.
@@ -68,9 +76,10 @@ char *captcha_token_text(const unsigned char key[32], const char *token, time_t 
 // 0, else -1. For tests - the server never needs to read it.
 int captcha_answer(const unsigned char key[32], const char *token, char out[CAPTCHA_LENGTH + 1]);
 
-// The PNG / GIF of a text alone (malloc'd, *len bytes), for tests.
+// The PNG / GIF / WBMP of a text alone (malloc'd, *len bytes), for tests.
 unsigned char *captcha_png(const char *text, size_t *len);
 unsigned char *captcha_gif(const char *text, size_t *len);
+unsigned char *captcha_wbmp(const char *text, size_t *len);
 char *captcha_text_art(const char *text);
 
 #endif // CAPTCHA_H

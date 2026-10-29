@@ -1,0 +1,25 @@
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li><li><a href="/dashboard/comments?status=%1$s">Comments</a></li></ol>
+  </nav>
+  <h1>Reply to a comment</h1>
+  <p>On <a href="%2$s#comments">%3$s</a></p>
+%7$s
+  <div class="boat-rudder-card boat-rudder-dashboard__comment">
+    <p><strong>%4$s</strong> &middot; %5$s</p>
+    <p>%6$s</p>
+  </div>
+  <form class="boat-rudder-dashboard__form boat-rudder-dashboard__form--wide boat-rudder-card" method="POST" action="/dashboard/comments/%8$s/reply">
+    <input type="hidden" name="back" value="%1$s">
+    <div class="boat-rudder-dashboard__form-row">
+      <label for="replyText">Your reply</label>
+      <textarea class="boat-rudder-input" id="replyText" name="text" rows="6" maxlength="%10$d" required>%9$s</textarea>
+      <p class="boat-rudder-dashboard__hint">Plain text, shown under the comment with your name. One reply
+         per comment: saving again replaces it. The commenter is emailed the first time.%12$s</p>
+    </div>
+    <div class="boat-rudder-dashboard__button-container">
+      <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save reply</button>
+    </div>
+  </form>
+%11$s
+</section>

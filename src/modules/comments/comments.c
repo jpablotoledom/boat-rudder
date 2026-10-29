@@ -308,19 +308,44 @@ static char *wml_safe(char *html, int epoch) {
     return out;
 }
 
-// WAP (epoch -1): the approved comments only, read-only - writing one
-// needs epoch 0 or later. Nothing at all while there are none.
-static char *retro_section(int epoch, const char *link, const char *lang) {
+// The team's reply under a comment ("" when it has none), marked as the
+// entry's author's or an Administrador's.
+static char *reply_html(int epoch, const CmsComment *c, const char *color) {
+    if (!c->reply_text || !c->reply_text[0]) return strdup("");
+    char *tpl = load_template("comments/comment-reply_epoch%d.html", epoch);
+    char *name = wml_safe(html_encode_alloc(c->reply_name), epoch);
+    char *text = wml_safe(text_html(c->reply_text), epoch);
+    char *out = (tpl && name && text)
+        ? render_template(tpl, name, c->reply_date, text, c->reply_by_author ? "Author" : "Administrator", color) : NULL;
+    free(tpl); free(name); free(text);
+    return out;
+}
+
+// The thanks after sending (?comment=sent|pending), NULL for anything else.
+static const char *notice_message(const char *notice) {
+    if (notice && strcmp(notice, "sent") == 0)
+        return "Thanks! Check your email: we sent you a link to confirm your comment. It works for 24 hours.";
+    if (notice && strcmp(notice, "pending") == 0)
+        return "Thanks! Your comment is waiting for a moderator.";
+    return NULL;
+}
+
+// WAP (epoch -1): the approved comments, then a link to the form - a page of
+// its own (comments_wap_form_page()), as the deck is cut into packets the
+// form must not be split across. Nothing at all while there is neither a
+// comment nor a way to write one.
+static char *retro_section(int epoch, const char *link, const char *lang, const char *notice) {
     char entry_id[25];
     bool closed = false;
     if (!cms_comments_blog_entry(link, lang, entry_id, &closed, NULL)) return strdup("");
+    int writable = !closed && comments_available();
     CmsComment *list = NULL;
     int count = cms_comments_approved(entry_id, &list);
-    if (count <= 0) { cms_comments_free(list, count); return strdup(""); }
+    const char *message = notice_message(notice);
+    if (count <= 0 && !writable && !message) { cms_comments_free(list, count); return strdup(""); }
 
     char *section_tpl = load_template("comments/comments_epoch%d.html", epoch);
     char *item_tpl = load_template("comments/comment-item_epoch%d.html", epoch);
-    // Epoch 1/2 color their text like the entry's paragraphs (entry_page.c).
     CmsThemeColors colors;
     cms_get_theme_colors(request_theme(), &colors);
 
@@ -329,26 +354,118 @@ static char *retro_section(int epoch, const char *link, const char *lang) {
         char *name = wml_safe(html_encode_alloc(list[i].name), epoch);
         char *text = wml_safe(text_html(list[i].text), epoch);
         char *client = comment_client_html(epoch, list[i].browser, list[i].os, list[i].user_agent);
-        char *item = (name && text && client)
-            ? render_template(item_tpl, name, list[i].date, text, client, colors.home_content_text) : NULL;
+        char *reply = reply_html(epoch, &list[i], colors.home_content_text);
+        char *item = (name && text && client && reply)
+            ? render_template(item_tpl, name, list[i].date, text, client, reply, colors.home_content_text) : NULL;
         items = item ? str_append(items, item) : (free(items), NULL);
-        free(name); free(text); free(client); free(item);
+        free(name); free(text); free(client); free(reply); free(item);
     }
+    if (items && count <= 0) {
+        char *empty = load_template("comments/comments-empty_epoch%d.html", epoch);
+        if (empty) items = str_append(items, empty);
+        free(empty);
+    }
+    char *notice_html = NULL;
+    if (message) {
+        char *ntpl = load_template("comments/comments-notice_epoch%d.html", epoch);
+        notice_html = ntpl ? render_template(ntpl, message, colors.home_content_text) : NULL;
+        free(ntpl);
+    }
+    char *note = NULL;
+    if (closed) note = strdup("Comments are closed on this entry.");
+    else if (writable) {
+        char *enc = html_encode_alloc(link);
+        note = enc ? render_template("<a href=\"/blog/%s/comment\">Write a comment</a>", enc) : NULL;
+        free(enc);
+    } else note = strdup("");
     char count_str[16];
-    snprintf(count_str, sizeof(count_str), "%d", count);
-    const char *note = closed ? "Comments are closed on this entry."
-                              : "To write a comment, open this page on a computer.";
-    char *result = items ? render_template(section_tpl, count_str, items, note, colors.home_content_text) : NULL;
+    snprintf(count_str, sizeof(count_str), "%d", count > 0 ? count : 0);
+    char *result = items && note
+        ? render_template(section_tpl, count_str, notice_html ? notice_html : "", items, note) : NULL;
 
     cms_comments_free(list, count);
-    free(items); free(section_tpl); free(item_tpl);
+    free(items); free(notice_html); free(note); free(section_tpl); free(item_tpl);
     return result ? result : strdup("");
+}
+
+char *comments_wap_sent_page(const char *link, const char *notice) {
+    const char *message = notice_message(notice);
+    char *tpl = message ? load_template("comments/comment-sent_epoch%d.html", EPOCH_WML) : NULL;
+    char back[600];
+    snprintf(back, sizeof(back), "/blog/%s", link);
+    char *back_enc = html_encode_alloc(back);
+    char *html = tpl && back_enc ? render_template(tpl, message, back_enc) : NULL;
+    free(tpl);
+    free(back_enc);
+    return html;
+}
+
+char *comments_wap_form_page(const char *link, const char *lang, int step, const char *error) {
+    char entry_id[25];
+    bool closed = false;
+    if (!comments_available() || !cms_comments_blog_entry(link, lang, entry_id, &closed, NULL) || closed)
+        return NULL;
+    char here[600];
+    snprintf(here, sizeof(here), "/blog/%s/comment", link);
+    char *here_enc = html_encode_alloc(here);
+    if (!here_enc) return NULL;
+
+    char step2[700];
+    snprintf(step2, sizeof(step2), "%s?step=2", here_enc);
+
+    // A refused comment: why, and the way back - a page of its own, as the
+    // message and the challenge together don't fit one packet.
+    if (error) {
+        char *tpl = load_template("comments/comment-error_epoch%d.html", EPOCH_WML);
+        char *enc = html_encode_alloc(error);
+        char *html = tpl && enc ? render_template(tpl, enc, here_enc, step2) : NULL;
+        free(tpl); free(enc); free(here_enc);
+        return html;
+    }
+
+    // Step 1: what is said. The fields are WML variables, which the phone
+    // keeps from deck to deck - so they need no value here, and are still
+    // filled in when the visitor comes back to them.
+    if (step != 2) {
+        char *tpl = load_template("comments/comment-form_epoch%d.html", EPOCH_WML);
+        char *html = tpl ? render_template(tpl, COMMENT_NAME_MAX, COMMENT_WAP_TEXT_MAX, step2) : NULL;
+        free(tpl);
+        free(here_enc);
+        return html;
+    }
+
+    // Step 2: the challenge and Send, which posts the variables of step 1.
+    char *tpl = load_template("comments/comment-code_epoch%d.html", EPOCH_WML);
+    unsigned char key[SITE_SECRET_BYTES];
+    Captcha cap = { 0 };
+    if (!tpl || cms_get_site_secret(key) != 0 || captcha_new(key, 0, &cap) != 0) {
+        free(tpl);
+        free(here_enc);
+        captcha_free(&cap);
+        return NULL;
+    }
+    sodium_memzero(key, sizeof(key));
+
+    char action[600], image[CAPTCHA_TOKEN_MAX + 64], var[9];
+    snprintf(action, sizeof(action), "/blog/%s/comments", link);
+    snprintf(image, sizeof(image), "/comments/captcha?t=%s&format=wbmp", cap.token);
+    // The answer's variable is the token's own: a phone keeps WML variables
+    // between decks, and an old answer must not fill in a new challenge.
+    snprintf(var, sizeof(var), "%.8s", cap.token);
+    char *action_enc = html_encode_alloc(action);
+    char *image_enc = html_encode_alloc(image);
+    char *html = (action_enc && image_enc)
+        ? render_template(tpl, image_enc, cap.token, action_enc, var)
+        : NULL;
+    free(action_enc); free(image_enc); free(here_enc); free(tpl);
+    captcha_free(&cap);
+    return html;
 }
 
 char *comments_section(int epoch, const char *link, const char *lang, const CommentForm *form,
                        const char *notice) {
     if (epoch < EPOCH_PRESTANDARD)
-        return mongodb_manager_is_ready() && cms_get_comments_enabled() ? retro_section(epoch, link, lang)
+        return mongodb_manager_is_ready() && cms_get_comments_enabled() ? retro_section(epoch, link, lang, notice)
                                                                         : strdup("");
     if (!comments_available()) return strdup("");
     // Epochs 1-2 color their text like the entry's paragraphs (entry_page.c);
@@ -372,9 +489,11 @@ char *comments_section(int epoch, const char *link, const char *lang, const Comm
         char *name = html_encode_alloc(list[i].name);
         char *text = text_html(list[i].text);
         char *client = comment_client_html(epoch, list[i].browser, list[i].os, list[i].user_agent);
-        char *item = (name && text && client) ? render_template(item_tpl, name, list[i].date, text, client, color) : NULL;
+        char *reply = reply_html(epoch, &list[i], color);
+        char *item = (name && text && client && reply)
+            ? render_template(item_tpl, name, list[i].date, text, client, reply, color) : NULL;
         items = item ? str_append(items, item) : (free(items), NULL);
-        free(name); free(text); free(client); free(item);
+        free(name); free(text); free(client); free(reply); free(item);
     }
     if (items && count <= 0) {
         char *etpl = load_template("comments/comments-empty_epoch%d.html", epoch);
@@ -384,11 +503,7 @@ char *comments_section(int epoch, const char *link, const char *lang, const Comm
     }
 
     char *notice_html = strdup("");
-    const char *message = NULL;
-    if (notice && strcmp(notice, "sent") == 0)
-        message = "Thanks! Check your email: we sent you a link to confirm your comment. It works for 24 hours.";
-    else if (notice && strcmp(notice, "pending") == 0)
-        message = "Thanks! Your comment is waiting for a moderator.";
+    const char *message = notice_message(notice);
     if (message) {
         char *ntpl = load_template("comments/comments-notice_epoch%d.html", epoch);
         if (ntpl) { free(notice_html); notice_html = render_template(ntpl, message, color); free(ntpl); }
@@ -470,6 +585,53 @@ static void notify_author(const char *comment_id, const char *lang, const char *
     free(text);
     free(site);
     cms_comments_notice_free(&n);
+}
+
+// Tells the commenter that the team replied to `comment_id`. Best effort:
+// the reply is saved either way.
+static void notify_commenter(const char *comment_id, const char *lang, const char *base_url) {
+    ReplyNotice n;
+    if (cms_comments_reply_notice(comment_id, lang, &n) != 1) return;
+    char *site = cms_get_site_name();
+    const char *title = n.entry_title[0] ? n.entry_title : "a blog entry";
+    size_t cut = strlen(title);   // as in notify_author()
+    if (cut > 150) {
+        cut = 150;
+        while (cut > 0 && ((unsigned char)title[cut] & 0xC0) == 0x80) cut--;
+    }
+    char subject[200];
+    snprintf(subject, sizeof(subject), "Reply to your comment on \"%.*s%s\"", (int)cut, title, title[cut] ? "..." : "");
+    char *text = render_template(
+        "Hello %s,\n\n"
+        "%s replied to your comment on \"%s\" at %s:\n\n"
+        "%s\n\n"
+        "Your comment was:\n\n"
+        "%s\n\n"
+        "Read it on the site: %s/blog/%s#comments\n",
+        n.commenter_name, n.replier_name, title, site ? site : "the site", n.reply_text,
+        n.comment_text, base_url, n.entry_link);
+    if (!text || mailer_enqueue(n.commenter_email, subject, text) != 0)
+        LOG_ERROR("Comment %s: the commenter's reply notice was not queued", comment_id);
+    free(text);
+    free(site);
+    cms_comments_reply_notice_free(&n);
+}
+
+CommentReplyResult comments_reply(const char *comment_id, const char *user_id, char *text, size_t text_size,
+                                  const char *lang, const char *base_url, const char **error) {
+    *error = NULL;
+    if (to_utf8(text, text_size) != 0) { *error = "The reply is too long (2000 characters at most)."; return COMMENT_REPLY_INVALID; }
+    const char *bad = clean_text(text);
+    if (bad) {
+        *error = !text[0] ? "Please write a reply."
+               : strlen(text) > COMMENT_REPLY_MAX ? "The reply is too long (2000 characters at most)."
+               : "The reply has characters that can't be read.";
+        return COMMENT_REPLY_INVALID;
+    }
+    int first = 0, approved = 0;
+    if (cms_comments_set_reply(comment_id, user_id, text, &first, &approved) != 0) return COMMENT_REPLY_ERROR;
+    if (first && mailer_configured()) notify_commenter(comment_id, lang, base_url);
+    return approved ? COMMENT_REPLY_APPROVED : COMMENT_REPLY_SAVED;
 }
 
 int comments_resend(const char *comment_id, const char *lang, const char *base_url) {

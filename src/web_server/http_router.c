@@ -871,6 +871,20 @@ static int role_sees_everything(const char *role) {
     return strcmp(role, "admin") == 0 || strcmp(role, "viewer") == 0;
 }
 
+// Who answers visitors' comments: an Administrador (any comment) or an Autor
+// (comments on their own blog entries) - not the Moderador or the Observador.
+static int role_may_reply(const char *role) {
+    return strcmp(role, "admin") == 0 || strcmp(role, "author") == 0;
+}
+
+// A moderation list tab from a "back" value; "pending" for anything else.
+static const char *comments_tab(const char *back) {
+    static const char *TABS[] = { "approved", "rejected", "unverified" };
+    for (size_t i = 0; back && i < sizeof(TABS) / sizeof(TABS[0]); i++)
+        if (strcmp(back, TABS[i]) == 0) return TABS[i];
+    return "pending";
+}
+
 // require_dashboard_session() + cms_get_user_role(): role_out (>= USER_ROLE_BUF_SIZE
 // bytes) is "admin", "author" or "viewer" (a missing `role` field, or a lookup error, defaults
 // to "admin" - same backward-compatible convention as cms_get_user_role()). Same
@@ -2866,6 +2880,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             { "blocked",  "Email blocked: its future comments are refused." },
                             { "unblocked", "Email unblocked." },
                             { "resent",   "A new confirmation email is on its way (the old link no longer works); the comment has 24 more hours." },
+                            { "replied",  "Reply saved: it shows under the comment." },
+                            { "replied-approved", "Reply saved and comment approved: both are public now." },
+                            { "reply-deleted", "Reply deleted." },
                             { "error",    "That didn't work - the comment may be gone, or not on your entries." },
                         };
                         const char *done = get_query_param(params, param_count, "done");
@@ -2876,8 +2893,31 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *content = comments_admin_page(epoch, status,
                                                             role_sees_everything(role) || moderator ? NULL : user_id,
                                                             !moderator, role_sees_everything(role),
-                                                            content_lang, notice);
+                                                            role_may_reply(role), content_lang, notice);
                         char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Comments", content) : NULL;
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (match_id_route(decoded_url, "/dashboard/comments", "/reply", id, sizeof(id))) {
+                int epoch = resolve_epoch(&req);
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                char role[USER_ROLE_BUF_SIZE];
+                if (!dashboard_allowed(&req, epoch)) {
+                    send_or_error(ctx, build_redirect_response("/dashboard", "", epoch), req.method, epoch);
+                } else if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                    const char *back = comments_tab(get_query_param(params, param_count, "back"));
+                    const char *owner = strcmp(role, "admin") == 0 ? NULL : user_id;
+                    char *content = role_may_reply(role) && cms_comments_can_moderate(id, owner)
+                        ? comments_admin_reply_page(epoch, id, content_lang, back, NULL, NULL) : NULL;
+                    if (!content) {
+                        char location[128];
+                        snprintf(location, sizeof(location), "/dashboard/comments?status=%s&done=error", back);
+                        send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
+                    } else {
+                        char *body = buildPageWebSite(epoch, "{{SITE_NAME}} - Reply to a comment", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                         send_or_error(ctx, response, req.method, epoch);
@@ -2887,13 +2927,17 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             } else if (strcmp(decoded_url, "/comments/captcha") == 0) {
                 // The comment form's challenge image for epochs 1-2, which
                 // can't show the inline one: a GIF drawn again from the
-                // token (?t=), only while it is the site's own and unexpired
-                // (captcha.h). Nothing is stored or written.
+                // token (?t=) - a black-and-white WBMP for WAP phones with
+                // ?format=wbmp - only while it is the site's own and
+                // unexpired (captcha.h). Nothing is stored or written.
+                const char *format = get_query_param(params, param_count, "format");
+                int wbmp = format && strcmp(format, "wbmp") == 0;
                 unsigned char key[SITE_SECRET_BYTES];
                 size_t gif_len = 0;
-                unsigned char *gif = cms_get_site_secret(key) == 0
-                    ? captcha_token_gif(key, get_query_param(params, param_count, "t"), time(NULL), &gif_len)
-                    : NULL;
+                const char *token = get_query_param(params, param_count, "t");
+                unsigned char *gif = cms_get_site_secret(key) != 0 ? NULL
+                    : wbmp ? captcha_token_wbmp(key, token, time(NULL), &gif_len)
+                           : captcha_token_gif(key, token, time(NULL), &gif_len);
                 sodium_memzero(key, sizeof(key));
                 if (!gif) {
                     send_error_response(ctx, 404, "404 Not Found", resolve_epoch(&req));
@@ -2901,12 +2945,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char header[256];
                     snprintf(header, sizeof(header),
                              "HTTP/1.1 200 OK\r\n"
-                             "Content-Type: image/gif\r\n"
+                             "Content-Type: %s\r\n"
                              "Content-Length: %zu\r\n"
                              "Cache-Control: no-store\r\n"
                              "X-Content-Type-Options: nosniff\r\n"
                              "Connection: close\r\n"
-                             "\r\n", gif_len);
+                             "\r\n", wbmp ? "image/vnd.wap.wbmp" : "image/gif", gif_len);
                     connection_write(ctx, header, strlen(header));
                     if (strcmp(req.method, "HEAD") != 0) connection_write(ctx, (const char *)gif, gif_len);
                     free(gif);
@@ -3457,6 +3501,34 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 }
 
+            } else if (strncmp(decoded_url, "/blog/", 6) == 0 && strlen(decoded_url) > 6 + 8 &&
+                       strcmp(decoded_url + strlen(decoded_url) - 8, "/comment") == 0 &&
+                       !memchr(decoded_url + 6, '/', strlen(decoded_url) - 6 - 8)) {
+                // WAP's comment form, a page of its own (comments.h); other
+                // epochs have it under the entry.
+                int epoch = resolve_epoch(&req);
+                char link[256];
+                snprintf(link, sizeof(link), "%.*s", (int)(strlen(decoded_url) - 6 - 8), decoded_url + 6);
+                if (epoch != EPOCH_WML) {
+                    char back[300];
+                    snprintf(back, sizeof(back), "/blog/%s#comments", link);
+                    send_or_error(ctx, build_redirect_response(back, "", epoch), req.method, epoch);
+                } else {
+                    const char *step = get_query_param(params, param_count, "step");
+                    const char *sent = get_query_param(params, param_count, "comment");
+                    char *content = sent[0] ? comments_wap_sent_page(link, sent)
+                                         : comments_wap_form_page(link, content_lang,
+                                                                  strcmp(step, "2") == 0 ? 2 : 1, NULL);
+                    if (!content) {
+                        send_error_response(ctx, 404, "404 Not Found", epoch);
+                    } else {
+                        char *body = buildPageWebSite(epoch, "{{SITE_NAME}} - Comment", content);
+                        char *response = body ? build_epoch_response(body, "Cache-Control: no-store\r\n", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
             } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
                 // ?comment=sent|pending after the comment form (comments.h).
@@ -3582,6 +3654,57 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             }
 
         } else if (strcmp(req.method, "POST") == 0 &&
+                   (match_id_route(decoded_url, "/dashboard/comments", "/reply", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/comments", "/reply/delete", id, sizeof(id)))) {
+            // The one reply to a comment: an Administrador's on any, an Autor's on
+            // their own entries'.
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            char role[USER_ROLE_BUF_SIZE];
+            if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                char back_field[16] = "";
+                parse_urlencoded_field(req.body, req.body_length, "back", back_field, sizeof(back_field));
+                const char *back = comments_tab(back_field);
+                const char *owner = strcmp(role, "admin") == 0 ? NULL : user_id;
+                int may = role_may_reply(role) && cms_comments_can_moderate(id, owner);
+                const char *done = "error";
+                if (may && strcmp(strrchr(decoded_url, '/'), "/delete") == 0) {
+                    if (cms_comments_delete_reply(id) == 0) done = "reply-deleted";
+                } else if (may) {
+                    // Room for more than a reply may hold, so a long one is refused, not cut.
+                    size_t size = COMMENT_REPLY_MAX * 4 + 1;
+                    char *text = calloc(1, size);
+                    const char *error = NULL;
+                    CommentReplyResult rc = COMMENT_REPLY_ERROR;
+                    if (text) {
+                        parse_urlencoded_field(req.body, req.body_length, "text", text, size);
+                        char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
+                        rc = comments_reply(id, user_id, text, size, content_lang, base ? base : "", &error);
+                        free(base);
+                    }
+                    if (rc == COMMENT_REPLY_INVALID) {
+                        // The page again, with what was typed and why it was refused.
+                        char *content = comments_admin_reply_page(epoch, id, content_lang, back, text, error);
+                        char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Reply to a comment", content) : NULL;
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        free(text);
+                        send_or_error(ctx, response, req.method, epoch);
+                        done = NULL;
+                    } else {
+                        free(text);
+                        if (rc == COMMENT_REPLY_SAVED) done = "replied";
+                        else if (rc == COMMENT_REPLY_APPROVED) done = "replied-approved";
+                    }
+                }
+                if (done) {
+                    char location[128];
+                    snprintf(location, sizeof(location), "/dashboard/comments?status=%s&done=%s", back, done);
+                    send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
                    (match_id_route(decoded_url, "/dashboard/comments", "/approve", id, sizeof(id)) ||
                     match_id_route(decoded_url, "/dashboard/comments", "/reject", id, sizeof(id)) ||
                     match_id_route(decoded_url, "/dashboard/comments", "/delete", id, sizeof(id)) ||
@@ -3645,56 +3768,61 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 link[link_len] = '\0';
                 char back[300];
                 snprintf(back, sizeof(back), "/blog/%s", link);
-                if (epoch < EPOCH_PRESTANDARD) {
-                    // WAP has no form (comments.h).
-                    char *abs_back = absolute_location(ctx, &req, back);
-                    send_or_error(ctx, build_redirect_response(abs_back ? abs_back : back, "", epoch), req.method, epoch);
-                    free(abs_back);
+                char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
+                CommentForm form;
+                CommentPostResult result = comments_post(link, content_lang, req.body, req.body_length,
+                                                         get_header_value(&req, "Cookie"), client_ip,
+                                                         base ? base : "", get_header_value(&req, "User-Agent"),
+                                                         epoch, &form);
+                free(base);
+                if (result == COMMENT_POST_NOT_FOUND) {
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else if (result == COMMENT_POST_FORM && epoch == EPOCH_WML) {
+                    // WAP's form is on pages of its own: why it was refused,
+                    // with the way back to it (the phone kept what was typed).
+                    char *content = comments_wap_form_page(link, content_lang, 2, form.error);
+                    char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Comment", content) : NULL;
+                    char *response = body ? build_epoch_response(body, "Cache-Control: no-store\r\n", epoch) : NULL;
+                    free(body);
+                    if (response) send_or_error(ctx, response, req.method, epoch);
+                    else send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else if (result == COMMENT_POST_FORM) {
+                    char *comments = comments_section(epoch, link, content_lang, &form, NULL);
+                    serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
+                } else if (!get_header_value(&req, "Host") || !get_header_value(&req, "Host")[0]) {
+                    // No Host (NCSA Mosaic 2, HTTP/1.0 browsers): a redirect
+                    // can't name this server - Mosaic makes a bare path the
+                    // hostless "http:///..." - so the entry is served right
+                    // here, with the notice, as epoch 1's language and theme
+                    // links avoid redirects too. A reload resends the form,
+                    // which the spent challenge then refuses.
+                    char *comments = comments_section(epoch, link, content_lang, NULL,
+                                                      result == COMMENT_POST_PENDING ? "pending" : "sent");
+                    serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
                 } else {
-                    char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
-                    CommentForm form;
-                    CommentPostResult result = comments_post(link, content_lang, req.body, req.body_length,
-                                                             get_header_value(&req, "Cookie"), client_ip,
-                                                             base ? base : "", get_header_value(&req, "User-Agent"),
-                                                             epoch, &form);
-                    free(base);
-                    if (result == COMMENT_POST_NOT_FOUND) {
-                        send_error_response(ctx, 404, "404 Not Found", epoch);
-                    } else if (result == COMMENT_POST_FORM) {
-                        char *comments = comments_section(epoch, link, content_lang, &form, NULL);
-                        serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
-                    } else if (!get_header_value(&req, "Host") || !get_header_value(&req, "Host")[0]) {
-                        // No Host (NCSA Mosaic 2, HTTP/1.0 browsers): a redirect
-                        // can't name this server - Mosaic makes a bare path the
-                        // hostless "http:///..." - so the entry is served right
-                        // here, with the notice, as epoch 1's language and theme
-                        // links avoid redirects too. A reload resends the form,
-                        // which the spent challenge then refuses.
-                        char *comments = comments_section(epoch, link, content_lang, NULL,
-                                                          result == COMMENT_POST_PENDING ? "pending" : "sent");
-                        serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
-                    } else {
-                        // Epochs 0-2 carry the language (0-1) and theme (1-2)
-                        // in the URL, not a cookie (build_epoch_response.c);
-                        // and epoch 1 gets no #fragment, which an HTTP/1.0
-                        // browser may send on as part of the query.
-                        char keep[96] = "";
-                        if (epoch == EPOCH_PRESTANDARD)
-                            snprintf(keep, sizeof(keep), "&lang=%s", request_lang());
-                        else if (epoch == EPOCH_EARLY)
-                            snprintf(keep, sizeof(keep), "&theme=%s&lang=%s", request_theme(), request_lang());
-                        else if (epoch == EPOCH_MIDDLE)
-                            snprintf(keep, sizeof(keep), "&theme=%s", request_theme());
-                        char location[420];
-                        snprintf(location, sizeof(location), "%s?comment=%s%s%s", back,
-                                 result == COMMENT_POST_PENDING ? "pending" : "sent", keep,
-                                 epoch == EPOCH_EARLY ? "" : "#comments");
-                        // Absolute: Mosaic turns a bare "/blog/..." into the
-                        // hostless "http:///blog/..." (absolute_location()).
-                        char *abs = absolute_location(ctx, &req, location);
-                        send_or_error(ctx, build_redirect_response(abs ? abs : location, "", epoch), req.method, epoch);
-                        free(abs);
-                    }
+                    // Epochs 0-2 carry the language (0-1) and theme (1-2)
+                    // in the URL, not a cookie (build_epoch_response.c);
+                    // and epoch 1 gets no #fragment, which an HTTP/1.0
+                    // browser may send on as part of the query.
+                    char keep[96] = "";
+                    if (epoch == EPOCH_PRESTANDARD || epoch == EPOCH_WML)
+                        snprintf(keep, sizeof(keep), "&lang=%s", request_lang());
+                    else if (epoch == EPOCH_EARLY)
+                        snprintf(keep, sizeof(keep), "&theme=%s&lang=%s", request_theme(), request_lang());
+                    else if (epoch == EPOCH_MIDDLE)
+                        snprintf(keep, sizeof(keep), "&theme=%s", request_theme());
+                    char location[420];
+                    // WAP: to a short page with the thanks - the entry's
+                    // comments are many packets away from its top.
+                    if (epoch == EPOCH_WML) strcat(back, "/comment");
+                    snprintf(location, sizeof(location), "%s?comment=%s%s%s", back,
+                             result == COMMENT_POST_PENDING ? "pending" : "sent", keep,
+                             epoch == EPOCH_EARLY || epoch == EPOCH_WML ? "" : "#comments");
+                    // Absolute: Mosaic turns a bare "/blog/..." into the
+                    // hostless "http:///blog/..." (absolute_location()).
+                    char *abs = absolute_location(ctx, &req, location);
+                    send_or_error(ctx, build_redirect_response(abs ? abs : location, "", epoch), req.method, epoch);
+                    free(abs);
                 }
             }
 

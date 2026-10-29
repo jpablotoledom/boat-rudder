@@ -225,8 +225,10 @@ Anonymous visitors can write to the database, so comments carry their own defens
 UDP has no handshake, so a spoofed request makes the gateway send its (~20× larger) reply to a
 victim. `rate_allow()` caps answers at `wap_gateway_rate_limit` per minute per source IP (default
 60) in a 256-entry table; excess requests are dropped silently after one log line. The gateway
-only answers GET-family PDUs, only on the addresses in `wap_gateway_ips`, and fetches pages
-through the HTTP listener (so the HTTP limits apply too). Details:
+only answers GET-family PDUs and Posts (forwarded as an HTTP POST - blog comments), only on the
+addresses in `wap_gateway_ips`, and fetches pages through the HTTP listener (so the HTTP limits
+apply too; a gateway that isn't a trusted proxy shares one address's comment limit across every
+phone behind it). Details:
 [wap-gateway.md](wap-gateway.md#abuse-protection).
 
 ---

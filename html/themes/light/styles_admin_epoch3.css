@@ -2256,6 +2256,13 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
 }
 .boat-rudder-media__dir-item:hover { background: var(--br-admin-hover); }
 .boat-rudder-comment__client { vertical-align: -3px; margin-right: 2px; }
+.boat-rudder-dashboard__reply {
+  margin-top: 8px; padding-left: 10px;
+  border-left: 3px solid #d6d6d8;
+}
+.boat-rudder-dashboard__comment { margin-bottom: 16px; }
+.boat-rudder-dashboard__comment p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.boat-rudder-dashboard__reply-delete { margin-top: 12px; }
 .boat-rudder-media__dir-owner { color: var(--br-admin-text-muted); font-size: 0.9em; }
 .boat-rudder-media__dir-item--selected {
   padding-left: 12px;

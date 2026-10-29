@@ -159,12 +159,23 @@ static int fetch_sends_proxy_header(const char *server_ip) {
     return proxy_protocol && is_trusted_proxy(server_ip);
 }
 
+// A form a phone posts (WSP Post): its body as it came, the type the phone
+// gave it, and the phone's own User-Agent when it named one.
+typedef struct {
+    char content_type[128];
+    char user_agent[256];
+    const unsigned char *body;
+    size_t len;
+} WapPost;
+
 // GET `path` of `host` (the host the phone asked for; empty when it named
-// none) from fetch_target(). `client_ip` rides along as X-Forwarded-For
-// (honored only if the gateway's address is a trusted proxy) and, per
-// fetch_sends_proxy_header(), as a PROXY header, so analytics and rate
-// limiting see the phone rather than the gateway.
-static int fetch_page(const char *host, const char *path, const char *client_ip, HttpResponse *r) {
+// none) from fetch_target() - or POST `post` there when it isn't NULL.
+// `client_ip` rides along as X-Forwarded-For (honored only if the gateway's
+// address is a trusted proxy) and, per fetch_sends_proxy_header(), as a
+// PROXY header, so analytics and rate limiting see the phone rather than
+// the gateway.
+static int fetch_page(const char *host, const char *path, const char *client_ip, const WapPost *post,
+                      HttpResponse *r) {
     memset(r, 0, sizeof(*r));
     struct sockaddr_in addr;
     if (fetch_target(&addr) != 0) {
@@ -189,16 +200,27 @@ static int fetch_page(const char *host, const char *path, const char *client_ip,
     if (fetch_sends_proxy_header(server_ip))
         proxy_len = proxy_protocol_format_v1(req, sizeof(req), client_ip, 0, server_ip,
                                              ntohs(addr.sin_port));
+    char post_headers[512] = "";
+    if (post)
+        snprintf(post_headers, sizeof(post_headers), "Content-Type: %s\r\nContent-Length: %zu\r\n",
+                 post->content_type, post->len);
     int n = snprintf(req + proxy_len, sizeof(req) - proxy_len,
-                     "GET %s HTTP/1.0\r\n"
+                     "%s %s HTTP/1.0\r\n"
                      "Host: %s\r\n"
-                     "User-Agent: BoatRudder-WAP-Gateway\r\n"
+                     "User-Agent: %s\r\n"
                      "Accept: text/vnd.wap.wml, image/vnd.wap.wbmp\r\n"
                      "X-Forwarded-For: %s\r\n"
-                     "Connection: close\r\n\r\n", path, host[0] ? host : "127.0.0.1", client_ip);
+                     "%s"
+                     "Connection: close\r\n\r\n", post ? "POST" : "GET", path, host[0] ? host : "127.0.0.1",
+                     post && post->user_agent[0] ? post->user_agent : "BoatRudder-WAP-Gateway", client_ip,
+                     post_headers);
     if (n <= 0 || (size_t)n >= sizeof(req) - proxy_len) { close(fd); return -1; }
     n += (int)proxy_len;
-    if (send(fd, req, (size_t)n, 0) != n) { close(fd); return -1; }
+    if (send(fd, req, (size_t)n, 0) != n ||
+        (post && post->len && send(fd, post->body, post->len, 0) != (ssize_t)post->len)) {
+        close(fd);
+        return -1;
+    }
 
     Bytes in = { .ok = 1 };
     char chunk[8192];
@@ -347,10 +369,57 @@ static void message_reply(Bytes *out, const char *title, const char *text) {
     }
 }
 
-// The WSP Reply (everything after the framing) for a GET of `uri`.
-static void handle_get(Bytes *out, const char *uri, const char *client_ip, size_t page_bytes,
-                       const char *label) {
-    int page = wbxml_page_param(uri);
+// The WSP Reply for the response `resp` to `uri` (its page `page`).
+static void reply_page(Bytes *out, const HttpResponse *resp, const char *uri, int page, size_t page_bytes) {
+    if (resp->status == 200 && !strncasecmp(resp->content_type, "text/vnd.wap.wml", 16)) {
+        int utf8 = contains_ci(resp->content_type, "utf-8");
+        WbxmlBuf page_buf;
+        if (wbxml_compile_page((const char *)resp->body, resp->body_len, !utf8, uri, page,
+                               page_bytes, &page_buf) == 0) {
+            wsp_reply(out, CT_WMLC, page_buf.data, page_buf.len);
+            free(page_buf.data);
+        } else {
+            message_reply(out, "Error", "This page could not be converted.");
+        }
+    } else if (resp->status == 200 && !strncasecmp(resp->content_type, "image/vnd.wap.wbmp", 18)) {
+        wsp_reply(out, CT_WBMP, resp->body, resp->body_len);
+    } else if (resp->status == 404) {
+        message_reply(out, "Not found", "This page does not exist.");
+    } else {
+        message_reply(out, "Unavailable", "This content is not available on WAP.");
+    }
+}
+
+// Fetches `path` of `host` as epoch -1, in one deck (wml_pages=all: this
+// gateway does the paginating, into single-packet pages - see wbxml.h),
+// posting `post` when it isn't NULL; follows redirects with GETs, leaving
+// `host` and `path` (path_size bytes) at the page finally fetched. Returns
+// fetch_page()'s result; on 0 the caller frees resp->raw.
+static int fetch_following(char *host, size_t host_size, char *path, size_t path_size, const char *client_ip,
+                           const WapPost *post, HttpResponse *resp) {
+    int fetched = -1;
+    memset(resp, 0, sizeof(*resp));
+    for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
+        char req_path[1200];
+        snprintf(req_path, sizeof(req_path), "%s%spreview_epoch=-1&wml_pages=all",
+                 path, strchr(path, '?') ? "&" : "?");
+        free(resp->raw);
+        fetched = fetch_page(host, req_path, client_ip, hop == 0 ? post : NULL, resp);
+        if (fetched != 0 || resp->status < 300 || resp->status >= 400 || !resp->location[0]) break;
+        // An absolute Location names the site the rest of the chain is on.
+        char next_host[256];
+        uri_host(resp->location, next_host, sizeof(next_host));
+        if (next_host[0]) snprintf(host, host_size, "%s", next_host);
+        local_path(resp->location, path, path_size);
+    }
+    return fetched;
+}
+
+// The WSP Reply (everything after the framing) for a GET of `uri` - or, with
+// `post`, for posting it there.
+static void handle_request(Bytes *out, const char *uri, const WapPost *post, const char *client_ip,
+                           size_t page_bytes, const char *label) {
+    int page = post ? 0 : wbxml_page_param(uri);
     char page0[1100];
     wbxml_set_page_param(uri, 0, page0, sizeof(page0));
 
@@ -359,53 +428,105 @@ static void handle_get(Bytes *out, const char *uri, const char *client_ip, size_
     char host[256];
     uri_host(page0, host, sizeof(host));
 
-    HttpResponse resp = {0};
-    int fetched = -1;
-    for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
-        char req_path[1200];
-        // wml_pages=all: the whole entry in one deck - this gateway does the
-        // paginating, into single-packet pages (see wbxml.h).
-        snprintf(req_path, sizeof(req_path), "%s%spreview_epoch=-1&wml_pages=all",
-                 path, strchr(path, '?') ? "&" : "?");
-        free(resp.raw);
-        fetched = fetch_page(host, req_path, client_ip, &resp);
-        if (fetched != 0 || resp.status < 300 || resp.status >= 400 || !resp.location[0]) break;
-        // An absolute Location names the site the rest of the chain is on.
-        char next_host[256];
-        uri_host(resp.location, next_host, sizeof(next_host));
-        if (next_host[0]) snprintf(host, sizeof(host), "%s", next_host);
-        local_path(resp.location, path, sizeof(path));
-    }
-
-    if (fetched != 0) {
+    HttpResponse resp;
+    if (fetch_following(host, sizeof(host), path, sizeof(path), client_ip, post, &resp) != 0) {
         LOG_WARN("WAP %s %s: site unreachable", label, uri);
         message_reply(out, "Error", "The site is not responding. Try again later.");
         return;
     }
-
-    if (resp.status == 200 && !strncasecmp(resp.content_type, "text/vnd.wap.wml", 16)) {
-        int utf8 = contains_ci(resp.content_type, "utf-8");
-        WbxmlBuf page_buf;
-        if (wbxml_compile_page((const char *)resp.body, resp.body_len, !utf8, uri, page,
-                               page_bytes, &page_buf) == 0) {
-            wsp_reply(out, CT_WMLC, page_buf.data, page_buf.len);
-            free(page_buf.data);
-        } else {
-            message_reply(out, "Error", "This page could not be converted.");
-        }
-    } else if (resp.status == 200 && !strncasecmp(resp.content_type, "image/vnd.wap.wbmp", 18)) {
-        wsp_reply(out, CT_WBMP, resp.body, resp.body_len);
-    } else if (resp.status == 404) {
-        message_reply(out, "Not found", "This page does not exist.");
-    } else {
-        message_reply(out, "Unavailable", "This content is not available on WAP.");
-    }
-    LOG_INFO("WAP %s %s -> %d (%zu bytes)", label, uri, resp.status, out->len);
+    // After a post, the page it led to (the entry, with a notice) is what the
+    // phone shows: its Prev/Next links and relative links are that page's.
+    char shown[1400];
+    if (post && host[0]) snprintf(shown, sizeof(shown), "http://%s%s", host, path);
+    else snprintf(shown, sizeof(shown), "%s", uri);
+    reply_page(out, &resp, shown, page, page_bytes);
+    LOG_INFO("WAP %s %s%s -> %d (%zu bytes)", label, post ? "POST " : "", uri, resp.status, out->len);
     free(resp.raw);
 }
 
+// ---- WSP Post --------------------------------------------------------------------
+
+// Skips one WSP header value at *pos (WAP-230 8.4.1.2: short integer, a
+// length-prefixed value, or a NUL-terminated text) - copying it to `text`
+// (when not NULL) if it is a text. -1 when malformed.
+static int wsp_value(const unsigned char *d, size_t end, size_t *pos, char *text, size_t text_size) {
+    if (*pos >= end) return -1;
+    unsigned char b = d[*pos];
+    if (b >= 0x80) { (*pos)++; return 0; }
+    if (b <= 30 || b == 31) {
+        unsigned long len = b;
+        (*pos)++;
+        if (b == 31 && read_uintvar(d, end, pos, &len) != 0) return -1;
+        if (len > end - *pos) return -1;
+        *pos += len;
+        return 0;
+    }
+    const unsigned char *nul = memchr(d + *pos, 0, end - *pos);
+    if (!nul) return -1;
+    size_t len = (size_t)(nul - (d + *pos));
+    if (text && text_size) snprintf(text, text_size, "%.*s", (int)len, (const char *)d + *pos);
+    *pos += len + 1;
+    return 0;
+}
+
+// The content type and headers of a WSP Post (`d`..`end`): the type as text
+// into post->content_type, and a User-Agent header into post->user_agent.
+// 0, or -1 when malformed.
+static int wsp_post_headers(const unsigned char *d, size_t end, WapPost *post) {
+    static const struct { unsigned char code; const char *name; } TYPES[] = {
+        { 0x12, "application/x-www-form-urlencoded" }, { 0x24, "multipart/form-data" },
+        { 0x03, "text/plain" },
+    };
+    size_t pos = 0;
+    if (end == 0) return -1;
+    // Content-Type: a well-known code, a text, or a general form whose media
+    // comes first (its parameters are skipped).
+    unsigned char b = d[0];
+    size_t media = 0, after = 0;
+    if (b <= 31) {
+        unsigned long len = b;
+        pos = 1;
+        if (b == 31 && read_uintvar(d, end, &pos, &len) != 0) return -1;
+        if (len > end - pos) return -1;
+        media = pos;
+        after = pos + len;
+    } else {
+        media = 0;
+        if (wsp_value(d, end, &pos, NULL, 0) != 0) return -1;
+        after = pos;
+    }
+    post->content_type[0] = '\0';
+    if (d[media] >= 0x80) {
+        for (size_t i = 0; i < sizeof(TYPES) / sizeof(TYPES[0]); i++)
+            if ((d[media] & 0x7F) == TYPES[i].code) snprintf(post->content_type, sizeof(post->content_type), "%s", TYPES[i].name);
+    } else {
+        size_t m = media;
+        if (wsp_value(d, after, &m, post->content_type, sizeof(post->content_type)) != 0) return -1;
+    }
+    if (!post->content_type[0]) snprintf(post->content_type, sizeof(post->content_type), "application/octet-stream");
+
+    // The headers: well-known ones (a code >= 0x80) and application ones (a
+    // text name); only User-Agent (0x29) is kept. A shift sequence ends the
+    // reading - nothing after it is needed.
+    for (pos = after; pos < end; ) {
+        b = d[pos];
+        if (b >= 0x80) {
+            pos++;
+            char *dst = (b & 0x7F) == 0x29 ? post->user_agent : NULL;
+            if (wsp_value(d, end, &pos, dst, dst ? sizeof(post->user_agent) : 0) != 0) return -1;
+        } else if (b >= 32 && b < 127) {
+            if (wsp_value(d, end, &pos, NULL, 0) != 0 || wsp_value(d, end, &pos, NULL, 0) != 0) return -1;
+        } else {
+            break;
+        }
+    }
+    // Printable ASCII only: it goes out as an HTTP header.
+    for (char *p = post->user_agent; *p; p++) if (*p < 0x20 || *p > 0x7E) *p = '?';
+    return 0;
+}
+
 // One datagram in, one datagram out. Anything that isn't a GET-family
-// request in the expected framing is ignored (the client simply retries or
+// request or a Post in the expected framing is ignored (the client simply retries or
 // times out, as with a lost packet).
 static void handle_datagram(const GatewaySocket *gs, const unsigned char *d, size_t n,
                             const struct sockaddr_in *from) {
@@ -424,15 +545,31 @@ static void handle_datagram(const GatewaySocket *gs, const unsigned char *d, siz
     }
 
     unsigned char type = d[wsp_at];
-    if (type < 0x40 || type > 0x44) return;   // Get, Options, Head, Delete, Trace
+    // Get, Options, Head, Delete, Trace - or Post (0x60), a form.
+    if ((type < 0x40 || type > 0x44) && type != 0x60) return;
 
     size_t pos = wsp_at + 1;
-    unsigned long uri_len;
-    if (read_uintvar(d, n, &pos, &uri_len) != 0 || uri_len == 0 || uri_len > n - pos || uri_len > 1000)
-        return;
+    unsigned long uri_len, headers_len = 0;
+    if (read_uintvar(d, n, &pos, &uri_len) != 0) return;
+    if (type == 0x60 && read_uintvar(d, n, &pos, &headers_len) != 0) return;
+    if (uri_len == 0 || uri_len > n - pos || uri_len > 1000) return;
     char uri[1024];
     memcpy(uri, d + pos, uri_len);
     uri[uri_len] = '\0';
+    pos += uri_len;
+
+    // A Post: its content type and headers, then the body - all in this one
+    // datagram (a form too big for one isn't put back together here).
+    WapPost post;
+    memset(&post, 0, sizeof(post));
+    if (type == 0x60) {
+        if (headers_len > n - pos || wsp_post_headers(d + pos, headers_len, &post) != 0) {
+            LOG_WARN("WAP %s: malformed Post from %s", gs->label, client_ip);
+            return;
+        }
+        post.body = d + pos + headers_len;
+        post.len = n - pos - headers_len;
+    }
 
     if (!rate_allow(from->sin_addr.s_addr, client_ip)) return;
 
@@ -449,7 +586,7 @@ static void handle_datagram(const GatewaySocket *gs, const unsigned char *d, siz
     }
 
     Bytes body = { .ok = 1 };
-    handle_get(&body, uri, client_ip, WAP_PAGE_BYTES, gs->label);
+    handle_request(&body, uri, type == 0x60 ? &post : NULL, client_ip, WAP_PAGE_BYTES, gs->label);
     if (body.ok && body.len) {
         bytes_put(&reply, body.d, body.len);
         if (reply.ok)

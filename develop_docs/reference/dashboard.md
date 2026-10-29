@@ -542,7 +542,8 @@ Modules: `src/modules/site_settings_admin/`, `src/modules/fonts_admin/`, `src/mo
 ## Comments (`/dashboard/comments`)
 
 Moderation of visitors' blog comments - tabs by status, Approve / Reject / Delete, blocking a
-commenter's email (Administrador). An Autor sees and moderates the comments on their own blog
+commenter's email (Administrador), and one reply per comment (`/dashboard/comments/<id>/reply`,
+Administrador or Autor). An Autor sees, moderates and answers the comments on their own blog
 entries. Linked from the *Content* group of the menu; the dashboard home starts with the number
 waiting. The *Comments* panel of [Settings](#settings-dashboardsettings) turns them on and sends
 a test email. Full description: [comments.md](comments.md).

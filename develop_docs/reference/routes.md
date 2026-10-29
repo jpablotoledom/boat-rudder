@@ -61,7 +61,8 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |
 | `/menu` | `return` | `menu/menu-page_epoch<N>.html` | Full nav menu + back link - the target of WML's compact `[Menu]` link. Only epochs with that template (today: −1); others `404` |
-| `/comments/captcha` | `t` | `captcha_token_gif()` | The comment form's challenge for epochs 1-2: `200 image/gif`, `no-store`, drawn again from the token; `404` unless the token is the site's own and unexpired ([comments.md](comments.md#4-the-challenge-srcutilscaptchac)) |
+| `/comments/captcha` | `t`, `format` | `captcha_token_gif()` / `captcha_token_wbmp()` | The comment form's challenge for epochs 1-2: `200 image/gif`, `no-store`, drawn again from the token; with `format=wbmp`, WAP's `image/vnd.wap.wbmp`; `404` unless the token is the site's own and unexpired ([comments.md](comments.md#4-the-challenge-srcutilscaptchac)) |
+| `/blog/<link>/comment` | `step`, `comment` | `comments_wap_form_page()` / `comments_wap_sent_page()` | WAP's comment form, a page of its own: step 1 (name, email, text), `?step=2` (challenge and Send), `?comment=sent\|pending` (the thanks after sending). Other epochs: `302 /blog/<link>#comments`. `404` when the entry takes no comments |
 | `/comments/verify` | `token` | `comments_verify_page()` | Epoch any. The email link: a *Confirm* button (`POST /comments/verify`), or "link expired" ([comments.md](comments.md)) |
 | `/search` | `q` | `search_page()` | Search form and the published blog entries and pages matching `q` ([rendering.md](rendering.md#search-search)) |
 | `/language` | `return` | `language_page()` | Language picker page |
@@ -94,7 +95,7 @@ Query parameters understood on **every** route (read before routing, see
 
 | Path | Fields | Handler | Response |
 |---|---|---|---|
-| `/blog/<link>/comments` | `name`, `email`, `text`, `captcha`, `captcha_token`, `website` (honeypot, epoch 3 only) | `comments_post()` | Epochs 0-3 (WAP: `302` back). `302 /blog/<link>?comment=sent\|pending#comments` (an absolute URL built from `Host`; epochs 0-1 also keep `lang`, 1-2 `theme`, and epoch 1 has no `#comments`). A request without `Host` (NCSA Mosaic 2) gets the entry and its notice as a `200` instead - no redirect can name the server for it, or the entry again with the form and why, `404` for no such published blog entry |
+| `/blog/<link>/comments` | `name`, `email`, `text`, `captcha`, `captcha_token`, `website` (honeypot, epoch 3 only) | `comments_post()` | Every epoch. `302 /blog/<link>?comment=sent\|pending#comments` (an absolute URL built from `Host`; epochs −1-1 also keep `lang`, 1-2 `theme`, and epochs −1 and 1 have no `#comments`; WAP goes to `/blog/<link>/comment?comment=…` instead, and a refused WAP comment gets its error page). A request without `Host` (NCSA Mosaic 2) gets the entry and its notice as a `200` instead - no redirect can name the server for it, or the entry again with the form and why, `404` for no such published blog entry |
 | `/comments/verify` | `token` | `comments_verify_post()` | Confirms the comment (→ pending), sets the `br_commenter` cookie; or "link expired" |
 
 No session and no CSRF token: the challenge token (signed, single use, time-bounded) plays that
@@ -125,6 +126,8 @@ title `{{SITE_NAME}} - Dashboard`.
 | `POST` | `/dashboard/entries/<id>/delete` | E3, A | `cms_delete_entry()` | `302 /dashboard` |
 | `GET` | `/dashboard/comments` | E3, S+R | `comments_admin_page()` | `?status=pending\|approved\|rejected\|unverified`, `?done=` notice. An author sees comments on their own blog entries only ([comments.md](comments.md#6-moderation-dashboardcomments-srcmodulescomments_admin)) |
 | `POST` | `/dashboard/comments/<id>/approve` · `/reject` · `/delete` · `/resend` | E3, S+R, Own entry | `cms_comments_set_status()` / `cms_comments_delete()` | Field `back` (the tab); `302 /dashboard/comments?status=<back>&done=…` |
+| `GET` | `/dashboard/comments/<id>/reply` | E3, S+R, Own entry | `comments_admin_reply_page()` | `?back=` (the tab). Administrador (any comment) or Autor (own entries) only; otherwise `302 …&done=error` |
+| `POST` | `/dashboard/comments/<id>/reply` · `/reply/delete` | E3, S+R, Own entry | `comments_reply()` / `cms_comments_delete_reply()` | Fields `text`, `back`. Saves the one reply (approves a pending comment, emails the commenter at the first one): `302 …&done=replied\|replied-approved\|reply-deleted`; a refused text shows the page again with the reason |
 | `POST` | `/dashboard/comments/commenter/<id>/block` · `/unblock` · `/block-delete` | E3, A | `cms_comments_block()` | Block (and delete everything from) a commenter's email |
 | `POST` | `/dashboard/settings/comments` | E3, A | `cms_update_comments_enabled()` | Field `comments_enabled`; can't turn on without mail |
 | `POST` | `/dashboard/settings/mail/test` | E3, A | `mailer_enqueue()` | Test email to the admin's own address; `302 /dashboard/settings?mail=queued\|no-email\|failed#comments` |

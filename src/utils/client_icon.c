@@ -50,6 +50,9 @@ static void browser_of(const char *key, const char *ua, ClientIcons *out) {
     static const struct { const char *token; const char *icon; const char *name; } OTHERS[] = {
         { "ELinks", "text", "ELinks" }, { "Line Mode", "text", "Line Mode Browser" },
         { "LineMode", "text", "Line Mode Browser" }, { "Arachne", "arachne", "Arachne" },
+        // WAP phones, and the WAP gateway when a phone didn't say what it is.
+        { "BoatRudder-WAP-Gateway", "wap", "WAP phone" }, { "Nokia", "wap", "Nokia" },
+        { "Ericsson", "wap", "Ericsson" }, { "MOT-", "wap", "Motorola" },
     };
     for (size_t i = 0; ua && i < sizeof(OTHERS) / sizeof(OTHERS[0]); i++) {
         if (strstr(ua, OTHERS[i].token)) {

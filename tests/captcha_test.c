@@ -1,7 +1,8 @@
 // The comment form's challenge (src/utils/captcha.c): a token accepts its
 // own answer only - in any case, once the minimum time has passed and before
 // it expires - and nothing else; the answer comes from the token under the
-// key; a token always draws the same image; the PNG and GIF are well formed.
+// key; a token always draws the same image; the PNG, GIF and WBMP are well
+// formed.
 //
 // Run with: ctest --test-dir build/debug (or the binary directly).
 
@@ -118,6 +119,27 @@ int main(void) {
     }
     free(t1);
     free(t2);
+
+    // The WBMP for WAP phones: the same token's, the same every time.
+    size_t w1_len = 0, w2_len = 0;
+    unsigned char *w1 = captcha_token_wbmp(key, c.token, now, &w1_len);
+    unsigned char *w2 = captcha_token_wbmp(key, c.token, now, &w2_len);
+    expect_true("token wbmp", w1 && w2);
+    expect_true("same token, same wbmp", w1 && w2 && w1_len == w2_len && memcmp(w1, w2, w1_len) == 0);
+    expect_true("expired token, no wbmp", captcha_token_wbmp(key, c.token, now - 10 + CAPTCHA_TTL_SECS + 1, &w2_len) == NULL);
+    expect_true("other key, no wbmp", captcha_token_wbmp(other_key, c.token, now, &w2_len) == NULL);
+    if (w1) {
+        int row_bytes = (CAPTCHA_WBMP_WIDTH + 7) / 8, black = 0;
+        expect_true("wbmp type 0", w1[0] == 0 && w1[1] == 0);
+        expect_int("wbmp width", w1[2], CAPTCHA_WBMP_WIDTH);
+        expect_int("wbmp height", w1[3], CAPTCHA_WBMP_HEIGHT);
+        expect_int("wbmp size", (int)w1_len, 4 + row_bytes * CAPTCHA_WBMP_HEIGHT);
+        for (size_t i = 4; i < w1_len; i++)
+            for (int bit = 0; bit < 8; bit++) black += !(w1[i] & (0x80 >> bit));
+        expect_true("wbmp has ink, not too much", black > 150 && black < CAPTCHA_WBMP_WIDTH * CAPTCHA_WBMP_HEIGHT / 3);
+    }
+    free(w1);
+    free(w2);
     captcha_free(&c);
 
     // Without inline_png, only the token; fresh challenges differ.

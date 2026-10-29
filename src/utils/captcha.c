@@ -365,6 +365,61 @@ static char *draw_text_art(const char *text, const unsigned char seed[32]) {
     return out;
 }
 
+// ---- WBMP (WAP) ----------------------------------------------------------------
+
+// A phone's screen is 96-160 pixels wide and black and white: the glyphs at
+// twice their size, each shifted up or down, a few holes, dots and a dotted
+// line - less than the GIF, as a 1-bit image this small can't take more and
+// stay readable.
+static unsigned char *draw_wbmp(const char *text, const unsigned char seed[32], size_t *len) {
+    enum { WW = CAPTCHA_WBMP_WIDTH, WH = CAPTCHA_WBMP_HEIGHT };
+    Rng rng;
+    rng_init(&rng, seed);
+    uint8_t ink[WH][WW];
+    memset(ink, 0, sizeof(ink));
+
+    int x = rnd(&rng, 2, 6);
+    for (const char *p = text; *p; p++) {
+        const uint8_t *g = glyph(*p);
+        if (!g) continue;
+        int y0 = (WH - 14) / 2 + rnd(&rng, -4, 4);
+        for (int r = 0; r < 7; r++)
+            for (int c = 0; c < 5; c++) {
+                if (!(g[r] & (0x10 >> c))) continue;
+                for (int k = 0; k < 4; k++) {
+                    int px = x + c * 2 + (k & 1), py = y0 + r * 2 + (k >> 1);
+                    if (px >= 0 && px < WW && py < WH && rnd(&rng, 0, 19) > 0) ink[py][px] = 1;
+                }
+            }
+        x += 10 + rnd(&rng, 4, 7);
+    }
+    for (int i = 0; i < 25; i++) ink[rnd(&rng, 0, WH - 1)][rnd(&rng, 0, WW - 1)] = 1;
+    int y = rnd(&rng, 8, WH - 9), dy = rnd(&rng, -1, 1);
+    for (int lx = 0; lx < WW; lx++) {
+        if (lx % 24 == 23) y += dy;
+        if (y >= 0 && y < WH && lx % 3 == 0) ink[y][lx] = 1;
+    }
+
+    // WBMP type 0: type, fixed header, width and height (one byte each below
+    // 128), then rows of bits, most significant first, 1 white.
+    int row_bytes = (WW + 7) / 8;
+    *len = 4 + (size_t)row_bytes * WH;
+    unsigned char *out = malloc(*len);
+    if (!out) return NULL;
+    out[0] = 0; out[1] = 0; out[2] = WW; out[3] = WH;
+    unsigned char *w = out + 4;
+    for (int r = 0; r < WH; r++)
+        for (int b = 0; b < row_bytes; b++) {
+            unsigned char byte = 0;
+            for (int bit = 0; bit < 8; bit++) {
+                int px = b * 8 + bit;
+                if (px >= WW || !ink[r][px]) byte |= (unsigned char)(0x80 >> bit);
+            }
+            *w++ = byte;
+        }
+    return out;
+}
+
 // ---- Images of a text (tests) ---------------------------------------------------
 
 static unsigned char *image_of(const char *text, const unsigned char seed[32], int gif, size_t *len) {
@@ -389,6 +444,11 @@ unsigned char *captcha_gif(const char *text, size_t *len) {
 char *captcha_text_art(const char *text) {
     static const unsigned char seed[32];
     return draw_text_art(text, seed);
+}
+
+unsigned char *captcha_wbmp(const char *text, size_t *len) {
+    static const unsigned char seed[32];
+    return draw_wbmp(text, seed, len);
 }
 
 // ---- Token ----------------------------------------------------------------------
@@ -501,32 +561,45 @@ int captcha_answer(const unsigned char key[32], const char *token, char out[CAPT
     return -1;
 }
 
-unsigned char *captcha_token_gif(const unsigned char key[32], const char *token, time_t now, size_t *len) {
-    char nonce[33], text[CAPTCHA_LENGTH + 1];
+// The answer and drawing seed of `token`: 1 when it is the key's own and not
+// expired at `now`.
+static int token_drawing(const unsigned char key[32], const char *token, time_t now,
+                         char text[CAPTCHA_LENGTH + 1], unsigned char seed[32]) {
+    char nonce[33];
     long long issued;
     if (!token_genuine(key, token, nonce, &issued, text) ||
         (long long)now - issued > CAPTCHA_TTL_SECS || issued > (long long)now + 60) {
-        sodium_memzero(text, sizeof(text));
-        return NULL;
+        sodium_memzero(text, CAPTCHA_LENGTH + 1);
+        return 0;
     }
-    unsigned char seed[32];
     draw_seed(key, nonce, issued, seed);
+    return 1;
+}
+
+unsigned char *captcha_token_gif(const unsigned char key[32], const char *token, time_t now, size_t *len) {
+    char text[CAPTCHA_LENGTH + 1];
+    unsigned char seed[32];
+    if (!token_drawing(key, token, now, text, seed)) return NULL;
     unsigned char *gif = image_of(text, seed, 1, len);
     sodium_memzero(text, sizeof(text));
     sodium_memzero(seed, sizeof(seed));
     return gif;
 }
 
-char *captcha_token_text(const unsigned char key[32], const char *token, time_t now) {
-    char nonce[33], text[CAPTCHA_LENGTH + 1];
-    long long issued;
-    if (!token_genuine(key, token, nonce, &issued, text) ||
-        (long long)now - issued > CAPTCHA_TTL_SECS || issued > (long long)now + 60) {
-        sodium_memzero(text, sizeof(text));
-        return NULL;
-    }
+unsigned char *captcha_token_wbmp(const unsigned char key[32], const char *token, time_t now, size_t *len) {
+    char text[CAPTCHA_LENGTH + 1];
     unsigned char seed[32];
-    draw_seed(key, nonce, issued, seed);
+    if (!token_drawing(key, token, now, text, seed)) return NULL;
+    unsigned char *wbmp = draw_wbmp(text, seed, len);
+    sodium_memzero(text, sizeof(text));
+    sodium_memzero(seed, sizeof(seed));
+    return wbmp;
+}
+
+char *captcha_token_text(const unsigned char key[32], const char *token, time_t now) {
+    char text[CAPTCHA_LENGTH + 1];
+    unsigned char seed[32];
+    if (!token_drawing(key, token, now, text, seed)) return NULL;
     char *art = draw_text_art(text, seed);
     sodium_memzero(text, sizeof(text));
     sodium_memzero(seed, sizeof(seed));

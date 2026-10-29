@@ -64,13 +64,14 @@ tricks of its own.
 ```
 recvfrom() ─► handle_datagram()
                 ├─ framing check (rover: WTP Invoke; wsp: TID byte)
-                ├─ PDU type must be 0x40..0x44 (Get/Options/Head/Delete/Trace)
-                ├─ read URI (uintvar length, ≤ 1000 bytes)
+                ├─ PDU type must be 0x40..0x44 (Get/Options/Head/Delete/Trace) or 0x60 (Post)
+                ├─ read URI (uintvar length, ≤ 1000 bytes); a Post: content type, headers, body
                 ├─ rate_allow(source IP)  ── over limit → silently dropped
-                └─ handle_get()
+                └─ handle_request()
                      ├─ __page=N read from the URI, then removed
                      ├─ local_path(): drop scheme://host and #fragment; uri_host(): keep the host
-                     ├─ fetch_page(host, path + "preview_epoch=-1&wml_pages=all")  (≤ 3 redirects)
+                     ├─ fetch_page(host, path + "preview_epoch=-1&wml_pages=all")  (≤ 3 redirects;
+                     │    a Post goes as an HTTP POST, the redirects after it as GETs)
                      ├─ 200 text/vnd.wap.wml  → wbxml_compile_page(page N) → WSP Reply (wmlc)
                      ├─ 200 image/vnd.wap.wbmp → WSP Reply (wbmp) as-is
                      ├─ 404 → "Not found" card
@@ -79,8 +80,21 @@ recvfrom() ─► handle_datagram()
               ─► sendto() the reply, from the socket the request arrived on
 ```
 
-Anything that isn't a well-formed GET-family request in the socket's framing is ignored - the
-client retries or times out exactly as with a lost packet.
+Anything that isn't a well-formed GET-family request or Post in the socket's framing is ignored -
+the client retries or times out exactly as with a lost packet.
+
+### Forms (WSP Post)
+
+A WML `<go method="post">` arrives as a WSP **Post** PDU (`0x60`, WAP-230 §8.2.3.2): URI length,
+headers length, the URI, the content type and headers, then the body. `wsp_post_headers()` reads
+the content type (a well-known code - `0x12` is `application/x-www-form-urlencoded` - or a text,
+plain or in a general form) and the **User-Agent** header (`0x29`); the other headers are
+skipped. The body is forwarded as an HTTP `POST` with that content type and the phone's own
+User-Agent (else `BoatRudder-WAP-Gateway`), so a comment records the phone it was written on;
+the redirect after it is followed with GETs, and the page it leads to is compiled with *that*
+page's URI (its Prev/Next and relative links are its own). The whole Post must fit one datagram
+(≤ 4096 bytes): WTP segmentation isn't implemented. That is the reason for WAP's 300-character
+comment field ([comments.md](comments.md)).
 
 ### Framings
 
@@ -212,7 +226,7 @@ All keys are documented in [configuration.md](configuration.md#wap-gateway):
 | Connectionless WSP (9200) | Implemented per the spec, **untested on real phones**. |
 | WTP segmentation/reassembly (SAR) | Not implemented - hence the single-packet pages. |
 | WTLS (9202/9203) | Not supported. |
-| POST, forms with server state | Only GET-family PDUs are answered. The dashboard and login are epoch 3 only anyway. |
+| POST | A WSP Post is forwarded as an HTTP POST (blog comments, their confirmation), only within one datagram. Untested on a real Palm Rover. The dashboard and login are epoch 3 only anyway. |
 | IPv6 | Sockets are IPv4 only. |
 | Per-device page size | One `WAP_PAGE_BYTES` for every client. |
 

@@ -301,7 +301,8 @@ Full behavior: [comments.md](comments.md).
 | `expires_at` | date | Only while `unverified`: the TTL index deletes the comment 24 h after it was sent |
 | `browser`, `os` | string | Where it was written from, as `ua_parser.h` classifies it for analytics: `"MSIE/5"`, `"Lynx/2"`, `"Windows/2000"`, `"Unknown"`... - for an icon later. Missing on comments older than 2026-10-29 |
 | `user_agent` | string | The User-Agent itself, printable ASCII, ≤ 256 bytes - so a comment can be classified again |
-| `epoch` | int | The epoch it was written from (0-3) |
+| `epoch` | int | The epoch it was written from (−1-3) |
+| `reply` | document | The team's one reply, when there is one: `text` (plain, ≤ 2000 bytes), `user_id` (`users._id`), `name` (the replier's name then, else username), `by_author` (bool: the entry's author, not an Administrador), `created_at`, `updated_at` (after an edit) |
 
 Indexes: `{entry_id, status, created_at}`, `{status, created_at}`, `{ip_hash, created_at}`,
 `{commenter_id, created_at}`, TTL on `expires_at`.

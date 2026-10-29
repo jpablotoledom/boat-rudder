@@ -45,9 +45,17 @@ static char *action(const char *tpl, const char *path, const char *back, const c
 }
 
 static char *row_actions(const char *tpl, const CmsCommentAdmin *c, const char *status, int can_delete,
-                         int can_block) {
+                         int can_block, int can_reply) {
     char path[96];
     char *out = strdup("");
+    // Only a comment that is or can become public is answered.
+    if (out && can_reply && (strcmp(status, "pending") == 0 || strcmp(status, "approved") == 0)) {
+        char *ltpl = load_template("dashboard/comments/reply-link_epoch%d.html", EPOCH_MODERN);
+        char *a = ltpl ? render_template(ltpl, c->id, status, c->reply_text[0] ? "Edit reply" : "Reply") : NULL;
+        out = a ? str_append(out, a) : (free(out), NULL);
+        free(a);
+        free(ltpl);
+    }
     struct { const char *verb, *label, *modifier, *confirm; int show; } acts[] = {
         { "approve", strcmp(status, "rejected") == 0 ? "Restore" : "Approve", " boat-rudder-btn--primary", NULL,
           strcmp(status, "approved") != 0 },
@@ -104,7 +112,7 @@ static char *client_line(const CmsCommentAdmin *c) {
     readable_client(c->os, os, sizeof(os));
     if (browser[0]) snprintf(parts, sizeof(parts), "%s", browser);
     if (os[0]) snprintf(parts + strlen(parts), sizeof(parts) - strlen(parts), "%s%s", parts[0] ? " · " : "", os);
-    if (c->epoch >= 0)
+    if (c->epoch != COMMENT_EPOCH_NONE)
         snprintf(parts + strlen(parts), sizeof(parts) - strlen(parts), "%sepoch %d", parts[0] ? " · " : "", c->epoch);
     if (!parts[0]) return strdup(c->date);
     char *enc = html_encode_alloc(parts);
@@ -115,8 +123,22 @@ static char *client_line(const CmsCommentAdmin *c) {
     return out;
 }
 
+// The comment's text, and under it the team's reply when there is one.
+static char *text_with_reply(const CmsCommentAdmin *c) {
+    char *text = text_html(c->text);
+    if (!text || !c->reply_text[0]) return text;
+    char *name = html_encode_alloc(c->reply_name);
+    char *reply = text_html(c->reply_text);
+    char *out = name && reply
+        ? render_template("%s<div class=\"boat-rudder-dashboard__reply\"><small>Reply (%s, %s):</small><br>%s</div>",
+                          text, name, c->reply_date, reply)
+        : NULL;
+    free(text); free(name); free(reply);
+    return out;
+}
+
 char *comments_admin_page(int epoch, const char *status, const char *owner_id, int can_delete,
-                          int can_block, const char *lang, const char *notice) {
+                          int can_block, int can_reply, const char *lang, const char *notice) {
     char *list_tpl = load_template("dashboard/comments/list_epoch%d.html", epoch);
     char *row_tpl = load_template("dashboard/comments/list-row_epoch%d.html", epoch);
     char *action_tpl = load_template("dashboard/comments/action_epoch%d.html", epoch);
@@ -139,8 +161,8 @@ char *comments_admin_page(int epoch, const char *status, const char *owner_id, i
         char *title = html_encode_alloc(c->entry_title[0] ? c->entry_title : c->entry_link);
         char *name = html_encode_alloc(c->name);
         char *email = html_encode_alloc(c->email);
-        char *text = text_html(c->text);
-        char *acts = row_actions(action_tpl, c, status, can_delete, can_block);
+        char *text = text_with_reply(c);
+        char *acts = row_actions(action_tpl, c, status, can_delete, can_block, can_reply);
         // An unconfirmed comment says how its confirmation email is doing.
         char badge[700] = "";
         if (c->commenter_blocked) snprintf(badge, sizeof(badge), "<br><span class=\"boat-rudder-badge\">Blocked</span>");
@@ -200,4 +222,48 @@ char *comments_admin_pending_notice(int epoch, const char *owner_id) {
     if (n <= 0) return strdup("");
     return render_template("<p class=\"boat-rudder-alert\">%ld comment%s waiting for moderation. "
                            "<a href=\"/dashboard/comments\">Moderate</a></p>\n", n, n == 1 ? " is" : "s are");
+}
+
+char *comments_admin_reply_page(int epoch, const char *comment_id, const char *lang, const char *back,
+                                const char *text, const char *error) {
+    CmsCommentAdmin *c = cms_comments_admin_one(comment_id, lang);
+    if (!c) return NULL;
+    char *tpl = load_template("dashboard/comments/reply_epoch%d.html", epoch);
+    char *action_tpl = load_template("dashboard/comments/action_epoch%d.html", epoch);
+    char url[300];
+    snprintf(url, sizeof(url), "/blog/%s", c->entry_link);
+    char *url_enc = html_encode_alloc(url);
+    char *title = html_encode_alloc(c->entry_title[0] ? c->entry_title : c->entry_link);
+    char *name = html_encode_alloc(c->name);
+    char *when = client_line(c);
+    char *comment = text_html(c->text);
+    char *typed = html_encode_alloc(text ? text : c->reply_text);
+    char *notice = strdup("");
+    if (notice && error) {
+        char *ntpl = load_template("dashboard/comments/notice_epoch%d.html", epoch);
+        char *enc = html_encode_alloc(error);
+        if (ntpl && enc) { free(notice); notice = render_template(ntpl, enc); }
+        free(ntpl);
+        free(enc);
+    }
+    // Deleting is its own form: forms don't nest.
+    char *del = strdup("");
+    if (del && action_tpl && c->reply_text[0]) {
+        char path[64];
+        snprintf(path, sizeof(path), "%s/reply/delete", c->id);
+        char *a = action(action_tpl, path, back, " boat-rudder-btn--danger", "Delete your reply?", "Delete reply");
+        free(del);
+        del = a ? render_template("  <div class=\"boat-rudder-dashboard__inline-form boat-rudder-dashboard__reply-delete\">\n%s  </div>\n", a) : NULL;
+        free(a);
+    }
+    const char *pending = strcmp(c->status, "pending") == 0
+        ? " This comment is still pending: saving the reply approves it." : "";
+    char *out = (tpl && url_enc && title && name && when && comment && typed && notice && del)
+        ? render_template(tpl, back, url_enc, title, name, when, comment, notice, c->id, typed,
+                          COMMENT_REPLY_MAX, del, pending)
+        : NULL;
+    free(tpl); free(action_tpl); free(url_enc); free(title); free(name); free(when);
+    free(comment); free(typed); free(notice); free(del);
+    cms_comments_admin_free(c, 1);
+    return out;
 }

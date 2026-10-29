@@ -10,10 +10,13 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ### Comments from older browsers
 
 **Added**
-- Blog comments can be written from epochs 0, 1 and 2 (Lynx and other text browsers, Mosaic,
-  Netscape, Internet Explorer 3-6...), not only from modern browsers: the same form in each
-  epoch's markup, the same checks, email confirmation and moderation. WAP still shows the
-  comments read-only.
+- Blog comments can be written from every epoch - WAP phones, Lynx and other text browsers,
+  Mosaic, Netscape, Internet Explorer 3-6... - not only from modern browsers: the same form in
+  each epoch's markup, the same checks, email confirmation and moderation.
+- On WAP the form has pages of its own, small enough for one gateway packet each (name, email
+  and comment, then the challenge and Send), with the challenge as a black-and-white WBMP.
+- The WAP gateway forwards forms (WSP Post) as HTTP POSTs, with the phone's own User-Agent - so
+  comments, and confirming one, work from a phone through it.
 - The challenge for those browsers: a GIF served by URL (`/comments/captcha`) on epochs 1-2,
   which can't show the inline PNG, and the same characters drawn as text art on epoch 0.
 
@@ -22,6 +25,10 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   WAP): 12 browsers and 11 systems, from Mosaic, Arachne and MS-DOS to today's, drawn in pixel
   art by `scripts/generate-client-icons.py`. The moderation list shows the icons and the words.
   DOS is recognized when the User-Agent says so (`(DOS)`, `FreeDOS`, `DJGPP`) or from Arachne.
+- The author of a blog entry can reply to a comment on it - one reply per comment, edited or
+  deleted from *Dashboard → Comments* (an Administrador can reply to any comment). The reply
+  shows under the comment in every epoch, marked *Author*; replying to a pending comment
+  approves it, and the commenter is emailed at the first reply. Visitors still only comment.
 
 **Changed**
 - The challenge's answer is now derived from its token with the site's secret instead of

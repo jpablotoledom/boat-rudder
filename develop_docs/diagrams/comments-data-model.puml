@@ -28,6 +28,7 @@ class comments {
     moderated_at : date
     moderated_by : ObjectId [users]
     ip_hash : string [HMAC, for limits]
+    reply : {text, user_id, name, by_author,\n         created_at, updated_at} [optional, one]
     --
     index {entry_id, status, created_at}
     index {status, created_at}

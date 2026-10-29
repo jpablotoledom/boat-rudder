@@ -1,7 +1,7 @@
 # Blog comments
 
-Visitors can comment on **blog entries** (never pages) from **epochs 0-3** (text browsers, HTML
-3.2, HTML 4, HTML5); WAP (epoch −1) shows the approved comments read-only. A comment needs
+Visitors can comment on **blog entries** (never pages) from **every epoch** - WAP phones, text
+browsers, HTML 3.2, HTML 4, HTML5. A comment needs
 a name, an email and the answer to a challenge Boat Rudder draws itself; the visitor confirms the
 email through a link, and the comment waits for a moderator - an Administrador, a Moderador, or
 the Autor of the entry. Off by default; it needs outgoing mail.
@@ -37,7 +37,8 @@ Design and its decisions: [plans/comments-plan.md](../plans/comments-plan.md). D
 Under a published blog entry (`comments_section()`, `src/modules/comments/`):
 
 - **Comments (N)** - the approved ones, oldest first: name, date (UTC), text. Text is plain:
-  escaped, line breaks kept, no links or markup.
+  escaped, line breaks kept, no links or markup. Under a comment, the team's reply when it has
+  one (§6).
 - **The form**: name (2-40 bytes: letters of any language, digits, spaces, `. _ - '`), email
   (never shown publicly), comment (up to 2000 bytes), the challenge image and its answer, and a
   hidden honeypot field.
@@ -64,11 +65,31 @@ browser may send on as part of the query. A browser that sends no `Host` (NCSA M
 the entry with its notice directly instead: no URL could name the server for it. Its reload
 resends the form, which the spent challenge refuses.
 
-**WAP, epoch −1** (`retro_section()`): the approved comments only - `Comments (N)`, then name,
-date and text per comment (`$` doubled) - and a line saying a computer is needed to write one
-(or that comments are closed). Nothing at all while an entry has no approved comment, or while
-comments are off. HTTP/0.9 browsers on epoch 0 see the form but can't send it: that protocol
-has no POST.
+**WAP, epoch −1** (`retro_section()`): `Comments (N)`, the approved comments - name, date and
+text (`$` doubled) - or "No comments yet.", then a **Write a comment** link (or "Comments are
+closed"). Nothing at all while there is neither a comment nor a way to write one. The form isn't
+under the entry: a WAP deck is cut into ~860-byte packets (one gateway reply each, see
+[wap-gateway.md](wap-gateway.md)) and a form must not be split across them, so it has pages of
+its own, each small enough for one packet even with the gateway's absolute links
+(`comments_wap_form_page()`, `GET /blog/<link>/comment`):
+
+1. **Step 1** - name, email and comment (up to 300 characters on a keypad, `COMMENT_WAP_TEXT_MAX`;
+   the server still takes 2000), "We email you a link to confirm it", **Next >**.
+2. **Step 2** (`?step=2`) - the challenge as a 96x32 black-and-white **WBMP**
+   (`/comments/captcha?t=…&format=wbmp`, §4), the answer and **Send**: a `<go method="post">`
+   whose `<postfield>`s carry step 1's values.
+
+What is typed lives in **WML variables** (`cn`, `cm`, `ct`), which a phone keeps from deck to
+deck: step 2 posts them, and coming back to step 1 shows them still filled in. The answer's
+variable is named after its token (`a<first 8 hex>`), so an old answer never fills in a new
+challenge. A refused comment gets a page of its own - the reason, **Try again** (a new step 2)
+and **< Edit** (step 1) - since the reason and the challenge together don't fit one packet.
+After sending: `302` to `/blog/<link>/comment?comment=sent` (or `pending`), a short page with the
+thanks and **Back to the entry** - the entry's own comments section is many packets from its
+top. The phone sends no cookie through the gateway, so every WAP comment is confirmed by email.
+Through the WAP gateway the post goes as a WSP Post, forwarded with the phone's own User-Agent
+([wap-gateway.md](wap-gateway.md#forms-wsp-post)). HTTP/0.9 browsers on epoch 0 see the form but
+can't send it: that protocol has no POST.
 
 The email links to `/comments/verify?token=…`. That page only shows a **Confirm** button: the
 `GET` itself confirms nothing, since mail scanners open links on their own. The `POST` moves the
@@ -97,7 +118,10 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
   epoch 0 (`captcha_token_text()`): each glyph pixel two characters wide, an ink character per
   glyph, slanted and shifted, a few holes, scattered punctuation - 9 lines within 80 columns.
   A bot built for this site reads text art more easily than an image; the 3 s minimum, the
-  limits, email confirmation and moderation still apply.
+  limits, email confirmation and moderation still apply. **WAP**: a 96x32 one-bit **WBMP**
+  (`captcha_token_wbmp()`, `/comments/captcha?t=…&format=wbmp`, `image/vnd.wap.wbmp`) - the
+  glyphs at twice their size, each shifted up or down, a few holes and dots and a dotted line;
+  lighter than the GIF, as a phone's screen can take no more and stay readable.
 - Stateless token in the form: `nonce.issued.HMAC-SHA256(secret, "captcha|nonce|issued|ANSWER")`.
   The **answer is derived** from the token under the secret - `HMAC-SHA256(secret,
   "captcha-text|nonce|issued")` mapped onto the alphabet - so it is in no token and no record,
@@ -105,7 +129,7 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
   ChaCha20 stream seeded by `HMAC-SHA256(secret, "captcha-draw|nonce|issued")`: **one token,
   one image** - reloading it gives a bot nothing new. The answer is checked by recomputing the
   mac; the issue time is inside it, so the 3 s / 15 min window can't be faked.
-- `/comments/captcha` draws only a token that is the site's own and unexpired (else `404`),
+- `/comments/captcha` (GIF, or WBMP with `format=wbmp`) draws only a token that is the site's own and unexpired (else `404`),
   `Cache-Control: no-store`, and stores nothing.
 - **Single use**: an accepted nonce goes into `captcha_used` (unique index, TTL).
 - Answers ignore case and spaces. Unit test: `tests/captcha_test.c` (derived answer, same token
@@ -169,6 +193,23 @@ Collections: [data-model.md](data-model.md#comments).
   Writes go through the dashboard's guards: session, CSRF, the Observador refused.
 - The dashboard home starts with "N comments are waiting for moderation" when there are any, and
   the menu's *Content* group links *Comments*.
+- **Replying** - one reply per comment, from the team only (visitors comment, they don't
+  reply). *Reply* on a pending or approved comment (*Edit reply* once it has one) opens
+  `/dashboard/comments/<id>/reply`: the comment and a text box. An **Administrador** replies to
+  any comment, an **Autor** to those on their own blog entries; the Moderador and the Observador
+  don't. Saving again replaces the reply (`reply.updated_at`, the first date kept); *Delete
+  reply* removes it; deleting the comment deletes it too. **Replying to a pending comment
+  approves it.** Plain text like a comment (≤ 2000 bytes, escaped, line breaks kept), stored in
+  the comment as `reply` (text, the replier's id and name, `by_author`, dates). The list shows
+  it under the comment's text.
+- **On the page** the reply sits under its comment with the replier's name, the date and
+  *Author* (the entry's `header.author_id` or `created_by`) or *Administrator* (anyone else):
+  epoch 3 an indented block (`boat-rudder-comment__reply`, `__badge`), epochs 0-2 a
+  `<blockquote>`, WAP a line `Re: name (Author) date` (`comment-reply_epoch*.html`).
+- **The commenter is told by email** at a comment's first reply (not at edits) - the reply, their
+  comment and the link to the entry - when their email was confirmed, they aren't blocked and
+  they aren't the one replying (`notify_commenter()`, `cms_comments_reply_notice()`). A reply
+  deleted and written again counts as a first one.
 - **The author is told by email** when a comment reaches *pending* - at the `POST` of
   `/comments/verify`, or at once from a remembered browser - with the commenter's name, the text
   and links to `/dashboard/comments` and the entry (`notify_author()`, `cms_comments_notice()`).

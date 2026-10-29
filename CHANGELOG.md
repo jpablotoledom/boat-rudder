@@ -28,6 +28,8 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   the role and giving them a password.
 - New role **Moderator**: only the dashboard home and Comments - approves and rejects every blog
   comment, deletes and blocks nothing.
+- Older epochs (WAP, text browsers, HTML 3.2 / 4) show a blog entry's approved comments,
+  read-only, with a note that writing one needs a modern browser.
 - **Comments → Unverified**: comments whose email isn't confirmed yet, with the state of their
   confirmation email (sent / retrying with the SMTP error / failed); **Resend email** sends a new
   link, and a moderator can approve one without the email check.

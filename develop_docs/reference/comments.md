@@ -1,6 +1,7 @@
 # Blog comments
 
-Visitors can comment on **blog entries** (never pages) from **epoch 3** browsers. A comment needs
+Visitors can comment on **blog entries** (never pages) from **epoch 3** browsers; every other
+epoch (WAP, text, HTML 3.2, HTML 4) shows the approved comments read-only. A comment needs
 a name, an email and the answer to a challenge Boat Rudder draws itself; the visitor confirms the
 email through a link, and the comment waits for a moderator - an Administrador, a Moderador, or
 the Autor of the entry. Off by default; it needs outgoing mail.
@@ -41,6 +42,13 @@ Under a published blog entry (`comments_section()`, `src/modules/comments/`):
 - After sending: `?comment=sent` - "check your email". A browser that already confirmed this
   email (cookie, §5) skips the email: `?comment=pending`.
 - A refused form comes back with the reason, what was typed, and a **new** challenge.
+
+**Older epochs** (−1…2, `retro_section()`): the approved comments only - `Comments (N)`, then
+name, date and text per comment (`comments/comments_epoch<N>.html`,
+`comment-item_epoch<N>.html`; epochs 1-2 in the theme's home-content text color, like the
+entry's paragraphs; WML with `$` doubled) - and a line saying a modern browser is needed to
+write one (or that comments are closed). Nothing at all while an entry has no approved comment,
+or while comments are off.
 
 The email links to `/comments/verify?token=…`. That page only shows a **Confirm** button: the
 `GET` itself confirms nothing, since mail scanners open links on their own. The `POST` moves the

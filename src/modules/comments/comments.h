@@ -21,7 +21,9 @@ int comments_available(void);
 
 // The section under a blog entry: approved comments, then the form (or "closed").
 // `form` is NULL for an empty one; `notice` is "sent", "pending" or NULL.
-// "" when not epoch 3 or comments aren't available. Returns malloc'd HTML.
+// "" when comments aren't available. Epochs -1..2 get the approved comments
+// only, read-only (comments/comments_epoch<N>.html), and nothing when there
+// are none. Returns malloc'd HTML.
 char *comments_section(int epoch, const char *link, const char *lang, const CommentForm *form,
                        const char *notice);
 

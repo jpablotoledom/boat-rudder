@@ -1,5 +1,6 @@
 #include "comments.h"
 #include "../../db/cms_site_settings.h"
+#include "../../db/cms_themes.h"
 #include "../../db/mongodb_manager.h"
 #include "../../utils/captcha.h"
 #include "../../utils/detect_epoch.h"
@@ -8,6 +9,7 @@
 #include "../../utils/log.h"
 #include "../../utils/mailer.h"
 #include "../../utils/read_file.h"
+#include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
 #include <ctype.h>
 #include <sodium.h>
@@ -227,9 +229,61 @@ static char *form_html(int epoch, const char *link, const CommentForm *form) {
     return html;
 }
 
+// WML reads a lone '$' as a variable: doubled there, unchanged elsewhere.
+static char *wml_safe(char *html, int epoch) {
+    if (!html || epoch != EPOCH_WML || !strchr(html, '$')) return html;
+    char *out = malloc(strlen(html) * 2 + 1);
+    char *w = out;
+    for (const char *p = html; out && *p; p++) {
+        if (*p == '$') *w++ = '$';
+        *w++ = *p;
+    }
+    if (out) *w = '\0';
+    free(html);
+    return out;
+}
+
+// Epochs -1..2: the approved comments only, read-only - writing one needs
+// epoch 3. Nothing at all while there are none.
+static char *retro_section(int epoch, const char *link, const char *lang) {
+    char entry_id[25];
+    bool closed = false;
+    if (!cms_comments_blog_entry(link, lang, entry_id, &closed, NULL)) return strdup("");
+    CmsComment *list = NULL;
+    int count = cms_comments_approved(entry_id, &list);
+    if (count <= 0) { cms_comments_free(list, count); return strdup(""); }
+
+    char *section_tpl = load_template("comments/comments_epoch%d.html", epoch);
+    char *item_tpl = load_template("comments/comment-item_epoch%d.html", epoch);
+    // Epoch 1/2 color their text like the entry's paragraphs (entry_page.c).
+    CmsThemeColors colors;
+    cms_get_theme_colors(request_theme(), &colors);
+
+    char *items = (section_tpl && item_tpl) ? strdup("") : NULL;
+    for (int i = 0; items && i < count; i++) {
+        char *name = wml_safe(html_encode_alloc(list[i].name), epoch);
+        char *text = wml_safe(text_html(list[i].text), epoch);
+        char *item = (name && text) ? render_template(item_tpl, name, list[i].date, text, colors.home_content_text) : NULL;
+        items = item ? str_append(items, item) : (free(items), NULL);
+        free(name); free(text); free(item);
+    }
+    char count_str[16];
+    snprintf(count_str, sizeof(count_str), "%d", count);
+    const char *note = closed ? "Comments are closed on this entry."
+                              : "To write a comment, open this page in a modern browser.";
+    char *result = items ? render_template(section_tpl, count_str, items, note, colors.home_content_text) : NULL;
+
+    cms_comments_free(list, count);
+    free(items); free(section_tpl); free(item_tpl);
+    return result ? result : strdup("");
+}
+
 char *comments_section(int epoch, const char *link, const char *lang, const CommentForm *form,
                        const char *notice) {
-    if (epoch != EPOCH_MODERN || !comments_available()) return strdup("");
+    if (epoch != EPOCH_MODERN)
+        return mongodb_manager_is_ready() && cms_get_comments_enabled() ? retro_section(epoch, link, lang)
+                                                                        : strdup("");
+    if (!comments_available()) return strdup("");
 
     char entry_id[25];
     bool closed = false;

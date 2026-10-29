@@ -60,6 +60,7 @@
 #include "../utils/request_charset.h"
 #include "../utils/request_code_lines.h"
 #include "../utils/request_wml.h"
+#include "../utils/captcha.h"
 #include "../utils/request_lang.h"
 #include "../utils/request_theme.h"
 #include "../utils/request_site.h"
@@ -1706,15 +1707,27 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             int body_in_buffer = bytes_read - header_size;
 
             // Extract Content-Length from raw headers
-            int content_length = 0;
+            int content_length = 0, has_length = 0;
             for (const char *h = raw_request; h < hdr_end; h++) {
                 if (h[0] == '\r' && h[1] == '\n' &&
                     strncasecmp(h + 2, "Content-Length:", 15) == 0) {
                     const char *v = h + 17;
                     while (*v == ' ') v++;
                     content_length = atoi(v);
+                    has_length = content_length >= 0;
                     break;
                 }
+            }
+
+            // Bytes past Content-Length aren't part of the body: NCSA Mosaic
+            // 2 and IE 2 send a CRLF after a POST's body that the length
+            // doesn't count (RFC 2616 4.1 asks servers to tolerate it). Kept,
+            // it would end the last form field - the comment form's token,
+            // whose shape check then fails.
+            if (has_length && body_in_buffer > content_length) {
+                bytes_read = header_size + content_length;
+                raw_request[bytes_read] = '\0';
+                body_in_buffer = content_length;
             }
 
             if (content_length > (int)MAX_BODY_SIZE) {
@@ -2871,6 +2884,34 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
+            } else if (strcmp(decoded_url, "/comments/captcha") == 0) {
+                // The comment form's challenge image for epochs 1-2, which
+                // can't show the inline one: a GIF drawn again from the
+                // token (?t=), only while it is the site's own and unexpired
+                // (captcha.h). Nothing is stored or written.
+                unsigned char key[SITE_SECRET_BYTES];
+                size_t gif_len = 0;
+                unsigned char *gif = cms_get_site_secret(key) == 0
+                    ? captcha_token_gif(key, get_query_param(params, param_count, "t"), time(NULL), &gif_len)
+                    : NULL;
+                sodium_memzero(key, sizeof(key));
+                if (!gif) {
+                    send_error_response(ctx, 404, "404 Not Found", resolve_epoch(&req));
+                } else {
+                    char header[256];
+                    snprintf(header, sizeof(header),
+                             "HTTP/1.1 200 OK\r\n"
+                             "Content-Type: image/gif\r\n"
+                             "Content-Length: %zu\r\n"
+                             "Cache-Control: no-store\r\n"
+                             "X-Content-Type-Options: nosniff\r\n"
+                             "Connection: close\r\n"
+                             "\r\n", gif_len);
+                    connection_write(ctx, header, strlen(header));
+                    if (strcmp(req.method, "HEAD") != 0) connection_write(ctx, (const char *)gif, gif_len);
+                    free(gif);
+                }
+
             } else if (strcmp(decoded_url, "/comments/verify") == 0) {
                 // The link in a comment's confirmation email: a page with a
                 // button - the GET itself confirms nothing (comments.h).
@@ -3604,26 +3645,55 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 link[link_len] = '\0';
                 char back[300];
                 snprintf(back, sizeof(back), "/blog/%s", link);
-                if (epoch != EPOCH_MODERN) {
-                    send_or_error(ctx, build_redirect_response(back, "", epoch), req.method, epoch);
+                if (epoch < EPOCH_PRESTANDARD) {
+                    // WAP has no form (comments.h).
+                    char *abs_back = absolute_location(ctx, &req, back);
+                    send_or_error(ctx, build_redirect_response(abs_back ? abs_back : back, "", epoch), req.method, epoch);
+                    free(abs_back);
                 } else {
                     char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
                     CommentForm form;
                     CommentPostResult result = comments_post(link, content_lang, req.body, req.body_length,
                                                              get_header_value(&req, "Cookie"), client_ip,
-                                                             base ? base : "", &form);
+                                                             base ? base : "", get_header_value(&req, "User-Agent"),
+                                                             epoch, &form);
                     free(base);
                     if (result == COMMENT_POST_NOT_FOUND) {
                         send_error_response(ctx, 404, "404 Not Found", epoch);
                     } else if (result == COMMENT_POST_FORM) {
                         char *comments = comments_section(epoch, link, content_lang, &form, NULL);
                         serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
+                    } else if (!get_header_value(&req, "Host") || !get_header_value(&req, "Host")[0]) {
+                        // No Host (NCSA Mosaic 2, HTTP/1.0 browsers): a redirect
+                        // can't name this server - Mosaic makes a bare path the
+                        // hostless "http:///..." - so the entry is served right
+                        // here, with the notice, as epoch 1's language and theme
+                        // links avoid redirects too. A reload resends the form,
+                        // which the spent challenge then refuses.
+                        char *comments = comments_section(epoch, link, content_lang, NULL,
+                                                          result == COMMENT_POST_PENDING ? "pending" : "sent");
+                        serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
                     } else {
-                        char location[340];
-                        snprintf(location, sizeof(location), "%s%s#comments", back,
-                                 result == COMMENT_POST_VERIFY ? "?comment=sent"
-                                 : result == COMMENT_POST_PENDING ? "?comment=pending" : "");
-                        send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
+                        // Epochs 0-2 carry the language (0-1) and theme (1-2)
+                        // in the URL, not a cookie (build_epoch_response.c);
+                        // and epoch 1 gets no #fragment, which an HTTP/1.0
+                        // browser may send on as part of the query.
+                        char keep[96] = "";
+                        if (epoch == EPOCH_PRESTANDARD)
+                            snprintf(keep, sizeof(keep), "&lang=%s", request_lang());
+                        else if (epoch == EPOCH_EARLY)
+                            snprintf(keep, sizeof(keep), "&theme=%s&lang=%s", request_theme(), request_lang());
+                        else if (epoch == EPOCH_MIDDLE)
+                            snprintf(keep, sizeof(keep), "&theme=%s", request_theme());
+                        char location[420];
+                        snprintf(location, sizeof(location), "%s?comment=%s%s%s", back,
+                                 result == COMMENT_POST_PENDING ? "pending" : "sent", keep,
+                                 epoch == EPOCH_EARLY ? "" : "#comments");
+                        // Absolute: Mosaic turns a bare "/blog/..." into the
+                        // hostless "http:///blog/..." (absolute_location()).
+                        char *abs = absolute_location(ctx, &req, location);
+                        send_or_error(ctx, build_redirect_response(abs ? abs : location, "", epoch), req.method, epoch);
+                        free(abs);
                     }
                 }
             }

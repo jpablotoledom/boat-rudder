@@ -61,6 +61,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |
 | `/menu` | `return` | `menu/menu-page_epoch<N>.html` | Full nav menu + back link - the target of WML's compact `[Menu]` link. Only epochs with that template (today: −1); others `404` |
+| `/comments/captcha` | `t` | `captcha_token_gif()` | The comment form's challenge for epochs 1-2: `200 image/gif`, `no-store`, drawn again from the token; `404` unless the token is the site's own and unexpired ([comments.md](comments.md#4-the-challenge-srcutilscaptchac)) |
 | `/comments/verify` | `token` | `comments_verify_page()` | Epoch any. The email link: a *Confirm* button (`POST /comments/verify`), or "link expired" ([comments.md](comments.md)) |
 | `/search` | `q` | `search_page()` | Search form and the published blog entries and pages matching `q` ([rendering.md](rendering.md#search-search)) |
 | `/language` | `return` | `language_page()` | Language picker page |
@@ -93,7 +94,7 @@ Query parameters understood on **every** route (read before routing, see
 
 | Path | Fields | Handler | Response |
 |---|---|---|---|
-| `/blog/<link>/comments` | `name`, `email`, `text`, `captcha`, `captcha_token`, `website` (honeypot) | `comments_post()` | Epoch 3 only (others: `302` back). `302 /blog/<link>?comment=sent\|pending#comments`, or the entry again with the form and why, `404` for no such published blog entry |
+| `/blog/<link>/comments` | `name`, `email`, `text`, `captcha`, `captcha_token`, `website` (honeypot, epoch 3 only) | `comments_post()` | Epochs 0-3 (WAP: `302` back). `302 /blog/<link>?comment=sent\|pending#comments` (an absolute URL built from `Host`; epochs 0-1 also keep `lang`, 1-2 `theme`, and epoch 1 has no `#comments`). A request without `Host` (NCSA Mosaic 2) gets the entry and its notice as a `200` instead - no redirect can name the server for it, or the entry again with the form and why, `404` for no such published blog entry |
 | `/comments/verify` | `token` | `comments_verify_post()` | Confirms the comment (→ pending), sets the `br_commenter` cookie; or "link expired" |
 
 No session and no CSRF token: the challenge token (signed, single use, time-bounded) plays that

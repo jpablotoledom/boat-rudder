@@ -5,6 +5,42 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## v0.0.7
+### 2026-10-29
+
+### Comments from older browsers
+
+**Added**
+- Blog comments can be written from epochs 0, 1 and 2 (Lynx and other text browsers, Mosaic,
+  Netscape, Internet Explorer 3-6...), not only from modern browsers: the same form in each
+  epoch's markup, the same checks, email confirmation and moderation. WAP still shows the
+  comments read-only.
+- The challenge for those browsers: a GIF served by URL (`/comments/captcha`) on epochs 1-2,
+  which can't show the inline PNG, and the same characters drawn as text art on epoch 0.
+
+- Each comment records where it was written from - browser, operating system, the User-Agent and
+  the epoch - and shows it as two small icons next to the commenter's name (text on Lynx and
+  WAP): 12 browsers and 11 systems, from Mosaic, Arachne and MS-DOS to today's, drawn in pixel
+  art by `scripts/generate-client-icons.py`. The moderation list shows the icons and the words.
+  DOS is recognized when the User-Agent says so (`(DOS)`, `FreeDOS`, `DJGPP`) or from Arachne.
+
+**Changed**
+- The challenge's answer is now derived from its token with the site's secret instead of
+  chosen at random, so the image can be drawn again from the token alone; one token always
+  draws the same image. Security is unchanged: the answer can't be computed without the secret.
+- Form actions carry `?theme=`/`?lang=` (and `?site=`) on the epochs that keep them in links, so
+  posting a form no longer loses the reader's theme or language.
+
+**Fixed**
+- Forms sent in Latin-1 (epoch 1 pages, some epoch 2 browsers) are converted to UTF-8, so a
+  name like "Peña" is no longer refused.
+- Bytes after a request's `Content-Length` are no longer read as part of its body. NCSA
+  Mosaic 2 and Internet Explorer 2 send a CRLF after a form's data; it ended up in the last
+  field, so their comments were refused as a wrong challenge answer.
+- After sending a comment, the redirect names the full URL (`http://host/blog/...`), and a
+  browser that sends no `Host` (NCSA Mosaic 2) gets the entry with its notice straight away
+  instead of a redirect: Mosaic turned the bare path into the hostless `http:///blog/...` and
+  failed with "Failed DNS Lookup".
+
 ### 2026-10-28
 
 ### Blog comments

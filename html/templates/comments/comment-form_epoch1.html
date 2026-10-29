@@ -1,0 +1,15 @@
+<form method="post" action="%1$s">
+<p><font color="%10$s"><b>Leave a comment</b></font></p>
+%2$s<p><font color="%10$s">Name:<br>
+<input name="name" value="%3$s" size="30" maxlength="%8$d"><br>
+Email (never shown; we send you a link to confirm it):<br>
+<input name="email" value="%4$s" size="30" maxlength="254"><br>
+Comment (up to %9$d characters):<br>
+<textarea name="text" rows="6" cols="50">%5$s</textarea><br>
+Type the characters in the image:<br>
+<img src="%6$s" width="200" height="70" alt="[Challenge image]"><br>
+<input name="captcha" size="8" maxlength="8">
+<input type="hidden" name="captcha_token" value="%7$s"><br>
+Comments are published once a moderator approves them.<br>
+<input type="submit" value="Send"></font></p>
+</form>

@@ -1,7 +1,7 @@
 # Blog comments
 
-Visitors can comment on **blog entries** (never pages) from **epoch 3** browsers; every other
-epoch (WAP, text, HTML 3.2, HTML 4) shows the approved comments read-only. A comment needs
+Visitors can comment on **blog entries** (never pages) from **epochs 0-3** (text browsers, HTML
+3.2, HTML 4, HTML5); WAP (epoch −1) shows the approved comments read-only. A comment needs
 a name, an email and the answer to a challenge Boat Rudder draws itself; the visitor confirms the
 email through a link, and the comment waits for a moderator - an Administrador, a Moderador, or
 the Autor of the entry. Off by default; it needs outgoing mail.
@@ -15,7 +15,9 @@ Design and its decisions: [plans/comments-plan.md](../plans/comments-plan.md). D
 [comments-data-model.puml](../diagrams/comments-data-model.puml),
 [comment-states.puml](../diagrams/comment-states.puml),
 [sequence-comment-submit.puml](../diagrams/sequence-comment-submit.puml),
-[sequence-comment-moderation.puml](../diagrams/sequence-comment-moderation.puml).
+[sequence-comment-submit-retro.puml](../diagrams/sequence-comment-submit-retro.puml),
+[sequence-comment-moderation.puml](../diagrams/sequence-comment-moderation.puml); epochs 1-2:
+[plans/comments-retro-plan.md](../plans/comments-retro-plan.md).
 
 ---
 
@@ -43,12 +45,30 @@ Under a published blog entry (`comments_section()`, `src/modules/comments/`):
   email (cookie, §5) skips the email: `?comment=pending`.
 - A refused form comes back with the reason, what was typed, and a **new** challenge.
 
-**Older epochs** (−1…2, `retro_section()`): the approved comments only - `Comments (N)`, then
-name, date and text per comment (`comments/comments_epoch<N>.html`,
-`comment-item_epoch<N>.html`; epochs 1-2 in the theme's home-content text color, like the
-entry's paragraphs; WML with `$` doubled) - and a line saying a modern browser is needed to
-write one (or that comments are closed). Nothing at all while an entry has no approved comment,
-or while comments are off.
+**Epochs 0-2** get the same section and form in their own markup (`comments/*_epoch0.html`,
+`*_epoch1.html`, `*_epoch2.html`: plain HTML, `<font>`, tables, `<a name="comments">`; on 1-2 text
+in the theme's home-content color, like the entry's paragraphs), with three differences:
+
+- The challenge: on epochs 1-2 a **GIF by URL** - `GET /comments/captcha?t=<token>` (§4) - since
+  those browsers know neither `data:` URIs nor, all of them, PNG; on epoch 0 the same characters
+  as **text art** in a `<pre>`, for browsers without images (Lynx, w3m, ELinks).
+- **No honeypot field**: without (reliable) CSS a person would see it and fill it.
+- **Form input in Latin-1**: epoch 1 pages go out in Latin-1, so their forms come back in it
+  (as do some epoch 2 browsers'). A field that isn't valid UTF-8 is read as Windows-1252 and
+  converted before any check (`to_utf8()`).
+
+The form's `action` carries `?lang=` (epochs 0-1) and `?theme=` (1-2), like every link
+([rendering.md](rendering.md)); after sending, the redirect keeps them, names the full URL
+(Mosaic can't resolve a bare path), and on epoch 1 has no `#comments`, which an HTTP/1.0
+browser may send on as part of the query. A browser that sends no `Host` (NCSA Mosaic 2) gets
+the entry with its notice directly instead: no URL could name the server for it. Its reload
+resends the form, which the spent challenge refuses.
+
+**WAP, epoch −1** (`retro_section()`): the approved comments only - `Comments (N)`, then name,
+date and text per comment (`$` doubled) - and a line saying a computer is needed to write one
+(or that comments are closed). Nothing at all while an entry has no approved comment, or while
+comments are off. HTTP/0.9 browsers on epoch 0 see the form but can't send it: that protocol
+has no POST.
 
 The email links to `/comments/verify?token=…`. That page only shows a **Confirm** button: the
 `GET` itself confirms nothing, since mail scanners open links on their own. The `POST` moves the
@@ -70,14 +90,26 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
 ## 4. The challenge (`src/utils/captcha.c`)
 
 - 5 characters from `ACDEFHJKMNPRTUVWXY34679` (no look-alikes), drawn from a built-in 5x7 font:
-  each glyph scaled, slanted and shifted at random, then the whole image waved, crossed by lines
-  and dotted. 200x70 grayscale **PNG**, encoded here (stored deflate, no image library), inlined
-  as `data:image/png;base64`.
+  each glyph scaled, slanted and shifted, then the whole image waved, crossed by lines and
+  dotted. 200x70, encoded here with no image library: grayscale **PNG** (stored deflate) inlined
+  as `data:image/png;base64` on epoch 3; 16-gray **GIF87a** (LZW kept uncompressed - a clear
+  code every 12 pixels) at `GET /comments/captcha?t=<token>` on epochs 1-2; **text art** on
+  epoch 0 (`captcha_token_text()`): each glyph pixel two characters wide, an ink character per
+  glyph, slanted and shifted, a few holes, scattered punctuation - 9 lines within 80 columns.
+  A bot built for this site reads text art more easily than an image; the 3 s minimum, the
+  limits, email confirmation and moderation still apply.
 - Stateless token in the form: `nonce.issued.HMAC-SHA256(secret, "captcha|nonce|issued|ANSWER")`.
-  Nothing is stored when the image is drawn; the answer is checked by recomputing the mac. The
-  issue time is inside the mac, so the 3 s / 15 min window can't be faked.
+  The **answer is derived** from the token under the secret - `HMAC-SHA256(secret,
+  "captcha-text|nonce|issued")` mapped onto the alphabet - so it is in no token and no record,
+  yet the server can draw the image again from the token alone. The drawing's randomness is a
+  ChaCha20 stream seeded by `HMAC-SHA256(secret, "captcha-draw|nonce|issued")`: **one token,
+  one image** - reloading it gives a bot nothing new. The answer is checked by recomputing the
+  mac; the issue time is inside it, so the 3 s / 15 min window can't be faked.
+- `/comments/captcha` draws only a token that is the site's own and unexpired (else `404`),
+  `Cache-Control: no-store`, and stores nothing.
 - **Single use**: an accepted nonce goes into `captcha_used` (unique index, TTL).
-- Answers ignore case and spaces. Unit test: `tests/captcha_test.c`.
+- Answers ignore case and spaces. Unit test: `tests/captcha_test.c` (derived answer, same token
+  same image, GIF/PNG structure, expired / tampered / foreign tokens).
 - Limitation: an image excludes readers who can't see it; there is no audio or text alternative.
 
 ## 5. Secrets, cookies and stored data
@@ -94,6 +126,27 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
 - **Remember cookie** `br_commenter=<commenter id>.<issued>.<HMAC>` - `HttpOnly`, `SameSite=Lax`,
   1 year. Valid only while the commenter's email stays confirmed and not blocked.
 - **Addresses**: only `HMAC(secret, "ip|<address>")` (16 bytes, hex) is stored, for the limits.
+- **Where it was written from**: `browser` and `os` (`ua_parser.h`, the analytics classifier:
+  `"MSIE/5"`, `"Windows/2000"`), the `user_agent` itself (printable ASCII, ≤ 256 bytes, so it can
+  be classified again) and the `epoch`.
+- **Shown as icons** next to the commenter's name (`comment_client_html()`): the browser's and the
+  system's 16x16 GIFs from `html/assets/icons/clients/`, their names as alt text (and `title` on
+  epochs 2-3); on epoch 0 and WAP the names as text, `[Lynx 2]` / `(Lynx 2)`. `client_icon.c` maps
+  the stored keys to an icon and words - "MSIE/5" → `ie.gif`, "Internet Explorer 5";
+  "Windows/2000" → `windows-classic.gif` - and reads the User-Agent where the keys say nothing
+  (Mac OS before X, IRIX, other Unixes, DOS). DOS builds of Lynx and Links don't name their
+  system unless their User-Agent is set to (`USER_AGENT:Lynx/2.9.0 (DOS) ...` in `lynx.cfg`);
+  `DOS`, `MS-DOS`, `FreeDOS` or `DJGPP` in it, or Arachne (DOS only), show `dos.gif`. An unknown system shows no system icon (text browsers
+  rarely say theirs); comments older than this record show none. The moderation list shows the
+  icons and, under the date, the words: `MSIE 5 · Windows 2000 · epoch 2`.
+- **The icons** are Boat Rudder's own pixel drawings, made to be recognizable - not the vendors'
+  logos - drawn by `scripts/generate-client-icons.py` (`python3 scripts/generate-client-icons.py
+  --preview sheet.png` redraws them all and a sample sheet): browsers `chrome`, `firefox`,
+  `edge`, `safari`, `opera`, `ie`, `netscape`, `mosaic`, `text` (Lynx, Links, w3m, ELinks), `arachne`,
+  `wap`, `browser` (any other); systems `windows` (8 and later), `windows-xp` (XP to 7),
+  `windows-classic` (3.x to 2000), `mac`, `mac-classic`, `linux`, `android`, `ios`, `bsd`,
+  `unix` (Solaris, IRIX, BeOS, OS/2...), `dos`, `os`. GIF89a with a transparent background; a new icon
+  needs a line in both the script and `client_icon.c`.
 - Emails are shown only in the dashboard.
 
 Collections: [data-model.md](data-model.md#comments).

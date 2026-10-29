@@ -87,8 +87,9 @@ shipped themes (`dark`, `light`) contain the same set.
 | `login/` | `login` | −1…3 | 0-1 | | `/login` (epoch 3 form; other epochs "not available") |
 | | `login-error` | 3 | 1 | | error line |
 | `language/` | `language`, `language-item` | −1…3 | 2 / 3-4 | | `/language` page |
-| `comments/` | `comments`, `comment-item`, `comment-form`, `comment-error`, `comments-notice`, `comments-empty`, `comments-closed` | 3 | 4 / 3 / 9 (positional) / 1 / 1 / 0 / 0 | | Blog comments section and form (`comments_section()`) |
-| | `comments`, `comment-item` | −1…2 | 4 (positional: count, comments, note, color) / 4 (name, date, text, color) | | Read-only approved comments on older epochs (`retro_section()`) |
+| `comments/` | `comments`, `comment-item`, `comment-form`, `comment-error`, `comments-notice`, `comments-empty`, `comments-closed` | 0…3 | 5 (positional: count, notice, comments, form or closed, color) / 5 (name, date, text, client icons, color) / 10 (positional: action, error, name, email, text, challenge - image src, or text art on epoch 0 -, token, name max, text max, color) / 2 (message, color) / 2 (message, color) / 1 (color) / 1 (color) | | Blog comments section and form (`comments_section()`); epochs 0 and 3 ignore the color, epochs 0-2 have no honeypot |
+| | `comments`, `comment-item` | −1 | 4 (positional: count, comments, note, color) / 5 (name, date, text, client, color) | | Read-only approved comments on WAP (`retro_section()`) |
+| | `comment-client` | −1…3 | 2 (positional: label, icon URL) | | One browser or system icon next to a comment's name (`comment_client_html()`); text on −1 and 0 |
 | | `verify`, `verify-form` | −1…3 | 3 / 1 | | `/comments/verify` pages |
 | `search/` | `search` | −1…3 | 4 (`%1$s` query, `%2$s` summary, `%3$s` results, `%4$s` hidden fields) | | `/search` page: form, summary, results |
 | | `search-item` | −1…3 | 4 (`%1$s` URL, `%2$s` title, `%3$s` "Blog - date" / "Page", `%4$s` excerpt) | | one result |

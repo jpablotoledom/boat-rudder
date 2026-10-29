@@ -20,6 +20,7 @@
 #define COMMENT_NAME_MIN      2      // bytes, after trimming
 #define COMMENT_NAME_MAX      40
 #define COMMENT_TEXT_MAX      2000
+#define COMMENT_UA_MAX        256
 #define COMMENT_VERIFY_HOURS  24
 #define COMMENT_LIMIT_PER_IP_HOUR     5
 #define COMMENT_LIMIT_PER_EMAIL_DAY   10
@@ -57,6 +58,14 @@ typedef struct {
     const char *text;            // validated
     const char *ip_hash;
     const char *remembered_id;   // commenter id from a valid remember-me cookie, or NULL
+    // Where it was written from, for showing it later (an icon): ua_parser.h's
+    // "Browser/version" and "OS/version", the User-Agent itself (printable
+    // ASCII, at most COMMENT_UA_MAX bytes, so it can be classified again),
+    // and the epoch (0-3).
+    const char *browser;
+    const char *os;
+    const char *user_agent;
+    int         epoch;
 } CommentSubmission;
 
 // Stores the comment (and the commenter, new or updated). On
@@ -101,6 +110,9 @@ typedef struct {
     char *name;
     char *text;
     char  date[17];              // "YYYY-MM-DD HH:MM" (UTC)
+    char *browser;               // where it was written from ("" before that was recorded)
+    char *os;
+    char *user_agent;
 } CmsComment;
 
 // The approved comments of an entry, oldest first (at most 500). Returns the
@@ -124,6 +136,11 @@ typedef struct {
     // and its last error ("" if none).
     char  mail_status[12];
     char *mail_error;
+    // Where it was written from ("" / -1 for comments older than this).
+    char *browser;
+    char *os;
+    char *user_agent;
+    int   epoch;
 } CmsCommentAdmin;
 
 // Moderation list: comments with `status` ("unverified", "pending",

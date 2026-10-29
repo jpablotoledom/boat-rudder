@@ -11,6 +11,8 @@
 #include "../../utils/read_file.h"
 #include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
+#include "../../utils/client_icon.h"
+#include "../../utils/ua_parser.h"
 #include <ctype.h>
 #include <sodium.h>
 #include <stdio.h>
@@ -77,6 +79,37 @@ static int valid_utf8(const unsigned char *s) {
         for (s++; n > 0; n--, s++) if ((*s & 0xC0) != 0x80) return 0;
     }
     return 1;
+}
+
+// Windows-1252's 0x80-0x9F (what browsers really send for "ISO-8859-1"):
+// curly quotes, dashes, the euro sign... 0 where it has nothing.
+static const unsigned short CP1252_HIGH[32] = {
+    0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0,
+    0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178,
+};
+
+// Epoch 1 pages go out in Latin-1 (build_epoch_response.c), so their forms
+// come back in it - as do some epoch 2 browsers'. A field that isn't UTF-8
+// is read as Windows-1252 and converted in place. Returns 0, or -1 if the
+// converted text doesn't fit in `size` (the field is then too long anyway).
+static int to_utf8(char *s, size_t size) {
+    if (valid_utf8((const unsigned char *)s)) return 0;
+    size_t n = strlen(s);
+    char *out = malloc(n * 3 + 1);
+    if (!out) return -1;
+    char *w = out;
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        unsigned cp = *p < 0x80 ? *p : *p < 0xA0 ? CP1252_HIGH[*p - 0x80] : *p;
+        if (!cp) continue;
+        if (cp < 0x80) *w++ = (char)cp;
+        else if (cp < 0x800) { *w++ = (char)(0xC0 | cp >> 6); *w++ = (char)(0x80 | (cp & 0x3F)); }
+        else { *w++ = (char)(0xE0 | cp >> 12); *w++ = (char)(0x80 | (cp >> 6 & 0x3F)); *w++ = (char)(0x80 | (cp & 0x3F)); }
+    }
+    *w = '\0';
+    int fits = (size_t)(w - out) < size;
+    if (fits) memcpy(s, out, (size_t)(w - out) + 1);
+    free(out);
+    return fits ? 0 : -1;
 }
 
 static void trim(char *s) {
@@ -195,11 +228,17 @@ static char *text_html(const char *text) {
     return out;
 }
 
-static char *form_html(int epoch, const char *link, const CommentForm *form) {
+// The form. Epoch 3 gets the challenge inline (a data: PNG); epochs 1-2,
+// which know neither data: URIs nor (all of them) PNG, a GIF by URL that
+// GET /comments/captcha draws from the token; epoch 0's text browsers the
+// same characters as text art for a <pre>. Below epoch 3, no honeypot:
+// without CSS a person would see it and fill it.
+static char *form_html(int epoch, const char *link, const CommentForm *form, const char *color) {
     char *tpl = load_template("comments/comment-form_epoch%d.html", epoch);
     unsigned char key[SITE_SECRET_BYTES];
     Captcha cap = { 0 };
-    if (!tpl || cms_get_site_secret(key) != 0 || captcha_new(key, &cap) != 0) {
+    int inline_png = epoch == EPOCH_MODERN;
+    if (!tpl || cms_get_site_secret(key) != 0 || captcha_new(key, inline_png, &cap) != 0) {
         free(tpl);
         captcha_free(&cap);
         return NULL;
@@ -210,7 +249,7 @@ static char *form_html(int epoch, const char *link, const CommentForm *form) {
     if (form && form->error) {
         char *etpl = load_template("comments/comment-error_epoch%d.html", epoch);
         char *enc = html_encode_alloc(form->error);
-        error = (etpl && enc) ? render_template(etpl, enc) : NULL;
+        error = (etpl && enc) ? render_template(etpl, enc, color) : NULL;
         free(etpl);
         free(enc);
     }
@@ -220,13 +259,39 @@ static char *form_html(int epoch, const char *link, const CommentForm *form) {
     char *name = html_encode_alloc(form ? form->name : "");
     char *email = html_encode_alloc(form ? form->email : "");
     char *text = html_encode_alloc(form ? form->text : "");
-    char *html = (action_enc && name && email && text)
-        ? render_template(tpl, action_enc, error ? error : "", name, email, text, cap.image_data_uri,
-                          cap.token, COMMENT_NAME_MAX, COMMENT_TEXT_MAX)
+    char image_url[CAPTCHA_TOKEN_MAX + 32];
+    snprintf(image_url, sizeof(image_url), "/comments/captcha?t=%s", cap.token);   // hex and '.' only
+    char *art = NULL;
+    if (epoch == EPOCH_PRESTANDARD && cms_get_site_secret(key) == 0) {
+        art = captcha_token_text(key, cap.token, time(NULL));   // needs no escaping
+        sodium_memzero(key, sizeof(key));
+    }
+    const char *challenge = inline_png ? cap.image_data_uri : epoch == EPOCH_PRESTANDARD ? art : image_url;
+    char *html = (action_enc && name && email && text && challenge)
+        ? render_template(tpl, action_enc, error ? error : "", name, email, text, challenge,
+                          cap.token, COMMENT_NAME_MAX, COMMENT_TEXT_MAX, color)
         : NULL;
-    free(action_enc); free(name); free(email); free(text); free(error); free(tpl);
+    free(action_enc); free(name); free(email); free(text); free(error); free(tpl); free(art);
     captcha_free(&cap);
     return html;
+}
+
+char *comment_client_html(int epoch, const char *browser, const char *os, const char *user_agent) {
+    ClientIcons c;
+    char *tpl = client_icons(browser, os, user_agent, &c)
+        ? load_template("comments/comment-client_epoch%d.html", epoch) : NULL;
+    if (!tpl) return strdup("");
+    char src[96];
+    snprintf(src, sizeof(src), CLIENT_ICON_DIR "%s.gif", c.browser_icon);
+    char *out = render_template(tpl, c.browser_label, src);
+    if (out && c.os_icon) {
+        snprintf(src, sizeof(src), CLIENT_ICON_DIR "%s.gif", c.os_icon);
+        char *os_html = render_template(tpl, c.os_label, src);
+        out = os_html ? str_append(str_append(out, " "), os_html) : out;
+        free(os_html);
+    }
+    free(tpl);
+    return out ? out : strdup("");
 }
 
 // WML reads a lone '$' as a variable: doubled there, unchanged elsewhere.
@@ -243,8 +308,8 @@ static char *wml_safe(char *html, int epoch) {
     return out;
 }
 
-// Epochs -1..2: the approved comments only, read-only - writing one needs
-// epoch 3. Nothing at all while there are none.
+// WAP (epoch -1): the approved comments only, read-only - writing one
+// needs epoch 0 or later. Nothing at all while there are none.
 static char *retro_section(int epoch, const char *link, const char *lang) {
     char entry_id[25];
     bool closed = false;
@@ -263,14 +328,16 @@ static char *retro_section(int epoch, const char *link, const char *lang) {
     for (int i = 0; items && i < count; i++) {
         char *name = wml_safe(html_encode_alloc(list[i].name), epoch);
         char *text = wml_safe(text_html(list[i].text), epoch);
-        char *item = (name && text) ? render_template(item_tpl, name, list[i].date, text, colors.home_content_text) : NULL;
+        char *client = comment_client_html(epoch, list[i].browser, list[i].os, list[i].user_agent);
+        char *item = (name && text && client)
+            ? render_template(item_tpl, name, list[i].date, text, client, colors.home_content_text) : NULL;
         items = item ? str_append(items, item) : (free(items), NULL);
-        free(name); free(text); free(item);
+        free(name); free(text); free(client); free(item);
     }
     char count_str[16];
     snprintf(count_str, sizeof(count_str), "%d", count);
     const char *note = closed ? "Comments are closed on this entry."
-                              : "To write a comment, open this page in a modern browser.";
+                              : "To write a comment, open this page on a computer.";
     char *result = items ? render_template(section_tpl, count_str, items, note, colors.home_content_text) : NULL;
 
     cms_comments_free(list, count);
@@ -280,10 +347,15 @@ static char *retro_section(int epoch, const char *link, const char *lang) {
 
 char *comments_section(int epoch, const char *link, const char *lang, const CommentForm *form,
                        const char *notice) {
-    if (epoch != EPOCH_MODERN)
+    if (epoch < EPOCH_PRESTANDARD)
         return mongodb_manager_is_ready() && cms_get_comments_enabled() ? retro_section(epoch, link, lang)
                                                                         : strdup("");
     if (!comments_available()) return strdup("");
+    // Epochs 1-2 color their text like the entry's paragraphs (entry_page.c);
+    // epochs 0 and 3's templates ignore it.
+    CmsThemeColors colors;
+    cms_get_theme_colors(request_theme(), &colors);
+    const char *color = colors.home_content_text;
 
     char entry_id[25];
     bool closed = false;
@@ -299,13 +371,16 @@ char *comments_section(int epoch, const char *link, const char *lang, const Comm
     for (int i = 0; items && i < count; i++) {
         char *name = html_encode_alloc(list[i].name);
         char *text = text_html(list[i].text);
-        char *item = (name && text) ? render_template(item_tpl, name, list[i].date, text) : NULL;
+        char *client = comment_client_html(epoch, list[i].browser, list[i].os, list[i].user_agent);
+        char *item = (name && text && client) ? render_template(item_tpl, name, list[i].date, text, client, color) : NULL;
         items = item ? str_append(items, item) : (free(items), NULL);
-        free(name); free(text); free(item);
+        free(name); free(text); free(client); free(item);
     }
     if (items && count <= 0) {
-        char *empty = load_template("comments/comments-empty_epoch%d.html", epoch);
-        if (empty) { items = str_append(items, empty); free(empty); }
+        char *etpl = load_template("comments/comments-empty_epoch%d.html", epoch);
+        char *empty = etpl ? render_template(etpl, color) : NULL;
+        if (empty) items = str_append(items, empty);
+        free(etpl); free(empty);
     }
 
     char *notice_html = strdup("");
@@ -316,15 +391,21 @@ char *comments_section(int epoch, const char *link, const char *lang, const Comm
         message = "Thanks! Your comment is waiting for a moderator.";
     if (message) {
         char *ntpl = load_template("comments/comments-notice_epoch%d.html", epoch);
-        if (ntpl) { free(notice_html); notice_html = render_template(ntpl, message); free(ntpl); }
+        if (ntpl) { free(notice_html); notice_html = render_template(ntpl, message, color); free(ntpl); }
     }
 
-    char *bottom = closed ? load_template("comments/comments-closed_epoch%d.html", epoch)
-                          : form_html(epoch, link, form);
+    char *bottom = NULL;
+    if (closed) {
+        char *ctpl = load_template("comments/comments-closed_epoch%d.html", epoch);
+        bottom = ctpl ? render_template(ctpl, color) : NULL;
+        free(ctpl);
+    } else {
+        bottom = form_html(epoch, link, form, color);
+    }
     char count_str[16];
     snprintf(count_str, sizeof(count_str), "%d", count > 0 ? count : 0);
     char *result = (items && notice_html && bottom)
-        ? render_template(section_tpl, count_str, notice_html, items, bottom) : NULL;
+        ? render_template(section_tpl, count_str, notice_html, items, bottom, color) : NULL;
 
     cms_comments_free(list, count);
     free(items); free(notice_html); free(bottom); free(section_tpl); free(item_tpl);
@@ -407,7 +488,7 @@ int comments_resend(const char *comment_id, const char *lang, const char *base_u
 
 CommentPostResult comments_post(const char *link, const char *lang, const char *body, int body_len,
                                 const char *cookie_header, const char *client_ip, const char *base_url,
-                                CommentForm *form) {
+                                const char *user_agent, int epoch, CommentForm *form) {
     memset(form, 0, sizeof(*form));
     if (!comments_available()) return COMMENT_POST_CLOSED;
 
@@ -425,6 +506,7 @@ CommentPostResult comments_post(const char *link, const char *lang, const char *
     form_field(body, body_len, "website", honeypot, sizeof(honeypot));
     form_field(body, body_len, "captcha", answer, sizeof(answer));
     form_field(body, body_len, "captcha_token", token, sizeof(token));
+    trim(token);   // hex and dots only: whitespace around it is never part of it
 
     // A filled honeypot is a bot: it gets the usual answer, nothing is stored.
     if (honeypot[0]) {
@@ -433,9 +515,15 @@ CommentPostResult comments_post(const char *link, const char *lang, const char *
         return COMMENT_POST_VERIFY;
     }
 
+    const char *error = NULL;
+    if (to_utf8(form->name, sizeof(form->name)) != 0) error = "Your name is too long.";
+    if (!error && to_utf8(form->text, sizeof(form->text)) != 0)
+        error = "Your comment is too long (2000 characters at most).";
+    to_utf8(form->email, sizeof(form->email));   // shape-checked below anyway
+
     trim(form->email);
     for (char *p = form->email; *p; p++) *p = (char)tolower((unsigned char)*p);
-    const char *error = clean_name(form->name);
+    if (!error) error = clean_name(form->name);
     if (!error && !mailer_valid_address(form->email)) error = "Please give a valid email address.";
     if (!error) error = clean_text(form->text);
 
@@ -468,8 +556,18 @@ CommentPostResult comments_post(const char *link, const char *lang, const char *
     if (!error) {
         char remembered[25];
         int has_cookie = remembered_commenter(cookie_header, remembered);
+        // Where it was written from: classified as analytics does, and the
+        // User-Agent itself kept (printable ASCII only: it must be valid
+        // UTF-8 for the database) so it can be classified again later.
+        char browser[64], os[64], ua[COMMENT_UA_MAX + 1];
+        ua_parse_browser(user_agent, browser, sizeof(browser));
+        ua_parse_os(user_agent, os, sizeof(os));
+        size_t k = 0;
+        for (const char *p = user_agent ? user_agent : ""; *p && k < COMMENT_UA_MAX; p++)
+            ua[k++] = (*p >= 0x20 && *p < 0x7f) ? *p : '?';
+        ua[k] = '\0';
         CommentSubmission s = { entry_id, form->name, form->email, form->text, hash,
-                                has_cookie ? remembered : NULL };
+                                has_cookie ? remembered : NULL, browser, os, ua, epoch };
         char confirm_token[COMMENT_TOKEN_HEX + 1], commenter_id[25], comment_id[25];
         switch (cms_comments_submit(&s, confirm_token, commenter_id, comment_id)) {
         case COMMENT_SUBMIT_VERIFY:

@@ -1,0 +1,38 @@
+@startuml
+!theme plain
+title Boat Rudder - Writing a comment from epoch 1 or 2
+
+actor "Visitor\n(Netscape 3, IE 5...)" as Visitor
+participant "http_router" as R
+participant "comments" as COM
+participant "captcha" as CAP
+database "MongoDB" as DB
+participant "mailer thread" as MAIL
+
+== The entry page ==
+Visitor -> R : GET /blog/<link>
+R -> COM : comments_section(epoch 1/2)
+COM -> CAP : captcha_new()\nanswer = HMAC(secret, nonce|issued)
+CAP --> COM : token (no image)
+COM --> Visitor : comments + form\n<img src="/comments/captcha?t=token">\n(no honeypot field)
+
+== The image ==
+Visitor -> R : GET /comments/captcha?t=token
+R -> CAP : token's mac valid? age <= 15 min?
+alt valid
+  CAP -> CAP : answer from the token,\ndrawing seeded from it (same token, same image)
+  CAP --> Visitor : 200 image/gif, no-store
+else invalid / expired
+  R --> Visitor : 404
+end
+
+== Sending ==
+Visitor -> R : POST /blog/<link>/comments\n(Latin-1 or UTF-8)
+R -> COM : comments_post()
+COM -> COM : not UTF-8? read as Latin-1, convert
+COM -> COM : same checks as epoch 3\n(challenge, 3 s, limits, name, block)
+COM -> DB : store comment, queue confirmation email
+COM --> Visitor : 302 /blog/<link>?comment=sent#comments
+MAIL -> MAIL : sends it (unchanged)
+
+@enduml

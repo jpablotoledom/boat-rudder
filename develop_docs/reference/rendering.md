@@ -705,9 +705,9 @@ applies, in order:
 
 | Step | Epochs | What |
 |---|---|---|
-| Language re-tagging | −1, 0, 1 | `?lang=<code>` on every site-relative link |
+| Language re-tagging | −1, 0, 1 | `?lang=<code>` on every site-relative link and form `action` (a POST keeps it; a GET form replaces it with its fields, so those carry hidden inputs) |
 | WML pagination | −1, unless `?wml_pages=all` | `wml_paginate()` - see below |
-| Theme re-tagging | 1, 2 | `?theme=<key>` on every site-relative link |
+| Theme re-tagging | 1, 2 | `?theme=<key>` on every site-relative link and form `action` |
 | WML fixups | −1 | `<br>` → `<br/>`, HTML lists → `- item<br/>` lines |
 | Latin-1 transcode | −1, 1, and 0 for Cello, Line Mode and HTTP/0.9 | `utf8_to_latin1()` |
 

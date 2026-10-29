@@ -211,8 +211,8 @@ Anonymous visitors can write to the database, so comments carry their own defens
 
 | Defense | How |
 |---|---|
-| **Challenge** | Server-drawn image, HMAC-signed stateless token, answered ≥ 3 s and ≤ 15 min after drawing, single use (`captcha_used`). Replaces the CSRF token on this public form |
-| **Honeypot** | A hidden field; filled in → "success" shown, nothing stored |
+| **Challenge** | Server-drawn image (text art on epoch 0), HMAC-signed stateless token whose answer is derived from it under the site secret (never in the token or stored), answered ≥ 3 s and ≤ 15 min after drawing, single use (`captcha_used`). One token always draws the same image, so reloading `/comments/captcha` gives a bot nothing new; that route draws only valid, unexpired tokens. Replaces the CSRF token on this public form |
+| **Honeypot** | A hidden field (epoch 3 only - without CSS a person would see it); filled in → "success" shown, nothing stored |
 | **Rate limits** | 5 comments per address per hour, 10 per email per day |
 | **Email ownership** | Nothing is public before the address's owner clicks a link (token: 32 random bytes, only its SHA-256 stored, 24 h, single use) and a moderator approves. The link's `GET` doesn't confirm, so mail scanners can't |
 | **Identity** | A name belongs to the first email that confirmed it; the site users' names are reserved. The remember cookie is HMAC-signed and void once the email is blocked |

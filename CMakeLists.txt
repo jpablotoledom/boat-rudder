@@ -89,6 +89,7 @@ set(SOURCES
     src/utils/theme_catalog.c
     src/utils/request_user.c
     src/utils/ua_parser.c
+    src/utils/client_icon.c
 
     # Retro-compatible CMS: HTML builder
     src/html_builder/orchestrator.c
@@ -219,6 +220,9 @@ add_test(NAME browser_detection_bson COMMAND browser_detection_bson_test)
 add_executable(captcha_test tests/captcha_test.c src/utils/captcha.c)
 target_link_libraries(captcha_test PkgConfig::SODIUM m)
 add_test(NAME captcha COMMAND captcha_test)
+
+add_executable(client_icon_test tests/client_icon_test.c src/utils/client_icon.c src/utils/ua_parser.c)
+add_test(NAME client_icon COMMAND client_icon_test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(proxy_protocol_test tests/proxy_protocol_test.c src/web_server/proxy_protocol.c)
 target_link_libraries(proxy_protocol_test Threads::Threads)

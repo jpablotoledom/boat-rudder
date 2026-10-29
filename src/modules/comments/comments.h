@@ -5,7 +5,8 @@
 
 // Blog comments, visitor side (develop_docs/reference/comments.md): the
 // comments section under a blog entry, the form's submission and the
-// email-confirmation pages. Epoch 3 only.
+// email-confirmation pages. Writing from epochs 0-3; WAP shows the approved
+// comments read-only.
 
 // What the form held when it comes back with a message.
 typedef struct {
@@ -21,9 +22,9 @@ int comments_available(void);
 
 // The section under a blog entry: approved comments, then the form (or "closed").
 // `form` is NULL for an empty one; `notice` is "sent", "pending" or NULL.
-// "" when comments aren't available. Epochs -1..2 get the approved comments
-// only, read-only (comments/comments_epoch<N>.html), and nothing when there
-// are none. Returns malloc'd HTML.
+// "" when comments aren't available. WAP (epoch -1) gets the approved
+// comments only, read-only (comments/comments_epoch-1.html), and nothing
+// when there are none. Returns malloc'd HTML.
 char *comments_section(int epoch, const char *link, const char *lang, const CommentForm *form,
                        const char *notice);
 
@@ -39,11 +40,12 @@ typedef enum {
 // fields, limits, name ownership, block), then storage and the email - to
 // the commenter to confirm it, or, once it waits for moderation, to the
 // entry's author.
-// `base_url` ("https://host") builds the confirmation link. Fills *form with
-// what was sent (for COMMENT_POST_FORM).
+// `base_url` ("https://host") builds the confirmation link; `user_agent` and
+// `epoch` are stored with the comment (browser, OS - see CommentSubmission).
+// Fills *form with what was sent (for COMMENT_POST_FORM).
 CommentPostResult comments_post(const char *link, const char *lang, const char *body, int body_len,
                                 const char *cookie_header, const char *client_ip, const char *base_url,
-                                CommentForm *form);
+                                const char *user_agent, int epoch, CommentForm *form);
 
 // "Resend email" on an unverified comment (dashboard): a new confirmation
 // link replaces the old one, queued to the commenter, and the comment gets
@@ -53,6 +55,12 @@ int comments_resend(const char *comment_id, const char *lang, const char *base_u
 // GET /comments/verify?token=: the "Confirm your comment" page (or "link
 // expired"). Returns a malloc'd fragment.
 char *comments_verify_page(int epoch, const char *token);
+
+// Where a comment was written from, as `epoch` shows it next to the name:
+// the browser's and the system's icons (client_icon.h) with their names as
+// alt text on epochs 1-3, the names as text on 0 and WAP. Arguments as the
+// comment stored them; "" when nothing was recorded. Returns malloc'd HTML.
+char *comment_client_html(int epoch, const char *browser, const char *os, const char *user_agent);
 
 // POST /comments/verify: confirms, and tells the entry's author (title in
 // `lang`, links from `base_url`). Returns a malloc'd fragment; on success

@@ -43,9 +43,35 @@ static const uint8_t *glyph(char c) {
     return NULL;
 }
 
-// Uniform in [lo, hi].
-static int rnd(int lo, int hi) {
-    return lo + (int)randombytes_uniform((uint32_t)(hi - lo + 1));
+// The drawing's randomness: a ChaCha20 keystream from a 32-byte seed, so a
+// token (whose seed is derived from it, see draw_seed()) always gives the
+// same image - redrawing it shows a bot nothing new.
+typedef struct {
+    unsigned char key[32];
+    unsigned char buf[64];
+    uint64_t block;
+    int pos;
+} Rng;
+
+static void rng_init(Rng *r, const unsigned char seed[32]) {
+    memcpy(r->key, seed, 32);
+    r->block = 0;
+    r->pos = 64;
+}
+
+// Uniform in [lo, hi] (the modulo bias over 32 bits is far below anything
+// visible in a drawing).
+static int rnd(Rng *r, int lo, int hi) {
+    static const unsigned char zero_nonce[8];
+    if (r->pos + 4 > 64) {
+        static const unsigned char zeros[64];
+        crypto_stream_chacha20_xor_ic(r->buf, zeros, 64, zero_nonce, r->block++, r->key);
+        r->pos = 0;
+    }
+    uint32_t v = (uint32_t)r->buf[r->pos] | (uint32_t)r->buf[r->pos + 1] << 8 |
+                 (uint32_t)r->buf[r->pos + 2] << 16 | (uint32_t)r->buf[r->pos + 3] << 24;
+    r->pos += 4;
+    return lo + (int)(v % (uint32_t)(hi - lo + 1));
 }
 
 // ---- Drawing --------------------------------------------------------------------
@@ -70,22 +96,25 @@ static void line(uint8_t *img, int x0, int y0, int x1, int y1, uint8_t v) {
     }
 }
 
-// Draws `text` into a W x H grayscale buffer (0 black .. 255 white).
-static void draw(const char *text, uint8_t *out) {
+// Draws `text` into a W x H grayscale buffer (0 black .. 255 white), every
+// random choice taken from `seed`.
+static void draw(const char *text, const unsigned char seed[32], uint8_t *out) {
+    Rng rng;
+    rng_init(&rng, seed);
     uint8_t *img = malloc((size_t)W * H);
     if (!img) { memset(out, 255, (size_t)W * H); return; }
-    for (int i = 0; i < W * H; i++) img[i] = (uint8_t)rnd(215, 255);
+    for (int i = 0; i < W * H; i++) img[i] = (uint8_t)rnd(&rng, 215, 255);
 
     int len = (int)strlen(text);
     int step = (W - 20) / (len > 0 ? len : 1);
     for (int i = 0; i < len; i++) {
         const uint8_t *g = glyph(text[i]);
         if (!g) continue;
-        int sx = rnd(4, 5), sy = rnd(6, 7);
-        double shear = rnd(-20, 20) / 100.0;
-        int x0 = 10 + i * step + rnd(-3, 3);
-        int y0 = (H - 7 * sy) / 2 + rnd(-6, 6);
-        uint8_t ink = (uint8_t)rnd(10, 60);
+        int sx = rnd(&rng, 4, 5), sy = rnd(&rng, 6, 7);
+        double shear = rnd(&rng, -20, 20) / 100.0;
+        int x0 = 10 + i * step + rnd(&rng, -3, 3);
+        int y0 = (H - 7 * sy) / 2 + rnd(&rng, -6, 6);
+        uint8_t ink = (uint8_t)rnd(&rng, 10, 60);
         for (int r = 0; r < 7; r++)
             for (int c = 0; c < 5; c++) {
                 if (!(g[r] & (0x10 >> c))) continue;
@@ -93,21 +122,21 @@ static void draw(const char *text, uint8_t *out) {
                 int by = y0 + r * sy;
                 for (int yy = 0; yy < sy; yy++)
                     for (int xx = 0; xx < sx; xx++)
-                        if (rnd(0, 29) > 0) put(img, bx + xx, by + yy, ink);   // a few holes
+                        if (rnd(&rng, 0, 29) > 0) put(img, bx + xx, by + yy, ink);   // a few holes
             }
     }
 
     for (int i = 0; i < 3; i++)
-        line(img, rnd(0, W / 4), rnd(0, H - 1), rnd(3 * W / 4, W - 1), rnd(0, H - 1), (uint8_t)rnd(90, 160));
-    for (int i = 0; i < 250; i++) put(img, rnd(0, W - 1), rnd(0, H - 1), (uint8_t)rnd(60, 180));
+        line(img, rnd(&rng, 0, W / 4), rnd(&rng, 0, H - 1), rnd(&rng, 3 * W / 4, W - 1), rnd(&rng, 0, H - 1), (uint8_t)rnd(&rng, 90, 160));
+    for (int i = 0; i < 250; i++) put(img, rnd(&rng, 0, W - 1), rnd(&rng, 0, H - 1), (uint8_t)rnd(&rng, 60, 180));
 
     // One sine wave across the image, so glyphs don't sit on straight lines.
-    double amp = rnd(15, 30) / 10.0, period = rnd(70, 110), phase = rnd(0, 628) / 100.0;
+    double amp = rnd(&rng, 15, 30) / 10.0, period = rnd(&rng, 70, 110), phase = rnd(&rng, 0, 628) / 100.0;
     for (int x = 0; x < W; x++) {
         int shift = (int)lround(amp * sin(2 * M_PI * x / period + phase));
         for (int y = 0; y < H; y++) {
             int src = y + shift;
-            out[y * W + x] = (src >= 0 && src < H) ? img[src * W + x] : (uint8_t)rnd(215, 255);
+            out[y * W + x] = (src >= 0 && src < H) ? img[src * W + x] : (uint8_t)rnd(&rng, 215, 255);
         }
     }
     free(img);
@@ -199,37 +228,249 @@ static unsigned char *encode_png(const uint8_t *gray, size_t *len) {
     return png;
 }
 
-unsigned char *captcha_png(const char *text, size_t *len) {
+// ---- GIF ------------------------------------------------------------------------
+
+// GIF87a, 16 grays, for the browsers that don't show PNG (or data: URIs).
+// The LZW stream is "uncompressed": a clear code every few pixels keeps the
+// code table small and every code 5 bits wide, so no dictionary is needed.
+// 200x70 comes to about 9 KB.
+#define GIF_CLEAR       16
+#define GIF_END         17
+#define GIF_CODE_BITS   5
+#define GIF_RUN         12      // pixels between clear codes: the table never reaches 32
+
+typedef struct {
+    uint8_t *out;
+    size_t   len;
+    uint8_t  block[255];
+    int      block_len;
+    uint32_t bits;
+    int      nbits;
+} GifWriter;
+
+static void gif_byte(GifWriter *g, uint8_t b) {
+    g->block[g->block_len++] = b;
+    if (g->block_len == 255) {
+        g->out[g->len++] = 255;
+        memcpy(g->out + g->len, g->block, 255);
+        g->len += 255;
+        g->block_len = 0;
+    }
+}
+
+static void gif_code(GifWriter *g, unsigned code) {
+    g->bits |= (uint32_t)code << g->nbits;
+    g->nbits += GIF_CODE_BITS;
+    while (g->nbits >= 8) {
+        gif_byte(g, (uint8_t)g->bits);
+        g->bits >>= 8;
+        g->nbits -= 8;
+    }
+}
+
+static unsigned char *encode_gif(const uint8_t *gray, size_t *len) {
+    size_t pixels = (size_t)W * H;
+    size_t codes = pixels + pixels / GIF_RUN + 3;
+    size_t data = codes * GIF_CODE_BITS / 8 + 2;
+    size_t cap = 13 + 48 + 10 + 1 + data + data / 255 + 2 + 2;
+    GifWriter g = { .out = malloc(cap) };
+    if (!g.out) return NULL;
+
+    uint8_t *p = g.out;
+    memcpy(p, "GIF87a", 6); p += 6;
+    *p++ = (uint8_t)W; *p++ = (uint8_t)(W >> 8);
+    *p++ = (uint8_t)H; *p++ = (uint8_t)(H >> 8);
+    *p++ = 0xB3;        // global color table, 16 entries
+    *p++ = 0; *p++ = 0;
+    for (int i = 0; i < 16; i++) { uint8_t v = (uint8_t)(i * 17); *p++ = v; *p++ = v; *p++ = v; }
+    *p++ = 0x2C;        // image descriptor: 0,0 W x H, no local table
+    *p++ = 0; *p++ = 0; *p++ = 0; *p++ = 0;
+    *p++ = (uint8_t)W; *p++ = (uint8_t)(W >> 8);
+    *p++ = (uint8_t)H; *p++ = (uint8_t)(H >> 8);
+    *p++ = 0;
+    *p++ = 4;           // LZW minimum code size: 16 colors
+    g.len = (size_t)(p - g.out);
+
+    for (size_t i = 0; i < pixels; i++) {
+        if (i % GIF_RUN == 0) gif_code(&g, GIF_CLEAR);
+        gif_code(&g, gray[i] >> 4);
+    }
+    gif_code(&g, GIF_END);
+    if (g.nbits > 0) gif_byte(&g, (uint8_t)g.bits);
+    if (g.block_len) {
+        g.out[g.len++] = (uint8_t)g.block_len;
+        memcpy(g.out + g.len, g.block, (size_t)g.block_len);
+        g.len += (size_t)g.block_len;
+    }
+    g.out[g.len++] = 0;     // end of image data
+    g.out[g.len++] = 0x3B;  // trailer
+    *len = g.len;
+    return g.out;
+}
+
+// ---- Text art -------------------------------------------------------------------
+
+// The challenge for browsers without images (epoch 0: Lynx, w3m...): the
+// same 5x7 glyphs as characters, for a <pre>. Each glyph pixel is two
+// characters wide (a terminal cell is about twice as tall as wide), in an
+// ink of its own; glyphs are slanted, shifted up or down, spaced unevenly,
+// with a few holes, among scattered punctuation. Fits 80 columns. Only
+// characters that need no HTML escaping.
+#define ART_ROWS  9
+#define ART_COLS  80
+
+static char *draw_text_art(const char *text, const unsigned char seed[32]) {
+    static const char INKS[] = "#%@$MWX8";
+    static const char NOISE[] = ".,'`:-";
+    Rng rng;
+    rng_init(&rng, seed);
+    char grid[ART_ROWS][ART_COLS];
+    memset(grid, ' ', sizeof(grid));
+
+    int x = rnd(&rng, 1, 3);
+    for (const char *p = text; *p; p++) {
+        const uint8_t *g = glyph(*p);
+        if (!g) continue;
+        char ink = INKS[rnd(&rng, 0, (int)sizeof(INKS) - 2)];
+        int y0 = rnd(&rng, 0, ART_ROWS - 7);
+        int slant = rnd(&rng, -1, 1);   // the top rows lean one cell left, right, or not
+        for (int r = 0; r < 7; r++) {
+            int dx = r < 3 ? slant : 0;
+            for (int c = 0; c < 5; c++) {
+                if (!(g[r] & (0x10 >> c))) continue;
+                for (int k = 0; k < 2; k++) {
+                    int col = x + dx + c * 2 + k;
+                    if (col >= 0 && col < ART_COLS && rnd(&rng, 0, 24) > 0) grid[y0 + r][col] = ink;
+                }
+            }
+        }
+        x += 10 + rnd(&rng, 3, 5);
+    }
+    for (int r = 0; r < ART_ROWS; r++)
+        for (int c = 0; c < x && c < ART_COLS; c++)
+            if (grid[r][c] == ' ' && rnd(&rng, 0, 13) == 0)
+                grid[r][c] = NOISE[rnd(&rng, 0, (int)sizeof(NOISE) - 2)];
+
+    char *out = malloc(ART_ROWS * (ART_COLS + 1) + 1);
+    if (!out) return NULL;
+    char *w = out;
+    for (int r = 0; r < ART_ROWS; r++) {
+        int n = ART_COLS;
+        while (n > 0 && grid[r][n - 1] == ' ') n--;
+        memcpy(w, grid[r], (size_t)n);
+        w += n;
+        *w++ = '\n';
+    }
+    *w = '\0';
+    return out;
+}
+
+// ---- Images of a text (tests) ---------------------------------------------------
+
+static unsigned char *image_of(const char *text, const unsigned char seed[32], int gif, size_t *len) {
     uint8_t *gray = malloc((size_t)W * H);
     if (!gray) return NULL;
-    draw(text, gray);
-    unsigned char *png = encode_png(gray, len);
+    draw(text, seed, gray);
+    unsigned char *img = gif ? encode_gif(gray, len) : encode_png(gray, len);
     free(gray);
-    return png;
+    return img;
+}
+
+unsigned char *captcha_png(const char *text, size_t *len) {
+    static const unsigned char seed[32];
+    return image_of(text, seed, 0, len);
+}
+
+unsigned char *captcha_gif(const char *text, size_t *len) {
+    static const unsigned char seed[32];
+    return image_of(text, seed, 1, len);
+}
+
+char *captcha_text_art(const char *text) {
+    static const unsigned char seed[32];
+    return draw_text_art(text, seed);
 }
 
 // ---- Token ----------------------------------------------------------------------
 
+static void hmac(const unsigned char key[32], const char *msg, unsigned char out[32]) {
+    crypto_auth_hmacsha256(out, (const unsigned char *)msg, strlen(msg), key);
+}
+
+// The answer of nonce/issued: drawn from an HMAC under the site's key, so
+// it is in no token and no record, yet the server can always recompute it -
+// to check an answer, or to draw the image again from the token alone.
+static void derive_text(const unsigned char key[32], const char *nonce, long long issued,
+                        char out[CAPTCHA_LENGTH + 1]) {
+    char msg[96];
+    unsigned char h[32];
+    snprintf(msg, sizeof(msg), "captcha-text|%s|%lld", nonce, issued);
+    hmac(key, msg, h);
+    for (int i = 0; i < CAPTCHA_LENGTH; i++) out[i] = ALPHABET[h[i] % (sizeof(ALPHABET) - 1)];
+    out[CAPTCHA_LENGTH] = '\0';
+    sodium_memzero(h, sizeof(h));
+}
+
+// The drawing's seed of nonce/issued (Rng).
+static void draw_seed(const unsigned char key[32], const char *nonce, long long issued, unsigned char out[32]) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "captcha-draw|%s|%lld", nonce, issued);
+    hmac(key, msg, out);
+}
+
 static void mac_hex(const unsigned char key[32], const char *nonce, long long issued, const char *answer,
                     char out[65]) {
     char msg[128];
-    int n = snprintf(msg, sizeof(msg), "captcha|%s|%lld|%s", nonce, issued, answer);
-    unsigned char mac[crypto_auth_hmacsha256_BYTES];
-    crypto_auth_hmacsha256(mac, (const unsigned char *)msg, (unsigned long long)n, key);
+    unsigned char mac[32];
+    snprintf(msg, sizeof(msg), "captcha|%s|%lld|%s", nonce, issued, answer);
+    hmac(key, msg, mac);
     sodium_bin2hex(out, 65, mac, sizeof(mac));
 }
 
-int captcha_issue(const unsigned char key[32], const char *text, time_t issued, Captcha *out) {
+// Splits "nonce.issued.mac". Returns 1 on the right shape.
+static int parse_token(const char *token, char nonce[33], long long *issued, const char **mac) {
+    if (!token) return 0;
+    const char *d1 = strchr(token, '.');
+    const char *d2 = d1 ? strchr(d1 + 1, '.') : NULL;
+    if (!d1 || !d2 || d1 - token != 32 || strlen(d2 + 1) != 64) return 0;
+    memcpy(nonce, token, 32);
+    nonce[32] = '\0';
+    for (int i = 0; i < 32; i++) if (!isxdigit((unsigned char)nonce[i])) return 0;
+    char *end = NULL;
+    *issued = strtoll(d1 + 1, &end, 10);
+    if (end != d2 || *issued <= 0) return 0;
+    *mac = d2 + 1;
+    return 1;
+}
+
+// 1 if `token` is the site's own (its mac matches its derived answer); fills
+// nonce, issued and the answer.
+static int token_genuine(const unsigned char key[32], const char *token, char nonce[33], long long *issued,
+                         char text[CAPTCHA_LENGTH + 1]) {
+    const char *mac;
+    if (!parse_token(token, nonce, issued, &mac)) return 0;
+    char expected[65];
+    derive_text(key, nonce, *issued, text);
+    mac_hex(key, nonce, *issued, text, expected);
+    return sodium_memcmp(expected, mac, 64) == 0;
+}
+
+int captcha_issue(const unsigned char key[32], time_t issued, int inline_png, Captcha *out) {
     memset(out, 0, sizeof(*out));
     unsigned char raw[16];
-    char nonce[33], mac[65];
+    char nonce[33], mac[65], text[CAPTCHA_LENGTH + 1];
     randombytes_buf(raw, sizeof(raw));
     sodium_bin2hex(nonce, sizeof(nonce), raw, sizeof(raw));
+    derive_text(key, nonce, (long long)issued, text);
     mac_hex(key, nonce, (long long)issued, text, mac);
     snprintf(out->token, sizeof(out->token), "%s.%lld.%s", nonce, (long long)issued, mac);
+    if (!inline_png) { sodium_memzero(text, sizeof(text)); return 0; }
 
+    unsigned char seed[32];
+    draw_seed(key, nonce, (long long)issued, seed);
     size_t png_len = 0;
-    unsigned char *png = captcha_png(text, &png_len);
+    unsigned char *png = image_of(text, seed, 0, &png_len);
+    sodium_memzero(text, sizeof(text));
     if (!png) return -1;
     size_t b64_len = sodium_base64_encoded_len(png_len, sodium_base64_VARIANT_ORIGINAL);
     out->image_data_uri = malloc(b64_len + 32);
@@ -242,14 +483,8 @@ int captcha_issue(const unsigned char key[32], const char *text, time_t issued, 
     return out->image_data_uri ? 0 : -1;
 }
 
-int captcha_new(const unsigned char key[32], Captcha *out) {
-    char text[CAPTCHA_LENGTH + 1];
-    for (int i = 0; i < CAPTCHA_LENGTH; i++)
-        text[i] = ALPHABET[randombytes_uniform((uint32_t)(sizeof(ALPHABET) - 1))];
-    text[CAPTCHA_LENGTH] = '\0';
-    int rc = captcha_issue(key, text, time(NULL), out);
-    sodium_memzero(text, sizeof(text));
-    return rc;
+int captcha_new(const unsigned char key[32], int inline_png, Captcha *out) {
+    return captcha_issue(key, time(NULL), inline_png, out);
 }
 
 void captcha_free(Captcha *c) {
@@ -258,21 +493,52 @@ void captcha_free(Captcha *c) {
     c->image_data_uri = NULL;
 }
 
+int captcha_answer(const unsigned char key[32], const char *token, char out[CAPTCHA_LENGTH + 1]) {
+    char nonce[33];
+    long long issued;
+    if (token_genuine(key, token, nonce, &issued, out)) return 0;
+    sodium_memzero(out, CAPTCHA_LENGTH + 1);
+    return -1;
+}
+
+unsigned char *captcha_token_gif(const unsigned char key[32], const char *token, time_t now, size_t *len) {
+    char nonce[33], text[CAPTCHA_LENGTH + 1];
+    long long issued;
+    if (!token_genuine(key, token, nonce, &issued, text) ||
+        (long long)now - issued > CAPTCHA_TTL_SECS || issued > (long long)now + 60) {
+        sodium_memzero(text, sizeof(text));
+        return NULL;
+    }
+    unsigned char seed[32];
+    draw_seed(key, nonce, issued, seed);
+    unsigned char *gif = image_of(text, seed, 1, len);
+    sodium_memzero(text, sizeof(text));
+    sodium_memzero(seed, sizeof(seed));
+    return gif;
+}
+
+char *captcha_token_text(const unsigned char key[32], const char *token, time_t now) {
+    char nonce[33], text[CAPTCHA_LENGTH + 1];
+    long long issued;
+    if (!token_genuine(key, token, nonce, &issued, text) ||
+        (long long)now - issued > CAPTCHA_TTL_SECS || issued > (long long)now + 60) {
+        sodium_memzero(text, sizeof(text));
+        return NULL;
+    }
+    unsigned char seed[32];
+    draw_seed(key, nonce, issued, seed);
+    char *art = draw_text_art(text, seed);
+    sodium_memzero(text, sizeof(text));
+    sodium_memzero(seed, sizeof(seed));
+    return art;
+}
+
 CaptchaResult captcha_check(const unsigned char key[32], const char *token, const char *answer,
                             time_t now, char nonce_out[33]) {
-    if (!token || !answer) return CAPTCHA_MALFORMED;
-
-    // nonce.issued.mac
-    const char *d1 = strchr(token, '.');
-    const char *d2 = d1 ? strchr(d1 + 1, '.') : NULL;
-    if (!d1 || !d2 || d1 - token != 32 || strlen(d2 + 1) != 64) return CAPTCHA_MALFORMED;
     char nonce[33];
-    memcpy(nonce, token, 32);
-    nonce[32] = '\0';
-    for (int i = 0; i < 32; i++) if (!isxdigit((unsigned char)nonce[i])) return CAPTCHA_MALFORMED;
-    char *end = NULL;
-    long long issued = strtoll(d1 + 1, &end, 10);
-    if (end != d2 || issued <= 0) return CAPTCHA_MALFORMED;
+    long long issued;
+    const char *mac;
+    if (!answer || !parse_token(token, nonce, &issued, &mac)) return CAPTCHA_MALFORMED;
 
     char norm[16];
     size_t k = 0;
@@ -282,7 +548,7 @@ CaptchaResult captcha_check(const unsigned char key[32], const char *token, cons
 
     char expected[65];
     mac_hex(key, nonce, issued, norm, expected);
-    int match = sodium_memcmp(expected, d2 + 1, 64) == 0;
+    int match = sodium_memcmp(expected, mac, 64) == 0;
 
     // The time checks need the mac to be trusted first: an attacker can't
     // move `issued` without breaking it.

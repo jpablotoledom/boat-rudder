@@ -481,7 +481,10 @@ CommentSubmitResult cms_comments_submit(const CommentSubmission *s, char token_o
     bson_t *doc = BCON_NEW("_id", BCON_OID(&comment_oid), "entry_id", BCON_OID(&entry_oid),
                            "commenter_id", BCON_OID(&commenter_oid), "name", BCON_UTF8(s->name),
                            "text", BCON_UTF8(s->text), "status", BCON_UTF8(remembered ? "pending" : "unverified"),
-                           "created_at", BCON_DATE_TIME(now), "ip_hash", BCON_UTF8(s->ip_hash));
+                           "created_at", BCON_DATE_TIME(now), "ip_hash", BCON_UTF8(s->ip_hash),
+                           "browser", BCON_UTF8(s->browser ? s->browser : ""), "os", BCON_UTF8(s->os ? s->os : ""),
+                           "user_agent", BCON_UTF8(s->user_agent ? s->user_agent : ""),
+                           "epoch", BCON_INT32(s->epoch));
     if (remembered) BSON_APPEND_DATE_TIME(doc, "verified_at", now);
     else BSON_APPEND_DATE_TIME(doc, "expires_at", now + (int64_t)COMMENT_VERIFY_HOURS * 3600 * 1000);
 
@@ -729,6 +732,9 @@ int cms_comments_approved(const char *entry_id, CmsComment **out) {
         list[n].name = dup_utf8(doc, "name");
         list[n].text = dup_utf8(doc, "text");
         date_str(doc, "created_at", list[n].date);
+        list[n].browser = dup_utf8(doc, "browser");
+        list[n].os = dup_utf8(doc, "os");
+        list[n].user_agent = dup_utf8(doc, "user_agent");
         n++;
     }
     if (mongoc_cursor_error(cursor, NULL)) { cms_comments_free(list, n); list = NULL; n = -1; }
@@ -742,7 +748,10 @@ int cms_comments_approved(const char *entry_id, CmsComment **out) {
 
 void cms_comments_free(CmsComment *list, int count) {
     if (!list) return;
-    for (int i = 0; i < count; i++) { free(list[i].name); free(list[i].text); }
+    for (int i = 0; i < count; i++) {
+        free(list[i].name); free(list[i].text);
+        free(list[i].browser); free(list[i].os); free(list[i].user_agent);
+    }
     free(list);
 }
 
@@ -807,6 +816,10 @@ int cms_comments_admin_list(const char *status, const char *owner_id, const char
         snprintf(c->status, sizeof(c->status), "%s", st ? st : "");
         free(st);
         date_str(doc, "created_at", c->date);
+        c->browser = dup_utf8(doc, "browser");
+        c->os = dup_utf8(doc, "os");
+        c->user_agent = dup_utf8(doc, "user_agent");
+        c->epoch = bson_iter_init_find(&it, doc, "epoch") && BSON_ITER_HOLDS_INT32(&it) ? bson_iter_int32(&it) : -1;
         if (bson_iter_init_find(&it, doc, "created_at") && BSON_ITER_HOLDS_DATE_TIME(&it))
             created_at[n] = bson_iter_date_time(&it);
         n++;
@@ -864,6 +877,7 @@ void cms_comments_admin_free(CmsCommentAdmin *list, int count) {
     for (int i = 0; i < count; i++) {
         free(list[i].entry_link); free(list[i].entry_title); free(list[i].name);
         free(list[i].email); free(list[i].text); free(list[i].mail_error);
+        free(list[i].browser); free(list[i].os); free(list[i].user_agent);
     }
     free(list);
 }

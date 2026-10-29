@@ -1,5 +1,6 @@
 #include "comments_admin.h"
 #include "../../db/cms_comments.h"
+#include "../comments/comments.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/http_utils.h"
@@ -84,6 +85,36 @@ static char *row_actions(const char *tpl, const CmsCommentAdmin *c, const char *
     return out;
 }
 
+// "Windows/8_1" -> "Windows 8.1", "UP_Browser/4" -> "UP.Browser 4": ua_parser.h's
+// keys as a person reads them. "" for an unknown or missing one.
+static void readable_client(const char *key, char *out, size_t size) {
+    out[0] = '\0';
+    if (!key || !key[0] || strcmp(key, "Unknown") == 0) return;
+    size_t k = 0;
+    for (const char *p = key; *p && k + 1 < size; p++) out[k++] = *p == '/' ? ' ' : *p == '_' ? '.' : *p;
+    out[k] = '\0';
+}
+
+// The date, and under it where the comment was written from: the browser's
+// and system's icons, then browser, OS and epoch in words (comments older
+// than that record show the date alone).
+static char *client_line(const CmsCommentAdmin *c) {
+    char browser[64], os[64], parts[200] = "";
+    readable_client(c->browser, browser, sizeof(browser));
+    readable_client(c->os, os, sizeof(os));
+    if (browser[0]) snprintf(parts, sizeof(parts), "%s", browser);
+    if (os[0]) snprintf(parts + strlen(parts), sizeof(parts) - strlen(parts), "%s%s", parts[0] ? " · " : "", os);
+    if (c->epoch >= 0)
+        snprintf(parts + strlen(parts), sizeof(parts) - strlen(parts), "%sepoch %d", parts[0] ? " · " : "", c->epoch);
+    if (!parts[0]) return strdup(c->date);
+    char *enc = html_encode_alloc(parts);
+    char *icons = comment_client_html(EPOCH_MODERN, c->browser, c->os, c->user_agent);
+    char *out = enc && icons ? render_template("%s<br><small>%s %s</small>", c->date, icons, enc) : NULL;
+    free(enc);
+    free(icons);
+    return out;
+}
+
 char *comments_admin_page(int epoch, const char *status, const char *owner_id, int can_delete,
                           int can_block, const char *lang, const char *notice) {
     char *list_tpl = load_template("dashboard/comments/list_epoch%d.html", epoch);
@@ -124,10 +155,11 @@ char *comments_admin_page(int epoch, const char *status, const char *owner_id, i
                      state, err && err[0] ? "<br><small>" : "", err && err[0] ? err : "", err && err[0] ? "</small>" : "");
             free(err);
         }
-        char *row = (url_enc && title && name && email && text && acts)
-            ? render_template(row_tpl, url_enc, title, name, email, badge, text, c->date, acts) : NULL;
+        char *when = client_line(c);
+        char *row = (url_enc && title && name && email && text && acts && when)
+            ? render_template(row_tpl, url_enc, title, name, email, badge, text, when, acts) : NULL;
         rows = row ? str_append(rows, row) : (free(rows), NULL);
-        free(url_enc); free(title); free(name); free(email); free(text); free(acts); free(row);
+        free(url_enc); free(title); free(name); free(email); free(text); free(acts); free(row); free(when);
     }
     if (rows && count == 0) {
         char *empty = load_template("dashboard/comments/list-empty_epoch%d.html", epoch);

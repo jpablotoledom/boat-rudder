@@ -202,14 +202,20 @@ static char *inject_query_param_into_attr(const char *html, const char *marker_t
     return out;
 }
 
-// Every link: href attributes, and the JavaScript navigations epoch 2's
+// Every link: href attributes, the JavaScript navigations epoch 2's
 // buttons make instead (code-text's "Hide line numbers") - a link all the
-// same, which otherwise drops ?theme= and a Host-less request's ?site=.
+// same, which otherwise drops ?theme= and a Host-less request's ?site= -
+// and form actions: a POST keeps its action's query (the comment form,
+// /comments/verify), while a GET form replaces it with its fields, so a
+// GET form (search) still carries these as hidden inputs of its own.
 static char *inject_query_param_into_links(const char *html, const char *param, const char *value) {
     char *hrefs = inject_query_param_into_attr(html, "href=\"", param, value);
     if (!hrefs) return NULL;
-    char *out = inject_query_param_into_attr(hrefs, "location.href='", param, value);
+    char *nav = inject_query_param_into_attr(hrefs, "location.href='", param, value);
     free(hrefs);
+    if (!nav) return NULL;
+    char *out = inject_query_param_into_attr(nav, "action=\"", param, value);
+    free(nav);
     return out;
 }
 

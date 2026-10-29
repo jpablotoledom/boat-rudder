@@ -175,7 +175,8 @@ boat-rudder/
 │       ├── image_size.c/h               # image_intrinsic_width(): GIF header width, for
 │       │                                # sizing retro-epoch images without CSS
 │       ├── category_tags.c/h            # category_tags_render(): shared category-tag loop
-│       ├── captcha.c/h                  # The comment form's own challenge: drawing, PNG, signed token
+│       ├── captcha.c/h                  # The comment form's own challenge: drawing, PNG/GIF, signed token
+│       ├── client_icon.c/h              # A comment's browser/system -> icon and words
 │       ├── mailer.c/h                   # Outgoing mail: mail_queue + sender thread (libcurl SMTP)
 │       └── build_epoch_response.c/h     # Epoch-correct headers, link re-tagging, WML pagination,
 │                                        # Latin-1 transcoding; redirect/JSON/CSS variants

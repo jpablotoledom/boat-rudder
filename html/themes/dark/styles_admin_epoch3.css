@@ -2256,6 +2256,7 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   transition: background 0.1s, color 0.1s;
 }
 .boat-rudder-media__dir-item:hover { background: var(--br-admin-hover); }
+.boat-rudder-comment__client { vertical-align: -3px; margin-right: 2px; }
 .boat-rudder-media__dir-owner { color: var(--br-admin-text-muted); font-size: 0.9em; }
 .boat-rudder-media__dir-item--selected {
   padding-left: 12px;

@@ -67,14 +67,38 @@ static void token_hash(const char *token, char out[65]) {
 
 // ---- Indexes ----------------------------------------------------------------------
 
+// One index on `collection`: `keys`, plus `opts` (unique, TTL, collation,
+// name...). Takes both. As a raw createIndexes command rather than
+// mongoc_collection_create_indexes_with_opts(), which needs libmongoc >=
+// 1.28 - distributions still ship older 1.x releases (session_manager.c).
 static void create_index(const char *collection, bson_t *keys, bson_t *opts) {
     mongoc_collection_t *col = mongodb_manager_get_collection(collection);
     if (col) {
-        mongoc_index_model_t *model = mongoc_index_model_new(keys, opts);
+        // The name MongoDB would give it ("email_1", "entry_id_1_status_1")
+        // unless opts names it.
+        char name[128] = "";
+        bson_iter_t it;
+        if (bson_iter_init(&it, keys)) {
+            while (bson_iter_next(&it)) {
+                size_t used = strlen(name);
+                snprintf(name + used, sizeof(name) - used, "%s%s_%d", used ? "_" : "",
+                         bson_iter_key(&it), (int)bson_iter_as_int64(&it));
+            }
+        }
+        bson_t command, indexes, index;
+        bson_init(&command);
+        BSON_APPEND_UTF8(&command, "createIndexes", collection);
+        bson_append_array_begin(&command, "indexes", -1, &indexes);
+        bson_append_document_begin(&indexes, "0", -1, &index);
+        BSON_APPEND_DOCUMENT(&index, "key", keys);
+        if (!opts || !bson_has_field(opts, "name")) BSON_APPEND_UTF8(&index, "name", name);
+        if (opts) bson_concat(&index, opts);
+        bson_append_document_end(&indexes, &index);
+        bson_append_array_end(&command, &indexes);
         bson_error_t error;
-        if (!mongoc_collection_create_indexes_with_opts(col, &model, 1, NULL, NULL, &error))
+        if (!mongoc_collection_write_command_with_opts(col, &command, NULL, NULL, &error))
             LOG_ERROR("cms_comments: index on %s: %s", collection, error.message);
-        mongoc_index_model_destroy(model);
+        bson_destroy(&command);
         mongoc_collection_destroy(col);
     }
     bson_destroy(keys);

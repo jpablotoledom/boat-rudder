@@ -287,11 +287,13 @@ static void requeue_interrupted(void) {
     if (!col) return;
     bson_t *query = BCON_NEW("status", BCON_UTF8("sending"));
     bson_t *update = BCON_NEW("$set", "{", "status", BCON_UTF8("queued"), "}");
-    bson_t *index = BCON_NEW("status", BCON_INT32(1), "next_attempt_at", BCON_INT32(1));
-    mongoc_index_model_t *model = mongoc_index_model_new(index, NULL);
+    // A raw createIndexes command: mongoc_collection_create_indexes_with_opts()
+    // needs libmongoc >= 1.28 (see session_manager.c).
+    bson_t *index = BCON_NEW("createIndexes", BCON_UTF8(MAIL_QUEUE_COLLECTION),
+                             "indexes", "[", "{", "key", "{", "status", BCON_INT32(1), "next_attempt_at", BCON_INT32(1), "}",
+                                                  "name", BCON_UTF8("status_1_next_attempt_at_1"), "}", "]");
     mongoc_collection_update_many(col, query, update, NULL, NULL, NULL);
-    mongoc_collection_create_indexes_with_opts(col, &model, 1, NULL, NULL, NULL);
-    mongoc_index_model_destroy(model);
+    mongoc_collection_write_command_with_opts(col, index, NULL, NULL, NULL);
     bson_destroy(index);
     bson_destroy(query);
     bson_destroy(update);

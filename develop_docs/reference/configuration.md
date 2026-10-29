@@ -76,6 +76,13 @@ wap_upstream_proxy_protocol=0  # 1: PROXY v1 header with the phone's address to 
 
 # Updates (scripts.md)
 update_repo=jpablotoledom/boat-rudder   # GitHub owner/name of the releases
+
+# Mail - blog comments' confirmation emails (comments.md); empty = no mail
+mail_smtp_url=                 # smtps://host:465 or smtp://host:587 (STARTTLS required)
+mail_smtp_user=
+mail_smtp_password=
+mail_from=                     # sender address
+mail_from_name=                # sender name; empty = the site name
 ```
 
 ---
@@ -151,6 +158,20 @@ The UDP gateway that serves epoch -1 as compiled WBXML to real WAP 1.x devices. 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `update_repo` | string | `jpablotoledom/boat-rudder` | GitHub repository (`owner/name`) whose releases `/dashboard/settings/updates` lists and `boat-rudder-update` installs from (its `BR_REPO` overrides it). Only `[A-Za-z0-9._-]` and one `/`; anything else is refused. |
+
+### Mail
+
+Outgoing mail, sent by a background thread through libcurl (`src/utils/mailer.c`). Used by blog
+comments' email confirmation ([comments.md](comments.md)); without `mail_smtp_url` and
+`mail_from`, comments can't be turned on.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `mail_smtp_url` | string | (empty) | `smtps://host:465` (TLS from the start) or `smtp://host:587` (STARTTLS, required - except to `localhost`/`127.*`, a relay on this machine) |
+| `mail_smtp_user` | string | (empty) | SMTP login; empty = no authentication |
+| `mail_smtp_password` | string | (empty) | SMTP password. The file then holds a secret: keep it readable by the server's user only |
+| `mail_from` | string | (empty) | Sender address (envelope and `From:`) |
+| `mail_from_name` | string | site name | Sender display name |
 
 ---
 

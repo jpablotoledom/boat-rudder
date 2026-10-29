@@ -14,6 +14,7 @@
 #include "../db/cms_menu.h"
 #include "../db/cms_site_settings.h"
 #include "../db/cms_fonts.h"
+#include "../db/cms_comments.h"
 #include "../db/cms_themes.h"
 #include "../db/cms_users_admin.h"
 #include "../db/mongodb_manager.h"
@@ -37,6 +38,8 @@
 #include "../modules/language_page/language_page.h"
 #include "../modules/site_page/site_page.h"
 #include "../modules/search_page/search_page.h"
+#include "../modules/comments/comments.h"
+#include "../modules/comments_admin/comments_admin.h"
 #include "../modules/theme_page/theme_page.h"
 #include "../modules/login/login.h"
 #include "../modules/media_admin/media_admin.h"
@@ -60,6 +63,7 @@
 #include "../utils/request_lang.h"
 #include "../utils/request_theme.h"
 #include "../utils/request_site.h"
+#include "../utils/mailer.h"
 #include "../utils/theme_catalog.h"
 #include "../utils/request_user.h"
 #include "../utils/config_loader.h"
@@ -541,14 +545,17 @@ static void send_or_error(void *ctx, char *response, const char *method, int epo
 // include_drafts: the visitor holds a dashboard session, so an unpublished
 // entry is served too (a preview from the editor) instead of a 404 - marked
 // "[Draft]" in its title and kept out of any cache.
+// `extra_html` (may be NULL; always taken over) goes after the entry's own
+// content - a blog entry's comments section.
 static void serve_cms_entry(void *ctx, const char *link, const char *expected_type,
                              const char *lang, const char *method, int epoch,
-                             char *category_menu_html, int include_drafts) {
+                             char *category_menu_html, int include_drafts, char *extra_html) {
     CmsEntry entry;
     if (mongodb_manager_is_ready() && cms_get_entry_by_link(link, lang, include_drafts, &entry)) {
         if (strcmp(entry.type, expected_type) != 0) {
             cms_entry_free(&entry);
             free(category_menu_html);
+            free(extra_html);
             send_error_response(ctx, 404, "404 Not Found", epoch);
             return;
         }
@@ -566,6 +573,9 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
                               : strdup(entry.header_title);
         char *content = entry_page(&entry, epoch);
         cms_entry_free(&entry);
+        if (content && extra_html && extra_html[0]) content = str_append(content, extra_html);
+        free(extra_html);
+        extra_html = NULL;
 
         char *body = NULL;
         if (content && title) {
@@ -582,6 +592,7 @@ static void serve_cms_entry(void *ctx, const char *link, const char *expected_ty
         send_or_error(ctx, response, method, epoch);
     } else {
         free(category_menu_html);
+        free(extra_html);
         send_error_response(ctx, 404, "404 Not Found", epoch);
     }
 }
@@ -611,8 +622,11 @@ static void qr_back_label(const char *back, const char *lang, char *out, size_t 
 // serve_cms_entry() show a draft.
 static int viewer_can_preview_drafts(HttpRequest *req) {
     if (!mongodb_manager_is_ready()) return 0;
-    char user_id[USER_ID_HEX_BUF_SIZE];
-    return validate_session_cookie(get_header_value(req, "Cookie"), user_id) == 1;
+    char user_id[USER_ID_HEX_BUF_SIZE], role[USER_ROLE_BUF_SIZE];
+    // The content team only: not a moderator (comments), nor a commenter.
+    return validate_session_cookie(get_header_value(req, "Cookie"), user_id) == 1 &&
+           cms_get_user_role(user_id, role, sizeof(role)) == 0 &&
+           strcmp(role, "moderator") != 0 && strcmp(role, "commenter") != 0;
 }
 
 // Shared by every /dashboard/* sub-route: sends a 503 and returns 0 if
@@ -734,7 +748,29 @@ static void send_maintenance_lockout(void *ctx, HttpRequest *req, int epoch) {
     send_or_error(ctx, response, req->method, epoch);
 }
 
+// What each role may open in the dashboard. A commenter never signs in
+// (auth.c refuses it, and making someone a commenter ends their sessions),
+// so a session that still says "commenter" opens nothing; a moderator opens
+// the dashboard home and the comment pages. Every other role, everything
+// (each route still checks its own rule: admin only, own entries...).
+static int role_may_open(const char *role, const char *url) {
+    if (strcmp(role, "commenter") == 0) return 0;
+    if (strcmp(role, "moderator") != 0) return 1;
+    size_t n = strcspn(url, "?#");
+    if (n == 10 && strncmp(url, "/dashboard", 10) == 0) return 1;
+    return n >= 19 && strncmp(url, "/dashboard/comments", 19) == 0 && (n == 19 || url[19] == '/');
+}
+
+static int require_dashboard_session_ex(void *ctx, HttpRequest *req, int epoch, char *user_id_out,
+                                        char *role_out, size_t role_size);
+
 static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
+    char role[USER_ROLE_BUF_SIZE];
+    return require_dashboard_session_ex(ctx, req, epoch, user_id_out, role, sizeof(role));
+}
+
+static int require_dashboard_session_ex(void *ctx, HttpRequest *req, int epoch, char *user_id_out,
+                                        char *role_out, size_t role_size) {
     if (!mongodb_manager_is_ready()) {
         send_error_response(ctx, 503, "503 Service Unavailable", epoch);
         return 0;
@@ -749,6 +785,20 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
 
     if (maintenance_locks_out(user_id_out)) {
         send_maintenance_lockout(ctx, req, epoch);
+        return 0;
+    }
+
+    // The session's user must still exist: a role that can't be read opens
+    // nothing (it used to fall back to "admin").
+    if (cms_get_user_role(user_id_out, role_out, role_size) != 0) {
+        char *response = build_redirect_response("/login", "", epoch);
+        send_or_error(ctx, response, req->method, epoch);
+        return 0;
+    }
+    if (!role_may_open(role_out, req->url)) {
+        const char *home = strcmp(role_out, "moderator") == 0 ? "/dashboard" : "/";
+        char *response = build_redirect_response(home, "", epoch);
+        send_or_error(ctx, response, req->method, epoch);
         return 0;
     }
 
@@ -770,12 +820,7 @@ static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, cha
         // check covers every route, present and future. Fails closed: a
         // role that can't be read can't write either.
         if (!is_read_only_post(req->url)) {
-            char role[USER_ROLE_BUF_SIZE];
-            if (cms_get_user_role(user_id_out, role, sizeof(role)) != 0) {
-                send_error_response(ctx, 503, "503 Service Unavailable", epoch);
-                return 0;
-            }
-            if (strcmp(role, "viewer") == 0) {
+            if (strcmp(role_out, "viewer") == 0) {
                 LOG_INFO("Read-only account: %s %s refused", req->method, req->url);
                 send_read_only_refusal(ctx, req, epoch);
                 return 0;
@@ -798,14 +843,7 @@ static int role_sees_everything(const char *role) {
 // 0/1 return + ctx-write contract as require_dashboard_session().
 static int require_dashboard_session_role(void *ctx, HttpRequest *req, int epoch,
                                             char *user_id_out, char *role_out, size_t role_size) {
-    if (!require_dashboard_session(ctx, req, epoch, user_id_out)) return 0;
-
-    if (cms_get_user_role(user_id_out, role_out, role_size) != 0) {
-        strncpy(role_out, "admin", role_size - 1);
-        role_out[role_size - 1] = '\0';
-    }
-
-    return 1;
+    return require_dashboard_session_ex(ctx, req, epoch, user_id_out, role_out, role_size);
 }
 
 // require_dashboard_session_role() + a role that doesn't see everything ->
@@ -949,7 +987,7 @@ static void serve_extension(void *ctx, HttpRequest *req, const char *decoded_url
 // showing `home` - or, when NULL, what site_settings holds now.
 static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, const char *lang,
                                        const char *site_name, const SiteHomeSettings *home,
-                                       const char *error_message) {
+                                       const char *error_message, const char *mail_notice) {
     SiteHomeSettings stored = { 0 };
     char *stored_page = NULL;
     if (!home) {
@@ -959,7 +997,7 @@ static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, c
         home = &stored;
     }
 
-    char *content  = site_settings_general_page(epoch, lang, site_name, home, error_message);
+    char *content  = site_settings_general_page(epoch, lang, site_name, home, error_message, mail_notice);
     free(stored_page);
     char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
     char *response = body ? build_epoch_response(body, "", epoch) : NULL;
@@ -1862,14 +1900,15 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     const char *cookie = get_header_value(&req, "Cookie");
 
                     int signed_in = validate_session_cookie(cookie, user_id) == 1;
+                    // A session whose user is gone, or a commenter's, is no
+                    // sign-in at all (see role_may_open()).
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (signed_in && (cms_get_user_role(user_id, role, sizeof(role)) != 0 ||
+                                      strcmp(role, "commenter") == 0))
+                        signed_in = 0;
                     if (signed_in && maintenance_locks_out(user_id)) {
                         send_maintenance_lockout(ctx, &req, epoch);
                     } else if (signed_in) {
-                        char role[USER_ROLE_BUF_SIZE];
-                        if (cms_get_user_role(user_id, role, sizeof(role)) != 0) {
-                            strncpy(role, "admin", sizeof(role) - 1);
-                            role[sizeof(role) - 1] = '\0';
-                        }
 
                         char *content  = epoch == EPOCH_MODERN && !dashboard_allowed(&req, epoch)
                                              ? login_unavailable(epoch)
@@ -2093,9 +2132,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         for (size_t i = 0; error_code && i < sizeof(ERRORS) / sizeof(ERRORS[0]); i++)
                             if (strcmp(error_code, ERRORS[i].code) == 0) error_message = ERRORS[i].message;
 
+                        // ?mail=<code> after "Send a test email".
+                        static const struct { const char *code, *message; } MAIL_NOTICES[] = {
+                            { "queued",   "Test email queued to your account's address - it should arrive within a minute. If it doesn't, the server log says why." },
+                            { "no-email", "Your account has no valid email address to send the test to." },
+                            { "failed",   "The test email could not be queued (mail not set, or a database error)." },
+                        };
+                        const char *mail_code = get_query_param(params, param_count, "mail");
+                        const char *mail_notice = NULL;
+                        for (size_t i = 0; mail_code && i < sizeof(MAIL_NOTICES) / sizeof(MAIL_NOTICES[0]); i++)
+                            if (strcmp(mail_code, MAIL_NOTICES[i].code) == 0) mail_notice = MAIL_NOTICES[i].message;
+
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL,
-                                                   error_message);
+                                                   error_message, mail_notice);
                         free(name);
                     }
                 }
@@ -2428,7 +2478,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
                     if (require_admin_session(ctx, &req, epoch, user_id)) {
-                        char *content  = users_admin_list(epoch, NULL);
+                        const char *list = get_query_param(params, param_count, "list");
+                        char *content  = users_admin_list(epoch, NULL, list && strcmp(list, "commenters") == 0);
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -2737,6 +2788,55 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 free(abs_return);
                 send_or_error(ctx, response, req.method, epoch);
 
+            } else if (strcmp(decoded_url, "/dashboard/comments") == 0) {
+                int epoch = resolve_epoch(&req);
+                if (!dashboard_allowed(&req, epoch)) {
+                    send_or_error(ctx, build_redirect_response("/dashboard", "", epoch), req.method, epoch);
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                        // An Autor moderates comments on their own blog entries only; a
+                        // Moderador every comment, but deletes and blocks nothing.
+                        const char *status = get_query_param(params, param_count, "status");
+                        if (!status || (strcmp(status, "approved") != 0 && strcmp(status, "rejected") != 0 &&
+                                        strcmp(status, "unverified") != 0))
+                            status = "pending";
+                        static const struct { const char *code, *message; } DONE[] = {
+                            { "approved", "Comment approved: it is public now." },
+                            { "rejected", "Comment rejected: it is not shown." },
+                            { "deleted",  "Comment deleted." },
+                            { "blocked",  "Email blocked: its future comments are refused." },
+                            { "unblocked", "Email unblocked." },
+                            { "resent",   "A new confirmation email is on its way (the old link no longer works); the comment has 24 more hours." },
+                            { "error",    "That didn't work - the comment may be gone, or not on your entries." },
+                        };
+                        const char *done = get_query_param(params, param_count, "done");
+                        const char *notice = NULL;
+                        for (size_t i = 0; done && i < sizeof(DONE) / sizeof(DONE[0]); i++)
+                            if (strcmp(done, DONE[i].code) == 0) notice = DONE[i].message;
+                        int moderator = strcmp(role, "moderator") == 0;
+                        char *content = comments_admin_page(epoch, status,
+                                                            role_sees_everything(role) || moderator ? NULL : user_id,
+                                                            !moderator, role_sees_everything(role),
+                                                            content_lang, notice);
+                        char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Comments", content) : NULL;
+                        char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/comments/verify") == 0) {
+                // The link in a comment's confirmation email: a page with a
+                // button - the GET itself confirms nothing (comments.h).
+                int epoch = resolve_epoch(&req);
+                char *content = comments_verify_page(epoch, get_query_param(params, param_count, "token"));
+                char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Confirm your comment", content) : NULL;
+                char *response = body ? build_epoch_response(body, "Cache-Control: no-store\r\n", epoch) : NULL;
+                free(body);
+                send_or_error(ctx, response, req.method, epoch);
+
             } else if (strcmp(decoded_url, "/search") == 0) {
                 // Every epoch: the form, and the published blog entries and
                 // pages matching ?q= (see search_page.h).
@@ -2802,7 +2902,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             } else if (strncmp(decoded_url, "/page/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
                 serve_cms_entry(ctx, decoded_url + 6, "page", content_lang, req.method, epoch, NULL,
-                                viewer_can_preview_drafts(&req));
+                                viewer_can_preview_drafts(&req), NULL);
 
             } else if (strncmp(decoded_url, "/qr/", 4) == 0 && decoded_url[4] != '\0') {
                 int epoch = resolve_epoch(&req);
@@ -3274,8 +3374,11 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strncmp(decoded_url, "/blog/", 6) == 0 && decoded_url[6] != '\0') {
                 int epoch = resolve_epoch(&req);
+                // ?comment=sent|pending after the comment form (comments.h).
+                char *comments = comments_section(epoch, decoded_url + 6, content_lang, NULL,
+                                                  get_query_param(params, param_count, "comment"));
                 serve_cms_entry(ctx, decoded_url + 6, "blog", content_lang, req.method, epoch, NULL,
-                                viewer_can_preview_drafts(&req));
+                                viewer_can_preview_drafts(&req), comments);
 
             } else if (match_theme_css_url(decoded_url, id, sizeof(id), &css_sheet)) {
                 if (!theme_key_is_valid(id)) {
@@ -3370,6 +3473,113 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                    : rc == -1 ? "/dashboard/settings/extensions?error=That+extension+can%27t+be+enabled+-+see+its+problem+below."
                                               : "/dashboard/settings/extensions?error=Could+not+save+the+change+-+database+error.";
                 send_or_error(ctx, build_redirect_response(target, "", epoch), req.method, epoch);
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   (match_id_route(decoded_url, "/dashboard/comments/commenter", "/block", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/comments/commenter", "/unblock", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/comments/commenter", "/block-delete", id, sizeof(id)))) {
+            // Blocking an email is an Administrador's call.
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            if (require_admin_session(ctx, &req, epoch, user_id)) {
+                const char *verb = strrchr(decoded_url, '/') + 1;
+                int unblock = strcmp(verb, "unblock") == 0;
+                int rc = cms_comments_block(id, !unblock, strcmp(verb, "block-delete") == 0);
+                char back[16] = "pending";
+                parse_urlencoded_field(req.body, req.body_length, "back", back, sizeof(back));
+                if (strcmp(back, "approved") != 0 && strcmp(back, "rejected") != 0 &&
+                    strcmp(back, "unverified") != 0) strcpy(back, "pending");
+                char location[128];
+                snprintf(location, sizeof(location), "/dashboard/comments?status=%s&done=%s", back,
+                         rc != 0 ? "error" : unblock ? "unblocked" : "blocked");
+                send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 &&
+                   (match_id_route(decoded_url, "/dashboard/comments", "/approve", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/comments", "/reject", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/comments", "/delete", id, sizeof(id)) ||
+                    match_id_route(decoded_url, "/dashboard/comments", "/resend", id, sizeof(id)))) {
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            char role[USER_ROLE_BUF_SIZE];
+            if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                const char *verb = strrchr(decoded_url, '/') + 1;
+                int moderator = strcmp(role, "moderator") == 0;
+                const char *owner = role_sees_everything(role) || moderator ? NULL : user_id;
+                int rc = -1;
+                if (cms_comments_can_moderate(id, owner)) {
+                    if (strcmp(verb, "resend") == 0) {
+                        char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
+                        rc = comments_resend(id, content_lang, base ? base : "");
+                        free(base);
+                    } else if (strcmp(verb, "delete") == 0) rc = moderator ? -1 : cms_comments_delete(id);
+                    else rc = cms_comments_set_status(id, strcmp(verb, "approve") == 0 ? "approved" : "rejected", user_id);
+                }
+                char back[16] = "pending";
+                parse_urlencoded_field(req.body, req.body_length, "back", back, sizeof(back));
+                if (strcmp(back, "approved") != 0 && strcmp(back, "rejected") != 0 &&
+                    strcmp(back, "unverified") != 0) strcpy(back, "pending");
+                char location[128];
+                snprintf(location, sizeof(location), "/dashboard/comments?status=%s&done=%s", back,
+                         rc != 0 ? "error" : strcmp(verb, "resend") == 0 ? "resent"
+                         : strcmp(verb, "delete") == 0 ? "deleted"
+                         : strcmp(verb, "approve") == 0 ? "approved" : "rejected");
+                send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/comments/verify") == 0) {
+            int epoch = resolve_epoch(&req);
+            char token[80] = "";
+            parse_urlencoded_field(req.body, req.body_length, "token", token, sizeof(token));
+            char *set_cookie = NULL;
+            char *content = comments_verify_post(epoch, token, &set_cookie);
+            char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Comment confirmed", content) : NULL;
+            char headers[512];
+            snprintf(headers, sizeof(headers), "Cache-Control: no-store\r\n%s", set_cookie ? set_cookie : "");
+            char *response = body ? build_epoch_response(body, headers, epoch) : NULL;
+            free(body);
+            free(set_cookie);
+            send_or_error(ctx, response, req.method, epoch);
+
+        } else if (strcmp(req.method, "POST") == 0 && strncmp(decoded_url, "/blog/", 6) == 0 &&
+                   strlen(decoded_url) > 6 + 9 &&
+                   strcmp(decoded_url + strlen(decoded_url) - 9, "/comments") == 0) {
+            // A visitor's comment on a blog entry (comments.h): back to the
+            // entry with a notice, or the entry again with the form and why.
+            int epoch = resolve_epoch(&req);
+            char link[256];
+            size_t link_len = strlen(decoded_url) - 6 - 9;
+            if (link_len == 0 || link_len >= sizeof(link) || memchr(decoded_url + 6, '/', link_len)) {
+                send_error_response(ctx, 404, "404 Not Found", epoch);
+            } else {
+                memcpy(link, decoded_url + 6, link_len);
+                link[link_len] = '\0';
+                char back[300];
+                snprintf(back, sizeof(back), "/blog/%s", link);
+                if (epoch != EPOCH_MODERN) {
+                    send_or_error(ctx, build_redirect_response(back, "", epoch), req.method, epoch);
+                } else {
+                    char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
+                    CommentForm form;
+                    CommentPostResult result = comments_post(link, content_lang, req.body, req.body_length,
+                                                             get_header_value(&req, "Cookie"), client_ip,
+                                                             base ? base : "", &form);
+                    free(base);
+                    if (result == COMMENT_POST_NOT_FOUND) {
+                        send_error_response(ctx, 404, "404 Not Found", epoch);
+                    } else if (result == COMMENT_POST_FORM) {
+                        char *comments = comments_section(epoch, link, content_lang, &form, NULL);
+                        serve_cms_entry(ctx, link, "blog", content_lang, "GET", epoch, NULL, 0, comments);
+                    } else {
+                        char location[340];
+                        snprintf(location, sizeof(location), "%s%s#comments", back,
+                                 result == COMMENT_POST_VERIFY ? "?comment=sent"
+                                 : result == COMMENT_POST_PENDING ? "?comment=pending" : "");
+                        send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
+                    }
+                }
             }
 
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/logout") == 0) {
@@ -3726,6 +3936,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         parse_urlencoded_field(req.body, req.body_length, "hide_author",
                                                hide_author_str, sizeof(hide_author_str));
                         bool hide_author = (strcmp(hide_author_str, "1") == 0);
+                        char closed_str[8];
+                        parse_urlencoded_field(req.body, req.body_length, "comments_closed",
+                                               closed_str, sizeof(closed_str));
+                        bool comments_closed = (strcmp(closed_str, "1") == 0);
 
                         char **title_values   = calloc(lang_count, sizeof(char *));
                         char **summary_values = calloc(lang_count, sizeof(char *));
@@ -3741,7 +3955,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             summary_values[i] = strdup(value);
                         }
 
-                        if (cms_update_entry_header(id, image_url, date, hide_author, langs, lang_count,
+                        if (cms_update_entry_header(id, image_url, date, hide_author, comments_closed,
+                                                     langs, lang_count,
                                                      title_values, summary_values) == 0) {
                             response = build_json_response("{\"ok\":true}");
                         } else {
@@ -4045,9 +4260,48 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL,
-                            name[0] ? "Could not save the site name." : "The site name cannot be empty.");
+                            name[0] ? "Could not save the site name." : "The site name cannot be empty.", NULL);
                     }
                 }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/comments") == 0) {
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            if (require_admin_session(ctx, &req, epoch, user_id)) {
+                // An unchecked checkbox sends no field at all. Comments can't be
+                // turned on without mail; turning them off always works.
+                char on_str[8];
+                bool on = parse_urlencoded_field(req.body, req.body_length, "comments_enabled",
+                                                 on_str, sizeof(on_str)) != 0 && mailer_configured();
+                cms_update_comments_enabled(on);
+                send_or_error(ctx, build_redirect_response("/dashboard/settings#comments", "", epoch),
+                              req.method, epoch);
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/mail/test") == 0) {
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            if (require_admin_session(ctx, &req, epoch, user_id)) {
+                char email[256] = "", role[USER_ROLE_BUF_SIZE];
+                const char *result = "failed";
+                if (cms_get_user_values(user_id, email, sizeof(email), role, sizeof(role)) != 0 ||
+                    !mailer_valid_address(email)) {
+                    result = "no-email";
+                } else {
+                    char *site = cms_get_site_name();
+                    char subject[200];
+                    snprintf(subject, sizeof(subject), "%s - test email", site ? site : "Boat Rudder");
+                    if (mailer_enqueue(email, subject,
+                            "This is a test email from your site's dashboard.\n\n"
+                            "If you are reading it, mail is set up correctly: visitors' comment\n"
+                            "confirmations will be delivered the same way.\n") == 0)
+                        result = "queued";
+                    free(site);
+                }
+                char location[96];
+                snprintf(location, sizeof(location), "/dashboard/settings?mail=%s#comments", result);
+                send_or_error(ctx, build_redirect_response(location, "", epoch), req.method, epoch);
             }
 
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/home") == 0) {
@@ -4074,7 +4328,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         SiteHomeSettings home = { hide, under_construction, page ? page : "" };
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
-                            "Could not save the home page settings.");
+                            "Could not save the home page settings.", NULL);
                         free(name);
                         free(page);
                     }
@@ -4118,7 +4372,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page };
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
-                                                   error_message);
+                                                   error_message, NULL);
                         free(name);
                     }
                 }
@@ -4583,6 +4837,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
+                    } else if (strcmp(role, "commenter") != 0 && !password[0] && !cms_user_has_password(id)) {
+                        // A commenter promoted to the team needs a way to sign in.
+                        char *content  = users_admin_form(epoch, id, name, username, email, role,
+                                              "This user has no password yet (a commenter): set one so they can sign in.");
+                        char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
+                        response = body ? build_epoch_response(body, "", epoch) : NULL;
+                        free(body);
                     } else if (cms_update_user(id, name, email, role, password) == 0) {
                         response = build_redirect_response("/dashboard/users", "", epoch);
                     } else {
@@ -4610,13 +4871,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char *response;
 
                     if (strcmp(id, user_id) == 0) {
-                        char *content  = users_admin_list(epoch, "You cannot delete your own account.");
+                        char *content  = users_admin_list(epoch, "You cannot delete your own account.", 0);
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
                     } else if (cms_get_user_role(id, target_role, sizeof(target_role)) == 0 &&
                                strcmp(target_role, "admin") == 0 && cms_count_admins() == 1) {
-                        char *content  = users_admin_list(epoch, "The last administrator cannot be deleted.");
+                        char *content  = users_admin_list(epoch, "The last administrator cannot be deleted.", 0);
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);

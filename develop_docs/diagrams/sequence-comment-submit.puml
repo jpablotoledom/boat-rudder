@@ -1,0 +1,59 @@
+@startuml sequence-comment-submit
+
+title Boat Rudder - Sending a comment and confirming the email
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Visitor
+participant "http_router" as R
+participant "captcha" as CAP
+participant "comments" as COM
+database "MongoDB" as DB
+participant "mailer thread" as MAIL
+participant "SMTP" as SMTP
+
+Visitor -> R : GET /blog/<link>
+R -> CAP : captcha_new()
+CAP --> R : PNG + signed token\n(nonce, expiry, HMAC(answer))
+R --> Visitor : entry + approved comments + form
+
+Visitor -> R : POST /blog/<link>/comments\nname, email, text, captcha, token,\nhoneypot (empty), form time
+R -> COM : comments_submit()
+COM -> COM : honeypot empty? filled in >= 3 s?\nlengths, email shape, name chars
+COM -> CAP : captcha_check(token, answer)
+CAP -> DB : insert captcha_used {nonce}\n(unique: a token works once)
+alt wrong / expired / reused
+    COM --> Visitor : 422 form again,\nnew captcha, text kept
+end
+COM -> COM : rate limits (IP hash, email)
+COM -> DB : upsert commenter {email, name}\nname taken by another email? -> 422
+COM -> DB : insert comment {status: "unverified"}
+COM -> DB : insert comment_tokens {SHA-256(token), 24 h}
+COM -> DB : insert mail_queue {to, "Confirm your comment", link}
+COM --> Visitor : 303 /blog/<link>?comment=check-email#comments\n"Check your email"
+
+MAIL -> DB : next queued mail
+MAIL -> SMTP : libcurl smtp(s)://, TLS
+SMTP --> MAIL : 250 OK
+MAIL -> DB : status "sent" (or retry with backoff)
+
+== Confirming ==
+Visitor -> R : GET /comments/verify?token=...
+R --> Visitor : "Confirm your comment" + button\n(a GET never confirms: mail scanners open links)
+Visitor -> R : POST /comments/verify (token)
+R -> COM : comments_verify(token)
+COM -> DB : find token by hash, not expired
+COM -> DB : comment -> "pending", commenter.email_verified_at = now
+COM -> DB : delete token
+COM --> Visitor : "Thanks - your comment is waiting\nfor a moderator" (+ remember-me cookie, option B)
+
+@enduml

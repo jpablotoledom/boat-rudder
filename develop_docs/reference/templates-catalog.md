@@ -87,6 +87,8 @@ shipped themes (`dark`, `light`) contain the same set.
 | `login/` | `login` | −1…3 | 0-1 | | `/login` (epoch 3 form; other epochs "not available") |
 | | `login-error` | 3 | 1 | | error line |
 | `language/` | `language`, `language-item` | −1…3 | 2 / 3-4 | | `/language` page |
+| `comments/` | `comments`, `comment-item`, `comment-form`, `comment-error`, `comments-notice`, `comments-empty`, `comments-closed` | 3 | 4 / 3 / 9 (positional) / 1 / 1 / 0 / 0 | | Blog comments section and form (`comments_section()`) |
+| | `verify`, `verify-form` | −1…3 | 3 / 1 | | `/comments/verify` pages |
 | `search/` | `search` | −1…3 | 4 (`%1$s` query, `%2$s` summary, `%3$s` results, `%4$s` hidden fields) | | `/search` page: form, summary, results |
 | | `search-item` | −1…3 | 4 (`%1$s` URL, `%2$s` title, `%3$s` "Blog - date" / "Page", `%4$s` excerpt) | | one result |
 | | `search-mark` | −1…3 | 1 | | the matched words inside an excerpt (no trailing newline) |

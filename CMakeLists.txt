@@ -25,6 +25,8 @@ find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
+# libcurl: outgoing mail over SMTP (utils/mailer.c).
+pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 
 # Optional: MaxMind GeoLite2 for country detection in analytics (src/modules/
 # analytics/geoip.c). Install libmaxminddb-dev and place a GeoLite2-Country.mmdb
@@ -115,6 +117,8 @@ set(SOURCES
     src/modules/updates_admin/updates_admin.c
     src/modules/extensions_admin/extensions_admin.c
     src/modules/search_page/search_page.c
+    src/modules/comments/comments.c
+    src/modules/comments_admin/comments_admin.c
     src/modules/fonts_admin/fonts_admin.c
     src/modules/analytics/analytics.c
     src/modules/analytics/geoip.c
@@ -144,6 +148,9 @@ set(SOURCES
     src/db/cms_themes.c
     src/db/cms_extensions.c
     src/db/cms_search.c
+    src/db/cms_comments.c
+    src/utils/mailer.c
+    src/utils/captcha.c
     src/extensions/extensions.c
     src/db/cms_fonts.c
     src/db/language_catalog.c
@@ -181,6 +188,7 @@ target_link_libraries(boat-rudder
     Threads::Threads
     PkgConfig::MONGOC
     PkgConfig::SODIUM
+    PkgConfig::CURL
     ${QRENCODE_LIBRARY}
     m
 )
@@ -207,6 +215,10 @@ add_executable(browser_detection_bson_test tests/browser_detection_bson_test.c
                src/db/browser_detection_bson.c src/utils/detect_epoch.c)
 target_link_libraries(browser_detection_bson_test PkgConfig::MONGOC Threads::Threads)
 add_test(NAME browser_detection_bson COMMAND browser_detection_bson_test)
+
+add_executable(captcha_test tests/captcha_test.c src/utils/captcha.c)
+target_link_libraries(captcha_test PkgConfig::SODIUM m)
+add_test(NAME captcha COMMAND captcha_test)
 
 add_executable(proxy_protocol_test tests/proxy_protocol_test.c src/web_server/proxy_protocol.c)
 target_link_libraries(proxy_protocol_test Threads::Threads)

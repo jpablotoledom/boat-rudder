@@ -7,6 +7,40 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 ## v0.0.7
 ### 2026-10-28
 
+### Blog comments
+
+**Added**
+- Comments on blog entries (epoch 3): name, email, comment and a challenge Boat Rudder draws
+  itself (no third-party service). The visitor confirms the email through a link; the comment
+  then waits for a moderator and is public only once approved. A browser that confirmed its email
+  is remembered for a year, so its next comments skip the email (still moderated). Off by
+  default: **Dashboard → Site → General → Comments**, which also sends a test email.
+- **Dashboard → Content → Comments**: pending / approved / rejected, Approve, Reject, Delete,
+  and (Administrador) block an email. An Autor moderates the comments on their own blog entries.
+  The dashboard home shows how many are waiting. The entry editor can close comments per entry.
+- Outgoing mail: `mail_smtp_url`, `mail_smtp_user`, `mail_smtp_password`, `mail_from`,
+  `mail_from_name` in `configs/settings.conf`; sent from a background queue (`mail_queue`) with
+  retries.
+- Defenses: a single-use, time-bounded challenge, a honeypot, per-address and per-email limits,
+  confirmation tokens stored only as hashes, addresses stored only as an HMAC.
+- Commenters are users (`role: "commenter"`, no password, can't sign in), listed under
+  **Users → Commenters**; an admin can make one an author, moderator or administrator by picking
+  the role and giving them a password.
+- New role **Moderator**: only the dashboard home and Comments - approves and rejects every blog
+  comment, deletes and blocks nothing.
+- **Comments → Unverified**: comments whose email isn't confirmed yet, with the state of their
+  confirmation email (sent / retrying with the SMTP error / failed); **Resend email** sends a new
+  link, and a moderator can approve one without the email check.
+
+**Security**
+- A session whose user had been deleted kept working - and as an administrator, since an
+  unreadable role fell back to "admin". Deleting a user now ends their sessions, and a role that
+  can't be read opens nothing. Making someone a commenter ends their sessions too.
+
+**Build**
+- New dependency: **libcurl** (`libcurl4-openssl-dev` on Debian/Ubuntu, `libcurl-devel` on
+  Fedora). `boat-rudder-update` checks for it before building - install it before updating.
+
 ### Site search
 
 **Added**

@@ -77,9 +77,14 @@ static char *render_header_sidebar(const CmsEntryEdit *entry, const CmsLanguageI
 
     const char *author_name = entry->header_author_name ? entry->header_author_name : "";
     const char *hide_author = entry->header_hide_author ? "checked" : "";
+    // Blog entries only: pages never take comments.
+    const char *closed = !entry->type || strcmp(entry->type, "blog") != 0 ? ""
+        : entry->comments_closed
+            ? "<label class=\"boat-rudder-entry-editor__meta-check\"><input name=\"comments_closed\" type=\"checkbox\" checked onchange=\"setContentChanged()\"> Close comments</label>"
+            : "<label class=\"boat-rudder-entry-editor__meta-check\"><input name=\"comments_closed\" type=\"checkbox\" onchange=\"setContentChanged()\"> Close comments</label>";
     char *result = panels
         ? render_template(tpl, entry->header_image_url, entry->header_date, author_name,
-                           hide_author, panels)
+                           hide_author, closed, panels)
         : NULL;
 
     free(panels);

@@ -40,6 +40,11 @@ int  wap_gateway_rate_limit = 60;
 char wap_upstream[64]       = {0};
 bool wap_upstream_proxy_protocol = false;
 char update_repo[128]      = "jpablotoledom/boat-rudder";
+char mail_smtp_url[256]      = {0};
+char mail_smtp_user[256]     = {0};
+char mail_smtp_password[256] = {0};
+char mail_from[256]          = {0};
+char mail_from_name[128]     = {0};
 
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -140,6 +145,16 @@ int load_config(const char *filename) {
         } else if (strcmp(key, "update_repo") == 0) {
             strncpy(update_repo, value, sizeof(update_repo) - 1);
             update_repo[sizeof(update_repo) - 1] = '\0';
+        } else if (strcmp(key, "mail_smtp_url") == 0) {
+            snprintf(mail_smtp_url, sizeof(mail_smtp_url), "%s", value);
+        } else if (strcmp(key, "mail_smtp_user") == 0) {
+            snprintf(mail_smtp_user, sizeof(mail_smtp_user), "%s", value);
+        } else if (strcmp(key, "mail_smtp_password") == 0) {
+            snprintf(mail_smtp_password, sizeof(mail_smtp_password), "%s", value);
+        } else if (strcmp(key, "mail_from") == 0) {
+            snprintf(mail_from, sizeof(mail_from), "%s", value);
+        } else if (strcmp(key, "mail_from_name") == 0) {
+            snprintf(mail_from_name, sizeof(mail_from_name), "%s", value);
         }
     }
 

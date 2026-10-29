@@ -384,7 +384,14 @@ an Administrador sees - every menu, the analytics summary, every entry, the entr
 settings page - and can change nothing; for a public demo account). A viewer's writes are
 refused in one place, `require_dashboard_session()` (see [security.md](security.md#roles)), and
 every dashboard page it opens starts with `dashboard/readonly-notice_epoch3.html`, put there by
-`page_layout_wrap()` when `request_user_read_only()` says so. A `users` document with no `role` field (the original seed account) is
+`page_layout_wrap()` when `request_user_read_only()` says so. Two more roles live in `users`: **Moderador** (`"moderator"`) opens only the dashboard home
+(`dashboard-moderator_epoch3.html`, its own menu `nav-moderator_epoch3.html`) and
+[Comments](comments.md), where it approves and rejects every blog comment but deletes and
+blocks nothing; **Comentarista** (`"commenter"`) is a blog commenter created by the comment form,
+with no password - it never signs in, and the Users page lists commenters in their own tab. To
+make a commenter part of the team, an admin picks the new role and sets a password (required
+when the user has none). Both limits are one central check, `role_may_open()` in
+`require_dashboard_session()`. A `users` document with no `role` field (the original seed account) is
 treated as `"admin"` everywhere it's read - no migration is required, and an admin can open that
 user in `/dashboard/users/<id>/edit` and Save to persist `role: "admin"` explicitly.
 
@@ -531,6 +538,14 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 
 Modules: `src/modules/site_settings_admin/`, `src/modules/fonts_admin/`, `src/modules/updates_admin/`; templates under
 `html/templates/dashboard/settings/` and `…/fonts/`.
+
+## Comments (`/dashboard/comments`)
+
+Moderation of visitors' blog comments - tabs by status, Approve / Reject / Delete, blocking a
+commenter's email (Administrador). An Autor sees and moderates the comments on their own blog
+entries. Linked from the *Content* group of the menu; the dashboard home starts with the number
+waiting. The *Comments* panel of [Settings](#settings-dashboardsettings) turns them on and sends
+a test email. Full description: [comments.md](comments.md).
 
 ## Analytics (`/dashboard/analytics`)
 

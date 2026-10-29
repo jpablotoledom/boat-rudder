@@ -1,0 +1,34 @@
+  <form class="boat-rudder-comments__form" method="post" action="%1$s#comments">
+    <h3 class="boat-rudder-comments__form-title">Leave a comment</h3>
+%2$s
+    <div class="boat-rudder-comments__row">
+      <label class="boat-rudder-comments__label" for="comment-name">Name</label>
+      <input class="boat-rudder-comments__input" id="comment-name" name="name" value="%3$s"
+             maxlength="%8$d" required autocomplete="nickname">
+    </div>
+    <div class="boat-rudder-comments__row">
+      <label class="boat-rudder-comments__label" for="comment-email">Email <small>(never shown; we send you a link to confirm it)</small></label>
+      <input class="boat-rudder-comments__input" id="comment-email" name="email" type="email" value="%4$s"
+             maxlength="254" required autocomplete="email">
+    </div>
+    <div class="boat-rudder-comments__row">
+      <label class="boat-rudder-comments__label" for="comment-text">Comment</label>
+      <textarea class="boat-rudder-comments__textarea" id="comment-text" name="text" rows="6"
+                maxlength="%9$d" required>%5$s</textarea>
+    </div>
+    <div class="boat-rudder-comments__hp" aria-hidden="true">
+      <label for="comment-website">Website</label>
+      <input id="comment-website" name="website" tabindex="-1" autocomplete="off">
+    </div>
+    <div class="boat-rudder-comments__row">
+      <label class="boat-rudder-comments__label" for="comment-captcha">Type the characters in the image</label>
+      <div class="boat-rudder-comments__captcha">
+        <img class="boat-rudder-comments__captcha-image" src="%6$s" width="200" height="70" alt="Challenge image">
+        <input class="boat-rudder-comments__input boat-rudder-comments__captcha-input" id="comment-captcha"
+               name="captcha" maxlength="8" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </div>
+      <input type="hidden" name="captcha_token" value="%7$s">
+    </div>
+    <p class="boat-rudder-comments__privacy">Comments are published once a moderator approves them.</p>
+    <button class="boat-rudder-comments__btn" type="submit">Send</button>
+  </form>

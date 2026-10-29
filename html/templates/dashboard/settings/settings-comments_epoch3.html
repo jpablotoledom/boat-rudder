@@ -1,0 +1,25 @@
+  <section class="boat-rudder-dashboard__panel" id="comments">
+    <h2>Comments</h2>
+%4$s
+    <form method="POST" action="/dashboard/settings/comments" class="boat-rudder-dashboard__site-name boat-rudder-card">
+      <div class="boat-rudder-dashboard__site-name-row">
+        <label class="boat-rudder-dashboard__asset-check">
+          <input type="checkbox" name="comments_enabled" value="1"%1$s%2$s>
+          Visitors can comment on blog entries
+        </label>
+        <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit"%2$s>Save</button>
+      </div>
+      <p class="boat-rudder-dashboard__hint">Epoch 3 only. A visitor gives a name and an email, answers
+         a challenge and confirms through a link sent to that email; the comment then waits for a
+         moderator in <a href="/dashboard/comments">Comments</a>.</p>
+    </form>
+    <form method="POST" action="/dashboard/settings/mail/test" class="boat-rudder-dashboard__site-name boat-rudder-card">
+      <div class="boat-rudder-dashboard__site-name-row">
+        <span>%3$s</span>
+        <button class="boat-rudder-btn" type="submit"%5$s>Send a test email</button>
+      </div>
+      <p class="boat-rudder-dashboard__hint">Mail is set in <code>configs/settings.conf</code>
+         (<code>mail_smtp_url</code>, <code>mail_smtp_user</code>, <code>mail_smtp_password</code>,
+         <code>mail_from</code>); the test goes to your own account's email.</p>
+    </form>
+  </section>

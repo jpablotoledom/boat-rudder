@@ -21,9 +21,12 @@ typedef struct {
 // (html/favicon2.ico / favicon3.ico, see page_layout.h), plus links to Themes,
 // Fonts and Preview. `error_message` is shown above the form if
 // non-NULL/non-empty. Returns a malloc'd string, or NULL on a missing
-// template / allocation failure.
+// template / allocation failure. The Comments panel shows the stored
+// site_settings.comments_enabled, whether mail is configured, and
+// `mail_notice` (may be NULL) - the result of "Send a test email".
 char *site_settings_general_page(int epoch, const char *lang, const char *site_name,
-                                 const SiteHomeSettings *home, const char *error_message);
+                                 const SiteHomeSettings *home, const char *error_message,
+                                 const char *mail_notice);
 
 // /dashboard/settings/themes/<key>/banner and .../footer - one <textarea>
 // + asset upload/browse widget per epoch (-1..3) for theme `key`

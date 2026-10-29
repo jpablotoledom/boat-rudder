@@ -897,6 +897,51 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
   color: var(--br-color-navbar-menu-active, #3800aa);
 }
 
+/* Blog comments (comments/comments_epoch3.html): the approved comments under
+   a blog entry and the form - name, email, comment, challenge image. */
+.boat-rudder-comments {
+  margin-top: 40px; padding-top: 20px;
+  border-top: 1px solid var(--br-color-table-border, #d6d6d8);
+}
+.boat-rudder-comments__title { margin: 0 0 12px; }
+.boat-rudder-comments__notice {
+  padding: 10px 12px; border-radius: 3px; background: #ddf5e8; color: #0b5a33;
+}
+.boat-rudder-comments__list { list-style: none; margin: 0 0 24px; padding: 0; }
+.boat-rudder-comments__empty { color: #5f5f66; padding: 8px 0; }
+.boat-rudder-comments__closed { color: #5f5f66; font-style: italic; }
+.boat-rudder-comment {
+  padding: 12px 0; border-bottom: 1px solid var(--br-color-table-border, #d6d6d8);
+}
+.boat-rudder-comment__meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.boat-rudder-comment__date { font-size: 0.85em; color: var(--br-color-blog-list-item-date, #5f5f66); }
+.boat-rudder-comment__text { margin: 0; overflow-wrap: anywhere; }
+.boat-rudder-comments__form { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.boat-rudder-comments__form-title { margin: 0; }
+.boat-rudder-comments__row { display: flex; flex-direction: column; gap: 4px; }
+.boat-rudder-comments__label small { color: #5f5f66; }
+.boat-rudder-comments__input,
+.boat-rudder-comments__textarea {
+  padding: 8px 10px; font: inherit; color: #1a1a1a; background: #ffffff;
+  border: 1px solid #c8c8cc; border-radius: 3px;
+}
+.boat-rudder-comments__textarea { resize: vertical; min-height: 120px; }
+.boat-rudder-comments__captcha { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.boat-rudder-comments__captcha-image { border-radius: 3px; border: 1px solid #c8c8cc; }
+.boat-rudder-comments__captcha-input { width: 140px; text-transform: uppercase; letter-spacing: 2px; }
+/* The honeypot: out of sight and out of reach for people, there for bots. */
+.boat-rudder-comments__hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.boat-rudder-comments__privacy { margin: 0; font-size: 0.85em; color: #5f5f66; }
+.boat-rudder-comments__error {
+  margin: 0; padding: 10px 12px; border-radius: 3px; background: #fde2e4; color: #8a1020;
+}
+.boat-rudder-comments__btn {
+  align-self: flex-start; padding: 8px 20px; font: inherit; font-weight: bold; cursor: pointer;
+  color: #ffffff; background: var(--br-color-navbar-menu-active, #3800aa);
+  border: none; border-radius: 3px;
+}
+.boat-rudder-comments-verify { max-width: 640px; margin: 40px auto; }
+
 /*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
 /* RESPONSIVE */
 @media (max-width: 1200px) {

@@ -61,6 +61,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |
 | `/menu` | `return` | `menu/menu-page_epoch<N>.html` | Full nav menu + back link - the target of WML's compact `[Menu]` link. Only epochs with that template (today: −1); others `404` |
+| `/comments/verify` | `token` | `comments_verify_page()` | Epoch any. The email link: a *Confirm* button (`POST /comments/verify`), or "link expired" ([comments.md](comments.md)) |
 | `/search` | `q` | `search_page()` | Search form and the published blog entries and pages matching `q` ([rendering.md](rendering.md#search-search)) |
 | `/language` | `return` | `language_page()` | Language picker page |
 | `/language/set` | `code`, `return` | inline | `302` to `return` (sanitized, absolute URL) with `Set-Cookie: lang=<code>; Max-Age=31536000` when `code` is a configured language |
@@ -88,6 +89,16 @@ Query parameters understood on **every** route (read before routing, see
 
 ---
 
+## Comments (`POST`)
+
+| Path | Fields | Handler | Response |
+|---|---|---|---|
+| `/blog/<link>/comments` | `name`, `email`, `text`, `captcha`, `captcha_token`, `website` (honeypot) | `comments_post()` | Epoch 3 only (others: `302` back). `302 /blog/<link>?comment=sent\|pending#comments`, or the entry again with the form and why, `404` for no such published blog entry |
+| `/comments/verify` | `token` | `comments_verify_post()` | Confirms the comment (→ pending), sets the `br_commenter` cookie; or "link expired" |
+
+No session and no CSRF token: the challenge token (signed, single use, time-bounded) plays that
+role. See [comments.md](comments.md).
+
 ## Authentication
 
 | Method | Path | Guard | Handler | Response |
@@ -111,6 +122,11 @@ title `{{SITE_NAME}} - Dashboard`.
 | `POST` | `/dashboard/entries/new` | E3, S+R | `cms_create_entry()` | Creates a draft (`page` for admin, `blog` for author), `302` to its editor |
 | `GET` | `/dashboard/entries/<id>/edit` | E3, S+R, Own | `entry_editor_page()` | `404` if unknown |
 | `POST` | `/dashboard/entries/<id>/delete` | E3, A | `cms_delete_entry()` | `302 /dashboard` |
+| `GET` | `/dashboard/comments` | E3, S+R | `comments_admin_page()` | `?status=pending\|approved\|rejected\|unverified`, `?done=` notice. An author sees comments on their own blog entries only ([comments.md](comments.md#6-moderation-dashboardcomments-srcmodulescomments_admin)) |
+| `POST` | `/dashboard/comments/<id>/approve` · `/reject` · `/delete` · `/resend` | E3, S+R, Own entry | `cms_comments_set_status()` / `cms_comments_delete()` | Field `back` (the tab); `302 /dashboard/comments?status=<back>&done=…` |
+| `POST` | `/dashboard/comments/commenter/<id>/block` · `/unblock` · `/block-delete` | E3, A | `cms_comments_block()` | Block (and delete everything from) a commenter's email |
+| `POST` | `/dashboard/settings/comments` | E3, A | `cms_update_comments_enabled()` | Field `comments_enabled`; can't turn on without mail |
+| `POST` | `/dashboard/settings/mail/test` | E3, A | `mailer_enqueue()` | Test email to the admin's own address; `302 /dashboard/settings?mail=queued\|no-email\|failed#comments` |
 | `GET` | `/dashboard/categories` | E3, A | `categories_admin_list()` | |
 | `GET`/`POST` | `/dashboard/categories/new` | E3, A | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
 | `GET`/`POST` | `/dashboard/categories/<id>/edit` | E3, A | same / `cms_update_category()` | |

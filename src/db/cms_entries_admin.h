@@ -35,6 +35,7 @@ typedef struct {
     char   *header_author_name;    // display name from users collection (via header.author_id)
     char    header_date[16];       // "YYYY-MM-DD", "" if absent
     bool    header_hide_author;    // header.hide_author: public views omit the byline
+    bool    comments_closed;       // comments_closed: no new comments (blog entries)
 
     CmsContentBlockEdit *content; // sorted by order
     size_t content_count;
@@ -76,7 +77,7 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
 // the byline - for pages that are not authored articles. Returns 0 on success,
 // -1 if id_hex is invalid, on a DB error, or if mongodb is not ready.
 int cms_update_entry_header(const char *id_hex, const char *image_url, const char *date,
-                             bool hide_author,
+                             bool hide_author, bool comments_closed,
                              const CmsLanguageItem *langs, size_t lang_count,
                              char *const *title_values, char *const *summary_values);
 

@@ -1,0 +1,41 @@
+@startuml sequence-comment-moderation
+
+title Boat Rudder - Moderating comments
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor "Admin / Author" as MOD
+participant "http_router\n(dashboard guards)" as R
+participant "comments_admin" as ADM
+database "MongoDB" as DB
+actor Visitor
+
+MOD -> R : GET /dashboard/comments?status=pending
+R -> ADM : comments_admin_page(role, user_id)
+alt admin (or viewer, read-only)
+    ADM -> DB : comments {status} - every entry
+else author
+    ADM -> DB : comments {status, entry_id in\nthe author's own blog entries}
+end
+ADM --> MOD : list: entry, name, text, date,\n[Approve] [Reject] [Delete]
+
+MOD -> R : POST /dashboard/comments/<id>/approve\n(+ CSRF)
+R -> R : session, CSRF, viewer refused
+R -> ADM : may this user moderate this comment?\n(author: entry.created_by == user)
+ADM -> DB : status "approved",\nmoderated_by, moderated_at
+R --> MOD : 302 back to the list
+
+Visitor -> R : GET /blog/<link>
+R -> DB : comments {entry_id, status: "approved"}\nsorted by created_at
+R --> Visitor : the comment under the entry
+
+@enduml

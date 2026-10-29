@@ -28,10 +28,12 @@ static char *html_encode_alloc(const char *src) {
 static const char *role_label(const char *role) {
     if (strcmp(role, "admin") == 0) return "Administrator";
     if (strcmp(role, "viewer") == 0) return "Viewer";
+    if (strcmp(role, "moderator") == 0) return "Moderator";
+    if (strcmp(role, "commenter") == 0) return "Commenter";
     return "Author";
 }
 
-char *users_admin_list(int epoch, const char *error_message) {
+char *users_admin_list(int epoch, const char *error_message, int commenters) {
     char *row_tpl  = load_template("dashboard/users/list-row_epoch%d.html", epoch);
     char *list_tpl = load_template("dashboard/users/list_epoch%d.html", epoch);
 
@@ -52,7 +54,7 @@ char *users_admin_list(int epoch, const char *error_message) {
         }
     }
 
-    cms_get_users(&items, &item_count);
+    cms_get_users(commenters, &items, &item_count);
 
     if (item_count == 0) {
         rows = load_template("dashboard/users/list-empty_epoch%d.html", epoch);
@@ -72,7 +74,9 @@ char *users_admin_list(int epoch, const char *error_message) {
         }
     }
 
-    if (rows) result = render_template(list_tpl, error_html ? error_html : "", rows);
+    if (rows) result = render_template(list_tpl, error_html ? error_html : "", rows,
+                                       commenters ? "" : " boat-rudder-tabs__tab--active",
+                                       commenters ? " boat-rudder-tabs__tab--active" : "");
 
 cleanup:
     cms_users_admin_free(items, item_count);
@@ -123,7 +127,9 @@ char *users_admin_form(int epoch, const char *id, const char *name, const char *
                               enc_email, password_label,
                               strcmp(role, "admin") == 0 ? " selected" : "",
                               strcmp(role, "author") == 0 ? " selected" : "",
-                              strcmp(role, "viewer") == 0 ? " selected" : "");
+                              strcmp(role, "viewer") == 0 ? " selected" : "",
+                              strcmp(role, "moderator") == 0 ? " selected" : "",
+                              strcmp(role, "commenter") == 0 ? " selected" : "");
 
 cleanup:
     free(form_tpl);

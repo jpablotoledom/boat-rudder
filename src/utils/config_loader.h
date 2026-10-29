@@ -110,4 +110,15 @@ extern bool wap_upstream_proxy_protocol;
 // lists - the same one scripts/boat-rudder-update installs from.
 extern char update_repo[128];
 
+// Outgoing mail (utils/mailer.h), for blog comments' email confirmation.
+// mail_smtp_url is "smtps://host:465" or "smtp://host:587" (STARTTLS is
+// then required, except to a loopback relay); empty = no mail, and comments
+// can't be turned on. mail_from is the sender address, mail_from_name its
+// display name (defaults to the site name).
+extern char mail_smtp_url[256];
+extern char mail_smtp_user[256];
+extern char mail_smtp_password[256];
+extern char mail_from[256];
+extern char mail_from_name[128];
+
 #endif // CONFIG_LOADER_H

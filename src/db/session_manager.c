@@ -130,6 +130,21 @@ int destroy_session(const char *token) {
     return ok ? 0 : -1;
 }
 
+int destroy_user_sessions(const char *user_id_hex) {
+    if (!user_id_hex || !bson_oid_is_valid(user_id_hex, strlen(user_id_hex))) return -1;
+    mongoc_collection_t *collection = mongodb_manager_get_collection(SESSIONS_COLLECTION);
+    if (!collection) return -1;
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, user_id_hex);
+    bson_t *query = BCON_NEW("user_id", BCON_OID(&oid));
+    bson_error_t error;
+    bool ok = mongoc_collection_delete_many(collection, query, NULL, NULL, &error);
+    if (!ok) LOG_ERROR("destroy_user_sessions: delete failed: %s", error.message);
+    bson_destroy(query);
+    mongoc_collection_destroy(collection);
+    return ok ? 0 : -1;
+}
+
 int derive_csrf_token(const char *session_token, char *token_out) {
     token_out[0] = '\0';
     if (!session_token || !session_token[0]) return 0;

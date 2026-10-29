@@ -1,4 +1,5 @@
 #include "cms_users_admin.h"
+#include "session_manager.h"
 #include "mongodb_manager.h"
 #include "../utils/log.h"
 #include <bson/bson.h>
@@ -16,17 +17,36 @@
 
 static int is_valid_role(const char *role) {
     return strcmp(role, "admin") == 0 || strcmp(role, "author") == 0 ||
-           strcmp(role, "viewer") == 0;
+           strcmp(role, "viewer") == 0 || strcmp(role, "moderator") == 0 ||
+           strcmp(role, "commenter") == 0;
 }
 
-void cms_get_users(CmsUserAdminItem **out, size_t *out_count) {
+int cms_user_role_valid(const char *role) {
+    return role && is_valid_role(role);
+}
+
+int cms_user_has_password(const char *id_hex) {
+    if (!id_hex || !bson_oid_is_valid(id_hex, strlen(id_hex))) return 0;
+    mongoc_collection_t *collection = mongodb_manager_get_collection(USERS_COLLECTION);
+    if (!collection) return 0;
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, id_hex);
+    bson_t *query = BCON_NEW("_id", BCON_OID(&oid), "password", "{", "$type", BCON_UTF8("string"), "}");
+    int64_t n = mongoc_collection_count_documents(collection, query, NULL, NULL, NULL, NULL);
+    bson_destroy(query);
+    mongoc_collection_destroy(collection);
+    return n > 0;
+}
+
+void cms_get_users(int commenters, CmsUserAdminItem **out, size_t *out_count) {
     *out = NULL;
     *out_count = 0;
 
     mongoc_collection_t *collection = mongodb_manager_get_collection(USERS_COLLECTION);
     if (!collection) return;
 
-    bson_t *query = bson_new();
+    bson_t *query = commenters ? BCON_NEW("role", BCON_UTF8("commenter"))
+                               : BCON_NEW("role", "{", "$ne", BCON_UTF8("commenter"), "}");
     bson_t *opts = BCON_NEW(
         "sort", "{", "email", BCON_INT32(1), "}",
         "limit", BCON_INT64((int64_t)USERS_LIST_LIMIT)
@@ -305,6 +325,8 @@ int cms_update_user(const char *id_hex, const char *name, const char *email, con
 
     bool ok = mongoc_collection_update_one(collection, query, &update, NULL, NULL, &error);
     if (!ok) LOG_ERROR("cms_update_user: update failed: %s", error.message);
+    // A commenter can't sign in: whatever sessions it had end now.
+    if (ok && strcmp(role, "commenter") == 0) destroy_user_sessions(id_hex);
 
     bson_destroy(query);
     bson_destroy(&update);
@@ -337,6 +359,8 @@ int cms_delete_user(const char *id_hex) {
 
     bson_destroy(query);
     mongoc_collection_destroy(collection);
+    // A deleted user's open sessions must not outlive it.
+    if (ok && deleted > 0) destroy_user_sessions(id_hex);
     return (ok && deleted > 0) ? 0 : -1;
 }
 
@@ -588,4 +612,12 @@ void cms_users_ensure_usernames(void) {
     bson_destroy(command);
 
     mongoc_collection_destroy(users);
+}
+
+int cms_new_username_for_email(const char *email, char *out, size_t out_size) {
+    mongoc_collection_t *users = mongodb_manager_get_collection(USERS_COLLECTION);
+    if (!users) return -1;
+    username_for_email(users, email, out, out_size);
+    mongoc_collection_destroy(users);
+    return 0;
 }

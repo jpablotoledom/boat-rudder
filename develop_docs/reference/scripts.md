@@ -609,11 +609,11 @@ an error, never a fallback to this checkout's database.
 
 ```bash
 # Debian / Ubuntu
-sudo apt install cmake gcc pkg-config libssl-dev libmongoc-dev libsodium-dev libqrencode-dev
+sudo apt install cmake gcc pkg-config libssl-dev libmongoc-dev libsodium-dev libqrencode-dev libcurl4-openssl-dev
 sudo apt install libmaxminddb-dev          # optional: GeoIP
 
 # Fedora / RHEL
-sudo dnf install cmake gcc pkgconf openssl-devel mongo-c-driver-devel libsodium-devel qrencode-devel
+sudo dnf install cmake gcc pkgconf openssl-devel mongo-c-driver-devel libsodium-devel qrencode-devel libcurl-devel
 sudo dnf install libmaxminddb-devel        # optional: GeoIP
 
 # Arch / Manjaro

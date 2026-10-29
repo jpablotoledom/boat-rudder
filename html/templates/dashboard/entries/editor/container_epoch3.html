@@ -859,6 +859,8 @@
     // so the server could not tell "unchecked" from "field absent".
     var hideAuthor = sidebar.querySelector('[name="hide_author"]');
     params.set('hide_author', hideAuthor && hideAuthor.checked ? '1' : '0');
+    var commentsClosed = sidebar.querySelector('[name="comments_closed"]');
+    params.set('comments_closed', commentsClosed && commentsClosed.checked ? '1' : '0');
     for (var i = 0; i < langs.length; i++) {
       var code = langs[i];
       var panel = sidebar.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + code + '"]');

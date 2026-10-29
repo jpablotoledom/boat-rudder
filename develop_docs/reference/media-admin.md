@@ -2,8 +2,9 @@
 
 A file manager and image library for the CMS. Admins and authors can upload images, organize
 them into directories, move and delete them, and select them from the entry editor. All routes
-are epoch 3 only (with the rules' dashboard flag, `dashboard_allowed()`) and require a valid session cookie (`require_dashboard_session()`) - any role;
-there is no per-item ownership check (see [security.md](security.md#known-gaps)). Collection
+are epoch 3 only (with the rules' dashboard flag, `dashboard_allowed()`) and require a valid session cookie - any role that opens the dashboard. An Autor sees and manages
+only their own directories and images; an Administrador every author's, and the read-only
+Observador sees every author's ([security.md](security.md#media-ownership)). Collection
 schemas are summarized in [data-model.md](data-model.md#media).
 
 ---
@@ -149,7 +150,7 @@ Shared (theme-agnostic) since the split between `html/templates/` and `html/them
 |---|---|---|
 | `media_epoch3.html` | 2 | Full page: `%s` = dirs HTML, `%s` = items HTML. Contains all inline JS. |
 | `media-directory-container_epoch3.html` | 1 | `<ul>` wrapper for directory list items |
-| `media-directory_epoch3.html` | 12 | `<li>` with hidden inputs (id × 3, name × 4, parent, author name, author id). Supports inline rename (hidden input shown on rename action). |
+| `media-directory_epoch3.html` | 13 | `<li>` with hidden inputs (id × 3, name × 4, parent, author name, author id), and after the name the owner (`owner_label`: `<span class="boat-rudder-media__dir-owner">(Me)</span>` or the owner's name, HTML-encoded; empty for an Autor). Supports inline rename (hidden input shown on rename action). |
 | `item-photo_epoch3.html` | 8 | Photo card: `%s` = id (×3), thumb path, name, id (×2), content path |
 | `media-modal_epoch3.html` | 1 | Modal wrapper: `%s` = media page HTML |
 
@@ -217,7 +218,11 @@ All routes require `require_dashboard_session()` (which, for `POST`, also checks
 token). The modal and contents routes return raw HTML (not wrapped by `buildPageWebSite()`).
 
 **Ownership and paths.** Writes go through `media_can_manage()`: an `admin` manages everything,
-an `author` only directories and images whose `author_id` is theirs. On-disk paths are built
+an `author` only directories and images whose `author_id` is theirs. Reads go through
+`media_scope()`: an `admin` or `viewer` lists every author's, an `author` only their own. For
+the first two each directory shows whose it is - "(Me)", or the owner's name, else username
+(`media_label_owners()`) - since every author has a `default`; the label is part of the
+directory's text, so the *Move to* picker shows it too. On-disk paths are built
 from the DB record - `./html/content/posts/<owner username>/<directory name>/` - never from a
 name or path sent by the client, and every component is re-validated
 (`media_dir_name_valid()`, `media_username_valid()`, `media_file_name_valid()`) before it touches

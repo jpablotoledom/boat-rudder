@@ -116,6 +116,13 @@ Collections: [data-model.md](data-model.md#comments).
   Writes go through the dashboard's guards: session, CSRF, the Observador refused.
 - The dashboard home starts with "N comments are waiting for moderation" when there are any, and
   the menu's *Content* group links *Comments*.
+- **The author is told by email** when a comment reaches *pending* - at the `POST` of
+  `/comments/verify`, or at once from a remembered browser - with the commenter's name, the text
+  and links to `/dashboard/comments` and the entry (`notify_author()`, `cms_comments_notice()`).
+  The author is the entry's `header.author_id`, else `created_by` (older entries carry only the
+  first). No email when that user is a commenter, has no email, or wrote the comment; a comment
+  approved straight from *Unverified* sends none either. Links use `public_url`, else the
+  request's host.
 
 ## 7. Mail (`src/utils/mailer.c`)
 

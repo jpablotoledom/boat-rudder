@@ -54,6 +54,7 @@ R -> COM : comments_verify(token)
 COM -> DB : find token by hash, not expired
 COM -> DB : comment -> "pending", commenter.email_verified_at = now
 COM -> DB : delete token
+COM -> DB : insert mail_queue {to: entry's author, "New comment on ..."}\n(not for their own comment; header.author_id, else created_by)
 COM --> Visitor : "Thanks - your comment is waiting\nfor a moderator" (+ remember-me cookie, option B)
 
 @enduml

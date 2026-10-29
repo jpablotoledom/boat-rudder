@@ -313,6 +313,39 @@ static int media_can_manage(const char *role, const char *user_id, const char *o
     return strcmp(role, "admin") == 0 || strcmp(user_id, owner_id) == 0;
 }
 
+// The part of the library an account sees: an Administrador and the
+// read-only Observador every author's, an Autor only their own. Returns the
+// author id to scope cms_get_media_*() to, or NULL for everything.
+static const char *media_scope(const char *role, const char *user_id) {
+    return strcmp(role, "admin") == 0 || strcmp(role, "viewer") == 0 ? NULL : user_id;
+}
+
+// Fills each directory's owner_label for a viewer who sees every author's
+// (media_scope() NULL) - "Me" for their own, the owner's name (else
+// username) for the rest - since two authors' "default" look alike. An
+// Autor only sees their own: no labels.
+static void media_label_owners(CmsMediaDirectory *dirs, size_t count, const char *role, const char *user_id) {
+    if (media_scope(role, user_id)) return;
+    for (size_t i = 0; i < count; i++) {
+        CmsMediaDirectory *d = &dirs[i];
+        if (strcmp(d->author_id, user_id) == 0) {
+            snprintf(d->owner_label, sizeof(d->owner_label), "Me");
+            continue;
+        }
+        size_t j = 0;   // the same owner as an earlier directory: its label
+        while (j < i && strcmp(dirs[j].author_id, d->author_id) != 0) j++;
+        if (j < i) {
+            memcpy(d->owner_label, dirs[j].owner_label, sizeof(d->owner_label));
+            continue;
+        }
+        char *name = cms_get_user_name_by_id(d->author_id);
+        if (name && name[0]) snprintf(d->owner_label, sizeof(d->owner_label), "%s", name);
+        else if (cms_get_username_by_id(d->author_id, d->owner_label, sizeof(d->owner_label)) != 0)
+            snprintf(d->owner_label, sizeof(d->owner_label), "unknown");
+        free(name);
+    }
+}
+
 // Upload allowlist: the formats scripts/image-optimizer.sh turns into its
 // JPEG/GIF variants, recognized by the file's magic bytes - its content, not
 // its name. Returns the extension that format is stored under (".jpg",
@@ -2606,10 +2639,12 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                         CmsMediaDirectory *dirs = NULL;
                         size_t dir_count = 0;
-                        cms_get_media_directories(&dirs, &dir_count);
+                        cms_get_media_directories(media_scope(role, user_id), &dirs, &dir_count);
+                        media_label_owners(dirs, dir_count, role, user_id);
 
                         char *content  = media_admin_page(epoch, dirs, dir_count, NULL, 0);
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Media", content);
@@ -2628,7 +2663,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_simple(ctx, "403 Forbidden", "Forbidden");
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                         const char *dir_id = get_query_param(params, param_count, "directory");
                         const char *start_str = get_query_param(params, param_count, "start");
                         const char *end_str = get_query_param(params, param_count, "end");
@@ -2638,7 +2674,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                         CmsMediaItem *items = NULL;
                         size_t item_count = 0;
-                        cms_get_media_items(dir_id[0] ? dir_id : NULL, skip, limit, &items, &item_count);
+                        cms_get_media_items(dir_id[0] ? dir_id : NULL, media_scope(role, user_id), skip, limit,
+                                            &items, &item_count);
 
                         char *html = media_admin_render_items(items, item_count, epoch);
                         char *response = build_json_response(html ? html : "");
@@ -2658,15 +2695,19 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_simple(ctx, "403 Forbidden", "Forbidden");
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                         const char *dir_id = get_query_param(params, param_count, "id");
+                        const char *scope = media_scope(role, user_id);
                         CmsMediaDirectory dir;
-                        if (!dir_id || !cms_get_media_directory_by_id(dir_id, &dir)) {
+                        if (!dir_id || !cms_get_media_directory_by_id(dir_id, &dir) ||
+                            (scope && strcmp(dir.author_id, scope) != 0)) {
                             send_simple(ctx, "404 Not Found", "Directory not found");
                         } else {
                             char username[64] = {0};
-                            cms_get_username_by_id(user_id, username, sizeof(username));
+                            cms_get_username_by_id(dir.author_id, username, sizeof(username));
                             snprintf(dir.author_name, sizeof(dir.author_name), "%s", username);
+                            media_label_owners(&dir, 1, role, user_id);
 
                             char *html = media_admin_render_directory_item(&dir, epoch);
                             char *response = build_json_response(html ? html : "");
@@ -2685,10 +2726,13 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_simple(ctx, "403 Forbidden", "Forbidden");
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                        const char *scope = media_scope(role, user_id);
                         CmsMediaDirectory *dirs = NULL;
                         size_t dir_count = 0;
-                        cms_get_media_directories(&dirs, &dir_count);
+                        cms_get_media_directories(scope, &dirs, &dir_count);
+                        media_label_owners(dirs, dir_count, role, user_id);
 
                         // Opens on the latest uploads across every directory
                         // (newest first, one page): with no directory selected,
@@ -2696,7 +2740,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         // all-directories list, and clicking a directory narrows it.
                         CmsMediaItem *items = NULL;
                         size_t item_count = 0;
-                        cms_get_media_items(NULL, 0, MEDIA_PAGE_SIZE, &items, &item_count);
+                        cms_get_media_items(NULL, scope, 0, MEDIA_PAGE_SIZE, &items, &item_count);
 
                         // ?browse=1: the theme customizer's "View images" -
                         // nothing to pick for, so no "Use selected".
@@ -3534,7 +3578,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
             char token[80] = "";
             parse_urlencoded_field(req.body, req.body_length, "token", token, sizeof(token));
             char *set_cookie = NULL;
-            char *content = comments_verify_post(epoch, token, &set_cookie);
+            char *base = public_url[0] ? strdup(public_url) : absolute_location(ctx, &req, "");
+            char *content = comments_verify_post(epoch, token, content_lang, base ? base : "", &set_cookie);
+            free(base);
             char *body = content ? buildPageWebSite(epoch, "{{SITE_NAME}} - Comment confirmed", content) : NULL;
             char headers[512];
             snprintf(headers, sizeof(headers), "Cache-Control: no-store\r\n%s", set_cookie ? set_cookie : "");
@@ -4904,7 +4950,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_simple(ctx, "403 Forbidden", "Forbidden");
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_dashboard_session_role(ctx, &req, epoch, user_id, role, sizeof(role))) {
                     char name[256];
                     parse_urlencoded_field(req.body, req.body_length, "newpath", name, sizeof(name));
 
@@ -4936,6 +4983,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             CmsMediaDirectory dir;
                             if (cms_get_media_directory_by_id(new_id, &dir)) {
                                 snprintf(dir.author_name, sizeof(dir.author_name), "%s", username);
+                                media_label_owners(&dir, 1, role, user_id);
                                 char *html = media_admin_render_directory_item(&dir, epoch);
                                 if (html) {
                                     send_html_fragment(ctx, html);
@@ -5013,6 +5061,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             char *html = NULL;
                             if (cms_get_media_directory_by_id(dir.id, &renamed)) {
                                 snprintf(renamed.author_name, sizeof(renamed.author_name), "%s", owner);
+                                media_label_owners(&renamed, 1, role, user_id);
                                 html = media_admin_render_directory_item(&renamed, epoch);
                             }
                             if (html) {

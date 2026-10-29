@@ -33,8 +33,16 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 - **Comments → Unverified**: comments whose email isn't confirmed yet, with the state of their
   confirmation email (sent / retrying with the SMTP error / failed); **Resend email** sends a new
   link, and a moderator can approve one without the email check.
+- The entry's author gets an email when a comment on it is waiting for moderation (once the
+  commenter's email is confirmed, or straight away from a remembered browser): who, the text,
+  and links to **Comments** and to the entry. Not for their own comments, nor when the author
+  has no email.
 
 **Security**
+- The media library showed an Autor every author's directories and images (the page, its
+  listing and the entry editor's picker) - only changing them was refused. An Autor now sees
+  only their own; an Administrador and the Observador still see everyone's, each directory
+  followed by whose it is - "(Me)" or the owner's name - since every author has a `default`.
 - A session whose user had been deleted kept working - and as an administrator, since an
   unreadable role fell back to "admin". Deleting a user now ends their sessions, and a role that
   can't be read opens nothing. Making someone a commenter ends their sessions too.

@@ -1,0 +1,40 @@
+@startuml extension-lifecycle
+
+title Boat Rudder - Extension states (ExtensionState)
+
+skinparam backgroundColor #FAFAFA
+skinparam state {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+[*] --> Invalid : manifest fails a check\n(name, title, version, protocol,\nexec, socket path, nav)
+[*] --> Disabled : manifest OK,\nno "enabled" document
+
+Invalid : can't be enabled;\nthe admin page shows why
+Disabled : no process
+Starting : process launched,\nsocket not answering yet
+Running : socket answers;\nrequests are forwarded
+Failed : 5 exits within 60 s,\nor fork() failed
+
+Invalid --> Disabled : manifest fixed\n(next rescan)
+Disabled --> Starting : admin enables\n(supervisor launches it)
+Starting --> Running : socket answers
+Running --> Starting : process exited\n(restart after 1 s, 2 s, ...)
+Starting --> Failed : 5th exit\nwithin 60 s
+Failed --> Disabled : admin disables
+Failed --> Starting : admin enables again\n(counters reset)
+Running --> Disabled : admin disables\n(SIGTERM, SIGKILL after 3 s)
+Starting --> Disabled : admin disables
+Running --> [*] : server stops\n(SIGTERM to every extension)
+
+note right of Running
+  Every second the supervisor checks
+  each enabled extension: process alive
+  (kill(pid, 0)) and socket answering.
+  The "enabled" choice is stored in the
+  `extensions` collection and survives
+  restarts.
+end note
+
+@enduml

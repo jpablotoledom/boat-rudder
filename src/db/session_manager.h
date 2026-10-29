@@ -50,6 +50,10 @@ int validate_session_cookie(const char *cookie_header, char *user_id_out);
 // 0 on success (including "not found"), -1 on DB error.
 int destroy_session(const char *token);
 
+// Ends every session of `user_id_hex` - the user was deleted, or can no
+// longer sign in (made a commenter). Returns 0, -1 on a bad id / DB error.
+int destroy_user_sessions(const char *user_id_hex);
+
 // Builds a "Set-Cookie: ..." header line (including trailing "\r\n") that
 // sets the session cookie to `token` with the given TTL. Adds "; Secure"
 // when ssl_enabled is set in configs/settings.conf.

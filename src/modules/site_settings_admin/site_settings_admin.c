@@ -1,4 +1,7 @@
 #include "site_settings_admin.h"
+#include "../../db/cms_site_settings.h"
+#include "../../utils/config_loader.h"
+#include "../../utils/mailer.h"
 #include "../../db/cms_entries.h"
 #include "../../db/cms_fonts.h"
 #include "../../html_builder/page_layout.h"
@@ -106,8 +109,38 @@ static char *page_options(int epoch, const char *lang, const char *selected_link
     return options;
 }
 
+// The Comments panel (settings-comments_epoch3.html). Comments can't be
+// turned on without mail, but a site that has them on keeps the checkbox
+// usable so they can be turned off.
+static char *comments_panel(int epoch, const char *mail_notice) {
+    char *tpl = load_template("dashboard/settings/settings-comments_epoch%d.html", epoch);
+    if (!tpl) return strdup("");
+    bool enabled = cms_get_comments_enabled();
+    int mail = mailer_configured();
+    char status[400];
+    if (mail) {
+        char from[300];
+        html_encode(from, mail_from, sizeof(from));
+        snprintf(status, sizeof(status), "Mail is set: sent from <strong>%s</strong>.", from);
+    } else {
+        snprintf(status, sizeof(status), "Mail is not set, so comments can't be turned on.");
+    }
+    char *notice = NULL;
+    if (mail_notice && mail_notice[0]) {
+        char *encoded = html_encode_alloc(mail_notice);
+        notice = encoded ? render_template("    <p class=\"boat-rudder-alert\">%s</p>", encoded) : NULL;
+        free(encoded);
+    }
+    char *panel = render_template(tpl, enabled ? " checked" : "", (!mail && !enabled) ? " disabled" : "",
+                                  status, notice ? notice : "", mail ? "" : " disabled");
+    free(notice);
+    free(tpl);
+    return panel ? panel : strdup("");
+}
+
 char *site_settings_general_page(int epoch, const char *lang, const char *site_name,
-                                 const SiteHomeSettings *home, const char *error_message) {
+                                 const SiteHomeSettings *home, const char *error_message,
+                                 const char *mail_notice) {
     char *page_tpl  = load_template("dashboard/settings/settings_epoch%d.html", epoch);
     char *error_tpl = load_template("dashboard/settings/settings-error_epoch%d.html", epoch);
 
@@ -115,6 +148,7 @@ char *site_settings_general_page(int epoch, const char *lang, const char *site_n
     char *encoded_name = NULL;
     char *favicons = NULL;
     char *pages = NULL;
+    char *comments = NULL;
     char *result = NULL;
 
     if (!page_tpl) goto cleanup;
@@ -125,11 +159,12 @@ char *site_settings_general_page(int epoch, const char *lang, const char *site_n
     encoded_name = html_encode_alloc(site_name ? site_name : "");
     favicons = favicon_panels(epoch);
     pages = page_options(epoch, lang, home->under_construction_page);
-    if (!encoded_name || !favicons || !pages) goto cleanup;
+    comments = comments_panel(epoch, mail_notice);
+    if (!encoded_name || !favicons || !pages || !comments) goto cleanup;
 
     result = render_template(page_tpl, error_html ? error_html : "", encoded_name, favicons,
                              BOAT_RUDDER_VERSION, home->hide_home_blog ? " checked" : "",
-                             home->under_construction ? " checked" : "", pages);
+                             home->under_construction ? " checked" : "", pages, comments);
 
 cleanup:
     free(page_tpl);
@@ -138,6 +173,7 @@ cleanup:
     free(encoded_name);
     free(favicons);
     free(pages);
+    free(comments);
     return result;
 }
 

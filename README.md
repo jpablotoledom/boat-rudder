@@ -9,6 +9,7 @@ the site.
 
 External dependencies: **OpenSSL** for the server itself; **libmongoc** and **libsodium** for
 the database-backed CMS and the dashboard; **libqrencode** for QR codes on retro browsers;
+**libcurl** to send email (blog comments' confirmation);
 **libmaxminddb** (optional) for analytics country detection; `libm`. `stb_image.h` is vendored.
 Built with **CMake**, concurrency via **POSIX threads**. Full list:
 [develop_docs/reference/third-party.md](develop_docs/reference/third-party.md).
@@ -202,6 +203,8 @@ Reference (`develop_docs/reference/`):
 | [media-admin.md](develop_docs/reference/media-admin.md) | The media library and gallery pages |
 | [analytics.md](develop_docs/reference/analytics.md) | Visit tracking, GeoIP, the report |
 | [wap-gateway.md](develop_docs/reference/wap-gateway.md) | The UDP WAP gateway |
+| [comments.md](develop_docs/reference/comments.md) | Blog comments: challenge, email confirmation, moderation, outgoing mail |
+| [extensions.md](develop_docs/reference/extensions.md) / [creating-an-extension.md](develop_docs/reference/creating-an-extension.md) | Extensions: programs that add pages to the dashboard - manifest, protocol, C SDK; step-by-step guide |
 | [qr-and-short-links.md](develop_docs/reference/qr-and-short-links.md) | QR codes and `/qr/<code>` |
 | [code-highlighting.md](develop_docs/reference/code-highlighting.md) | Server-side syntax highlighting |
 | [configuration.md](develop_docs/reference/configuration.md) | Every `configs/settings.conf` key |

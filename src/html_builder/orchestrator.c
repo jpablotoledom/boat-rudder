@@ -162,8 +162,6 @@ char *buildBlogListWebSiteAtUrl(int epoch, const char *page_title, char *html_co
     // generic page shell, which is all their layout supports.
     const char *tpl = (epoch >= EPOCH_MIDDLE) ? "page/page-blog_epoch%d.html"
                                               : "page/page_epoch%d.html";
-    // The listing shares home's backdrop ({{BODY_BACKDROP}} in its
-    // fragment, see page_layout.h); an article does not.
     return build_blog_page_internal(tpl, epoch, page_title, html_content, current_url,
                                      category_menu_html, 0);
 }

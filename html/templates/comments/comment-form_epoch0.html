@@ -1,0 +1,16 @@
+<form method="post" action="%1$s#comments">
+<h3>Leave a comment</h3>
+%2$s<p>Name:<br>
+<input name="name" value="%3$s" size="30" maxlength="%8$d"></p>
+<p>Email (never shown; we send you a link to confirm it):<br>
+<input name="email" value="%4$s" size="30" maxlength="254"></p>
+<p>Comment (up to %9$d characters):<br>
+<textarea name="text" rows="6" cols="60">%5$s</textarea></p>
+<p>Type the 5 characters drawn below:</p>
+<pre>
+%6$s</pre>
+<p><input name="captcha" size="8" maxlength="8">
+<input type="hidden" name="captcha_token" value="%7$s"></p>
+<p>Comments are published once a moderator approves them.<br>
+<input type="submit" value="Send"></p>
+</form>

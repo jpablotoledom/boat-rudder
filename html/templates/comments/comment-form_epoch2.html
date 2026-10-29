@@ -1,0 +1,13 @@
+<form method="post" action="%1$s#comments">
+<b>Leave a comment</b><br><br>
+%2$s<table border="0" cellpadding="2" cellspacing="0">
+<tr><td><font color="%10$s">Name</font></td><td><input name="name" value="%3$s" size="30" maxlength="%8$d"></td></tr>
+<tr><td valign="top"><font color="%10$s">Email</font></td><td><input name="email" value="%4$s" size="30" maxlength="254"><br><font color="%10$s" size="1">Never shown; we send you a link to confirm it.</font></td></tr>
+<tr><td valign="top"><font color="%10$s">Comment</font></td><td><textarea name="text" rows="6" cols="50">%5$s</textarea><br><font color="%10$s" size="1">Up to %9$d characters.</font></td></tr>
+<tr><td valign="top"><font color="%10$s">Challenge</font></td><td><img src="%6$s" width="200" height="70" alt="[Challenge image]"><br>
+<font color="%10$s" size="1">Type the characters in the image:</font><br>
+<input name="captcha" size="8" maxlength="8"><input type="hidden" name="captcha_token" value="%7$s"></td></tr>
+<tr><td></td><td><font color="%10$s" size="1">Comments are published once a moderator approves them.</font><br>
+<input type="submit" value="Send"></td></tr>
+</table>
+</form>

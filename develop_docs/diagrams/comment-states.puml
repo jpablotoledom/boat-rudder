@@ -1,0 +1,29 @@
+@startuml comment-states
+
+title Boat Rudder - A comment's life (comments.status)
+
+skinparam backgroundColor #FAFAFA
+skinparam state {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+[*] --> Unverified : form sent\n(captcha OK)
+[*] --> Pending : form sent from a browser\nwhose email is already verified\n(remembered, option B)
+
+Unverified : waits for the email link
+Pending : waits for a moderator;\nnot public
+Approved : shown under the entry
+Rejected : kept for the record;\nnever shown
+
+Unverified --> Pending : link opened and\nconfirmed (POST)
+Unverified --> [*] : not confirmed in 24 h\n(deleted by cleanup)
+Pending --> Approved : moderator approves
+Pending --> Rejected : moderator rejects
+Approved --> Rejected : moderator hides it
+Rejected --> Approved : moderator restores it
+Approved --> [*] : deleted
+Rejected --> [*] : deleted
+Pending --> [*] : deleted
+
+@enduml

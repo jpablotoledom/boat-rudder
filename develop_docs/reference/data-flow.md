@@ -51,6 +51,11 @@ main()
   │     port, starts the gateway thread. Failure → warning, server continues.
   │     See wap-gateway.md.
   │
+  ├─ extensions_start()
+  │     reads extensions/*/extension.conf and which are enabled (collection
+  │     `extensions`), starts the supervisor thread, which launches the program of
+  │     every enabled extension within a second. See extensions.md.
+  │
   └─ while (running) sleep(1)   until SIGINT/SIGTERM  ─────────────────►  see §7
 ```
 
@@ -530,6 +535,9 @@ SIGINT / SIGTERM
   └─ handle_shutdown():  running = 0           (main's _Atomic flag)
 
 main loop exits (≤ 1 s)
+  │
+  ├─ extensions_stop()
+  │     join the supervisor; SIGTERM every extension, SIGKILL after 3 s; remove sockets
   │
   ├─ wap_gateway_stop()
   │     gateway_running = 0; join gateway thread (≤ 500 ms poll timeout); close UDP sockets

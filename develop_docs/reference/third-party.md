@@ -62,6 +62,7 @@ Font License 1.1). Fonts uploaded through the dashboard are the site operator's 
 | libmongoc 1.x (+ libbson) | yes | MongoDB | `pkg-config libmongoc-1.0` |
 | libsodium | yes | Argon2id, CSPRNG | `pkg-config libsodium` |
 | libqrencode | yes | QR matrices | `find_library(qrencode)` (no pkg-config file) |
+| libcurl | yes | Outgoing mail over SMTP(S) (`utils/mailer.c`) | `pkg-config libcurl` |
 | libm | yes | Math (image scaling) | linked explicitly |
 | libmaxminddb | **optional** | GeoIP country lookup; defines `HAVE_MAXMINDDB` | `pkg-config libmaxminddb` |
 

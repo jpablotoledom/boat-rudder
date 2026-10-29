@@ -33,6 +33,8 @@ illustrated with diagrams. For deeper detail see:
 - [reference/themes.md](reference/themes.md) and [reference/fonts.md](reference/fonts.md) - themes, site settings, font library.
 - [reference/analytics.md](reference/analytics.md) - visit tracking, GeoIP and the report.
 - [reference/wap-gateway.md](reference/wap-gateway.md) - the UDP WAP gateway and WBXML.
+- [reference/comments.md](reference/comments.md) - blog comments: the form and its own challenge, email confirmation, moderation, outgoing mail.
+- [reference/extensions.md](reference/extensions.md) - extensions: separate programs that add pages to the dashboard (protocol, SDK), and [reference/creating-an-extension.md](reference/creating-an-extension.md), a step-by-step guide to building one.
 - [reference/qr-and-short-links.md](reference/qr-and-short-links.md), [reference/code-highlighting.md](reference/code-highlighting.md), [reference/templates-catalog.md](reference/templates-catalog.md).
 - [reference/configuration.md](reference/configuration.md) - every `configs/settings.conf` key.
 - [reference/security.md](reference/security.md) - every defense and the known gaps.
@@ -317,7 +319,7 @@ skinparam package {
 
 package "html/themes/<theme>/ (per theme)" {
     object "layout/layout_epoch<N>.html" as LAYOUT {
-      {{PAGE_TITLE}}, {{CONTENT}}, {{BODY_BACKGROUND}}
+      {{PAGE_TITLE}}, {{CONTENT}}
       epoch 3: {{THEME_COLORS}}
       epoch 1/2: {{COLOR_*}}
     }

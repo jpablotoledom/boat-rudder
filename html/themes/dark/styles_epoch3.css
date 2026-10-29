@@ -87,11 +87,15 @@ h3 {
 
 .boat-rudder-navbar__title {
   font-family: var(--br-font-navbar-logo, Milonga), Georgia, serif;
-  transition: all 1s;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(0);
   padding: 20px;
   font-size: 28px;
   width: max-content;
-  margin-right: 300px;
+  white-space: nowrap;
+  transition: top 0.8s ease, left 0.8s ease, transform 0.8s ease, font-size 0.8s ease;
 }
 
 .boat-rudder-navbar__title a {
@@ -100,29 +104,36 @@ h3 {
 }
 
 .boat-rudder-navbar__title--onslidelogo {
-  position: absolute;
-  color: var(--br-color-navbar-logo, #ffffff);
+  top: 10vh;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 6vw;
   z-index: 2;
-  margin: 13vh auto;
-  transition: all 1s;
 }
 
 .boat-rudder-navbar__menu {
   display: flex;
   justify-content: center;
   padding: 16px;
-  transition: all 1s;
-  width: 350px;
+  margin-left: 250px;
+  transition: margin-left 0.8s ease, top 1s;
   z-index: 2;
-  position: absolute;
-  margin-left: 300px;
 }
 
 .boat-rudder-navbar__menu--onslidelogo {
-  transition: all 1s;
-  position: relative;
   margin-left: 0;
+}
+
+/* Under construction (menu_without_items()): #navbarMenu holds only the
+   mobile user link, hidden at desktop widths, so there is no menu to make
+   room for - drop its margin and keep the title centred in both states. */
+.boat-rudder-navbar__content:not(:has(.boat-rudder-navbar__menu-item:not(.boat-rudder-navbar__menu-item--user))) .boat-rudder-navbar__menu {
+  margin-left: 0;
+}
+
+.boat-rudder-navbar__content:not(:has(.boat-rudder-navbar__menu-item:not(.boat-rudder-navbar__menu-item--user))) .boat-rudder-navbar__title {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .boat-rudder-navbar__separator {
@@ -832,12 +843,117 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder-theme__item:hover { background: #2a2a2a; color: #fff; }
 .boat-rudder-theme__item--active { color: var(--br-color-navbar-menu-active, #00ffab); font-weight: bold; }
 
+/* Search - a magnifier just left of the theme switcher (menu-search_epoch3.html);
+   it opens a search box below it, submitted to /search. */
+.boat-rudder-navbar-search { position: relative; display: inline-block; }
+.boat-rudder-navbar-search__btn {
+  background: none; border: 1px solid transparent; line-height: 0;
+  color: var(--br-color-navbar-menu-normal, #ffffff);
+  padding: 5px 8px; cursor: pointer; border-radius: 3px;
+}
+.boat-rudder-navbar-search__btn:hover {
+  color: var(--br-color-navbar-menu-hover, #98ffdd);
+}
+.boat-rudder-navbar-search__form {
+  display: none; position: absolute; right: 0; top: 100%; z-index: 50;
+  background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px;
+  padding: 6px;
+}
+.boat-rudder-navbar-search--open .boat-rudder-navbar-search__form { display: block; }
+.boat-rudder-navbar-search__input {
+  width: 240px; padding: 6px 8px; font: inherit; font-size: 15px;
+  color: #ffffff; background: #000000;
+  border: 1px solid #3a3a3a; border-radius: 3px;
+}
+
+/* Search page (/search, search/search_epoch3.html). */
+.boat-rudder-search { max-width: 760px; margin: 40px auto; }
+.boat-rudder-search__form { display: flex; gap: 8px; margin: 16px 0; }
+.boat-rudder-search__input {
+  flex: 1; min-width: 0; padding: 8px 10px; font: inherit;
+  color: #ffffff; background: #000000;
+  border: 1px solid #3a3a3a; border-radius: 3px;
+}
+.boat-rudder-search__btn {
+  padding: 8px 18px; font: inherit; font-weight: bold; cursor: pointer;
+  color: #000000; background: var(--br-color-navbar-menu-active, #00ffab);
+  border: none; border-radius: 3px;
+}
+.boat-rudder-search__summary { color: #a0a0a0; }
+.boat-rudder-search__results { list-style: none; margin: 0; padding: 0; }
+.boat-rudder-search-result {
+  padding: 14px 0; border-bottom: 1px solid var(--br-color-table-border, #3a3a3a);
+}
+.boat-rudder-search-result__title { font-size: 1.15em; font-weight: bold; }
+.boat-rudder-search-result__meta {
+  margin: 2px 0 6px; font-size: 0.85em;
+  color: var(--br-color-blog-list-item-date, #a0a0a0);
+}
+.boat-rudder-search-result__snippet { margin: 0; }
+.boat-rudder-search-result__mark {
+  background: none; font-weight: bold;
+  color: var(--br-color-navbar-menu-active, #00ffab);
+}
+
+/* Blog comments (comments/comments_epoch3.html): the approved comments under
+   a blog entry and the form - name, email, comment, challenge image. */
+.boat-rudder-comments {
+  margin-top: 40px; padding-top: 20px;
+  border-top: 1px solid var(--br-color-table-border, #3a3a3a);
+}
+.boat-rudder-comments__title { margin: 0 0 12px; }
+.boat-rudder-comments__notice {
+  padding: 10px 12px; border-radius: 3px; background: #0d3a24; color: #b3ffd9;
+}
+.boat-rudder-comments__list { list-style: none; margin: 0 0 24px; padding: 0; }
+.boat-rudder-comments__empty { color: #a0a0a0; padding: 8px 0; }
+.boat-rudder-comments__closed { color: #a0a0a0; font-style: italic; }
+.boat-rudder-comment {
+  padding: 12px 0; border-bottom: 1px solid var(--br-color-table-border, #3a3a3a);
+}
+.boat-rudder-comment__meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.boat-rudder-comment__date { font-size: 0.85em; color: var(--br-color-blog-list-item-date, #a0a0a0); }
+.boat-rudder-comment__client { vertical-align: -5px; margin-right: 2px; }
+.boat-rudder-comment__text { margin: 0; overflow-wrap: anywhere; }
+.boat-rudder-comment__reply {
+  margin: 10px 0 0 24px; padding: 4px 0 4px 12px;
+  border-left: 3px solid var(--br-color-table-border, #3a3a3a);
+}
+.boat-rudder-comment__badge {
+  font-size: 0.75em; padding: 1px 6px; border-radius: 3px;
+  background: #2c2c30; color: #a0a0a8;
+}
+.boat-rudder-comments__form { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.boat-rudder-comments__form-title { margin: 0; }
+.boat-rudder-comments__row { display: flex; flex-direction: column; gap: 4px; }
+.boat-rudder-comments__label small { color: #a0a0a0; }
+.boat-rudder-comments__input,
+.boat-rudder-comments__textarea {
+  padding: 8px 10px; font: inherit; color: #ffffff; background: #000000;
+  border: 1px solid #3a3a3a; border-radius: 3px;
+}
+.boat-rudder-comments__textarea { resize: vertical; min-height: 120px; }
+.boat-rudder-comments__captcha { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.boat-rudder-comments__captcha-image { border-radius: 3px; border: 1px solid #3a3a3a; }
+.boat-rudder-comments__captcha-input { width: 140px; text-transform: uppercase; letter-spacing: 2px; }
+/* The honeypot: out of sight and out of reach for people, there for bots. */
+.boat-rudder-comments__hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.boat-rudder-comments__privacy { margin: 0; font-size: 0.85em; color: #a0a0a0; }
+.boat-rudder-comments__error {
+  margin: 0; padding: 10px 12px; border-radius: 3px; background: #3a0d12; color: #ffb3ba;
+}
+.boat-rudder-comments__btn {
+  align-self: flex-start; padding: 8px 20px; font: inherit; font-weight: bold; cursor: pointer;
+  color: #000000; background: var(--br-color-navbar-menu-active, #00ffab);
+  border: none; border-radius: 3px;
+}
+.boat-rudder-comments-verify { max-width: 640px; margin: 40px auto; }
+
 /*XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX */
 /* RESPONSIVE */
 @media (max-width: 1200px) {
   .boat-rudder-navbar__title--onslidelogo {
-    margin-left: -8vw;
-    margin-top: 13vw;
+    top: 11vw;
   }
   .boat-rudder-home-blog, 
   .boat-rudder-footer {
@@ -846,13 +962,11 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 }
 
 @media (max-width: 960px) {
+  /* No menu beside it here (it is behind the hamburger), so the title
+     stays centred in both states and only moves up and shrinks. */
   .boat-rudder-navbar__title {
-    margin-right: 0;
-  }
-
-  .boat-rudder-navbar__title--onslidelogo {
-    font-size: 6vw;
-    margin: 10vh auto;
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .boat-rudder-navbar__content {
@@ -871,13 +985,6 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     margin-left: 0;
     width: 100%;
     padding: 0;
-    /* display: none; */
-    /* left: 0;
-    width: 100%;
-    margin-left: 0;
-    flex-direction: column;
-    background-color: #000000;
-    z-index: 999; */
   }
 
   .boat-rudder-navbar__menu--open {
@@ -940,6 +1047,10 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 
 @media (max-width: 768px) {
   .boat-rudder-youtube-embed__video iframe { width: 450px; height: 253px; }
+  .boat-rudder-navbar__title--onslidelogo {
+    top: 13vw;
+    font-size: 40px;
+  }
 }
 
 /* Below 600px the theme and language selectors live inside the hamburger
@@ -961,8 +1072,12 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     font-size: 16px; padding: 6px 12px; border-color: currentColor;
   }
   .boat-rudder-navbar__menu-options .boat-rudder-navbar-lang__menu,
-  .boat-rudder-navbar__menu-options .boat-rudder-navbar-theme__menu {
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-theme__menu,
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-search__form {
     right: auto; left: 50%; transform: translateX(-50%);
+  }
+  .boat-rudder-navbar__menu-options .boat-rudder-navbar-search__btn {
+    padding: 8px 12px; border-color: currentColor;
   }
 
   .boat-rudder-home-blog-item {
@@ -988,13 +1103,9 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     padding-top: 45%;
   }
 
-  .boat-rudder-navbar__title {
-    margin-left: 35px;
-  }
-
   .boat-rudder-navbar__title--onslidelogo {
-    margin-top: 22%;
-    font-size: 28px;
+    top: 20vw;
+    font-size: 38px;
   }
 
   .boat-rudder-youtube-embed__video iframe { width: auto; height: auto; }

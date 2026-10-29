@@ -6,3 +6,5 @@ configs
 *.
 !.gitignore
 dist
+/extensions/
+/run/

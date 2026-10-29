@@ -19,9 +19,18 @@ char *media_admin_render_directory_item(const CmsMediaDirectory *dir, int epoch)
     char *tpl = load_template("dashboard/media/media-directory_epoch%d.html", epoch);
     if (!tpl) return NULL;
 
-    // 12 %s: id, id, id, name, id, name, id, name, id, parent, author_name, author_id
+    // The owner, after the name: muted, and in the label's text, so the
+    // "Move to" picker (which copies that text) tells the two apart too.
+    char owner[sizeof(dir->owner_label) * 6] = "";
+    char owner_html[sizeof(owner) + 80] = "";
+    if (dir->owner_label[0]) {
+        html_encode(owner, dir->owner_label, sizeof(owner));
+        snprintf(owner_html, sizeof(owner_html), " <span class=\"boat-rudder-media__dir-owner\">(%s)</span>", owner);
+    }
+
+    // 13 %s: id, id, id, name, owner, id, name, id, name, id, parent, author_name, author_id
     char *result = render_template(tpl,
-        dir->id, dir->id, dir->id, dir->name,
+        dir->id, dir->id, dir->id, dir->name, owner_html,
         dir->id, dir->name, dir->id, dir->name,
         dir->id, dir->parent, dir->author_name, dir->author_id);
 

@@ -53,6 +53,7 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | Path | Query | Module / handler | Response |
 |---|---|---|---|
 | `/` | - | `buildHomeWebSite()` (orchestrator: banner, home content, blog list) | Home page |
+| `/` *(no `Host`, no `?site=`, `site_directory` set)* | `site` | `site_page()` | Site chooser for `Host`-less browsers behind a multi-site front (see `site_key` in [configuration.md](configuration.md)) |
 | `/blog` | - | `blog_list()` + `category_menu_render()` + `buildBlogListWebSiteAtUrl()` | Blog listing (≤ `BLOG_LIST_LIMIT` = 50) |
 | `/blog/category/<slug>` | - | `blog_list_category()`; `<slug>` matched against `slugify(category name)` | Filtered listing, `404` if no category matches |
 | `/blog/categories` | `return` | `category-menu/category-menu-page_epoch<N>.html` | Full category menu + back link. Only epochs with that template (today: −1); others `404` |
@@ -60,6 +61,10 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |
 | `/menu` | `return` | `menu/menu-page_epoch<N>.html` | Full nav menu + back link - the target of WML's compact `[Menu]` link. Only epochs with that template (today: −1); others `404` |
+| `/comments/captcha` | `t`, `format` | `captcha_token_gif()` / `captcha_token_wbmp()` | The comment form's challenge for epochs 1-2: `200 image/gif`, `no-store`, drawn again from the token; with `format=wbmp`, WAP's `image/vnd.wap.wbmp`; `404` unless the token is the site's own and unexpired ([comments.md](comments.md#4-the-challenge-srcutilscaptchac)) |
+| `/blog/<link>/comment` | `step`, `comment` | `comments_wap_form_page()` / `comments_wap_sent_page()` | WAP's comment form, a page of its own: step 1 (name, email, text), `?step=2` (challenge and Send), `?comment=sent\|pending` (the thanks after sending). Other epochs: `302 /blog/<link>#comments`. `404` when the entry takes no comments |
+| `/comments/verify` | `token` | `comments_verify_page()` | Epoch any. The email link: a *Confirm* button (`POST /comments/verify`), or "link expired" ([comments.md](comments.md)) |
+| `/search` | `q` | `search_page()` | Search form and the published blog entries and pages matching `q` ([rendering.md](rendering.md#search-search)) |
 | `/language` | `return` | `language_page()` | Language picker page |
 | `/language/set` | `code`, `return` | inline | `302` to `return` (sanitized, absolute URL) with `Set-Cookie: lang=<code>; Max-Age=31536000` when `code` is a configured language |
 | `/theme` | `return` | `theme_page()` | Theme picker page. Templates exist for epochs 1-3 only; others get `500` |
@@ -86,6 +91,16 @@ Query parameters understood on **every** route (read before routing, see
 
 ---
 
+## Comments (`POST`)
+
+| Path | Fields | Handler | Response |
+|---|---|---|---|
+| `/blog/<link>/comments` | `name`, `email`, `text`, `captcha`, `captcha_token`, `website` (honeypot, epoch 3 only) | `comments_post()` | Every epoch. `302 /blog/<link>?comment=sent\|pending#comments` (an absolute URL built from `Host`; epochs −1-1 also keep `lang`, 1-2 `theme`, and epochs −1 and 1 have no `#comments`; WAP goes to `/blog/<link>/comment?comment=…` instead, and a refused WAP comment gets its error page). A request without `Host` (NCSA Mosaic 2) gets the entry and its notice as a `200` instead - no redirect can name the server for it, or the entry again with the form and why, `404` for no such published blog entry |
+| `/comments/verify` | `token` | `comments_verify_post()` | Confirms the comment (→ pending), sets the `br_commenter` cookie; or "link expired" |
+
+No session and no CSRF token: the challenge token (signed, single use, time-bounded) plays that
+role. See [comments.md](comments.md).
+
 ## Authentication
 
 | Method | Path | Guard | Handler | Response |
@@ -109,6 +124,13 @@ title `{{SITE_NAME}} - Dashboard`.
 | `POST` | `/dashboard/entries/new` | E3, S+R | `cms_create_entry()` | Creates a draft (`page` for admin, `blog` for author), `302` to its editor |
 | `GET` | `/dashboard/entries/<id>/edit` | E3, S+R, Own | `entry_editor_page()` | `404` if unknown |
 | `POST` | `/dashboard/entries/<id>/delete` | E3, A | `cms_delete_entry()` | `302 /dashboard` |
+| `GET` | `/dashboard/comments` | E3, S+R | `comments_admin_page()` | `?status=pending\|approved\|rejected\|unverified`, `?done=` notice. An author sees comments on their own blog entries only ([comments.md](comments.md#6-moderation-dashboardcomments-srcmodulescomments_admin)) |
+| `POST` | `/dashboard/comments/<id>/approve` · `/reject` · `/delete` · `/resend` | E3, S+R, Own entry | `cms_comments_set_status()` / `cms_comments_delete()` | Field `back` (the tab); `302 /dashboard/comments?status=<back>&done=…` |
+| `GET` | `/dashboard/comments/<id>/reply` | E3, S+R, Own entry | `comments_admin_reply_page()` | `?back=` (the tab). Administrador (any comment) or Autor (own entries) only; otherwise `302 …&done=error` |
+| `POST` | `/dashboard/comments/<id>/reply` · `/reply/delete` | E3, S+R, Own entry | `comments_reply()` / `cms_comments_delete_reply()` | Fields `text`, `back`. Saves the one reply (approves a pending comment, emails the commenter at the first one): `302 …&done=replied\|replied-approved\|reply-deleted`; a refused text shows the page again with the reason |
+| `POST` | `/dashboard/comments/commenter/<id>/block` · `/unblock` · `/block-delete` | E3, A | `cms_comments_block()` | Block (and delete everything from) a commenter's email |
+| `POST` | `/dashboard/settings/comments` | E3, A | `cms_update_comments_enabled()` | Field `comments_enabled`; can't turn on without mail |
+| `POST` | `/dashboard/settings/mail/test` | E3, A | `mailer_enqueue()` | Test email to the admin's own address; `302 /dashboard/settings?mail=queued\|no-email\|failed#comments` |
 | `GET` | `/dashboard/categories` | E3, A | `categories_admin_list()` | |
 | `GET`/`POST` | `/dashboard/categories/new` | E3, A | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
 | `GET`/`POST` | `/dashboard/categories/<id>/edit` | E3, A | same / `cms_update_category()` | |
@@ -164,6 +186,9 @@ All **E3, A**. Detailed behavior in [themes.md](themes.md) and [fonts.md](fonts.
 | `POST` | `/dashboard/settings/updates/install` | `confirm_password()`, `updates_admin_request("install")` | Fields `password` (the admin's, again) and `version` (a signed release newer than the running one, from the last check). Queues the request and starts the updater (`systemd-run`); `302` back, or with `?error=password\|busy\|version\|unavailable\|launch` |
 | `POST` | `/dashboard/settings/updates/rollback` | `confirm_password()`, `updates_admin_request("rollback")` | Field `password`. Undoes the update that installed the running version; `302` back, or `?error=…` (`rollback` when there is none) |
 | `GET` | `/dashboard/api/updates/progress` | `updates_admin_progress_json()` | `{id, state, stage, message, log}` of the last run - `state`: `none`, `queued`, `running`, `done`, `failed`, `rolled-back`; `log` the tail of `.boat-rudder/last-run.log`. Polled by `html/assets/js/updates.js` |
+| `GET` | `/dashboard/settings/extensions` | `extensions_rescan()`, `extensions_admin_page()` | Admin. Every extension in `extensions/`, its state and Enable/Disable ([extensions.md](extensions.md)); query `error` shows a message |
+| `POST` | `/dashboard/settings/extensions/<name>/enable` · `/disable` | `extensions_set_enabled()` | Admin. Stores the choice and starts/stops the process; `302` back, or with `?error=` for an unknown/unusable extension or a DB error |
+| `GET` `HEAD` `POST` | `/dashboard/ext/<name>/…` | `serve_extension()` → `extensions_forward()` | Any signed-in role, epoch 3 (dashboard guard, CSRF on POST, viewer's POSTs refused). Forwarded to the enabled extension `<name>`; `404` when unknown or disabled, `503` when not running or no answer, `502` on a malformed answer ([extensions.md](extensions.md#5-protocol-1)) |
 | `GET` | `/dashboard/settings/fonts` | `fonts_admin_list()` | Query `error` shows a message |
 | `POST` | `/dashboard/settings/fonts/upload` | `cms_add_font()` | Multipart `name`, `file` (`.ttf/.otf/.woff/.woff2`) |
 | `POST` | `/dashboard/settings/fonts/<id>/delete` | `cms_delete_font()` + file removal | |

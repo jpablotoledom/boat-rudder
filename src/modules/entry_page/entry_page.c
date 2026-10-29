@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 // Widest an image may be drawn on the retro epochs, in pixels.
 //
@@ -197,12 +198,122 @@ static char *retro_safe_paragraph_text(const char *text, int epoch) {
     return out;
 }
 
+// Copies the value of `attr` (`attr="..."` or `attr='...'`) inside the tag
+// [tag, end) into `out`; "" when absent or longer than `out_size`.
+static void tag_attr(const char *tag, const char *end, const char *attr, char *out, size_t out_size) {
+    size_t alen = strlen(attr);
+    out[0] = '\0';
+    for (const char *p = tag + 1; p + alen + 2 < end; p++) {
+        if ((p[-1] != ' ' && p[-1] != '\t' && p[-1] != '\n') ||
+            strncasecmp(p, attr, alen) != 0 || p[alen] != '=')
+            continue;
+        char quote = p[alen + 1];
+        if (quote != '"' && quote != '\'') return;
+        const char *v = p + alen + 2;
+        const char *close = memchr(v, quote, (size_t)(end - v));
+        if (!close || (size_t)(close - v) >= out_size) return;
+        memcpy(out, v, (size_t)(close - v));
+        out[close - v] = '\0';
+        return;
+    }
+}
+
+// WML 1.1 is strict XML with a tiny vocabulary, and a WAP browser that meets
+// anything outside it shows nothing at all - UC Browser on Java ME gives a
+// blank screen for the whole deck. The dashboard's rich-text editor, though,
+// stores ordinary HTML: <p> (inside the template's own <p>), <span>, <div>,
+// headings, attributes like style="...". So for WML the paragraph is rebuilt
+// from what WML does have:
+//   - b/i/u/em/strong/big/small kept, attributes dropped - except inside
+//     an <a>, whose content model is text, <br/> and <img> only;
+//   - <a> kept with its href only, <img> with src and alt, self-closed;
+//   - br, and the end of any block (p, div, h1-h6, blockquote, li), become
+//     <br/>; list items open with "- " (see build_epoch_response.c's
+//     wml_strip_lists() for the same convention);
+//   - every other tag, and comments, dropped - their text stays;
+//   - '$' doubled: a lone one starts a WML variable reference.
+static char *wml_safe_paragraph_text(const char *text) {
+    static const char *const inline_tags[] = { "b", "i", "u", "em", "strong", "big", "small" };
+    static const char *const block_tags[] = { "p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
+                                              "blockquote", "li" };
+    char *out = strdup("");
+    int in_link = 0;
+    const char *p = text;
+    while (out && *p) {
+        if (*p == '$') { out = str_append(out, "$$"); p++; continue; }
+        if (*p != '<') {
+            char one[2] = { *p, '\0' };
+            out = str_append(out, one);
+            p++;
+            continue;
+        }
+        if (strncmp(p, "<!--", 4) == 0) {
+            const char *c = strstr(p + 4, "-->");
+            p = c ? c + 3 : p + strlen(p);
+            continue;
+        }
+        const char *end = strchr(p, '>');
+        if (!end) { out = str_append(out, "&lt;"); p++; continue; }
+
+        const char *n = p + 1;
+        int closing = *n == '/';
+        if (closing) n++;
+        char name[16];
+        size_t len = 0;
+        while (len + 1 < sizeof(name) && ((*n >= 'a' && *n <= 'z') || (*n >= 'A' && *n <= 'Z') ||
+                                          (*n >= '0' && *n <= '9')))
+            name[len++] = (char)(*n++ | 0x20);
+        name[len] = '\0';
+
+        char tag[512];
+        tag[0] = '\0';
+        if (strcmp(name, "br") == 0) {
+            snprintf(tag, sizeof(tag), "<br/>");
+        } else if (strcmp(name, "li") == 0 && !closing) {
+            snprintf(tag, sizeof(tag), "- ");
+        } else if (strcmp(name, "a") == 0) {
+            char href[400];
+            tag_attr(p, end, "href", href, sizeof(href));
+            if (closing && in_link) snprintf(tag, sizeof(tag), "</a>");
+            else if (!closing && !in_link) snprintf(tag, sizeof(tag), "<a href=\"%s\">", href[0] ? href : "/");
+            in_link = !closing;
+        } else if (strcmp(name, "img") == 0) {
+            char src[300], alt[150];
+            tag_attr(p, end, "src", src, sizeof(src));
+            tag_attr(p, end, "alt", alt, sizeof(alt));
+            if (src[0]) snprintf(tag, sizeof(tag), "<img src=\"%s\" alt=\"%s\"/>", src, alt);
+        } else {
+            for (size_t i = 0; !in_link && i < sizeof(inline_tags) / sizeof(inline_tags[0]); i++)
+                if (strcmp(name, inline_tags[i]) == 0)
+                    snprintf(tag, sizeof(tag), "<%s%s>", closing ? "/" : "", name);
+            // Nested blocks (</p></li>) close on one line, not two.
+            size_t olen = strlen(out);
+            int after_br = olen >= 5 && strcmp(out + olen - 5, "<br/>") == 0;
+            for (size_t i = 0; closing && !after_br && i < sizeof(block_tags) / sizeof(block_tags[0]); i++)
+                if (strcmp(name, block_tags[i]) == 0)
+                    snprintf(tag, sizeof(tag), "<br/>");
+        }
+        out = str_append(out, tag);
+        p = end + 1;
+    }
+
+    // A closing block tag ends the text with a break the template's own </p>
+    // already gives.
+    static const char BR[] = "<br/>";
+    size_t n = out ? strlen(out) : 0;
+    while (n >= sizeof(BR) - 1 && strcmp(out + n - (sizeof(BR) - 1), BR) == 0)
+        out[n -= sizeof(BR) - 1] = '\0';
+    return out;
+}
+
 static char *render_paragraph(const CmsContentBlock *block, int epoch) {
     char *tpl = load_template("elements/paragraph/paragraph_epoch%d.html", epoch);
     if (!tpl) return NULL;
 
     char *expanded = expand_newlines(block->text, epoch);
-    char *text = expanded ? retro_safe_paragraph_text(expanded, epoch) : NULL;
+    char *text = !expanded ? NULL
+               : epoch == EPOCH_WML ? wml_safe_paragraph_text(expanded)
+               : retro_safe_paragraph_text(expanded, epoch);
     free(expanded);
     char *result;
     if (!text) {

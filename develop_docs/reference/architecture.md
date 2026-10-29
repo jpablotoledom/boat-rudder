@@ -10,7 +10,8 @@ all named `boat-rudder`.
 
 Its core dependency is OpenSSL; the database-backed CMS and the dashboard additionally depend on
 **libmongoc** (MongoDB) and **libsodium** (Argon2id password hashing, CSPRNG); retro epochs'
-QR codes need **libqrencode**, and analytics can use **libmaxminddb** (optional) for country
+QR codes need **libqrencode**, blog comments' confirmation email **libcurl** (SMTP), and analytics
+can use **libmaxminddb** (optional) for country
 detection. It serves files from a configurable root directory, supports concurrent connections via
 POSIX threads, optionally enables TLS, and can run a built-in **WAP 1.x gateway** over UDP for real
 vintage phones, targeting **Linux and macOS** as primary platforms. The full dependency list,
@@ -42,6 +43,8 @@ own documents:
 | [fonts.md](fonts.md) | The uploaded font library used by the epoch 3 logo |
 | [analytics.md](analytics.md) | Visit tracking, GeoIP, the `/dashboard/analytics` report |
 | [wap-gateway.md](wap-gateway.md) | The UDP WAP 1.x gateway and WBXML compiler |
+| [comments.md](comments.md) | Blog comments: the form, its challenge, email confirmation, moderation, outgoing mail |
+| [extensions.md](extensions.md) / [creating-an-extension.md](creating-an-extension.md) | Extensions: separate programs that add pages to the dashboard - protocol, SDK, how to build one |
 | [qr-and-short-links.md](qr-and-short-links.md) | QR codes for retro epochs and `/qr/<code>` short links |
 | [code-highlighting.md](code-highlighting.md) | Server-side syntax highlighting for `code-text` blocks |
 | [templates-catalog.md](templates-catalog.md) | Inventory of every template, its arguments and markers |
@@ -79,6 +82,8 @@ boat-rudder/
 │   │       ├── url_parser.c/h           # URL path / query-string splitter + QueryParam
 │   │       ├── multipart_parser.c/h     # multipart/form-data body parser (file uploads)
 │   │       └── memmem_compat.h          # Portable memmem() shim (used by multipart parser)
+│   ├── extensions/                      # Extensions: registry, supervisor, forwarding (see extensions.md)
+│   │   └── extensions.c/h
 │   ├── wap_gateway/                     # WAP 1.x gateway (see wap-gateway.md)
 │   │   ├── wap_gateway.c/h              # UDP sockets, WTP/WSP framings, rate limit, loopback fetch
 │   │   └── wbxml.c/h                    # WML parser, WBXML compiler, single-packet pagination
@@ -115,10 +120,15 @@ boat-rudder/
 │   │   ├── analytics_view/              # /dashboard/analytics report + country_continent.c
 │   │   ├── login/login.c/h              # /login form (epoch3 only) per epoch
 │   │   ├── dashboard/dashboard.c/h      # /dashboard admin home (entries table, role-based nav)
+│   │   ├── comments/comments.c/h        # Blog comments: section, form submission, email confirmation
+│   │   ├── comments_admin/              # /dashboard/comments moderation
+│   │   ├── search_page/search_page.c/h  # /search
 │   │   └── error/error.c/h              # Centralized error page content per epoch
 │   ├── db/                              # Every MongoDB access (see data-model.md)
 │   │   ├── mongodb_manager.c/h          # Client pool lifecycle, mongodb_manager_aggregate()
 │   │   ├── auth.c/h                     # Email/password verification (Argon2id via libsodium)
+│   │   ├── cms_comments.c/h             # commenters, comments, tokens, single-use challenges
+│   │   ├── cms_search.c/h               # /search query
 │   │   ├── session_manager.c/h          # Session tokens, cookies, sessions collection
 │   │   ├── bson_lang.c/h                # map<lang,string> resolution, Eng/Esp -> en/es
 │   │   ├── cms_entries.c/h              # Public entry reads (blog list, entry by link, drafts)
@@ -165,6 +175,9 @@ boat-rudder/
 │       ├── image_size.c/h               # image_intrinsic_width(): GIF header width, for
 │       │                                # sizing retro-epoch images without CSS
 │       ├── category_tags.c/h            # category_tags_render(): shared category-tag loop
+│       ├── captcha.c/h                  # The comment form's own challenge: drawing, PNG/GIF, signed token
+│       ├── client_icon.c/h              # A comment's browser/system -> icon and words
+│       ├── mailer.c/h                   # Outgoing mail: mail_queue + sender thread (libcurl SMTP)
 │       └── build_epoch_response.c/h     # Epoch-correct headers, link re-tagging, WML pagination,
 │                                        # Latin-1 transcoding; redirect/JSON/CSS variants
 ├── html/                                # Static + templated content root (CLI root directory)
@@ -191,6 +204,10 @@ boat-rudder/
 ├── data/
 │   └── GeoLite2-Country.mmdb            # Optional GeoIP database (analytics.md)
 ├── ssl/                                 # TLS certificate and key (optional)
+├── sdk/
+│   └── brext.h / brext.c                # C SDK compiled into every extension (extensions.md)
+├── extensions/<name>/                   # Installed extensions: extension.conf + program (gitignored)
+├── run/extensions/<name>.sock           # Their sockets, created at runtime (gitignored)
 ├── boat_rudder_builder.sh               # Entry point for every script (scripts.md)
 ├── VERSION                              # The version: --version, the startup log, the updater
 └── CMakeLists.txt                       # Build definition
@@ -320,6 +337,18 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   (`wbxml.c`) in single-packet pages of `WAP_PAGE_BYTES` = 860 bytes, and replies.
 - Its own thread; per-source-IP rate limit against UDP amplification.
 - Full description: [wap-gateway.md](wap-gateway.md).
+
+### `extensions/`
+- Finds extensions in `extensions/<name>/extension.conf`, keeps which are enabled
+  (`cms_extensions.c`, collection `extensions`), and runs a **supervisor thread** that starts the
+  program of every enabled one, restarts it with backoff and stops it on disable/shutdown
+  (`extensions_start()`/`extensions_stop()` from `main.c`).
+- `extensions_forward()` sends a `/dashboard/ext/<name>/…` request to the extension's Unix
+  socket (`run/extensions/<name>.sock`) with the verified user in `X-BR-*` headers; the router's
+  `serve_extension()` turns the answer into a page, a redirect or JSON.
+- The extension side is `sdk/brext.{h,c}`, compiled into each extension.
+- Full description: [extensions.md](extensions.md); diagram:
+  [extensions-components.puml](../diagrams/extensions-components.puml).
 
 ### `modules/analytics/` and `modules/analytics_view/`
 - `analytics_track_visit()` (called by the router for every request) increments per-day
@@ -529,7 +558,7 @@ All other source files use `#define _XOPEN_SOURCE 700` (POSIX.1-2008) uniformly 
 ### Build on macOS
 
 ```bash
-brew install openssl cmake pkg-config mongo-c-driver libsodium qrencode
+brew install openssl cmake pkg-config mongo-c-driver libsodium qrencode curl
 brew install libmaxminddb          # optional: GeoIP country detection
 cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
@@ -540,7 +569,7 @@ cmake --build build
 
 ```bash
 # Debian/Ubuntu
-sudo apt install cmake gcc pkg-config libssl-dev libmongoc-dev libsodium-dev libqrencode-dev
+sudo apt install cmake gcc pkg-config libssl-dev libmongoc-dev libsodium-dev libqrencode-dev libcurl4-openssl-dev
 sudo apt install libmaxminddb-dev   # optional: GeoIP country detection (HAVE_MAXMINDDB)
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build

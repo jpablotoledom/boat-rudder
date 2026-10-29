@@ -21,7 +21,14 @@ char *auth_login_user(const char *email, const char *password) {
         bson_iter_t iter;
         bson_iter_t id_iter;
 
-        if (bson_iter_init_find(&iter, doc, "password") && BSON_ITER_HOLDS_UTF8(&iter) &&
+        // A blog commenter is a user too, but never signs in - even if it
+        // somehow had a password.
+        bson_iter_t role_iter;
+        int commenter = bson_iter_init_find(&role_iter, doc, "role") && BSON_ITER_HOLDS_UTF8(&role_iter) &&
+                        strcmp(bson_iter_utf8(&role_iter, NULL), "commenter") == 0;
+
+        if (!commenter &&
+            bson_iter_init_find(&iter, doc, "password") && BSON_ITER_HOLDS_UTF8(&iter) &&
             bson_iter_init_find(&id_iter, doc, "_id") && BSON_ITER_HOLDS_OID(&id_iter)) {
 
             const char *stored_hash = bson_iter_utf8(&iter, NULL);

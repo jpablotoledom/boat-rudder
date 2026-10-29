@@ -123,7 +123,7 @@ epoch 3 browser below that floor sees "needs a more recent browser" on `/login` 
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
-| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN` the page opens with "Welcome back" and, on its right, a **Menu** dropdown and a **Log out** button, then has two parts (three for an Administrador). (1) **Option groups**, inside the Menu dropdown (a `<details>`, so it works without JS; a small inline script in `dashboard_epoch3.html` closes it on an outside click or Escape) - an Administrador gets `dashboard/nav-admin_epoch3.html`: *Content* (Entries, Categories, Media library, Menu), *Site* (General, Themes, Fonts, Languages, Epoch preview), *Administration* (Users, Analytics report); an Autor gets `nav-author_epoch3.html`: *Content* (Entries, Media library). (2) For an Administrador only, the **analytics summary** (`analytics_summary()`, see [analytics.md](analytics.md#dashboard-summary)). (3) **Entries pending publication** - unpublished entries only (`enabled != true`), with **+ New entry** and **View all** (`/dashboard/entries`) next to the heading: every type for an Administrador (`entries_admin_rows(epoch, lang, NULL, NULL, true, true)`), only their own `type:"blog"` entries for an Autor (`entries_admin_rows(epoch, lang, "blog", user_id, true, false)` - no Delete button). Rows: see [Entries listing](#entries-listing-srcmodulesentries_admin-embedded-in-dashboard) below. Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
+| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN` the page opens with "Welcome back" and, on its right, a **Menu** dropdown and a **Log out** button, then has two parts (three for an Administrador). (1) **Option groups**, inside the Menu dropdown (a `<details>`, so it works without JS; a small inline script in `dashboard_epoch3.html` closes it on an outside click or Escape) - an Administrador gets `dashboard/nav-admin_epoch3.html`: *Content* (Entries, Categories, Media library, Menu), *Site* (General, Themes, Fonts, Languages, Epoch preview), *Administration* (Users, Analytics report, Extensions); an Autor gets `nav-author_epoch3.html`: *Content* (Entries, Media library). Both end with an *Extensions* group listing every enabled extension's `nav=` link (`extensions_admin_nav()`, see [extensions.md](extensions.md)), absent when there is none. (2) For an Administrador only, the **analytics summary** (`analytics_summary()`, see [analytics.md](analytics.md#dashboard-summary)). (3) **Entries pending publication** - unpublished entries only (`enabled != true`), with **+ New entry** and **View all** (`/dashboard/entries`) next to the heading: every type for an Administrador (`entries_admin_rows(epoch, lang, NULL, NULL, true, true)`), only their own `type:"blog"` entries for an Autor (`entries_admin_rows(epoch, lang, "blog", user_id, true, false)` - no Delete button). Rows: see [Entries listing](#entries-listing-srcmodulesentries_admin-embedded-in-dashboard) below. Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
 | `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()` - Administrador only, an Autor session gets `302 /dashboard`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
 | `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
 | `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
@@ -145,7 +145,7 @@ epoch 3 browser below that floor sees "needs a more recent browser" on `/login` 
 | `/dashboard/entries/<id>/delete` | `POST` | `require_admin_session()` - Administrador only; an Autor can never delete entries, even their own. `cms_delete_entry()`, `302 /dashboard`. |
 | `/dashboard/api/entries/<id>/...` | `POST` | The editor's five AJAX endpoints (`meta`, `header`, `content`, `blocks`, `blocks/<block_id>/delete`). All share the same gate: `require_dashboard_session_role()`, `404 {"ok":false,"error":"not found"}` if `<id>` doesn't resolve, `403 {"ok":false,"error":"forbidden"}` if `!can_edit_entry()`. Payloads and responses in [entry-editor.md](entry-editor.md). |
 | `/dashboard/api/block-preview` | `POST` | `require_dashboard_session()` - any role. Renders one block as epoch 3 would, for the editor ([entry-editor.md](entry-editor.md#block-preview)). |
-| `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session()` - any role; writes also `require_dashboard_session_role()` + `media_can_manage()` (an `author` only touches their own directories/images). See [media-admin.md](media-admin.md). |
+| `/dashboard/media`, `/dashboard/api/media/...` | `GET`/`POST` | `require_dashboard_session_role()` - any role; reads scoped by `media_scope()` (an `author` sees only their own directories/images, an `admin` or `viewer` everyone's), writes by `media_can_manage()` (an `author` only touches their own). See [media-admin.md](media-admin.md). |
 | `/dashboard/settings`, `/dashboard/settings/themes*`, `/dashboard/settings/preview`, `/dashboard/settings/fonts*`, `/dashboard/settings/browsers*`, `/dashboard/settings/updates*`, `/dashboard/api/theme-assets/*`, `/dashboard/api/browsers*` | `GET`/`POST` | **`EPOCH_MODERN` only**, `require_admin_session()`. Site name, themes (activate, colors, banner, footer, logo, CSS), epoch preview, font library. See [themes.md](themes.md), [fonts.md](fonts.md) and the full list in [routes.md](routes.md#settings-themes-fonts-preview). |
 | `/dashboard/analytics` | `GET` | **`EPOCH_MODERN` only**, `require_admin_session()`. Visit report by period. See [analytics.md](analytics.md#the-report). |
 | `/dashboard/users` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()`. Renders `users_admin_list(epoch, NULL)`: every `users` document sorted by email, with its username and role label ("Administrator"/"Author"/"Viewer" - a missing `role` field reads as `"admin"`/"Administrator"). |
@@ -384,7 +384,14 @@ an Administrador sees - every menu, the analytics summary, every entry, the entr
 settings page - and can change nothing; for a public demo account). A viewer's writes are
 refused in one place, `require_dashboard_session()` (see [security.md](security.md#roles)), and
 every dashboard page it opens starts with `dashboard/readonly-notice_epoch3.html`, put there by
-`page_layout_wrap()` when `request_user_read_only()` says so. A `users` document with no `role` field (the original seed account) is
+`page_layout_wrap()` when `request_user_read_only()` says so. Two more roles live in `users`: **Moderador** (`"moderator"`) opens only the dashboard home
+(`dashboard-moderator_epoch3.html`, its own menu `nav-moderator_epoch3.html`) and
+[Comments](comments.md), where it approves and rejects every blog comment but deletes and
+blocks nothing; **Comentarista** (`"commenter"`) is a blog commenter created by the comment form,
+with no password - it never signs in, and the Users page lists commenters in their own tab. To
+make a commenter part of the team, an admin picks the new role and sets a password (required
+when the user has none). Both limits are one central check, `role_may_open()` in
+`require_dashboard_session()`. A `users` document with no `role` field (the original seed account) is
 treated as `"admin"` everywhere it's read - no migration is required, and an admin can open that
 user in `/dashboard/users/<id>/edit` and Save to persist `role: "admin"` explicitly.
 
@@ -531,6 +538,15 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 
 Modules: `src/modules/site_settings_admin/`, `src/modules/fonts_admin/`, `src/modules/updates_admin/`; templates under
 `html/templates/dashboard/settings/` and `…/fonts/`.
+
+## Comments (`/dashboard/comments`)
+
+Moderation of visitors' blog comments - tabs by status, Approve / Reject / Delete, blocking a
+commenter's email (Administrador), and one reply per comment (`/dashboard/comments/<id>/reply`,
+Administrador or Autor). An Autor sees, moderates and answers the comments on their own blog
+entries. Linked from the *Content* group of the menu; the dashboard home starts with the number
+waiting. The *Comments* panel of [Settings](#settings-dashboardsettings) turns them on and sends
+a test email. Full description: [comments.md](comments.md).
 
 ## Analytics (`/dashboard/analytics`)
 

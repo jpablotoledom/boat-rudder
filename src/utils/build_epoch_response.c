@@ -6,6 +6,7 @@
 #include "request_wml.h"
 #include "../wap_gateway/wbxml.h"
 #include "request_lang.h"
+#include "request_site.h"
 #include "request_theme.h"
 #include "template_utils.h"
 #include <stdio.h>
@@ -105,14 +106,21 @@ static char *utf8_to_latin1(const char *utf8) {
 // (protocol-relative), "http(s)://...", "mailto:", "javascript:" and
 // "#fragment" links are left alone. A link that already carries this param
 // (e.g. epoch 1's own direct "?lang=xx"/"?theme=xx" switch links) is left
-// untouched rather than double-tagged.
-static char *inject_query_param_into_links(const char *html, const char *param, const char *value) {
+// untouched rather than double-tagged. `marker` is what opens the URL to
+// tag, up to and including its opening quote, which also closes it:
+// "href=\"" for links, "src=\"" for images (see request_site.h's ?site=),
+// "location.href='" for epoch 2's JavaScript buttons.
+static char *inject_query_param_into_attr(const char *html, const char *marker_text,
+                                          const char *param, const char *value) {
     size_t param_len = strlen(param);
     size_t value_len = strlen(value);
     size_t extra_per_link = 5 + param_len + 1 + value_len; // worst case: "&amp;" + param + "=" + value
 
+    size_t marker_len = strlen(marker_text);
+    char quote = marker_text[marker_len - 1];
+
     size_t link_count = 0;
-    for (const char *p = html; (p = strstr(p, "href=\"")) != NULL; p += 6) link_count++;
+    for (const char *p = html; (p = strstr(p, marker_text)) != NULL; p += marker_len) link_count++;
     if (link_count == 0) return strdup(html);
 
     char *out = malloc(strlen(html) + link_count * extra_per_link + 1);
@@ -124,7 +132,7 @@ static char *inject_query_param_into_links(const char *html, const char *param, 
     char *w = out;
     const char *p = html;
     for (;;) {
-        const char *marker = strstr(p, "href=\"");
+        const char *marker = strstr(p, marker_text);
         if (!marker) {
             strcpy(w, p);
             break;
@@ -134,11 +142,11 @@ static char *inject_query_param_into_links(const char *html, const char *param, 
         memcpy(w, p, prefix_len);
         w += prefix_len;
 
-        memcpy(w, "href=\"", 6);
-        w += 6;
+        memcpy(w, marker_text, marker_len);
+        w += marker_len;
 
-        const char *val_start = marker + 6;
-        const char *val_end = strchr(val_start, '"');
+        const char *val_start = marker + marker_len;
+        const char *val_end = strchr(val_start, quote);
         if (!val_end) {
             strcpy(w, val_start);
             w += strlen(val_start);
@@ -187,10 +195,27 @@ static char *inject_query_param_into_links(const char *html, const char *param, 
             w += val_len - base_len;
         }
 
-        *w++ = '"';
+        *w++ = quote;
         p = val_end + 1;
     }
 
+    return out;
+}
+
+// Every link: href attributes, the JavaScript navigations epoch 2's
+// buttons make instead (code-text's "Hide line numbers") - a link all the
+// same, which otherwise drops ?theme= and a Host-less request's ?site= -
+// and form actions: a POST keeps its action's query (the comment form,
+// /comments/verify), while a GET form replaces it with its fields, so a
+// GET form (search) still carries these as hidden inputs of its own.
+static char *inject_query_param_into_links(const char *html, const char *param, const char *value) {
+    char *hrefs = inject_query_param_into_attr(html, "href=\"", param, value);
+    if (!hrefs) return NULL;
+    char *nav = inject_query_param_into_attr(hrefs, "location.href='", param, value);
+    free(hrefs);
+    if (!nav) return NULL;
+    char *out = inject_query_param_into_attr(nav, "action=\"", param, value);
+    free(nav);
     return out;
 }
 
@@ -268,10 +293,22 @@ static char *wml_strip_lists(const char *html) {
 // Returns a fresh allocation, or NULL only when nothing needed changing
 // (the caller keeps using its original body).
 static char *retrofit_body_for_epoch(const char *body, int epoch) {
-    if (epoch > EPOCH_MIDDLE) return NULL;
+    // A Host-less request's site key goes on every in-site link and image,
+    // whatever the epoch - without it the next request reaches the front's
+    // default site instead of this one (see utils/request_site.h).
+    const char *site = request_site();
+    if (epoch > EPOCH_MIDDLE && !site) return NULL;
 
     char *step = NULL;
     const char *cur = body;
+
+    if (site) {
+        char *tagged = inject_query_param_into_links(cur, "site", site);
+        if (tagged) { free(step); step = tagged; cur = step; }
+        tagged = inject_query_param_into_attr(cur, "src=\"", "site", site);
+        if (tagged) { free(step); step = tagged; cur = step; }
+    }
+    if (epoch > EPOCH_MIDDLE) return step;
 
     if (epoch <= EPOCH_EARLY) {
         char *tagged = inject_query_param_into_links(cur, "lang", request_lang());
@@ -390,7 +427,7 @@ static char *build_redirect_body(const char *location, int epoch) {
     return body;
 }
 
-char *build_redirect_response(const char *location, const char *extra_headers, int epoch) {
+static char *redirect_response_to(const char *location, const char *extra_headers, int epoch) {
     char *body = build_redirect_body(location, epoch);
     if (!body) return NULL;
 
@@ -438,6 +475,17 @@ char *build_redirect_response(const char *location, const char *extra_headers, i
     memcpy(response + header_len, body, body_len + 1);
     free(body);
 
+    return response;
+}
+
+char *build_redirect_response(const char *location, const char *extra_headers, int epoch) {
+    // The Location header needs a Host-less request's ?site= as much as the
+    // links do (see utils/request_site.h) - retrofit_body_for_epoch() only
+    // reaches the body.
+    char *tagged = request_site_tag_location(location);
+    if (!tagged) return NULL;
+    char *response = redirect_response_to(tagged, extra_headers, epoch);
+    free(tagged);
     return response;
 }
 

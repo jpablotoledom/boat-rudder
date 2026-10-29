@@ -1,0 +1,26 @@
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li></ol>
+  </nav>
+  <h1>Extensions</h1>
+  <p>Programs installed in this site's <code>extensions/</code> directory. An enabled
+     extension runs alongside the site and adds its own pages to the dashboard; a
+     disabled one does not run at all. How to build one:
+     <code>develop_docs/reference/extensions.md</code>.</p>
+%s
+  <div class="boat-rudder-dashboard__table-scroll">
+  <table class="boat-rudder-dashboard__table">
+    <thead>
+      <tr>
+        <th>Extension</th>
+        <th>Version</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+%s
+    </tbody>
+  </table>
+  </div>
+</section>

@@ -7,7 +7,9 @@
 // /dashboard/users listing.
 #define USERS_LIST_LIMIT 100
 
-// "admin" | "author" | "viewer" + NUL.
+// users.role: "admin", "author", "viewer" (read-only admin), "moderator"
+// (only reviews and approves/rejects blog comments) or "commenter" (a blog
+// commenter: no password, can't sign in - see cms_comments.h). + NUL.
 #define USER_ROLE_BUF_SIZE 16
 
 // users.username: the user's permanent handle, set when the account is
@@ -31,14 +33,26 @@ typedef struct {
     char *name;
     char *username;
     char *email;
-    char *role;  // "admin" | "author" | "viewer" (missing field -> "admin")
+    char *role;  // see USER_ROLE_BUF_SIZE (missing field -> "admin")
 } CmsUserAdminItem;
 
-// db.users.find().sort({email: 1}).limit(USERS_LIST_LIMIT). On success, *out
-// points to a malloc'd array of *out_count items (possibly 0) that must be
-// passed to cms_users_admin_free(). On a DB error or if mongodb is not
-// ready, *out = NULL and *out_count = 0.
-void cms_get_users(CmsUserAdminItem **out, size_t *out_count);
+// db.users.find().sort({email: 1}).limit(USERS_LIST_LIMIT): the site's team
+// (every role but "commenter") or, with `commenters`, the blog commenters
+// only. On success, *out points to a malloc'd array of *out_count items
+// (possibly 0) that must be passed to cms_users_admin_free(). On a DB error
+// or if mongodb is not ready, *out = NULL and *out_count = 0.
+void cms_get_users(int commenters, CmsUserAdminItem **out, size_t *out_count);
+
+// 1 if `role` is one of the roles above.
+int cms_user_role_valid(const char *role);
+
+// 1 if the user has a password (can sign in), 0 if not or unknown.
+int cms_user_has_password(const char *id_hex);
+
+// A fresh username for a new account with `email` (as the startup
+// migration would make it: from the address, made unique). `out` >=
+// USERNAME_BUF_SIZE. Returns 0, -1 if MongoDB is not ready.
+int cms_new_username_for_email(const char *email, char *out, size_t out_size);
 
 // Frees every item's fields and the array itself. Safe to call with
 // items == NULL.

@@ -30,8 +30,6 @@ and which `{{MARKERS}}` it carries. How templates are resolved is in
 | `{{FOOTER}}` | `splice_footer()` | Theme footer (DB override or `layout/footer_epoch<N>.html`) |
 | `{{FOOTER_LOGO}}` | `splice_footer_logo()` | Footer logo image/text or `layout/footer-logo_epoch<N>.html` |
 | `{{LIGHTBOX}}` | `splice_part()` | `layout/lightbox_epoch<N>.html` (epoch 3 only) |
-| `{{BODY_BACKDROP}}` | `take_body_backdrop()` | Removed from the fragment that carries it (epoch 2 `page-home`, `page-blog`); asks for `layout/body-backdrop_epoch<N>.html` |
-| `{{BODY_BACKGROUND}}` | `page_layout_wrap()` | In the layout's `<body>`: the theme's `layout/body-backdrop_epoch<N>.html` when the fragment carries `{{BODY_BACKDROP}}`, else nothing |
 | `{{THEME_COLORS}}` | `splice_theme_colors()` | Epoch 3 `<style>` with `--br-color-*` and logo font |
 | `{{COLOR_*}}` | `splice_retro_colors()` | Epoch 1/2 hex colors (see [themes.md](themes.md#42-how-colors-reach-each-epoch)) |
 
@@ -44,11 +42,10 @@ shipped themes (`dark`, `light`) contain the same set.
 
 | Directory | Template | Epochs | Args | Markers | Used by |
 |---|---|---|---|---|---|
-| `layout/` | `layout` | −1…3 | 0 | `CONTENT PAGE_TITLE BODY_BACKGROUND THEME_COLORS(3) COLOR_*(1,2)` | `page_layout_wrap()` - the outer document |
+| `layout/` | `layout` | −1…3 | 0 | `CONTENT PAGE_TITLE THEME_COLORS(3) COLOR_*(1,2)` | `page_layout_wrap()` - the outer document |
 | | `footer` | −1…3 | 0 | `FOOTER_LOGO SITE_NAME` | `splice_footer()` fallback |
 | | `footer-logo` | 2 | 0 | `SITE_NAME` | `splice_footer_logo()` fallback |
 | | `lightbox` | 3 | 0 | | `splice_part()` |
-| | `body-backdrop` | 2 | 0 | | `take_body_backdrop()` - the `<body>` attributes (` background="..."`) of pages whose fragment carries `{{BODY_BACKDROP}}`; optional, none = plain body |
 | `menu/` | `menu` | −1…3 | 3/4/5 | | `menu()` container |
 | | `menu-item`, `menu-item-selected` | −1…3 | 3/4 | | one nav item (selected = current section) |
 | | `menu-item-separator` | −1…3 | 0 | | between items |
@@ -57,6 +54,7 @@ shipped themes (`dark`, `light`) contain the same set.
 | | `menu-lang-item` | 3 | 4 | | epoch 3 drop-down entry |
 | | `menu-theme` | 1, 2, 3 | 2 | | theme control (epoch 1/2: link to `/theme`) |
 | | `menu-theme-item` | 3 | 4 | | epoch 3 drop-down entry |
+| | `menu-search` | −1…3 | 0 | | search control, first of the options: epoch 3 magnifier opening a search box, epoch 1/2 `assets/menu/search.gif` linking to `/search`, epoch 0/−1 a text link |
 | | `menu-user`, `menu-user-mobile` | 3 | 1 | | signed-in user's name |
 | | `menu-compact` | −1 | 1 | | WML: single `[Menu]` link (arg: return path) |
 | | `menu-page` | −1 | 1 | | `/menu` page body (arg: return path) |
@@ -89,6 +87,15 @@ shipped themes (`dark`, `light`) contain the same set.
 | `login/` | `login` | −1…3 | 0-1 | | `/login` (epoch 3 form; other epochs "not available") |
 | | `login-error` | 3 | 1 | | error line |
 | `language/` | `language`, `language-item` | −1…3 | 2 / 3-4 | | `/language` page |
+| `comments/` | `comments`, `comment-item`, `comment-form`, `comment-error`, `comments-notice`, `comments-empty`, `comments-closed` | 0…3 | 5 (positional: count, notice, comments, form or closed, color) / 6 (name, date, text, client icons, reply, color) / 10 (positional: action, error, name, email, text, challenge - image src, or text art on epoch 0 -, token, name max, text max, color) / 2 (message, color) / 2 (message, color) / 1 (color) / 1 (color) | | Blog comments section and form (`comments_section()`); epochs 0 and 3 ignore the color, epochs 0-2 have no honeypot |
+| | `comments`, `comment-item`, `comments-notice`, `comments-empty` | −1 | 4 (positional: count, notice, comments, note - the "Write a comment" link or "closed") / 6 (name, date, text, client, reply, color) / 2 (message, color) / 0 | | Approved comments on WAP (`retro_section()`) |
+| | `comment-form`, `comment-code`, `comment-error`, `comment-sent` | −1 | 3 (positional: name max, text max, step 2 URL) / 4 (WBMP URL, token, action, answer variable suffix) / 3 (message, step 1 URL, step 2 URL) / 2 (message, entry URL) | | WAP's comment form on pages of its own (`comments_wap_form_page()`, `comments_wap_sent_page()`): step 1, step 2, a refusal, the thanks |
+| | `comment-reply` | −1…3 | 5 (positional: name, date, text, "Author"/"Administrator", color) | | The team's reply under a comment (`reply_html()`): a block on 3, `<blockquote>` on 0-2, a `Re:` line on −1; only epoch 1 uses the color |
+| | `comment-client` | −1…3 | 2 (positional: label, icon URL) | | One browser or system icon next to a comment's name (`comment_client_html()`); text on −1 and 0 |
+| | `verify`, `verify-form` | −1…3 | 3 / 1 | | `/comments/verify` pages |
+| `search/` | `search` | −1…3 | 4 (`%1$s` query, `%2$s` summary, `%3$s` results, `%4$s` hidden fields) | | `/search` page: form, summary, results |
+| | `search-item` | −1…3 | 4 (`%1$s` URL, `%2$s` title, `%3$s` "Blog - date" / "Page", `%4$s` excerpt) | | one result |
+| | `search-mark` | −1…3 | 1 | | the matched words inside an excerpt (no trailing newline) |
 | `theme/` | `theme`, `theme-item` | 1, 2, 3 | 2 / 3-4 | | `/theme` page (no WML/epoch 0 variant) |
 
 ### Content blocks (`elements/`)

@@ -138,8 +138,15 @@ startup (`SSL_CTX_check_private_key()`).
 | Role | Can |
 |---|---|
 | `admin` (also: missing `role` field) | Everything |
-| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, browse everything but upload into, rename, delete and move **only their own** directories and images |
+| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, see, upload into, rename, delete and move **only their own** directories and images |
 | `viewer` (Observador) | **Read-only**: opens every page an `admin` opens and sees every value - the entry editor included - but **changes nothing**. Meant for a public demo account whose password can be published |
+| `moderator` | The dashboard home and `/dashboard/comments` only: reviews every blog comment and approves or rejects it - no deleting, no blocking, no drafts preview |
+| `commenter` | **Never signs in**: a blog commenter ([comments.md](comments.md)), created by the comment form with no password. `auth_login_user()` refuses the role even with a password, and making someone a commenter ends their sessions |
+
+Every dashboard route goes through `require_dashboard_session()`, which reads the session's role
+once: a role that can't be read (the user was deleted) opens nothing - it used to fall back to
+`admin` - and `role_may_open()` limits a `moderator` to the home and comment pages and a
+`commenter` to nothing. Deleting a user ends their sessions.
 
 Guards are enforced per route in `http_router.c` (`require_admin_session()`,
 `require_dashboard_session_role()` + `can_edit_entry()`) - except the viewer's, which is one
@@ -164,6 +171,11 @@ the caller's own). Images move only between directories of **their own author** 
 `html/content/posts/<author>/`, so another author's directory is not a valid target, for admins
 either. A directory is deleted only when it has no `media` records (`409` otherwise) and the
 record is removed only after `rmdir()` succeeds (or the directory never existed on disk).
+
+Reads are scoped the same way by `media_scope()`: an `admin` and the read-only `viewer` see every
+author's directories and images; an `author` only their own - the library page, its listing
+(`/dashboard/api/media/contents`), the editor's picker (`/dashboard/api/media/modal`), and
+`/dashboard/api/media/directory/item` (`404` for another author's directory).
 
 ### CSRF protection
 
@@ -192,13 +204,31 @@ session (any role), marked `[Draft]` and sent with `Cache-Control: no-store`; ev
 
 ---
 
+## Blog comments
+
+Anonymous visitors can write to the database, so comments carry their own defenses
+([comments.md](comments.md)):
+
+| Defense | How |
+|---|---|
+| **Challenge** | Server-drawn image (text art on epoch 0), HMAC-signed stateless token whose answer is derived from it under the site secret (never in the token or stored), answered ≥ 3 s and ≤ 15 min after drawing, single use (`captcha_used`). One token always draws the same image, so reloading `/comments/captcha` gives a bot nothing new; that route draws only valid, unexpired tokens. Replaces the CSRF token on this public form |
+| **Honeypot** | A hidden field (epoch 3 only - without CSS a person would see it); filled in → "success" shown, nothing stored |
+| **Rate limits** | 5 comments per address per hour, 10 per email per day |
+| **Email ownership** | Nothing is public before the address's owner clicks a link (token: 32 random bytes, only its SHA-256 stored, 24 h, single use) and a moderator approves. The link's `GET` doesn't confirm, so mail scanners can't |
+| **Identity** | A name belongs to the first email that confirmed it; the site users' names are reserved. The remember cookie is HMAC-signed and void once the email is blocked |
+| **Output** | Comment text and names are always HTML-escaped; no markup is kept |
+| **Privacy** | Addresses only as an HMAC; emails shown only in the dashboard |
+| **Mail** | Sent from a background thread, never from a request; TLS required except to a local relay; header values with line breaks are refused |
+
 ## WAP gateway (UDP)
 
 UDP has no handshake, so a spoofed request makes the gateway send its (~20× larger) reply to a
 victim. `rate_allow()` caps answers at `wap_gateway_rate_limit` per minute per source IP (default
 60) in a 256-entry table; excess requests are dropped silently after one log line. The gateway
-only answers GET-family PDUs, only on the addresses in `wap_gateway_ips`, and fetches pages
-through the HTTP listener (so the HTTP limits apply too). Details:
+only answers GET-family PDUs and Posts (forwarded as an HTTP POST - blog comments), only on the
+addresses in `wap_gateway_ips`, and fetches pages through the HTTP listener (so the HTTP limits
+apply too; a gateway that isn't a trusted proxy shares one address's comment limit across every
+phone behind it). Details:
 [wap-gateway.md](wap-gateway.md#abuse-protection).
 
 ---

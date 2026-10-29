@@ -90,6 +90,7 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
     out->header_author_name    = NULL;
     out->header_date[0]        = '\0';
     out->header_hide_author    = false;
+    out->comments_closed       = false;
 
     bson_iter_t iter;
     if (!bson_iter_init_find(&iter, doc, "header") || !BSON_ITER_HOLDS_DOCUMENT(&iter)) {
@@ -120,6 +121,8 @@ static void parse_header_edit(const bson_t *doc, const CmsLanguageItem *langs,
 
     if (bson_iter_init_find(&hiter, &header, "hide_author") && BSON_ITER_HOLDS_BOOL(&hiter))
         out->header_hide_author = bson_iter_bool(&hiter);
+    if (bson_iter_init_find(&hiter, doc, "comments_closed") && BSON_ITER_HOLDS_BOOL(&hiter))
+        out->comments_closed = bson_iter_bool(&hiter);
 
     // The editor always shows the real author name, even when the public views
     // hide it, so the owner stays visible to whoever is editing.
@@ -386,7 +389,7 @@ int cms_update_entry_meta(const char *id_hex, const char *link, const char *type
 }
 
 int cms_update_entry_header(const char *id_hex, const char *image_url, const char *date,
-                             bool hide_author,
+                             bool hide_author, bool comments_closed,
                              const CmsLanguageItem *langs, size_t lang_count,
                              char *const *title_values, char *const *summary_values) {
     if (!bson_oid_is_valid(id_hex, strlen(id_hex))) return -1;
@@ -404,6 +407,7 @@ int cms_update_entry_header(const char *id_hex, const char *image_url, const cha
     bson_append_document_begin(&update, "$set", -1, &set_doc);
     bson_append_utf8(&set_doc, "header.image_url", -1, image_url, -1);
     bson_append_bool(&set_doc, "header.hide_author", -1, hide_author);
+    bson_append_bool(&set_doc, "comments_closed", -1, comments_closed);
 
     for (size_t i = 0; i < lang_count; i++) {
         char key[40];

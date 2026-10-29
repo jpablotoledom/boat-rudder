@@ -16,6 +16,7 @@
 #include "../../utils/theme_catalog.h"
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 // Used when the `menu` collection is empty, unreachable, or mongodb is not
 // ready, so the nav bar is never empty.
@@ -184,6 +185,20 @@ static char *theme_selector(int epoch) {
     return result ? result : strdup("");
 }
 
+// The search control (/search, search_page.h): menu/menu-search_epoch<N>.html,
+// no arguments - epoch 3's magnifier opens a search box in place, the
+// others link to the search page. It leads the options: epoch 3 puts it
+// before theme_selector()'s drop-down, epoch 1/2 before the language and
+// theme links, epoch 0 and WML (no theme control) after the
+// language link. Returns a malloc'd string ("" without a template), never
+// NULL unless allocation fails.
+static char *search_link(int epoch) {
+    char *path = generate_url_theme("menu/menu-search_epoch%d.html", epoch);
+    char *tpl  = path ? read_file_to_string(path) : NULL;
+    free(path);
+    return tpl ? tpl : strdup("");
+}
+
 // Epoch 3 only: a link to /dashboard carrying the signed-in user's display
 // name. request_user_name() (per-thread, resolved once per request in
 // http_router.c) is "" whenever there is no active session, which is what
@@ -223,6 +238,20 @@ static char *user_menu_item_mobile(int epoch) {
 }
 
 // menu() and menu_without_items(): `with_items` 0 leaves the menu items out.
+// True when `html` ends (trailing whitespace aside) in <br>, <br/> or <br />.
+static int ends_with_br(const char *html) {
+    size_t n = strlen(html);
+    while (n > 0 && strchr(" \t\r\n", html[n - 1]))
+        n--;
+    static const char *const forms[] = { "<br>", "<br/>", "<br />" };
+    for (size_t i = 0; i < sizeof(forms) / sizeof(forms[0]); i++) {
+        size_t len = strlen(forms[i]);
+        if (n >= len && strncasecmp(html + n - len, forms[i], len) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static char *build_menu(const char *current_url, int epoch, int with_items) {
     // WML: every page's first screen is one ~860-byte packet (see
     // wap_gateway/wbxml.h), and the full menu - logo, every section, the
@@ -397,6 +426,13 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
                                          request_theme(), epoch, cfg.navbar_image, encoded_alt,
                                          epoch == EPOCH_EARLY || epoch == EPOCH_MIDDLE ? " border=\"0\"" : "",
                                          epoch == EPOCH_WML ? "/" : "");
+            // Same shape as the theme's own menu-logo_epoch<N>.html, so an
+            // uploaded logo sits in the menu exactly like the default one:
+            // epoch 2 and WML link it home. Epoch 1's default is the bare image.
+            char *wrapped = NULL;
+            if (img && (epoch == EPOCH_WML || epoch == EPOCH_MIDDLE))
+                wrapped = render_template("<a href=\"/\">%s</a>", img);
+            if (wrapped) { free(img); img = wrapped; }
             if (img) { free(logo); logo = img; }
         } else if (cfg.mode == LOGO_MODE_TEXT) {
             char *site_name = cms_get_site_name();
@@ -417,9 +453,30 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
         }
     }
 
+    // WML: the menu items start on the line after the logo, whatever drew
+    // it (upload, text, raw markup or the theme's menu-logo_epoch-1.html,
+    // which therefore carries no <br> of its own). Only when there is a logo
+    // - home has none and must not open with a blank line - and not twice
+    // for raw markup saved with its own trailing break.
+    // build_epoch_response() turns the <br> into WML's <br/>.
+    if (epoch == EPOCH_WML && logo && logo[0] && !ends_with_br(logo)) {
+        size_t n = strlen(logo);
+        while (n > 0 && strchr(" \t\r\n", logo[n - 1]))
+            logo[--n] = '\0';
+        char *with_br = render_template("%s\n<br>", logo);
+        if (with_br) { free(logo); logo = with_br; }
+    }
+
     char *lang_html = language_selector(epoch);
-    // Epoch 0 and WML's menu-lang template opens with the "|" that separates
-    // it from the items before it; with no items it would lead the bar alone.
+    // No theme control on epoch 0 and WML: search follows the language link.
+    if (lang_html && epoch <= EPOCH_PRESTANDARD) {
+        char *search_html = search_link(epoch);
+        lang_html = search_html ? str_append(lang_html, search_html) : (free(lang_html), NULL);
+        free(search_html);
+    }
+    // Epoch 0 and WML's menu-lang and menu-search templates open with the "|"
+    // that separates them from the items before; with no items it would lead
+    // the bar alone.
     if (lang_html && !with_items) {
         const char *p = lang_html + strspn(lang_html, " \t\r\n");
         if (*p == '|') memmove(lang_html, p + 1, strlen(p + 1) + 1);
@@ -463,7 +520,11 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
             else { free(items); items = NULL; }
             free(user_html_mobile);
 
-            char *theme_html = theme_selector(epoch);
+            // The search control rides in the theme slot, just before it.
+            char *theme_html = search_link(epoch);
+            char *themes = theme_selector(epoch);
+            theme_html = (theme_html && themes) ? str_append(theme_html, themes) : (free(theme_html), NULL);
+            free(themes);
 
             result = (title_html && user_html && items && theme_html)
                 ? render_template(menu_tpl, user_html, title_html, items, theme_html, lang_html)
@@ -481,8 +542,17 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
             // same lang_html argument the container already takes,
             // reassigning lang_html so the one free() below still covers
             // whichever buffer ends up here.
+            // Epoch 1/2: search first, then language and theme - the order
+            // epoch 3's options bar shows. Epoch 0 and WML already have
+            // theirs after the language link (above), and no theme control.
             char *theme_html = theme_selector(epoch);
-            lang_html = theme_html ? str_append(lang_html, theme_html) : NULL;
+            if (lang_html && epoch >= EPOCH_EARLY) {
+                char *search_html = search_link(epoch);
+                char *joined = search_html ? str_append(search_html, lang_html) : NULL;
+                free(lang_html);
+                lang_html = joined;
+            }
+            lang_html = (lang_html && theme_html) ? str_append(lang_html, theme_html) : (free(lang_html), NULL);
             free(theme_html);
 
             if (epoch == EPOCH_MIDDLE) {

@@ -40,6 +40,11 @@ collections). Nothing else in the code base opens a collection.
 | `site_settings` | Singleton: site name, active theme, home blog visibility, maintenance mode | `cms_site_settings.c` | `cms_site_settings.c` |
 | `themes` | Sparse per-theme overrides (colors, banner, footer, logo, CSS) | `cms_themes.c` | `cms_themes.c` |
 | `fonts` | Uploaded font library | `cms_fonts.c` | `cms_fonts.c` |
+| `extensions` | Which installed extensions are enabled | `cms_extensions.c` | `cms_extensions.c` |
+| `comments` | Blog comments and their moderation status | `cms_comments.c` | `cms_comments.c` |
+| `comment_tokens` | SHA-256 of email-confirmation tokens (TTL) | `cms_comments.c` | `cms_comments.c` |
+| `captcha_used` | Answered challenge nonces (TTL) | `cms_comments.c` | `cms_comments.c` |
+| `mail_queue` | Outgoing mail and its delivery state | `mailer.c` | `mailer.c` |
 | `short_links` | Short codes for QR codes | `short_links.c` | `short_links.c` |
 | `browser_detection` | Singleton: browser detection rules and test cases | `cms_browser_detection.c`, `browser_detection_bson.c` | `cms_browser_detection.c` |
 | `page_visits_daily` | Site-wide analytics, one document per day | `analytics.c` (write), `analytics_view.c` (read) | both `.c` files |
@@ -168,8 +173,17 @@ entry is.
 
 ```jsonc
 { "_id": ObjectId, "name": "Jane", "username": "jane", "email": "jane@example.org",
-  "password": "$argon2id$...", "role": "admin" | "author" | "viewer" }
+  "password": "$argon2id$...", "role": "admin" | "author" | "viewer" | "moderator" | "commenter",
+  // blog commenters (comments.md); set by the comment form:
+  "name_key": "jane", "email_verified_at": ISODate, "blocked": false, "created_at": ISODate }
 ```
+
+A blog **commenter** is a user with `role: "commenter"` and no `password`: created by the
+comment form with a username like any account, it can't sign in. `name_key` is its name folded
+to lower case (unique among users that have one: a commenter's name belongs to one email);
+`email_verified_at` is set when it confirms an email link; `blocked` refuses its comments. A
+team member who comments with their own address is that same user. Index `email_ci`: unique
+email, compared without case.
 
 `username` is permanent: set when the account is created (3-32 characters of `[a-z0-9._-]`, not
 dot-led, unique - index `username_unique`) and never changed, because it names the user's media
@@ -267,6 +281,61 @@ filename under `html/content/themes/<key>/<logo|home-blog>/epoch<N>/`; on epoch 
 
 Files live under `html/assets/fonts/`. `name` is both the display name and the CSS
 `font-family` value, so it is restricted to `[A-Za-z0-9 _-]` on upload.
+
+## Comments
+
+Full behavior: [comments.md](comments.md).
+
+### `comments`
+
+| Field | Type | Notes |
+|---|---|---|
+| `entry_id` | ObjectId | `entries._id` (a blog entry) |
+| `commenter_id` | ObjectId | `users._id` (the commenter) |
+| `name` | string | Snapshot of the commenter's name |
+| `text` | string | Plain text, ≤ 2000 bytes, line breaks as `\n` |
+| `status` | string | `unverified` → `pending` → `approved` / `rejected` |
+| `created_at`, `verified_at`, `moderated_at` | date | |
+| `moderated_by` | ObjectId | `users._id` |
+| `ip_hash` | string | `HMAC(site secret, "ip|<address>")`, 32 hex - for the rate limits; no address in clear |
+| `expires_at` | date | Only while `unverified`: the TTL index deletes the comment 24 h after it was sent |
+| `browser`, `os` | string | Where it was written from, as `ua_parser.h` classifies it for analytics: `"MSIE/5"`, `"Lynx/2"`, `"Windows/2000"`, `"Unknown"`... - for an icon later. Missing on comments older than 2026-10-29 |
+| `user_agent` | string | The User-Agent itself, printable ASCII, ≤ 256 bytes - so a comment can be classified again |
+| `epoch` | int | The epoch it was written from (−1-3) |
+| `reply` | document | The team's one reply, when there is one: `text` (plain, ≤ 2000 bytes), `user_id` (`users._id`), `name` (the replier's name then, else username), `by_author` (bool: the entry's author, not an Administrador), `created_at`, `updated_at` (after an edit) |
+
+Indexes: `{entry_id, status, created_at}`, `{status, created_at}`, `{ip_hash, created_at}`,
+`{commenter_id, created_at}`, TTL on `expires_at`.
+
+### `comment_tokens`, `captcha_used`
+
+`comment_tokens`: `{token_hash (SHA-256 hex, unique), comment_id, expires_at}` with a TTL - the
+token itself exists only in the email. `captcha_used`: `{nonce (unique), expires_at}` with a TTL -
+an answered challenge can't be answered again.
+
+### `mail_queue`
+
+`{to, subject, text, status: queued|sending|sent|failed, attempts, created_at, next_attempt_at,
+sent_at, last_error}`; index `{status, next_attempt_at}`. See [comments.md](comments.md#7-mail-srcutilsmailerc).
+
+### Other fields
+
+- `entries.comments_closed` (bool) - no new comments on that blog entry.
+- `site_settings.comments_enabled` (bool) - comments on/off for the site.
+- `site_settings.secret` (64 hex) - the site's HMAC key (`cms_get_site_secret()`), generated once.
+
+### `extensions`
+
+One document per extension an admin ever enabled or disabled (`/dashboard/settings/extensions`);
+an installed extension with no document is disabled. See [extensions.md](extensions.md).
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | The extension's directory name under `extensions/` |
+| `enabled` | bool | Read at startup (`extensions_start()`); written by `cms_extensions_set_enabled()` (upsert) |
+
+Extensions keep their own data in collections named `ext_<name>_*` in the same database (e.g.
+`ext_notes_notes`); Boat Rudder never reads them.
 
 ### `browser_detection`
 

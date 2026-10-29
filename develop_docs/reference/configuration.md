@@ -45,6 +45,8 @@ proxy_protocol=0          # 1 behind a layer-4 front sending PROXY headers
 theme=dark                # last-resort theme fallback (see below)
 lang=Eng                  # content language fallback (see below)
 public_url=               # absolute base for QR-code URLs, e.g. https://example.org
+site_key=                 # behind a multi-site front: this site's ?site= key for Host-less browsers
+site_directory=           # behind a multi-site front: "key|Title;key|Title" chooser for Host-less "/"
 
 #force_epoch=3            # force a browser epoch (-1..3); omit to auto-detect
 
@@ -74,6 +76,13 @@ wap_upstream_proxy_protocol=0  # 1: PROXY v1 header with the phone's address to 
 
 # Updates (scripts.md)
 update_repo=jpablotoledom/boat-rudder   # GitHub owner/name of the releases
+
+# Mail - blog comments' confirmation emails (comments.md); empty = no mail
+mail_smtp_url=                 # smtps://host:465 or smtp://host:587 (STARTTLS required)
+mail_smtp_user=
+mail_smtp_password=
+mail_from=                     # sender address
+mail_from_name=                # sender name; empty = the site name
 ```
 
 ---
@@ -101,6 +110,8 @@ update_repo=jpablotoledom/boat-rudder   # GitHub owner/name of the releases
 | `theme` | string | `dark` | **Last-resort theme fallback**, not "the active theme". Per request the theme is resolved as `?theme=` → `theme` cookie → `site_settings.active_theme` (set from `/dashboard/settings/themes`) → this key (`src/utils/request_theme.h`). Each template path is then looked up first in `html/themes/<theme>/...` and, if the theme doesn't override it, in the shared `html/templates/...` (`generate_url_theme()`). See [themes.md](themes.md). |
 | `lang` | string | `Eng` | Content language **fallback**. Used only when MongoDB is unavailable or no `languages` document has `is_default:true`; otherwise the content language comes from the `languages` collection (`/dashboard/languages`), then per visitor from `?lang=` / the `lang` cookie. |
 | `public_url` | string | *(empty)* | Public base URL of the site, without trailing slash. Used to build the absolute URLs encoded in QR codes (`/gallery/<id>` for epochs -1/0, `/image-qr/<code>`), so a phone scanning the code reaches the public host rather than whatever `Host` the retro browser used. When empty, the URL is built from the request's own `Host` header. See [qr-and-short-links.md](qr-and-short-links.md). |
+| `site_key` | string | *(empty)* | Behind a front that serves several sites on one address (multi-br). A browser that sends no `Host` header (HTTP/0.9, early HTTP/1.0) names no site, so the front routes it by `?site=<key>` in the request line. When set, every page, image and redirect served to a request **without `Host`** carries `site=<site_key>` on its in-site URLs, keeping the visitor on this site; a request with `Host` never gets it. 1-32 of `a-z 0-9 _ -`. Set by multi-br. See `src/utils/request_site.h`. |
+| `site_directory` | string | *(empty)* | The sites a `Host`-less visitor can choose from, `key\|Title;key\|Title;...`. With `site_key` set, a `Host`-less request for `/` with no `?site=` gets this list (links to `/?site=<key>`) instead of the home page. Titles can't contain `< > " &`. Set by multi-br. See `src/modules/site_page/`. |
 | `force_epoch` | int | *(unset = auto-detect)* | Forces the browser epoch (`-1`=WML, `0`=pre-standard, `1`=early, `2`=middle, `3`=modern) for **every** request, bypassing both `?preview_epoch=` and `detect_epoch()`. Any value outside `-1..3` keeps auto-detection. Useful for checking a retro layout from a modern browser - but note it also locks the dashboard out unless set to `3`, since the dashboard is epoch 3 only. |
 
 ### Database and sessions
@@ -147,6 +158,20 @@ The UDP gateway that serves epoch -1 as compiled WBXML to real WAP 1.x devices. 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `update_repo` | string | `jpablotoledom/boat-rudder` | GitHub repository (`owner/name`) whose releases `/dashboard/settings/updates` lists and `boat-rudder-update` installs from (its `BR_REPO` overrides it). Only `[A-Za-z0-9._-]` and one `/`; anything else is refused. |
+
+### Mail
+
+Outgoing mail, sent by a background thread through libcurl (`src/utils/mailer.c`). Used by blog
+comments' email confirmation ([comments.md](comments.md)); without `mail_smtp_url` and
+`mail_from`, comments can't be turned on.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `mail_smtp_url` | string | (empty) | `smtps://host:465` (TLS from the start) or `smtp://host:587` (STARTTLS, required - except to `localhost`/`127.*`, a relay on this machine) |
+| `mail_smtp_user` | string | (empty) | SMTP login; empty = no authentication |
+| `mail_smtp_password` | string | (empty) | SMTP password. The file then holds a secret: keep it readable by the server's user only |
+| `mail_from` | string | (empty) | Sender address (envelope and `From:`) |
+| `mail_from_name` | string | site name | Sender display name |
 
 ---
 

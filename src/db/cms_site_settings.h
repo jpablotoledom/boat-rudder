@@ -53,4 +53,21 @@ void cms_get_under_construction(bool *enabled, char **page_link);
 // DB error or if mongodb is not ready.
 int cms_update_under_construction(bool enabled, const char *page_link);
 
+// site_settings.comments_enabled: blog comments on/off for the whole site
+// (comments.h). false if unset/unreachable.
+bool cms_get_comments_enabled(void);
+
+// db.site_settings.updateOne({}, {$set: {comments_enabled}}, {upsert: true}).
+// Returns 0 on success, -1 on a DB error or if mongodb is not ready.
+int cms_update_comments_enabled(bool enabled);
+
+#define SITE_SECRET_BYTES 32
+
+// The site's secret key: 32 random bytes generated once (libsodium) and kept
+// in site_settings.secret (hex), then cached for the process. It keys the
+// HMACs that make challenge tokens and the comment "remember me" cookie
+// unforgeable, and hashes visitor addresses before they're stored. Fills
+// `key` and returns 0, or -1 if MongoDB is not ready / on a DB error.
+int cms_get_site_secret(unsigned char key[SITE_SECRET_BYTES]);
+
 #endif // CMS_SITE_SETTINGS_H

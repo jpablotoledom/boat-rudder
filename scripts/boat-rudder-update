@@ -265,7 +265,7 @@ extract_package() {   # extract_package <pkg> <dir>
 check_prerequisites() {   # check_prerequisites <src>
     local missing="" tool
     for tool in cmake cc make pkg-config strip; do command -v "$tool" > /dev/null || missing="$missing $tool"; done
-    for tool in libmongoc-1.0 libsodium openssl; do pkg-config --exists "$tool" 2>/dev/null || missing="$missing $tool(dev)"; done
+    for tool in libmongoc-1.0 libsodium libcurl openssl; do pkg-config --exists "$tool" 2>/dev/null || missing="$missing $tool(dev)"; done
     [ -z "$missing" ] || die "missing build prerequisites:$missing"
     for tool in magick jpegoptim gifsicle; do
         command -v "$tool" > /dev/null || warn "'$tool' not found - media uploads will fail until it is installed"

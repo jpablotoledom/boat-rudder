@@ -1,0 +1,58 @@
+@startuml sequence-extension-request
+
+title Boat Rudder - A request for an extension's page
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Browser
+participant "http_router\nserve_extension()" as ROUTER
+participant "dashboard guards\nrequire_dashboard_session_role()" as GUARD
+participant "extensions_forward()" as FWD
+participant "extension process\nbrext SDK + handler" as EXT
+database "MongoDB\next_<name>_*" as MONGO
+participant "buildPageWebSite()\n+ build_epoch_response" as LAYOUT
+
+Browser -> ROUTER : POST /dashboard/ext/<name>/things/new\nCookie: session=...  csrf_token=...  name=...
+ROUTER -> ROUTER : resolve_epoch() == 3 ?\n(else 302 /dashboard)
+ROUTER -> GUARD : session, CSRF (POST), role
+alt no session
+    GUARD --> Browser : 302 /login
+else bad CSRF token / viewer writing
+    GUARD --> Browser : 403
+end
+ROUTER -> ROUTER : <name> known and enabled?\n(else 404)
+
+ROUTER -> FWD : method, target "/things/new", body,\nuser id / name / role, lang, theme, epoch
+FWD -> EXT : connect run/extensions/<name>.sock\nPOST /things/new HTTP/1.1\nX-BR-Mount: /dashboard/ext/<name>\nX-BR-User-Id: ... X-BR-Role: ...
+alt not running / no answer in 15 s
+    FWD --> ROUTER : -1
+    ROUTER --> Browser : 503
+end
+EXT -> EXT : brext_route() -> handler
+EXT -> MONGO : insert {owner_id: X-BR-User-Id, ...}
+MONGO --> EXT : ok
+EXT --> FWD : HTTP/1.1 302\nLocation: /
+FWD --> ROUTER : status, Content-Type, X-BR-Title, Location, body
+
+alt 3xx with Location "/path"
+    ROUTER --> Browser : 302 /dashboard/ext/<name>/path
+else text/html
+    ROUTER -> LAYOUT : fragment + "<site> - <X-BR-Title>"
+    LAYOUT --> ROUTER : full page (menu, theme,\ndashboard CSS, CSRF script)
+    ROUTER --> Browser : status from the extension + page
+else application/json
+    ROUTER --> Browser : JSON as it came
+else anything else / malformed
+    ROUTER --> Browser : 502
+end
+
+@enduml

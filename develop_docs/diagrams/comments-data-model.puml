@@ -1,0 +1,73 @@
+@startuml comments-data-model
+
+title Boat Rudder - Blog comments: data model
+
+skinparam backgroundColor #FAFAFA
+skinparam class {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+hide methods
+hide circle
+
+class entries {
+    _id : ObjectId
+    type : "blog"
+    created_by : ObjectId [author]
+    comments_closed : bool [new, optional]
+}
+
+class comments {
+    _id : ObjectId
+    entry_id : ObjectId
+    commenter_id : ObjectId
+    name : string [snapshot]
+    text : string [plain, <= 2000]
+    status : unverified | pending\n         | approved | rejected
+    created_at, verified_at : date
+    moderated_at : date
+    moderated_by : ObjectId [users]
+    ip_hash : string [HMAC, for limits]
+    reply : {text, user_id, name, by_author,\n         created_at, updated_at} [optional, one]
+    --
+    index {entry_id, status, created_at}
+    index {status, created_at}
+}
+
+class comment_tokens {
+    token_hash : string [SHA-256]
+    comment_id : ObjectId
+    expires_at : date [TTL 24 h]
+}
+
+class captcha_used {
+    nonce : string [unique]
+    expires_at : date [TTL]
+}
+
+class mail_queue {
+    to, subject, text : string
+    status : queued | sent | failed
+    attempts : int
+    next_attempt_at, sent_at : date
+    last_error : string
+}
+
+class users {
+    _id : ObjectId
+    email : string [unique, case-insensitive]
+    name, username : string
+    role : admin | author | viewer\n       | moderator | commenter
+    password : argon2id [none for a commenter]
+    name_key : string [commenters; unique]
+    email_verified_at : date | null
+    blocked : bool
+}
+
+entries "1" -- "0..*" comments
+users "1" -- "0..*" comments : commenter_id
+comments "1" -- "0..1" comment_tokens
+users "0..1" -- "0..*" comments : moderated_by
+users "1" -- "0..*" entries : created_by
+
+@enduml

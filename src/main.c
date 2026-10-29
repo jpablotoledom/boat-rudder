@@ -5,6 +5,9 @@
 #include "db/cms_users_admin.h"
 #include "db/mongodb_manager.h"
 #include "db/session_manager.h"
+#include "db/cms_comments.h"
+#include "extensions/extensions.h"
+#include "utils/mailer.h"
 #include "modules/analytics/geoip.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
@@ -162,6 +165,7 @@ int main(int argc, char *argv[]) {
         session_manager_ensure_indexes();
         cms_users_ensure_usernames();
         cms_browser_detection_reload();   // without MongoDB the factory rules apply
+        cms_comments_ensure_indexes();
     }
 
     geoip_init(GEOIP_DEFAULT_DB_PATH);
@@ -181,9 +185,19 @@ int main(int argc, char *argv[]) {
     if (wap_gateway_start() != 0)
         LOG_WARN("WAP gateway could not start - continuing without it");
 
+    // After the listener too: an extension may call back into the site.
+    // Without MongoDB nothing is enabled, so nothing starts.
+    extensions_start();
+
+    // Mail is sent from its own thread; without mail_smtp_url it stays off.
+    if (mailer_start() != 0)
+        LOG_WARN("Mail sender could not start - comments' confirmation emails will queue up");
+
     while (atomic_load(&running)) sleep(1);
 
     LOG_INFO("Shutting down...");
+    mailer_stop();
+    extensions_stop();
     wap_gateway_stop();
     server_stop();
     geoip_cleanup();

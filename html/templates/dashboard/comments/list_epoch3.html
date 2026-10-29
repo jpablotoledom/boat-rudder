@@ -1,0 +1,32 @@
+<section class="boat-rudder-dashboard">
+  <nav class="boat-rudder-dashboard__breadcrumb" aria-label="Breadcrumb">
+    <ol><li><a href="/dashboard">Dashboard</a></li></ol>
+  </nav>
+  <h1>Comments</h1>
+  <p>%7$s Visitors' comments appear on blog entries only once approved; an approved one can be
+     hidden again (Reject) and a rejected one restored. <em>Unverified</em> ones never confirmed
+     their email - approving one anyway makes it public; unconfirmed ones are deleted after 24 hours. Settings: <a href="/dashboard/settings#comments">Comments</a>.</p>
+  <nav class="boat-rudder-tabs" aria-label="Comment status">
+    <a class="boat-rudder-tabs__tab%1$s" href="/dashboard/comments?status=pending">Pending (%4$d)</a>
+    <a class="boat-rudder-tabs__tab%2$s" href="/dashboard/comments?status=approved">Approved</a>
+    <a class="boat-rudder-tabs__tab%3$s" href="/dashboard/comments?status=rejected">Rejected</a>
+    <a class="boat-rudder-tabs__tab%8$s" href="/dashboard/comments?status=unverified">Unverified (%9$d)</a>
+  </nav>
+%5$s
+  <div class="boat-rudder-dashboard__table-scroll">
+  <table class="boat-rudder-dashboard__table">
+    <thead>
+      <tr>
+        <th>Entry</th>
+        <th>From</th>
+        <th>Comment</th>
+        <th>Date</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+%6$s
+    </tbody>
+  </table>
+  </div>
+</section>

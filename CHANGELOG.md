@@ -4,6 +4,223 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+## v0.0.7
+### 2026-10-29
+
+### Comments from older browsers
+
+**Added**
+- Blog comments can be written from every epoch - WAP phones, Lynx and other text browsers,
+  Mosaic, Netscape, Internet Explorer 3-6... - not only from modern browsers: the same form in
+  each epoch's markup, the same checks, email confirmation and moderation.
+- On WAP the form has pages of its own, small enough for one gateway packet each (name, email
+  and comment, then the challenge and Send), with the challenge as a black-and-white WBMP.
+- The WAP gateway forwards forms (WSP Post) as HTTP POSTs, with the phone's own User-Agent - so
+  comments, and confirming one, work from a phone through it.
+- The challenge for those browsers: a GIF served by URL (`/comments/captcha`) on epochs 1-2,
+  which can't show the inline PNG, and the same characters drawn as text art on epoch 0.
+
+- Each comment records where it was written from - browser, operating system, the User-Agent and
+  the epoch - and shows it as two small icons next to the commenter's name (text on Lynx and
+  WAP): 12 browsers and 13 systems, from Mosaic, Arachne, MS-DOS, OS/2 and Palm OS to today's, drawn in pixel
+  art by `scripts/generate-client-icons.py`. The moderation list shows the icons and the words.
+  DOS is recognized when the User-Agent says so (`(DOS)`, `FreeDOS`, `DJGPP`) or from Arachne.
+- The author of a blog entry can reply to a comment on it - one reply per comment, edited or
+  deleted from *Dashboard → Comments* (an Administrador can reply to any comment). The reply
+  shows under the comment in every epoch, marked *Author*; replying to a pending comment
+  approves it, and the commenter is emailed at the first reply. Visitors still only comment.
+
+**Changed**
+- The challenge's answer is now derived from its token with the site's secret instead of
+  chosen at random, so the image can be drawn again from the token alone; one token always
+  draws the same image. Security is unchanged: the answer can't be computed without the secret.
+- Form actions carry `?theme=`/`?lang=` (and `?site=`) on the epochs that keep them in links, so
+  posting a form no longer loses the reader's theme or language.
+
+**Fixed**
+- The WAP gateway's WML compiler dropped `method="post"` from `<go>`, so a phone sent the form as
+  a GET with its fields in the URL ("This page does not exist"). It now encodes the method's
+  WML 1.1 token.
+- It also sent WML variables (`$(name)`) as plain text, so a phone posted "(name)" instead of
+  what was typed; they are now WBXML variable references (and `$$` a plain `$`).
+- A deck that fits one packet whole is no longer split into pages: the room kept for Prev/Next
+  links (long on long URLs) split a WAP form, and each half fetched apart drew another
+  challenge.
+- Forms sent in Latin-1 (epoch 1 pages, some epoch 2 browsers) are converted to UTF-8, so a
+  name like "Peña" is no longer refused.
+- Bytes after a request's `Content-Length` are no longer read as part of its body. NCSA
+  Mosaic 2 and Internet Explorer 2 send a CRLF after a form's data; it ended up in the last
+  field, so their comments were refused as a wrong challenge answer.
+- After sending a comment, the redirect names the full URL (`http://host/blog/...`), and a
+  browser that sends no `Host` (NCSA Mosaic 2) gets the entry with its notice straight away
+  instead of a redirect: Mosaic turned the bare path into the hostless `http:///blog/...` and
+  failed with "Failed DNS Lookup".
+
+### 2026-10-28
+
+### Blog comments
+
+**Added**
+- Comments on blog entries (epoch 3): name, email, comment and a challenge Boat Rudder draws
+  itself (no third-party service). The visitor confirms the email through a link; the comment
+  then waits for a moderator and is public only once approved. A browser that confirmed its email
+  is remembered for a year, so its next comments skip the email (still moderated). Off by
+  default: **Dashboard → Site → General → Comments**, which also sends a test email.
+- **Dashboard → Content → Comments**: pending / approved / rejected, Approve, Reject, Delete,
+  and (Administrador) block an email. An Autor moderates the comments on their own blog entries.
+  The dashboard home shows how many are waiting. The entry editor can close comments per entry.
+- Outgoing mail: `mail_smtp_url`, `mail_smtp_user`, `mail_smtp_password`, `mail_from`,
+  `mail_from_name` in `configs/settings.conf`; sent from a background queue (`mail_queue`) with
+  retries.
+- Defenses: a single-use, time-bounded challenge, a honeypot, per-address and per-email limits,
+  confirmation tokens stored only as hashes, addresses stored only as an HMAC.
+- Commenters are users (`role: "commenter"`, no password, can't sign in), listed under
+  **Users → Commenters**; an admin can make one an author, moderator or administrator by picking
+  the role and giving them a password.
+- New role **Moderator**: only the dashboard home and Comments - approves and rejects every blog
+  comment, deletes and blocks nothing.
+- Older epochs (WAP, text browsers, HTML 3.2 / 4) show a blog entry's approved comments,
+  read-only, with a note that writing one needs a modern browser.
+- **Comments → Unverified**: comments whose email isn't confirmed yet, with the state of their
+  confirmation email (sent / retrying with the SMTP error / failed); **Resend email** sends a new
+  link, and a moderator can approve one without the email check.
+- The entry's author gets an email when a comment on it is waiting for moderation (once the
+  commenter's email is confirmed, or straight away from a remembered browser): who, the text,
+  and links to **Comments** and to the entry. Not for their own comments, nor when the author
+  has no email.
+
+**Security**
+- The media library showed an Autor every author's directories and images (the page, its
+  listing and the entry editor's picker) - only changing them was refused. An Autor now sees
+  only their own; an Administrador and the Observador still see everyone's, each directory
+  followed by whose it is - "(Me)" or the owner's name - since every author has a `default`.
+- A session whose user had been deleted kept working - and as an administrator, since an
+  unreadable role fell back to "admin". Deleting a user now ends their sessions, and a role that
+  can't be read opens nothing. Making someone a commenter ends their sessions too.
+
+**Build**
+- New dependency: **libcurl** (`libcurl4-openssl-dev` on Debian/Ubuntu, `libcurl-devel` on
+  Fedora). `boat-rudder-update` checks for it before building - install it before updating.
+
+### Site search
+
+**Added**
+- Search, on every epoch: `/search?q=` lists the published blog entries and pages (never drafts)
+  whose title, summary or text contain the words, in the reader's language, each with an
+  excerpt around the first match. The results page has its own search form.
+- A magnifier in the menu, first of the options (before language and theme): on epoch 3 it opens a search box
+  (Enter searches); on epoch 1/2 it is a small icon (`assets/menu/search.gif`, one per theme)
+  linking to the search page; on epoch 0 and WAP, a "Search" link.
+- Themes: `menu/menu-search_epoch<N>.html` and `assets/menu/search.gif` in both shipped themes;
+  a third-party theme without them simply shows no search control (the page still works).
+
+### Extensions
+
+**Added**
+- Extensions: separate programs, installed under `extensions/<name>/`, that add pages to the
+  dashboard. Boat Rudder finds each one by its `extension.conf`, lists it in
+  **Dashboard → Administration → Extensions** (`/dashboard/settings/extensions`) disabled until
+  an admin enables it, runs the program of every enabled one (restarting it if it exits, giving
+  up after 5 exits in a minute) and stops it when disabled or when the server stops. Its pages
+  live at `/dashboard/ext/<name>/` behind every dashboard guard - session, CSRF, epoch 3, a
+  viewer's writes refused - and are forwarded to it over a Unix socket with the signed-in user's
+  id, name and role; the HTML it answers is shown inside the site's layout. An enabled extension
+  can add a link to a new *Extensions* group of the dashboard menu, for every role.
+- `sdk/brext.h` / `sdk/brext.c`: the C SDK an extension compiles in - socket server, routing,
+  form/query fields, the user's identity, HTML/JSON/redirect answers.
+- Reference for extension authors: `develop_docs/reference/extensions.md`, a step-by-step guide
+  in `develop_docs/reference/creating-an-extension.md`, and the design in
+  `develop_docs/plans/adr-extensions.md`.
+
+### Absolute-form requests
+
+**Fixed**
+- A request naming the full URL - `GET http://thejoyrobot.com/ HTTP/1.1`, the absolute form
+  a client sends to a proxy (RFC 9112 3.2.2) - got a 404: the scheme and host were taken as
+  part of the path. A phone whose connection profile names a proxy (UC Browser on Java ME)
+  passes its requests on that way, so every public site came up blank while a LAN address,
+  reached directly, worked. `parse_http_request()` now reduces the target to its path and
+  query (`/` when there is none) and takes the host from it, in place of any `Host` header,
+  or as one when the client sent none.
+
+### Rich text that WAP browsers can read
+
+**Fixed**
+- A paragraph written in the dashboard's rich-text editor went out to WAP (epoch -1) as the
+  editor's HTML - `<p>` inside the template's own `<p>`, `<span>`, `<ul data-...>`, `style`
+  and `data-*` attributes - none of which WML 1.1 has. A strict client such as UC Browser on
+  Java ME showed a blank screen for the whole page (the live thejoyrobot.com home did). For
+  WML the paragraph is now rebuilt from WML's own vocabulary (`render_paragraph()`,
+  entry_page.c): b/i/u/em/strong/big/small without attributes, `<a>` with its `href` only,
+  `<img>` with `src`/`alt`, self-closed; the end of a block (p, div, h1-h6, blockquote, li)
+  becomes `<br/>`, list items start with "- "; any other tag is dropped and its text kept; a
+  `$` is doubled, since a lone one opens a WML variable. Checked against the WML 1.1 DTD.
+- The WML paginator and the WAP gateway's WBXML compiler dropped a blank run between two
+  inline elements, so `</a> <img` or `</b> <i>` lost their word gap. It is now kept as one
+  space when it sits between two siblings inside text (wbxml.c's `parse_wml()`).
+
+### No page-wide backdrop on epoch 2
+
+**Removed**
+- Epoch 2's home and blog listing also put the listing's grid image on the whole `<body>`
+  (`layout/body-backdrop_epoch2.html`, asked for with `{{BODY_BACKDROP}}` and spliced into
+  the layout's `{{BODY_BACKGROUND}}`). The image was drawn for the listing, which already sets
+  it on its own `<table>` (`home-blog_epoch2.html`), so the page around it now shows only the
+  theme's background color. The file, both markers and `take_body_backdrop()` are gone; a
+  third-party theme should delete its `body-backdrop_epoch2.html` and the
+  `{{BODY_BACKGROUND}}` / `{{BODY_BACKDROP}}` markers from its templates, which would
+  otherwise reach the browser as literal text.
+
+### Uploaded logo laid out like the default one
+
+**Fixed**
+- An uploaded navbar logo for epoch -1 (WAP) was a bare `<img>`: no link home and no line
+  break, so the first menu item ran on right after the picture. It is now wrapped in
+  `<a href="/">` like the theme's default logo, and on epoch 2 gets the same link home its
+  default has. Epoch 1's default is a bare image, as before.
+
+**Changed**
+- The WAP menu's line break after the logo now comes from `menu()` itself, for every kind of
+  logo (uploaded image, text, legacy raw markup or the theme's default), and only when there
+  is a logo - the home page, which has none, does not start with an empty line. The default
+  `menu-logo_epoch-1.html` of both themes no longer carries its own `<br>`; a third-party
+  theme's template should drop it too (one ending in `<br>` is left as is, never doubled).
+- Silenced a `-Wformat-truncation` warning in the release build (`cms_users_admin.c`).
+
+### 2026-10-24
+
+### Several sites on one address: old browsers can choose
+
+**Added**
+- Behind a front that serves several sites on one address (multi-br), a browser too old to
+  send a `Host` header used to land on the default site with no way to reach the others. Now,
+  asking for `/`, it gets a list of every site. Once it picks one, every link, image and
+  redirect it receives carries `?site=<name>`, so it stays on that site, just as `?lang=` and
+  `?theme=` keep its language and theme. New settings `site_key` and `site_directory`, written
+  by multi-br. A browser that sends `Host` sees no change.
+
+**Fixed**
+- The *Hide/Show line numbers* button of code blocks in epoch 2 (a JavaScript button, not a
+  link) lost the visitor's theme on click, and behind multi-br sent a browser without `Host` to
+  the default site. It now keeps `?theme=` and `?site=` like every other link.
+- Browsers older than HTML 2.0, like Cello, send a link's `&amp;` and `#fragment` exactly as
+  written. Every parameter after the first was lost, so *Hide line numbers*, the language and
+  the theme didn't stick, and behind multi-br the click landed on the default site. The server
+  now reads `&amp;` as `&` and ignores a `#fragment` in the request.
+
+### Navbar: animated title on scroll
+
+**Changed**
+- On the home page (dark and light themes, epoch 3) the big site title over the banner now
+  slides up and shrinks into the navbar as you scroll, while the menu glides to the right to
+  make room for it; scrolling back to the top plays it in reverse. It used to jump between the
+  two positions. Below 960px, where the menu lives behind the hamburger, the title stays centred
+  and only moves up and shrinks.
+
+**Fixed**
+- In maintenance mode the navbar has no menu items, but the title was still pushed off-centre
+  by the room reserved for them. It is now centred, both over the banner and in the bar.
+
 ## v0.0.6
 ### 2026-10-21
 

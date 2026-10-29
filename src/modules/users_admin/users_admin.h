@@ -6,7 +6,8 @@
 // `error_message` is shown above the table if non-NULL/non-empty (e.g. the
 // self-delete / last-admin-removal messages from the router). Returns a
 // malloc'd string, or NULL on a missing template / allocation failure.
-char *users_admin_list(int epoch, const char *error_message);
+// `commenters`: the blog commenters (role "commenter") instead of the team.
+char *users_admin_list(int epoch, const char *error_message, int commenters);
 
 // /dashboard/users/new (id == "") and /dashboard/users/<id>/edit (id == hex
 // ObjectId). `name`/`username`/`email`/`role` are the user's current values

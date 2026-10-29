@@ -1,0 +1,62 @@
+@startuml sequence-extension-enable
+
+title Boat Rudder - Installing and enabling an extension
+
+skinparam backgroundColor #FAFAFA
+skinparam sequenceArrowThickness 1.5
+skinparam sequence {
+    LifeLineBackgroundColor #E3F2FD
+    LifeLineBorderColor #1565C0
+    ActorBackgroundColor #FFF9C4
+    ActorBorderColor #F9A825
+    ParticipantBackgroundColor #E8F5E9
+    ParticipantBorderColor #2E7D32
+}
+
+actor Developer as DEV
+actor Admin as ADMIN
+participant "http_router" as ROUTER
+participant "extensions registry" as REG
+participant "cms_extensions" as DB
+participant "supervisor thread" as SUP
+participant "extension process\n(brext SDK)" as EXT
+
+DEV -> DEV : make install DEST=<site>/extensions/<name>\n(extension.conf + bin/<program>)
+
+ADMIN -> ROUTER : GET /dashboard/settings/extensions
+ROUTER -> REG : extensions_rescan()
+REG -> REG : read every extensions/*/extension.conf\nvalid -> Disabled, else Invalid
+ROUTER --> ADMIN : list: <name> - Disabled - [Enable]
+
+ADMIN -> ROUTER : POST /dashboard/settings/extensions/<name>/enable\n(+ csrf_token)
+ROUTER -> ROUTER : require_admin_session()\n(session, CSRF, admin)
+ROUTER -> REG : extensions_set_enabled(name, 1)
+REG -> DB : upsert {name, enabled: true}
+REG -> REG : info.enabled = 1
+ROUTER --> ADMIN : 302 /dashboard/settings/extensions
+
+loop every second
+    SUP -> REG : reconcile(each extension)
+    alt enabled and no process
+        SUP -> EXT : fork() + execve(bin/<program>)\ncwd = extensions/<name>/\nBR_SOCKET, BR_MONGODB_URI, BR_MONGODB_DB, ...
+        note right of SUP : state = Starting
+        EXT -> EXT : bind + listen on BR_SOCKET (0600)
+    else process alive
+        SUP -> EXT : connect(BR_SOCKET)
+        EXT --> SUP : accepted
+        note right of SUP : state = Running
+    end
+end
+
+ADMIN -> ROUTER : GET /dashboard
+ROUTER -> REG : extensions_admin_nav()
+ROUTER --> ADMIN : menu with an "Extensions" group:\nlink to /dashboard/ext/<name><nav path>
+
+== Disable ==
+ADMIN -> ROUTER : POST .../<name>/disable
+ROUTER -> REG : extensions_set_enabled(name, 0)
+REG -> DB : upsert {name, enabled: false}
+SUP -> EXT : SIGTERM (SIGKILL after 3 s)
+EXT -> EXT : brext_serve() returns,\nsocket removed
+
+@enduml

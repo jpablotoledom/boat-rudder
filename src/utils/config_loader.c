@@ -18,6 +18,8 @@ char trusted_proxies[512] = {0};
 char theme[64]            = "dark";
 char lang[16]             = "Eng";
 char public_url[256]      = {0};
+char site_key[64]         = {0};
+char site_directory[1024] = {0};
 int  force_epoch          = -2;
 char mongodb_uri[256]     = "mongodb://localhost:27017";
 char mongodb_db[64]       = "boat_rudder";
@@ -38,6 +40,11 @@ int  wap_gateway_rate_limit = 60;
 char wap_upstream[64]       = {0};
 bool wap_upstream_proxy_protocol = false;
 char update_repo[128]      = "jpablotoledom/boat-rudder";
+char mail_smtp_url[256]      = {0};
+char mail_smtp_user[256]     = {0};
+char mail_smtp_password[256] = {0};
+char mail_from[256]          = {0};
+char mail_from_name[128]     = {0};
 
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -89,6 +96,12 @@ int load_config(const char *filename) {
         } else if (strcmp(key, "public_url") == 0) {
             strncpy(public_url, value, sizeof(public_url) - 1);
             public_url[sizeof(public_url) - 1] = '\0';
+        } else if (strcmp(key, "site_key") == 0) {
+            strncpy(site_key, value, sizeof(site_key) - 1);
+            site_key[sizeof(site_key) - 1] = '\0';
+        } else if (strcmp(key, "site_directory") == 0) {
+            strncpy(site_directory, value, sizeof(site_directory) - 1);
+            site_directory[sizeof(site_directory) - 1] = '\0';
         } else if (strcmp(key, "force_epoch") == 0) {
             force_epoch = atoi(value);
         } else if (strcmp(key, "mongodb_uri") == 0) {
@@ -132,6 +145,16 @@ int load_config(const char *filename) {
         } else if (strcmp(key, "update_repo") == 0) {
             strncpy(update_repo, value, sizeof(update_repo) - 1);
             update_repo[sizeof(update_repo) - 1] = '\0';
+        } else if (strcmp(key, "mail_smtp_url") == 0) {
+            snprintf(mail_smtp_url, sizeof(mail_smtp_url), "%s", value);
+        } else if (strcmp(key, "mail_smtp_user") == 0) {
+            snprintf(mail_smtp_user, sizeof(mail_smtp_user), "%s", value);
+        } else if (strcmp(key, "mail_smtp_password") == 0) {
+            snprintf(mail_smtp_password, sizeof(mail_smtp_password), "%s", value);
+        } else if (strcmp(key, "mail_from") == 0) {
+            snprintf(mail_from, sizeof(mail_from), "%s", value);
+        } else if (strcmp(key, "mail_from_name") == 0) {
+            snprintf(mail_from_name, sizeof(mail_from_name), "%s", value);
         }
     }
 

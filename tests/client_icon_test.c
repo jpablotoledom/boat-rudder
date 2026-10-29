@@ -69,6 +69,12 @@ int main(void) {
     expect_ua("Mozilla/5.0 (webOS/1.4.0; U; en-US) AppleWebKit/532.2 Version/1.0 Safari/532.2", "safari", "Safari 1", NULL, NULL);
     expect_ua("Nokia7110/1.0 (04.94)", "wap", "Nokia", NULL, NULL);
     expect_ua("BoatRudder-WAP-Gateway", "wap", "WAP phone", NULL, NULL);
+    expect_ua("Rover 1.5 (Palm; IP; OS v. 3.5.3)", "wap", "Rover", "palm", "Palm OS 3");
+    expect_ua("Mozilla/4.0 (compatible; MSIE 6.0; Windows 98; PalmSource/Palm-D050; Blazer/4.3) 16;320x320",
+              "ie", "Internet Explorer 6", "palm", "Palm OS");
+    expect_ua("Mozilla/4.61 [en] (OS/2; U)", "netscape", "Netscape 4", "os2", "OS/2");
+    expect_ua("IBM WebExplorer /v0.94 (OS/2)", "browser", "IBM WebExplorer", "os2", "OS/2");
+    expect_ua("IBM WebExplorer DLL /v960311", "browser", "IBM WebExplorer", "os2", "OS/2");
     expect_ua("w3m/0.5.3", "text", "w3m", NULL, NULL);
     expect_ua("Mozilla/5.0 (FreeBSD 14.0; amd64) Firefox/120.0", "firefox", "Firefox 120", "bsd", "FreeBSD 14");
 
@@ -80,7 +86,7 @@ int main(void) {
     // Every icon the generator draws is there.
     static const char *ALL[] = { "chrome", "firefox", "edge", "safari", "opera", "ie", "netscape", "mosaic", "text",
                                  "wap", "browser", "windows", "windows-xp", "windows-classic", "mac", "mac-classic",
-                                 "linux", "android", "ios", "bsd", "unix", "dos", "os", "arachne", NULL };
+                                 "linux", "android", "ios", "bsd", "unix", "dos", "os2", "palm", "os", "arachne", NULL };
     for (int i = 0; ALL[i]; i++) icon_exists(ALL[i]);
 
     printf("%d checks, %d failed\n", checks, failures);

@@ -154,7 +154,7 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
   `"MSIE/5"`, `"Windows/2000"`), the `user_agent` itself (printable ASCII, ≤ 256 bytes, so it can
   be classified again) and the `epoch`.
 - **Shown as icons** next to the commenter's name (`comment_client_html()`): the browser's and the
-  system's 16x16 GIFs from `html/assets/icons/clients/`, their names as alt text (and `title` on
+  system's 20x20 GIFs from `html/assets/icons/clients/`, their names as alt text (and `title` on
   epochs 2-3); on epoch 0 and WAP the names as text, `[Lynx 2]` / `(Lynx 2)`. `client_icon.c` maps
   the stored keys to an icon and words - "MSIE/5" → `ie.gif`, "Internet Explorer 5";
   "Windows/2000" → `windows-classic.gif` - and reads the User-Agent where the keys say nothing
@@ -167,9 +167,11 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
   logos - drawn by `scripts/generate-client-icons.py` (`python3 scripts/generate-client-icons.py
   --preview sheet.png` redraws them all and a sample sheet): browsers `chrome`, `firefox`,
   `edge`, `safari`, `opera`, `ie`, `netscape`, `mosaic`, `text` (Lynx, Links, w3m, ELinks), `arachne`,
-  `wap`, `browser` (any other); systems `windows` (8 and later), `windows-xp` (XP to 7),
+  `wap` (WAP phones, Rover, the WAP gateway), `browser` (any other); systems `windows` (8 and later), `windows-xp` (XP to 7),
   `windows-classic` (3.x to 2000), `mac`, `mac-classic`, `linux`, `android`, `ios`, `bsd`,
-  `unix` (Solaris, IRIX, BeOS, OS/2...), `dos`, `os`. GIF89a with a transparent background; a new icon
+  `unix` (Solaris, IRIX, BeOS...), `dos`, `os2` (OS/2, and IBM WebExplorer, which
+  only ran there), `palm` (Palm OS - read before any other system,
+  as its browsers' User-Agents name another one too), `os`. GIF89a with a transparent background; a new icon
   needs a line in both the script and `client_icon.c`.
 - Emails are shown only in the dashboard.
 

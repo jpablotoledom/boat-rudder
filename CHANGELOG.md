@@ -22,7 +22,7 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 - Each comment records where it was written from - browser, operating system, the User-Agent and
   the epoch - and shows it as two small icons next to the commenter's name (text on Lynx and
-  WAP): 12 browsers and 11 systems, from Mosaic, Arachne and MS-DOS to today's, drawn in pixel
+  WAP): 12 browsers and 13 systems, from Mosaic, Arachne, MS-DOS, OS/2 and Palm OS to today's, drawn in pixel
   art by `scripts/generate-client-icons.py`. The moderation list shows the icons and the words.
   DOS is recognized when the User-Agent says so (`(DOS)`, `FreeDOS`, `DJGPP`) or from Arachne.
 - The author of a blog entry can reply to a comment on it - one reply per comment, edited or
@@ -38,6 +38,14 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   posting a form no longer loses the reader's theme or language.
 
 **Fixed**
+- The WAP gateway's WML compiler dropped `method="post"` from `<go>`, so a phone sent the form as
+  a GET with its fields in the URL ("This page does not exist"). It now encodes the method's
+  WML 1.1 token.
+- It also sent WML variables (`$(name)`) as plain text, so a phone posted "(name)" instead of
+  what was typed; they are now WBXML variable references (and `$$` a plain `$`).
+- A deck that fits one packet whole is no longer split into pages: the room kept for Prev/Next
+  links (long on long URLs) split a WAP form, and each half fetched apart drew another
+  challenge.
 - Forms sent in Latin-1 (epoch 1 pages, some epoch 2 browsers) are converted to UTF-8, so a
   name like "Peña" is no longer refused.
 - Bytes after a request's `Content-Length` are no longer read as part of its body. NCSA

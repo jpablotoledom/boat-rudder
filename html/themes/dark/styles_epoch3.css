@@ -913,7 +913,7 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 }
 .boat-rudder-comment__meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
 .boat-rudder-comment__date { font-size: 0.85em; color: var(--br-color-blog-list-item-date, #a0a0a0); }
-.boat-rudder-comment__client { vertical-align: -3px; margin-right: 2px; }
+.boat-rudder-comment__client { vertical-align: -5px; margin-right: 2px; }
 .boat-rudder-comment__text { margin: 0; overflow-wrap: anywhere; }
 .boat-rudder-comment__reply {
   margin: 10px 0 0 24px; padding: 4px 0 4px 12px;

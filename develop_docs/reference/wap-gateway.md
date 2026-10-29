@@ -85,6 +85,14 @@ the client retries or times out exactly as with a lost packet.
 
 ### Forms (WSP Post)
 
+What makes a form work on the phone is in the compiled deck (`wbxml.c`): `<go method="post">`
+is the attribute token `0x1C` (`method="get"` `0x1B`) - WML 1.1 has no plain `method` token,
+and dropped, the phone sends a GET with the fields in the URL; and WML variables are WBXML
+references - `$(name)` `EXT_I_2` + the name (`:e` `EXT_I_0`, `:u` `EXT_I_1`), `$$` a plain `$` -
+since left as text a phone posts the literal "(name)". A deck that fits `WAP_PAGE_BYTES` whole
+goes out as one page, with no room kept for Prev/Next links: a form split across two fetches
+would show one challenge and send another.
+
 A WML `<go method="post">` arrives as a WSP **Post** PDU (`0x60`, WAP-230 §8.2.3.2): URI length,
 headers length, the URI, the content type and headers, then the body. `wsp_post_headers()` reads
 the content type (a well-known code - `0x12` is `application/x-www-form-urlencoded` - or a text,

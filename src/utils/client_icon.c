@@ -50,9 +50,10 @@ static void browser_of(const char *key, const char *ua, ClientIcons *out) {
     static const struct { const char *token; const char *icon; const char *name; } OTHERS[] = {
         { "ELinks", "text", "ELinks" }, { "Line Mode", "text", "Line Mode Browser" },
         { "LineMode", "text", "Line Mode Browser" }, { "Arachne", "arachne", "Arachne" },
+        { "WebExplorer", "browser", "IBM WebExplorer" },
         // WAP phones, and the WAP gateway when a phone didn't say what it is.
         { "BoatRudder-WAP-Gateway", "wap", "WAP phone" }, { "Nokia", "wap", "Nokia" },
-        { "Ericsson", "wap", "Ericsson" }, { "MOT-", "wap", "Motorola" },
+        { "Ericsson", "wap", "Ericsson" }, { "MOT-", "wap", "Motorola" }, { "Rover", "wap", "Rover" },
     };
     for (size_t i = 0; ua && i < sizeof(OTHERS) / sizeof(OTHERS[0]); i++) {
         if (strstr(ua, OTHERS[i].token)) {
@@ -82,6 +83,15 @@ static void os_of(const char *key, const char *ua, ClientIcons *out) {
     char *l = out->os_label;
     size_t n = sizeof(out->os_label);
 
+    // Palm OS first: its browsers' User-Agents name another system too
+    // (Blazer says "Windows 98").
+    if (ua && (strstr(ua, "Palm;") || strstr(ua, "PalmOS") || strstr(ua, "PalmSource") || strstr(ua, "Palm OS"))) {
+        const char *v = strstr(ua, "OS v. ");
+        out->os_icon = "palm";
+        label(l, n, "Palm OS", v ? atoi(v + 6) : 0);
+        return;
+    }
+
     if (key_is(key, "Windows")) {
         const char *v = strchr(key, '/') ? strchr(key, '/') + 1 : "";
         static const struct { const char *v; const char *icon; const char *name; } WIN[] = {
@@ -107,7 +117,7 @@ static void os_of(const char *key, const char *ua, ClientIcons *out) {
     if (key_is(key, "OpenBSD")) { out->os_icon = "bsd";     snprintf(l, n, "OpenBSD"); return; }
     if (key_is(key, "NetBSD"))  { out->os_icon = "bsd";     snprintf(l, n, "NetBSD"); return; }
     if (key_is(key, "BeOS"))    { out->os_icon = "unix";    snprintf(l, n, "BeOS"); return; }
-    if (key_is(key, "OS2"))     { out->os_icon = "unix";    snprintf(l, n, "OS/2"); return; }
+    if (key_is(key, "OS2"))     { out->os_icon = "os2";     snprintf(l, n, "OS/2"); return; }
     if (key_is(key, "Solaris")) { out->os_icon = "unix";    snprintf(l, n, "Solaris"); return; }
 
     // What the parser has no key for, read from the User-Agent itself.
@@ -130,6 +140,8 @@ static void os_of(const char *key, const char *ua, ClientIcons *out) {
     for (size_t i = 0; i < sizeof(UNIXES) / sizeof(UNIXES[0]); i++) {
         if (strstr(ua, UNIXES[i].token)) { out->os_icon = "unix"; snprintf(l, n, "%s", UNIXES[i].name); return; }
     }
+    // IBM WebExplorer only ever ran on OS/2, and doesn't always say so.
+    if (strstr(ua, "WebExplorer")) { out->os_icon = "os2"; snprintf(l, n, "OS/2"); return; }
     if (strstr(ua, "Win")) { out->os_icon = "windows-classic"; snprintf(l, n, "Windows"); return; }
 }
 

@@ -341,7 +341,14 @@ static const struct { const char *name; int code; } ELEMENTS[] = {
     {"br", 0x26},
 };
 
-// Attributes WML 1.1 has no plain start token for (method, mode, ...) are
+// Attributes whose WML 1.1 start token carries the value too: the token
+// alone, no string. method matters - dropped, a <go method="post"> becomes
+// a GET and a form's fields end up in the URL.
+static const struct { const char *name, *value; int code; } VALUE_ATTRS[] = {
+    {"method", "get", 0x1B}, {"method", "post", 0x1C},
+};
+
+// Other attributes WML 1.1 has no plain start token for (mode, ...) are
 // left out, i.e. dropped, as in the original compiler.
 static const struct { const char *name; int code; } ATTRS[] = {
     {"accept-charset", 0x05}, {"accesskey", 0x5E}, {"align", 0x52}, {"alt", 0x0C},
@@ -362,16 +369,75 @@ static int element_code(const char *name) {
     return -1;
 }
 
+static int value_attr_code(const char *name, const char *value) {
+    for (size_t i = 0; i < sizeof(VALUE_ATTRS) / sizeof(VALUE_ATTRS[0]); i++)
+        if (!strcasecmp(VALUE_ATTRS[i].name, name) && !strcasecmp(VALUE_ATTRS[i].value, value))
+            return VALUE_ATTRS[i].code;
+    return -1;
+}
+
 static int attr_code(const char *name) {
     for (size_t i = 0; i < sizeof(ATTRS) / sizeof(ATTRS[0]); i++)
         if (!strcasecmp(ATTRS[i].name, name)) return ATTRS[i].code;
     return -1;
 }
 
-static void put_str(Buf *b, const char *s) {
+static void put_literal(Buf *b, const char *s, size_t n) {
+    if (!n) return;
     b_byte(b, TOKEN_STR_I);
-    b_put(b, s, strlen(s));
+    b_put(b, s, n);
     b_byte(b, 0);
+}
+
+// A WML string: literal runs inline (STR_I), and WML's variable syntax as
+// WBXML has it - "$$" a plain "$", "$(name)" / "$name" a reference
+// (EXT_I_2, no conversion; ":e" / ":escape" EXT_I_0, ":u" / ":unesc"
+// EXT_I_1, ":n" / ":noesc" EXT_I_2) followed by the name. Left as text, a
+// browser doesn't substitute it - a form would post "$(name)" itself.
+static void put_str(Buf *b, const char *s) {
+    const char *run = s;
+    for (const char *p = s; *p; ) {
+        if (p[0] != '$') { p++; continue; }
+        if (p[1] == '$') {                       // "$$": one "$"
+            put_literal(b, run, (size_t)(p + 1 - run));
+            p += 2;
+            run = p;
+            continue;
+        }
+        const char *name = p + 1, *end;
+        int paren = *name == '(';
+        if (paren) name++;
+        if (!(isalpha((unsigned char)*name) || *name == '_')) { p++; continue; }
+        for (end = name; isalnum((unsigned char)*end) || *end == '_'; end++) {}
+        unsigned char token = 0x42;              // EXT_I_2
+        const char *after = end;
+        if (paren) {
+            const char *close = strchr(end, ')');
+            if (!close) { p++; continue; }
+            if (*end == ':') {
+                const char *conv = end + 1;
+                size_t cl = (size_t)(close - conv);
+                if ((cl == 1 && *conv == 'e') || (cl == 6 && !strncmp(conv, "escape", 6))) token = 0x40;
+                else if ((cl == 1 && *conv == 'u') || (cl == 5 && !strncmp(conv, "unesc", 5))) token = 0x41;
+            } else if (end != close) {
+                p++;
+                continue;
+            }
+            after = close + 1;
+        }
+        put_literal(b, run, (size_t)(p - run));
+        b_byte(b, token);
+        b_put(b, name, (size_t)(end - name));
+        b_byte(b, 0);
+        p = after;
+        run = p;
+    }
+    if (*s) {
+        put_literal(b, run, strlen(run));
+    } else {                                     // "" stays an (empty) inline string
+        b_byte(b, TOKEN_STR_I);
+        b_byte(b, 0);
+    }
 }
 
 static void compile_node(Buf *b, const Node *n, const char *base) {
@@ -385,6 +451,8 @@ static void compile_node(Buf *b, const Node *n, const char *base) {
 
     Buf attrs = { .ok = 1 }, content = { .ok = 1 };
     for (int i = 0; i < n->na; i++) {
+        int vc = value_attr_code(n->an[i], n->av[i]);
+        if (vc >= 0) { b_byte(&attrs, (unsigned char)vc); continue; }
         int ac = attr_code(n->an[i]);
         if (ac < 0) continue;
         b_byte(&attrs, (unsigned char)ac);
@@ -762,6 +830,20 @@ static int paged_build(Paged *pg, const char *src, const char *uri, int absolute
     // split there (see split_to_fit()), its rest starting the next page.
     for (int i = 0; i < card->nk; i++)
         if (card->kids[i]->name) list_add(&pg->queue, card->kids[i]);
+
+    // A card that fits whole needs no navigation, so no room is kept for it:
+    // it goes out as one page. (A form must: a page of it fetched apart is
+    // drawn again - another challenge than the one shown.)
+    if (card_size(pg->base_title, pg->queue.items, pg->queue.n, NULL, 0, basep) <= page_bytes) {
+        pg->pagev = malloc(sizeof(*pg->pagev));
+        if (!pg->pagev) return -1;
+        pg->pagev[0] = pg->queue;
+        pg->queue = (NodeList){0};
+        pg->pages = 1;
+        pg->page = 0;
+        snprintf(pg->page_title, sizeof(pg->page_title), "%s", pg->base_title);
+        return 0;
+    }
 
     int pcap = 0;
     NodeList cur = {0};

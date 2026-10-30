@@ -71,6 +71,11 @@ const char *brext_mongodb_uri(void);   // BR_MONGODB_URI    - the site's databas
 const char *brext_mongodb_db(void);    // BR_MONGODB_DB     - the site's database; name your
                                        //                     collections ext_<name>_...
 int         brext_log_level(void);     // BR_LOG_LEVEL      - 0 none .. 4 debug
+const char *brext_public_url(void);    // BR_PUBLIC_URL     - the site's public address
+                                       //                     ("https://example.org", no
+                                       //                     trailing slash), "" if not set:
+                                       //                     for links that leave the browser
+                                       //                     (QR codes, emails)
 
 // Writes "[<name>] message" to stderr, which ends up in the server's log, when
 // `level` <= brext_log_level() (1 error, 2 warning, 3 info, 4 debug).

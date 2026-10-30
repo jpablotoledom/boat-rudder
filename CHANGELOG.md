@@ -23,6 +23,8 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 **Added**
 - An extension can answer images (JPEG, PNG, GIF, WebP) under its own address, shown only to the
   signed-in user who asks: photos in an extension stay private. New SDK call `brext_bytes()`.
+- Extensions get the site's public address (`BR_PUBLIC_URL`, SDK `brext_public_url()`), for
+  absolute links such as QR codes on printed labels.
 
 **Fixed**
 - An extension stopped or restarted after the server had run any other program (an update check,

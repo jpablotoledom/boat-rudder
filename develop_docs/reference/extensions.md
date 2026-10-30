@@ -73,6 +73,7 @@ variables added to its environment:
 | `BR_SOCKET` | the Unix socket to listen on (`run/extensions/<name>.sock`) |
 | `BR_MONGODB_URI`, `BR_MONGODB_DB` | the site's database |
 | `BR_LOG_LEVEL` | the site's `verbose_level` (0 none … 4 debug) |
+| `BR_PUBLIC_URL` | the site's `public_url` (`https://example.org`, no trailing slash), "" when not set - for absolute links that leave the browser: QR codes, emails |
 
 The socket's absolute path must fit a Unix socket address (107 bytes): with Boat Rudder installed
 in a very long directory the extension is listed as *Can't be used* ("socket path too long").
@@ -174,7 +175,7 @@ int main(void) { return brext_serve(handle, NULL); }
 | `brext_bytes(res, type, data, len)` | The whole body as binary bytes: an image (§5) |
 | `brext_append`, `brext_appendf`, `brext_append_escaped` | Build the body |
 | `brext_status`, `brext_redirect`, `brext_not_found` | Status, `302` to a path below the mount, a 404 page |
-| `brext_mongodb_uri/_db`, `brext_name`, `brext_dir`, `brext_log` | Environment (§4) and logging to the server log |
+| `brext_mongodb_uri/_db`, `brext_name`, `brext_dir`, `brext_public_url`, `brext_log` | Environment (§4) and logging to the server log |
 
 Limits: request body 8 MiB, request head 16 KiB, 15 s per read/write.
 

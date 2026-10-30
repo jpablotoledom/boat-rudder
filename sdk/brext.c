@@ -32,6 +32,7 @@ const char *brext_name(void)        { return env_or_empty("BR_EXTENSION"); }
 const char *brext_dir(void)         { return env_or_empty("BR_EXTENSION_DIR"); }
 const char *brext_mongodb_uri(void) { return env_or_empty("BR_MONGODB_URI"); }
 const char *brext_mongodb_db(void)  { return env_or_empty("BR_MONGODB_DB"); }
+const char *brext_public_url(void)  { return env_or_empty("BR_PUBLIC_URL"); }
 int         brext_log_level(void)   { const char *v = getenv("BR_LOG_LEVEL"); return v ? atoi(v) : 3; }
 
 void brext_log(int level, const char *fmt, ...) {

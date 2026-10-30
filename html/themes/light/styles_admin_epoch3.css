@@ -2256,6 +2256,8 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
 }
 .boat-rudder-media__dir-item:hover { background: var(--br-admin-hover); }
 .boat-rudder-comment__client { vertical-align: -5px; margin-right: 2px; }
+.boat-rudder-comment__user { font-weight: normal; font-size: 0.85em; color: #5f5f66; }
+.boat-rudder-comment__verified { vertical-align: -5px; }
 .boat-rudder-dashboard__reply {
   margin-top: 8px; padding-left: 10px;
   border-left: 3px solid #d6d6d8;

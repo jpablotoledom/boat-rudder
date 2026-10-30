@@ -4,6 +4,20 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+## Unreleased
+
+### Commenters' names
+
+**Changed**
+- A commenter's name is no longer reserved: two people may comment under the same name. Each
+  commenter gets a username of its own, `user-1`, `user-2`..., shown next to the name ("Juan
+  user-12") and in the author's email. The same email is always the same commenter.
+- Comments and replies from the site's team carry a verified mark (a badge on epochs 1-3, `[v]` on
+  epoch 0 and WAP) instead of having their names reserved, and never show a team member's
+  sign-in name.
+- At startup, existing commenters get a `user-<n>` username in the order they first commented,
+  replacing the one taken from their email address.
+
 ## v0.0.7
 ### 2026-10-29
 

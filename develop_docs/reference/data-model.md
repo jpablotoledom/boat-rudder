@@ -174,14 +174,15 @@ entry is.
 ```jsonc
 { "_id": ObjectId, "name": "Jane", "username": "jane", "email": "jane@example.org",
   "password": "$argon2id$...", "role": "admin" | "author" | "viewer" | "moderator" | "commenter",
-  // blog commenters (comments.md); set by the comment form:
-  "name_key": "jane", "email_verified_at": ISODate, "blocked": false, "created_at": ISODate }
+  // blog commenters (comments.md); set by the comment form - username "user-<n>":
+  "email_verified_at": ISODate, "blocked": false, "created_at": ISODate }
 ```
 
 A blog **commenter** is a user with `role: "commenter"` and no `password`: created by the
-comment form with a username like any account, it can't sign in. `name_key` is its name folded
-to lower case (unique among users that have one: a commenter's name belongs to one email);
-`email_verified_at` is set when it confirms an email link; `blocked` refuses its comments. A
+comment form with the username `user-<n>` - the next number of the `counters` document
+`{ _id: "commenter_username", seq }` - and it can't sign in. Its `name` is free: two commenters
+may share one, their usernames tell them apart. `email_verified_at` is set when it confirms an
+email link; `blocked` refuses its comments. A
 team member who comments with their own address is that same user. Index `email_ci`: unique
 email, compared without case.
 

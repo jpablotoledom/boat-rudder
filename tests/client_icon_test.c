@@ -86,7 +86,7 @@ int main(void) {
     // Every icon the generator draws is there.
     static const char *ALL[] = { "chrome", "firefox", "edge", "safari", "opera", "ie", "netscape", "mosaic", "text",
                                  "wap", "browser", "windows", "windows-xp", "windows-classic", "mac", "mac-classic",
-                                 "linux", "android", "ios", "bsd", "unix", "dos", "os2", "palm", "os", "arachne", NULL };
+                                 "linux", "android", "ios", "bsd", "unix", "dos", "os2", "palm", "os", "arachne", "verified", NULL };
     for (int i = 0; ALL[i]; i++) icon_exists(ALL[i]);
 
     printf("%d checks, %d failed\n", checks, failures);

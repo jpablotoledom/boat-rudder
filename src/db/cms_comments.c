@@ -18,6 +18,8 @@
 #define COMMENTS_COLLECTION       "comments"
 #define COMMENT_TOKENS_COLLECTION "comment_tokens"
 #define CAPTCHA_USED_COLLECTION   "captcha_used"
+#define COUNTERS_COLLECTION       "counters"
+#define COMMENTER_COUNTER         "commenter_username"
 #define APPROVED_LIMIT            500
 
 static int64_t now_ms(void) { return (int64_t)time(NULL) * 1000; }
@@ -38,6 +40,28 @@ static void oid_hex(const bson_t *doc, const char *key, char out[25]) {
     bson_iter_t it;
     out[0] = '\0';
     if (bson_iter_init_find(&it, doc, key) && BSON_ITER_HOLDS_OID(&it)) bson_oid_to_string(bson_iter_oid(&it), out);
+}
+
+static int get_oid(const bson_t *doc, const char *key, bson_oid_t *out) {
+    bson_iter_t it;
+    if (!doc || !bson_iter_init_find(&it, doc, key) || !BSON_ITER_HOLDS_OID(&it)) return 0;
+    bson_oid_copy(bson_iter_oid(&it), out);
+    return 1;
+}
+
+// Who wrote a comment, from their `users` document: a commenter's username,
+// or verified for a team member (whose username - their sign-in name - is
+// never shown).
+static void writer_of(const bson_t *user, char username[COMMENT_USERNAME_MAX], bool *verified) {
+    char *role = dup_utf8(user, "role");
+    *verified = strcmp(role, "commenter") != 0;   // a missing role is an Administrador's
+    username[0] = '\0';
+    if (!*verified) {
+        char *u = dup_utf8(user, "username");
+        snprintf(username, COMMENT_USERNAME_MAX, "%s", u);
+        free(u);
+    }
+    free(role);
 }
 
 static void date_str(const bson_t *doc, const char *key, char out[17]) {
@@ -73,14 +97,6 @@ static void read_reply(const bson_t *doc, char **name, char **text, char date[17
     }
     if (!*name) *name = strdup("");
     if (!*text) *text = strdup("");
-}
-
-// Lower-cases ASCII and Latin-1 capitals: names compare without case.
-static void fold_case(char *s) {
-    for (unsigned char *p = (unsigned char *)s; *p; p++) {
-        if (*p >= 'A' && *p <= 'Z') *p = (unsigned char)(*p + 32);
-        else if (*p == 0xC3 && p[1] >= 0x80 && p[1] <= 0x9E && p[1] != 0x97) { p[1] = (unsigned char)(p[1] + 0x20); p++; }
-    }
 }
 
 static void token_hash(const char *token, char out[65]) {
@@ -135,6 +151,36 @@ static bson_t *email_collation_opts(void) {
     return BCON_NEW("collation", "{", "locale", BCON_UTF8("en"), "strength", BCON_INT32(2), "}");
 }
 
+// The next commenter number: a counter in `counters`, never handed out twice.
+// 0 on a DB error.
+static long long next_commenter_number(void) {
+    mongoc_collection_t *col = mongodb_manager_get_collection(COUNTERS_COLLECTION);
+    if (!col) return 0;
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(COMMENTER_COUNTER));
+    bson_t *update = BCON_NEW("$inc", "{", "seq", BCON_INT64(1), "}");
+    bson_t reply;
+    long long n = 0;
+    if (mongoc_collection_find_and_modify(col, filter, NULL, update, NULL, false, true, true, &reply, NULL)) {
+        bson_iter_t it, f;
+        if (bson_iter_init_find(&it, &reply, "value") && BSON_ITER_HOLDS_DOCUMENT(&it) &&
+            bson_iter_recurse(&it, &f) && bson_iter_find(&f, "seq"))
+            n = bson_iter_as_int64(&f);
+    }
+    bson_destroy(&reply);
+    bson_destroy(update);
+    bson_destroy(filter);
+    mongoc_collection_destroy(col);
+    return n;
+}
+
+// "user-<n>" for the next number into out (COMMENT_USERNAME_MAX). 0, or -1.
+static int new_commenter_username(char out[COMMENT_USERNAME_MAX]) {
+    long long n = next_commenter_number();
+    if (n <= 0) return -1;
+    snprintf(out, COMMENT_USERNAME_MAX, COMMENTER_USERNAME_PREFIX "%lld", n);
+    return 0;
+}
+
 // Moves the legacy `commenters` collection into `users` (role
 // "commenter"), keeping each _id - so comments still point at the right
 // one - or merging into the user that already has that email.
@@ -156,7 +202,6 @@ static void migrate_legacy_commenters(void) {
         bson_oid_copy(bson_iter_oid(&it), &old_id);
         char *email = dup_utf8(doc, "email");
         char *name = dup_utf8(doc, "name");
-        char *name_key = dup_utf8(doc, "name_key");
         int verified = bson_iter_init_find(&it, doc, "email_verified_at") && BSON_ITER_HOLDS_DATE_TIME(&it);
         int64_t verified_at = verified ? bson_iter_date_time(&it) : 0;
         bool blocked = bson_iter_init_find(&it, doc, "blocked") && BSON_ITER_HOLDS_BOOL(&it) && bson_iter_bool(&it);
@@ -184,10 +229,10 @@ static void migrate_legacy_commenters(void) {
             bson_destroy(cf);
             bson_destroy(cu);
         } else {
-            char username[USERNAME_BUF_SIZE] = "";
-            cms_new_username_for_email(email ? email : "", username, sizeof(username));
+            char username[COMMENT_USERNAME_MAX] = "";
+            new_commenter_username(username);
             bson_t *u = BCON_NEW("_id", BCON_OID(&old_id), "email", BCON_UTF8(email ? email : ""),
-                                 "name", BCON_UTF8(name ? name : ""), "name_key", BCON_UTF8(name_key ? name_key : ""),
+                                 "name", BCON_UTF8(name ? name : ""),
                                  "username", BCON_UTF8(username), "role", BCON_UTF8("commenter"),
                                  "blocked", BCON_BOOL(blocked), "created_at", BCON_DATE_TIME(now_ms()));
             if (verified) BSON_APPEND_DATE_TIME(u, "email_verified_at", verified_at);
@@ -204,7 +249,7 @@ static void migrate_legacy_commenters(void) {
         }
         bson_destroy(opts);
         bson_destroy(by_email);
-        free(email); free(name); free(name_key);
+        free(email); free(name);
     }
     mongoc_cursor_destroy(cursor);
     bson_destroy(all);
@@ -217,11 +262,82 @@ done:
     if (comments) mongoc_collection_destroy(comments);
 }
 
+// Names used to be unique among commenters, and usernames taken from the
+// email ("ana" for ana@x.com): the name index goes, every commenter without
+// a user-<n> gets one (in the order they came), and the counter is moved
+// past every user-<n> already taken. Does nothing once done.
+static void number_commenters(void) {
+    mongoc_collection_t *users = mongodb_manager_get_collection(USERS_COLLECTION);
+    mongoc_collection_t *counters = mongodb_manager_get_collection(COUNTERS_COLLECTION);
+    if (!users || !counters) goto done;
+
+    bson_t *drop = BCON_NEW("dropIndexes", BCON_UTF8(USERS_COLLECTION), "index", BCON_UTF8("name_key_1"));
+    mongoc_collection_write_command_with_opts(users, drop, NULL, NULL, NULL);   // gone already: fine
+    bson_destroy(drop);
+    bson_t *had_key = BCON_NEW("name_key", "{", "$exists", BCON_BOOL(true), "}");
+    bson_t *unset = BCON_NEW("$unset", "{", "name_key", BCON_UTF8(""), "}");
+    mongoc_collection_update_many(users, had_key, unset, NULL, NULL, NULL);
+    bson_destroy(unset);
+    bson_destroy(had_key);
+
+    // The highest user-<n> anyone has: the counter starts after it.
+    bson_t *numbered = BCON_NEW("username", BCON_REGEX("^" COMMENTER_USERNAME_PREFIX "[0-9]+$", ""));
+    bson_t *proj = BCON_NEW("projection", "{", "username", BCON_INT32(1), "}");
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(users, numbered, proj, NULL);
+    const bson_t *doc;
+    long long top = 0;
+    while (mongoc_cursor_next(cursor, &doc)) {
+        char *u = dup_utf8(doc, "username");
+        long long n = atoll(u + strlen(COMMENTER_USERNAME_PREFIX));
+        if (n > top) top = n;
+        free(u);
+    }
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(proj);
+    bson_destroy(numbered);
+    bson_t *cf = BCON_NEW("_id", BCON_UTF8(COMMENTER_COUNTER));
+    bson_t *cu = BCON_NEW("$max", "{", "seq", BCON_INT64(top), "}");
+    bson_t *upsert = BCON_NEW("upsert", BCON_BOOL(true));
+    mongoc_collection_update_one(counters, cf, cu, upsert, NULL, NULL);
+    bson_destroy(upsert);
+    bson_destroy(cu);
+    bson_destroy(cf);
+
+    bson_t *pending = BCON_NEW("role", BCON_UTF8("commenter"),
+                               "username", "{", "$not", BCON_REGEX("^" COMMENTER_USERNAME_PREFIX "[0-9]+$", ""), "}");
+    bson_t *order = BCON_NEW("sort", "{", "created_at", BCON_INT32(1), "_id", BCON_INT32(1), "}",
+                             "projection", "{", "_id", BCON_INT32(1), "}");
+    cursor = mongoc_collection_find_with_opts(users, pending, order, NULL);
+    int renamed = 0;
+    while (mongoc_cursor_next(cursor, &doc)) {
+        bson_oid_t oid;
+        if (!get_oid(doc, "_id", &oid)) continue;
+        // A team member may already be called user-<n>: then the next one.
+        for (int tries = 0; tries < 5; tries++) {
+            char username[COMMENT_USERNAME_MAX];
+            if (new_commenter_username(username) != 0) break;
+            bson_t *f = BCON_NEW("_id", BCON_OID(&oid));
+            bson_t *u = BCON_NEW("$set", "{", "username", BCON_UTF8(username), "}");
+            bson_error_t error;
+            bool ok = mongoc_collection_update_one(users, f, u, NULL, NULL, &error);
+            bson_destroy(u);
+            bson_destroy(f);
+            if (ok) { renamed++; break; }
+            if (error.code != 11000) break;
+        }
+    }
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(order);
+    bson_destroy(pending);
+    if (renamed) LOG_INFO("cms_comments: %d commenter(s) given a user-<n> username", renamed);
+done:
+    if (users) mongoc_collection_destroy(users);
+    if (counters) mongoc_collection_destroy(counters);
+}
+
 void cms_comments_ensure_indexes(void) {
     migrate_legacy_commenters();
-    // A commenter's name belongs to one user; team members have no name_key.
-    create_index(USERS_COLLECTION, BCON_NEW("name_key", BCON_INT32(1)),
-                 BCON_NEW("unique", BCON_BOOL(true), "partialFilterExpression", "{", "name_key", "{", "$type", BCON_UTF8("string"), "}", "}"));
+    number_commenters();
     create_index(USERS_COLLECTION, BCON_NEW("email", BCON_INT32(1)),
                  BCON_NEW("name", BCON_UTF8("email_ci"), "unique", BCON_BOOL(true),
                           "collation", "{", "locale", BCON_UTF8("en"), "strength", BCON_INT32(2), "}"));
@@ -367,65 +483,22 @@ int cms_comments_within_limits(const char *ip_hash, const char *email) {
     return 1;
 }
 
-// The literal `text` as an anchored, case-insensitive regex pattern.
-static char *exact_pattern(const char *text) {
-    char *out = malloc(strlen(text) * 2 + 3);
-    if (!out) return NULL;
-    char *w = out;
-    *w++ = '^';
-    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
-        if (*p < 0x80 && !((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == ' '))
-            *w++ = '\\';
-        *w++ = (char)*p;
-    }
-    *w++ = '$';
-    *w = '\0';
-    return out;
-}
-
-// 1 if some user other than `email`'s has this name: a commenter's
-// name_key, or a team member's name or username. Names compare without case.
-static int name_taken(mongoc_collection_t *users, const char *name, const char *name_key, const char *email) {
-    char *pattern = exact_pattern(name);
-    if (!pattern) return 1;
-    bson_t *filter = BCON_NEW("$or", "[",
-        "{", "name_key", BCON_UTF8(name_key), "}",
-        "{", "name", BCON_REGEX(pattern, "i"), "}",
-        "{", "username", BCON_REGEX(pattern, "i"), "}",
-    "]");
-    bson_t *opts = BCON_NEW("projection", "{", "email", BCON_INT32(1), "}");
-    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(users, filter, opts, NULL);
-    const bson_t *doc;
-    int taken = 0;
-    while (!taken && mongoc_cursor_next(cursor, &doc)) {
-        char *other = dup_utf8(doc, "email");
-        taken = !other || strcasecmp(other, email) != 0;
-        free(other);
-    }
-    mongoc_cursor_destroy(cursor);
-    bson_destroy(opts);
-    bson_destroy(filter);
-    free(pattern);
-    return taken;
-}
-
-// The user behind s->email, created as a "commenter" if there is none.
-// A team member commenting with their own address stays as they are (role
-// and name untouched). Fills id_hex, *verified and *blocked; returns 0 or an
-// error result.
+// The user behind s->email, created as a "commenter" (username user-<n>) if
+// there is none; a commenter's name becomes the one just given - names are
+// anyone's, the username tells commenters apart. A team member commenting
+// with their own address stays as they are (role and name untouched).
+// Fills id_hex, *verified and *blocked; returns 0 or an error result.
 static CommentSubmitResult commenter_for(const CommentSubmission *s, char id_hex[25], bool *verified, bool *blocked) {
     *verified = *blocked = false;
     id_hex[0] = '\0';
-    char name_key[COMMENT_NAME_MAX * 2 + 1];
-    snprintf(name_key, sizeof(name_key), "%s", s->name);
-    fold_case(name_key);
-
     mongoc_collection_t *users = mongodb_manager_get_collection(USERS_COLLECTION);
     if (!users) return COMMENT_SUBMIT_ERROR;
     CommentSubmitResult rc = COMMENT_SUBMIT_ERROR;
     bson_error_t error;
 
-    for (int attempt = 0; attempt < 2 && rc == COMMENT_SUBMIT_ERROR; attempt++) {
+    // A duplicate key sends it round again: the email was taken meanwhile
+    // (then it is found), or a team member is called user-<n> (the next n).
+    for (int attempt = 0; attempt < 4 && rc == COMMENT_SUBMIT_ERROR; attempt++) {
         bson_t *by_email = BCON_NEW("email", BCON_UTF8(s->email));
         bson_t *opts = email_collation_opts();
         mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(users, by_email, opts, NULL);
@@ -442,38 +515,35 @@ static CommentSubmitResult commenter_for(const CommentSubmission *s, char id_hex
         bson_destroy(opts);
         bson_destroy(by_email);
 
-        if (name_taken(users, s->name, name_key, s->email)) {
-            rc = COMMENT_SUBMIT_NAME_TAKEN;
-        } else if (found) {
+        if (found) {
             rc = 0;
             if (role && strcmp(role, "commenter") == 0) {
                 bson_oid_t oid;
                 bson_oid_init_from_string(&oid, id_hex);
                 bson_t *f = BCON_NEW("_id", BCON_OID(&oid));
-                bson_t *u = BCON_NEW("$set", "{", "name", BCON_UTF8(s->name), "name_key", BCON_UTF8(name_key), "}");
-                if (!mongoc_collection_update_one(users, f, u, NULL, NULL, &error))
-                    rc = error.code == 11000 ? COMMENT_SUBMIT_NAME_TAKEN : COMMENT_SUBMIT_ERROR;
+                bson_t *u = BCON_NEW("$set", "{", "name", BCON_UTF8(s->name), "}");
+                if (!mongoc_collection_update_one(users, f, u, NULL, NULL, &error)) rc = COMMENT_SUBMIT_ERROR;
                 bson_destroy(f);
                 bson_destroy(u);
             }
         } else {
-            char username[USERNAME_BUF_SIZE] = "";
-            cms_new_username_for_email(s->email, username, sizeof(username));
+            char username[COMMENT_USERNAME_MAX];
+            if (new_commenter_username(username) != 0) {
+                free(role);
+                break;
+            }
             bson_oid_t oid;
             bson_oid_init(&oid, NULL);
             bson_t *u = BCON_NEW("_id", BCON_OID(&oid), "email", BCON_UTF8(s->email), "name", BCON_UTF8(s->name),
-                                 "name_key", BCON_UTF8(name_key), "username", BCON_UTF8(username),
-                                 "role", BCON_UTF8("commenter"), "blocked", BCON_BOOL(false),
-                                 "created_at", BCON_DATE_TIME(now_ms()));
+                                 "username", BCON_UTF8(username), "role", BCON_UTF8("commenter"),
+                                 "blocked", BCON_BOOL(false), "created_at", BCON_DATE_TIME(now_ms()));
             if (mongoc_collection_insert_one(users, u, NULL, NULL, &error)) {
                 bson_oid_to_string(&oid, id_hex);
                 rc = 0;
             } else if (error.code != 11000) {
                 LOG_ERROR("cms_comments: new commenter: %s", error.message);
-                attempt = 2;
+                attempt = 4;
             }
-            // A duplicate key: someone took the email or the name meanwhile -
-            // the second pass reads what is there now.
             bson_destroy(u);
         }
         free(role);
@@ -663,13 +733,6 @@ static bson_t *find_by_id(const char *collection, const bson_oid_t *oid) {
     return copy;
 }
 
-static int get_oid(const bson_t *doc, const char *key, bson_oid_t *out) {
-    bson_iter_t it;
-    if (!doc || !bson_iter_init_find(&it, doc, key) || !BSON_ITER_HOLDS_OID(&it)) return 0;
-    bson_oid_copy(bson_iter_oid(&it), out);
-    return 1;
-}
-
 int cms_comments_notice(const char *comment_id, const char *lang, CommentNotice *out) {
     memset(out, 0, sizeof(*out));
     bson_oid_t oid, entry_oid, commenter_oid, author_oid;
@@ -706,6 +769,10 @@ int cms_comments_notice(const char *comment_id, const char *lang, CommentNotice 
     }
     if (rc) {
         out->commenter_name = dup_utf8(comment, "name");
+        char username[COMMENT_USERNAME_MAX] = "";
+        bool team = false;
+        if (commenter) writer_of(commenter, username, &team);
+        out->commenter_username = strdup(username);
         out->text = dup_utf8(comment, "text");
         out->entry_title = entry_title(entry, lang);
         out->entry_link = dup_utf8(entry, "link");
@@ -719,7 +786,7 @@ int cms_comments_notice(const char *comment_id, const char *lang, CommentNotice 
 }
 
 void cms_comments_notice_free(CommentNotice *n) {
-    free(n->author_email); free(n->author_name); free(n->commenter_name);
+    free(n->author_email); free(n->author_name); free(n->commenter_name); free(n->commenter_username);
     free(n->text); free(n->entry_title); free(n->entry_link);
     memset(n, 0, sizeof(*n));
 }
@@ -739,6 +806,44 @@ int cms_comments_commenter_verified(const char *commenter_id) {
 
 // ---- Lists --------------------------------------------------------------------------
 
+// Fills username/verified of `n` comments (each `stride` bytes apart, the
+// fields at those offsets) from their commenters, in one query.
+static void writers_of(const bson_oid_t *ids, int n, char *first_username, bool *first_verified, size_t stride) {
+    if (n <= 0) return;
+    mongoc_collection_t *users = mongodb_manager_get_collection(USERS_COLLECTION);
+    if (!users) return;
+    bson_t filter, in, idf;
+    bson_init(&filter);
+    bson_append_document_begin(&filter, "_id", -1, &idf);
+    bson_append_array_begin(&idf, "$in", -1, &in);
+    for (int i = 0; i < n; i++) {
+        char key[16];
+        snprintf(key, sizeof(key), "%d", i);
+        bson_append_oid(&in, key, -1, &ids[i]);
+    }
+    bson_append_array_end(&idf, &in);
+    bson_append_document_end(&filter, &idf);
+    bson_t *opts = BCON_NEW("projection", "{", "role", BCON_INT32(1), "username", BCON_INT32(1), "}");
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(users, &filter, opts, NULL);
+    const bson_t *doc;
+    while (mongoc_cursor_next(cursor, &doc)) {
+        bson_oid_t uid;
+        if (!get_oid(doc, "_id", &uid)) continue;
+        char username[COMMENT_USERNAME_MAX];
+        bool verified;
+        writer_of(doc, username, &verified);
+        for (int i = 0; i < n; i++)
+            if (bson_oid_equal(&ids[i], &uid)) {
+                memcpy(first_username + (size_t)i * stride, username, COMMENT_USERNAME_MAX);
+                *(bool *)((char *)first_verified + (size_t)i * stride) = verified;
+            }
+    }
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(opts);
+    bson_destroy(&filter);
+    mongoc_collection_destroy(users);
+}
+
 int cms_comments_approved(const char *entry_id, CmsComment **out) {
     *out = NULL;
     bson_oid_t oid;
@@ -749,10 +854,12 @@ int cms_comments_approved(const char *entry_id, CmsComment **out) {
     bson_t *opts = BCON_NEW("sort", "{", "created_at", BCON_INT32(1), "}", "limit", BCON_INT64(APPROVED_LIMIT));
     mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(col, filter, opts, NULL);
     CmsComment *list = calloc(APPROVED_LIMIT, sizeof(CmsComment));
-    int n = list ? 0 : -1;
+    bson_oid_t *writers = calloc(APPROVED_LIMIT, sizeof(bson_oid_t));
+    int n = list && writers ? 0 : -1;
     const bson_t *doc;
-    while (list && n < APPROVED_LIMIT && mongoc_cursor_next(cursor, &doc)) {
+    while (n >= 0 && n < APPROVED_LIMIT && mongoc_cursor_next(cursor, &doc)) {
         oid_hex(doc, "_id", list[n].id);
+        get_oid(doc, "commenter_id", &writers[n]);
         list[n].name = dup_utf8(doc, "name");
         list[n].text = dup_utf8(doc, "text");
         date_str(doc, "created_at", list[n].date);
@@ -762,7 +869,10 @@ int cms_comments_approved(const char *entry_id, CmsComment **out) {
         read_reply(doc, &list[n].reply_name, &list[n].reply_text, list[n].reply_date, &list[n].reply_by_author);
         n++;
     }
-    if (mongoc_cursor_error(cursor, NULL)) { cms_comments_free(list, n); list = NULL; n = -1; }
+    if (n >= 0 && mongoc_cursor_error(cursor, NULL)) { cms_comments_free(list, n); list = NULL; n = -1; }
+    if (n > 0) writers_of(writers, n, list[0].username, &list[0].verified, sizeof(CmsComment));
+    if (n < 0 && list) { free(list); list = NULL; }
+    free(writers);
     mongoc_cursor_destroy(cursor);
     bson_destroy(opts);
     bson_destroy(filter);
@@ -875,6 +985,7 @@ static int admin_query(const bson_t *filter, const char *lang, CmsCommentAdmin *
                 bson_iter_t it;
                 list[i].email = dup_utf8(doc, "email");
                 list[i].commenter_blocked = bson_iter_init_find(&it, doc, "blocked") && BSON_ITER_HOLDS_BOOL(&it) && bson_iter_bool(&it);
+                writer_of(doc, list[i].username, &list[i].verified);
             }
             mongoc_cursor_destroy(cc);
             bson_destroy(cf);

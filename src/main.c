@@ -40,6 +40,20 @@ static void sigchld_handler(int s) {
     errno = saved;
 }
 
+// signal() won't do: built as strict C17 with _XOPEN_SOURCE, glibc gives it
+// System V semantics (SA_RESETHAND), so a handler would run once and the
+// next child would stay a zombie - an extension the supervisor then takes
+// for alive, "starting" for ever.
+static void install_signal_handlers(void) {
+    struct sigaction sa = { .sa_handler = handle_shutdown, .sa_flags = SA_RESTART };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sa.sa_handler = sigchld_handler;
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, NULL);
+}
+
 // --wap-only: the WAP gateway alone - no HTTP listener, MongoDB or GeoIP -
 // fetching every page from wap_upstream. One such process can serve every
 // site on a machine from behind a front that routes by Host (see
@@ -59,9 +73,7 @@ static int run_wap_only(const char *config_path) {
     LOG_INFO("Upstream       : %s%s", wap_upstream,
              wap_upstream_proxy_protocol ? " (PROXY protocol)" : "");
 
-    signal(SIGINT,  handle_shutdown);
-    signal(SIGTERM, handle_shutdown);
-    signal(SIGCHLD, sigchld_handler);
+    install_signal_handlers();
 
     if (wap_gateway_start() != 0) {
         LOG_ERROR("WAP gateway could not start");
@@ -170,9 +182,7 @@ int main(int argc, char *argv[]) {
 
     geoip_init(GEOIP_DEFAULT_DB_PATH);
 
-    signal(SIGINT,  handle_shutdown);
-    signal(SIGTERM, handle_shutdown);
-    signal(SIGCHLD, sigchld_handler);
+    install_signal_handlers();
 
     if (server_start(root_directory, ssl_enabled, ssl_cert, ssl_key,
                      http_port, https_port) != 0) {

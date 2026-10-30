@@ -116,6 +116,7 @@ Read until the extension closes the connection; at most 4 MiB, within 15 s.
 |---|---|
 | `Content-Type: text/html` | Wraps the body (a fragment: no `<html>`/`<head>`) in the site's layout. `X-BR-Title` sets the page title (`<site> - <title>`), else the manifest's `title`. The status code is kept |
 | `Content-Type: application/json` | Passes the body through with the status code - for the page's own scripts (`fetch()` gets the CSRF header automatically) |
+| `Content-Type: image/jpeg`, `image/png`, `image/gif` or `image/webp` | Passes the bytes through with the status code, `Cache-Control: private, max-age=86400` and `nosniff` - for `<img src="<mount>/…">` in its own pages. The browser sends the session cookie with it, so an image is only ever seen by a signed-in user, and the extension still checks it is theirs. Never answer other bytes at the same URL: the browser keeps it a day. Other image types (SVG) are refused like any unknown type |
 | `3xx` + `Location: /path` | Redirects the browser to `<mount>/path`. A `Location` that isn't a path (`http://…`, `//…`) is refused with 502 |
 | anything else | 502 |
 
@@ -170,6 +171,7 @@ int main(void) { return brext_serve(handle, NULL); }
 | `brext_form(req, key, out, size)` / `brext_query(…)` | A decoded urlencoded-form / query field; 1 if present |
 | `brext_user_id/_name`, `brext_role`, `brext_lang`, `brext_epoch`, `brext_mount`, `brext_header` | The request's identity and context (§5) |
 | `brext_html(res, title)` / `brext_json(res)` | Set the answer's type |
+| `brext_bytes(res, type, data, len)` | The whole body as binary bytes: an image (§5) |
 | `brext_append`, `brext_appendf`, `brext_append_escaped` | Build the body |
 | `brext_status`, `brext_redirect`, `brext_not_found` | Status, `302` to a path below the mount, a 404 page |
 | `brext_mongodb_uri/_db`, `brext_name`, `brext_dir`, `brext_log` | Environment (§4) and logging to the server log |
@@ -210,5 +212,6 @@ curl --unix-socket /tmp/myext.sock -H 'X-BR-User-Id: 0123456789abcdef01234567' \
 ## 8. Not in protocol 1 yet
 
 Public pages (no session) and the retro epochs, answered as content blocks rendered for every
-epoch; static assets served from the extension's directory; a `member` role for users who only
+epoch; static assets served from the extension's directory (an extension can already answer an
+image itself, §5); a `member` role for users who only
 use extensions; packaging (`boat-rudder-ext`). See the ADR.

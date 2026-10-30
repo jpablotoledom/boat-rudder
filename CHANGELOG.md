@@ -18,6 +18,12 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 - At startup, existing commenters get a `user-<n>` username in the order they first commented,
   replacing the one taken from their email address.
 
+### Extensions
+
+**Added**
+- An extension can answer images (JPEG, PNG, GIF, WebP) under its own address, shown only to the
+  signed-in user who asks: photos in an extension stay private. New SDK call `brext_bytes()`.
+
 ## v0.0.7
 ### 2026-10-29
 

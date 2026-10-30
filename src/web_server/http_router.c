@@ -913,6 +913,40 @@ static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *u
 
 // The reason phrase for an extension's status code - only the code comes
 // from the extension, so nothing it sends lands in the status line.
+// The image types an extension may answer, by the type its answer names
+// ("image/jpeg", parameters ignored). NULL for any other: an image of
+// another type (SVG can carry scripts) is refused like any unknown answer.
+static const char *extension_image_type(const char *content_type) {
+    static const char *const types[] = { "image/jpeg", "image/png", "image/gif", "image/webp" };
+    size_t len = strcspn(content_type, "; \t");
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++)
+        if (len == strlen(types[i]) && strncasecmp(content_type, types[i], len) == 0) return types[i];
+    return NULL;
+}
+
+static const char *extension_status_line(int status);
+
+// Passes an extension's image through as it is, binary: only to the session
+// that asked (the route already required it), so private to the browser's
+// cache. An extension never reuses an image's URL for other bytes, so it
+// may stay there a day.
+static void send_extension_image(void *ctx, const HttpRequest *req, const ExtensionResponse *rs,
+                                 const char *type) {
+    char header[512];
+    int n = snprintf(header, sizeof(header),
+        "HTTP/1.1 %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Cache-Control: private, max-age=86400\r\n"
+        "X-Content-Type-Options: nosniff\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        extension_status_line(rs->status), type, rs->body_len);
+    if (n < 0 || (size_t)n >= sizeof(header)) return;
+    connection_write(ctx, header, (size_t)n);
+    if (strcmp(req->method, "HEAD") != 0 && rs->body_len) connection_write(ctx, rs->body, rs->body_len);
+}
+
 static const char *extension_status_line(int status) {
     switch (status) {
     case 200: return "200 OK";
@@ -1023,6 +1057,8 @@ static void serve_extension(void *ctx, HttpRequest *req, const char *decoded_url
         } else {
             send_error_response(ctx, 500, "500 Internal Server Error", epoch);
         }
+    } else if (extension_image_type(rs.content_type)) {
+        send_extension_image(ctx, req, &rs, extension_image_type(rs.content_type));
     } else {
         LOG_WARN("Extension %s: unsupported Content-Type \"%s\"", name, rs.content_type);
         send_error_response(ctx, 502, "502 Bad Gateway", epoch);

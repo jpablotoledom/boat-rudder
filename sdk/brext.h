@@ -116,6 +116,13 @@ void brext_html(BrextResponse *res, const char *title);
 // JSON, passed through as it is - for the page's own scripts.
 void brext_json(BrextResponse *res);
 
+// Binary content, `len` bytes of `data`, as the whole body: an image
+// ("image/jpeg", "image/png", "image/gif", "image/webp") Boat Rudder passes
+// through as it is, private to the signed-in user's browser and cached there
+// for a day - so never answer other bytes at the same URL. Any other type
+// is refused (502). At most 4 MiB.
+void brext_bytes(BrextResponse *res, const char *content_type, const void *data, size_t len);
+
 // 302 to a path inside the extension ("/" is its first page).
 void brext_redirect(BrextResponse *res, const char *path);
 

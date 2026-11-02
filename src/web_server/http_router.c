@@ -744,16 +744,25 @@ static void send_read_only_refusal(void *ctx, HttpRequest *req, int epoch) {
     "The site is under maintenance: only administrators can sign in right now."
 
 // Under construction mode (cms_get_under_construction()) closes the
-// dashboard to every role but an Administrador's - at sign-in, and for a
-// session already open when the mode was turned on. Fails closed: a role
-// that can't be read is locked out too.
+// dashboard to every role but an Administrador's - and an Autor's when the
+// Administrador lets authors keep editing (cms_get_under_construction_authors())
+// - at sign-in, and for a session already open when the mode was turned on.
+// Fails closed: a role that can't be read is locked out too.
 static int maintenance_locks_out(const char *user_id) {
     bool under_construction = false;
     cms_get_under_construction(&under_construction, NULL);
     if (!under_construction) return 0;
 
     char role[USER_ROLE_BUF_SIZE];
-    return cms_get_user_role(user_id, role, sizeof(role)) != 0 || strcmp(role, "admin") != 0;
+    if (cms_get_user_role(user_id, role, sizeof(role)) != 0) return 1;
+    if (strcmp(role, "admin") == 0) return 0;
+    return strcmp(role, "author") != 0 || !cms_get_under_construction_authors();
+}
+
+// Whether this request's signed-in user sees the real site while it is
+// under construction: an Administrador, or an Autor allowed in (as above).
+static int sees_site_under_construction(void) {
+    return request_user_is_admin() || (request_user_is_author() && cms_get_under_construction_authors());
 }
 
 // Ends `req`'s session (a non-admin's, see maintenance_locks_out()) and
@@ -1078,6 +1087,7 @@ static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, c
         stored.hide_home_blog = cms_get_hide_home_blog();
         cms_get_under_construction(&stored.under_construction, &stored_page);
         stored.under_construction_page = stored_page ? stored_page : "";
+        stored.under_construction_authors = cms_get_under_construction_authors();
         home = &stored;
     }
 
@@ -1105,7 +1115,7 @@ static int is_site_content_route(const char *url) {
 // content, and no menu or blog list - or, if the entry can't be found, the
 // 503 error content there, so the site stays closed - and returns 1. Returns 0, sending
 // nothing, when the mode is off. The caller skips this for an Administrador
-// (request_user_is_admin()). no-store, so nobody keeps it once the site opens.
+// and an allowed Autor (sees_site_under_construction()). no-store, so nobody keeps it once the site opens.
 static int serve_under_construction(void *ctx, HttpRequest *req, const char *lang) {
     bool enabled = false;
     char *link = NULL;
@@ -1954,7 +1964,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
 
-            } else if (is_site_content_route(decoded_url) && !request_user_is_admin() &&
+            } else if (is_site_content_route(decoded_url) && !sees_site_under_construction() &&
                 serve_under_construction(ctx, &req, content_lang)) {
                 // Sent: the under-construction page stands in for the site.
 
@@ -4605,7 +4615,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         bool under_construction = false;
                         char *page = NULL;
                         cms_get_under_construction(&under_construction, &page);
-                        SiteHomeSettings home = { hide, under_construction, page ? page : "" };
+                        SiteHomeSettings home = { hide, under_construction, page ? page : "",
+                                                  cms_get_under_construction_authors() };
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
                             "Could not save the home page settings.", NULL);
@@ -4632,6 +4643,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char page[256];
                     parse_urlencoded_field(req.body, req.body_length, "under_construction_page",
                                            page, sizeof(page));
+                    bool authors = parse_urlencoded_field(req.body, req.body_length, "under_construction_authors",
+                                                          enabled_str, sizeof(enabled_str)) != 0;
 
                     // Turning it on needs a page to show: a "page" entry, drafts included.
                     const char *error_message = NULL;
@@ -4642,14 +4655,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         cms_entry_free(&entry);
                         if (!found) error_message = "Choose the page to show while the site is in maintenance.";
                     }
-                    if (!error_message && cms_update_under_construction(enabled, page) != 0)
+                    if (!error_message && cms_update_under_construction(enabled, page, authors) != 0)
                         error_message = "Could not save the maintenance mode.";
 
                     if (!error_message) {
                         char *response = build_redirect_response("/dashboard/settings", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page };
+                        SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page, authors };
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
                                                    error_message, NULL);

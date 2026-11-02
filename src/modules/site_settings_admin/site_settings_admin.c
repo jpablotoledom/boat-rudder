@@ -164,7 +164,8 @@ char *site_settings_general_page(int epoch, const char *lang, const char *site_n
 
     result = render_template(page_tpl, error_html ? error_html : "", encoded_name, favicons,
                              BOAT_RUDDER_VERSION, home->hide_home_blog ? " checked" : "",
-                             home->under_construction ? " checked" : "", pages, comments);
+                             home->under_construction ? " checked" : "", pages, comments,
+                             home->under_construction_authors ? " checked" : "");
 
 cleanup:
     free(page_tpl);

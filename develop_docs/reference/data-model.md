@@ -226,7 +226,8 @@ A singleton (always updated with filter `{}` and `upsert: true`).
 
 ```jsonc
 { "_id": ObjectId, "site_name": "My Site", "active_theme": "dark", "hide_home_blog": false,
-  "under_construction": false, "under_construction_page": "coming-soon" }
+  "under_construction": false, "under_construction_page": "coming-soon",
+  "under_construction_authors": false }
 ```
 
 `site_name` defaults to `"Boat Rudder"` and replaces the `{{SITE_NAME}}` token in titles and
@@ -235,7 +236,9 @@ templates. `active_theme` is only honored if `html/themes/<key>/` exists. `hide_
 (absent means `false`) puts the site in maintenance mode (the code's historical name is "under
 construction"): every visitor but an Administrador gets
 the `page` entry whose `link` is `under_construction_page` (see
-[rendering.md](rendering.md#under-construction-mode)).
+[rendering.md](rendering.md#under-construction-mode)), and only an Administrador can sign in -
+and also an Autor, who then sees the real site too, while `under_construction_authors` is
+`true` (absent means `false`), so content can be prepared before the site opens.
 
 ### `themes`
 

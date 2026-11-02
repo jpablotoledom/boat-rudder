@@ -18,6 +18,13 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 - At startup, existing commenters get a `user-<n>` username in the order they first commented,
   replacing the one taken from their email address.
 
+### Maintenance mode
+
+**Added**
+- *Authors can sign in and edit*, next to *Site in maintenance*: Authors keep the dashboard
+  and see the real site while it is in maintenance, so content can be prepared before it
+  opens. Off by default; Moderators and Viewers stay out either way.
+
 ### Extensions
 
 **Added**

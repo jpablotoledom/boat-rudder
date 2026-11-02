@@ -9,12 +9,14 @@ static __thread char current_user_name[128] = "";
 static __thread char current_csrf_token[CSRF_TOKEN_BUF_SIZE] = "";
 static __thread int  current_read_only = 0;
 static __thread int  current_is_admin = 0;
+static __thread int  current_is_author = 0;
 
 void request_user_set(const char *cookie_header) {
     current_user_name[0] = '\0';
     current_csrf_token[0] = '\0';
     current_read_only = 0;
     current_is_admin = 0;
+    current_is_author = 0;
 
     char user_id[USER_ID_HEX_BUF_SIZE];
     if (validate_session_cookie(cookie_header, user_id) != 1) return;
@@ -42,6 +44,7 @@ void request_user_set(const char *cookie_header) {
     if (cms_get_user_role(user_id, role, sizeof(role)) == 0) {
         current_read_only = strcmp(role, "viewer") == 0;
         current_is_admin  = strcmp(role, "admin") == 0;
+        current_is_author = strcmp(role, "author") == 0;
     }
 }
 
@@ -59,4 +62,8 @@ int request_user_read_only(void) {
 
 int request_user_is_admin(void) {
     return current_is_admin;
+}
+
+int request_user_is_author(void) {
+    return current_is_author;
 }

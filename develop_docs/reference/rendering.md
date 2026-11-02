@@ -754,8 +754,9 @@ name, "under construction" (`site_settings.under_construction`, `serve_under_con
 While `site_settings.under_construction` is `true`, the router's first GET/HEAD branch answers
 every **site content route** - `/`, `/page/*`, `/blog`, `/blog/*`, `/menu`
 (`is_site_content_route()`) - with `serve_under_construction()`, unless the request carries the
-session of an Administrador (`request_user_is_admin()`, `users.role == "admin"`; an Autor or an
-Observador gets the page too):
+session of an Administrador (`users.role == "admin"`), or of an Autor while
+`site_settings.under_construction_authors` is on (`sees_site_under_construction()`); anyone else -
+a Moderador, an Observador, an Autor otherwise - gets the page too:
 
 - The **home page layout** (`buildUnderConstructionWebSite()`, which shares
   `build_home_layout()` with `buildHomeWebSite()`): navigation bar, main banner and footer
@@ -774,7 +775,8 @@ gallery pages, theme CSS and static files (the page's own images and styles). Th
 fetches over HTTP like any visitor, so phones get the page too. If MongoDB is unreachable the mode
 reads as off. Set from `/dashboard/settings` (*Maintenance mode* panel).
 
-It also closes the dashboard to everyone but an Administrador (`maintenance_locks_out()`):
+It also closes the dashboard to everyone but an Administrador - and an Autor, with *Authors can
+sign in and edit* (`under_construction_authors`) - (`maintenance_locks_out()`):
 `POST /login` with a right password for any other role creates no session and answers `503` with
 "The site is under maintenance: only administrators can sign in right now." (a wrong password
 still gets the usual "Invalid email or password."); a session already open when the mode was

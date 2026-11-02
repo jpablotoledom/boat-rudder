@@ -156,10 +156,11 @@ void cms_get_under_construction(bool *enabled, char **page_link) {
     if (page_link) *page_link = link ? link : strdup("");
 }
 
-int cms_update_under_construction(bool enabled, const char *page_link) {
+int cms_update_under_construction(bool enabled, const char *page_link, bool authors) {
     bson_t *set_doc = bson_new();
     bson_append_bool(set_doc, "under_construction", -1, enabled);
     bson_append_utf8(set_doc, "under_construction_page", -1, page_link, -1);
+    bson_append_bool(set_doc, "under_construction_authors", -1, authors);
     return upsert_set(set_doc);
 }
 
@@ -181,6 +182,10 @@ static bool get_bool(const char *field, bool fallback) {
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
     return result;
+}
+
+bool cms_get_under_construction_authors(void) {
+    return get_bool("under_construction_authors", false);
 }
 
 bool cms_get_comments_enabled(void) {

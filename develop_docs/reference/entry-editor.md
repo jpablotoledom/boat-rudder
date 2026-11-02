@@ -98,7 +98,7 @@ templates, which now cover every epoch:
 | `link` | `blocks/link_epoch3.html` | target URL |
 | `list` | `blocks/list_epoch3.html` | `"ol"` for ordered, else unordered |
 | `table` | `blocks/table_epoch3.html` | `"header"` to make row 0 a header row |
-| `code-text` | `blocks/code-text_epoch3.html` | language (`<select>`: Plain text, JavaScript, HTML, C / C++, Python, CSS, PHP, Bash, SQL) |
+| `code-text` | `blocks/code-text_epoch3.html` | language (`<select>` grouped Web / Languages / Retro / Data and shell - the keys are in [code-highlighting.md](code-highlighting.md#languages)) |
 | `youtube-embed` | `blocks/youtube-embed_epoch3.html` | video URL |
 | `social-networks` | `blocks/social-networks_epoch3.html` | `"<icon>\|<url>"` |
 | `generic` | `blocks/generic_epoch3.html` | unused |

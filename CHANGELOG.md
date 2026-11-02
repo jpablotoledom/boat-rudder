@@ -6,6 +6,14 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Code block languages
+
+**Added**
+- The code block highlights 14 more languages: TypeScript, Java, C#, Kotlin, Go, Swift, JSON,
+  XML, INI, Diff and, for retro code, Assembly (x86, 6502, Z80, 68000), BASIC, Pascal and DOS
+  Batch. The editor's language list is grouped: Web, Languages, Retro, Data and shell.
+- HTML code blocks color `<?...?>` and `<![CDATA[...]]>`; Python colors `@decorators`.
+
 ### Entry translation
 
 **Added**

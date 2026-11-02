@@ -14,6 +14,8 @@ typedef struct {
     const char *line_comment[3];   // NULL-terminated markers
     const char *block_open;        // NULL = no block comments
     const char *block_close;
+    const char *block_open2;       // a second kind of block comment (Pascal's (* *))
+    const char *block_close2;
     const char *quotes;            // string delimiters
     const char *pre_markers[4];    // NULL-terminated, emitted as "pre" (PHP's <?php / ?>)
     int nocase;                    // keywords match regardless of case (SQL, PHP)
@@ -26,6 +28,17 @@ typedef struct {
     int triple_quotes;             // """ / ''' block strings (Python)
     int css;                       // property names, @rules, #hex colors, !important
     int html;                      // markup scanner instead of the code scanner
+    int no_escapes;                // '\\' is a plain character in strings (Pascal, Batch: paths)
+    int annotations;               // "@Name" is a directive (Java, Kotlin, Swift, TS, Python)
+    int json_keys;                 // a string followed by ':' is a key
+    int ini;                       // "[section]" and "key =" at a line's start
+    int hex_dollar;                // "$FF" is a number (assemblers, Turbo Pascal)
+    int brace_directives;          // "{$I+}" is a compiler directive, not a comment (Pascal)
+    int rem_comments;              // the word REM comments out the rest of the line (BASIC, Batch)
+    int type_suffix;               // "A$", "N%" - a type sigil ends a name (BASIC)
+    int percent_vars;              // "%VAR%", "%1", "%%i", "!VAR!" and ":label" (Batch)
+    int asm;                       // mnemonic first on a line, "label:", ".directive", registers
+    int diff;                      // whole lines colored by their +/-/@@ prefix
 } LangDef;
 
 static const char *const KW_JS[] = {
@@ -87,6 +100,124 @@ static const char *const KW_SQL[] = {
     "WHEN", "WHERE", NULL
 };
 
+static const char *const KW_TS[] = {
+    "abstract", "any", "as", "async", "await", "boolean", "break", "case",
+    "catch", "class", "const", "continue", "declare", "default", "delete", "do",
+    "else", "enum", "export", "extends", "false", "finally", "for", "from",
+    "function", "get", "if", "implements", "import", "in", "infer", "instanceof",
+    "interface", "is", "keyof", "let", "namespace", "never", "new", "null",
+    "number", "object", "of", "private", "protected", "public", "readonly",
+    "return", "satisfies", "set", "static", "string", "super", "switch", "symbol",
+    "this", "throw", "true", "try", "type", "typeof", "undefined", "unknown",
+    "var", "void", "while", "with", "yield", NULL
+};
+
+static const char *const KW_JAVA[] = {
+    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char",
+    "class", "const", "continue", "default", "do", "double", "else", "enum",
+    "extends", "false", "final", "finally", "float", "for", "goto", "if",
+    "implements", "import", "instanceof", "int", "interface", "long", "native",
+    "new", "null", "package", "private", "protected", "public", "record",
+    "return", "short", "static", "strictfp", "super", "switch", "synchronized",
+    "this", "throw", "throws", "transient", "true", "try", "var", "void",
+    "volatile", "while", "yield", NULL
+};
+
+static const char *const KW_CSHARP[] = {
+    "abstract", "as", "async", "await", "base", "bool", "break", "byte", "case",
+    "catch", "char", "checked", "class", "const", "continue", "decimal",
+    "default", "delegate", "do", "double", "else", "enum", "event", "explicit",
+    "extern", "false", "finally", "fixed", "float", "for", "foreach", "get",
+    "goto", "if", "implicit", "in", "init", "int", "interface", "internal", "is",
+    "lock", "long", "namespace", "new", "null", "object", "operator", "out",
+    "override", "params", "private", "protected", "public", "readonly", "record",
+    "ref", "return", "sbyte", "sealed", "set", "short", "sizeof", "static",
+    "string", "struct", "switch", "this", "throw", "true", "try", "typeof",
+    "uint", "ulong", "unsafe", "ushort", "using", "var", "virtual", "void",
+    "volatile", "when", "where", "while", "yield", NULL
+};
+
+static const char *const KW_KOTLIN[] = {
+    "abstract", "as", "break", "by", "catch", "class", "companion", "const",
+    "constructor", "continue", "data", "do", "else", "enum", "false", "final",
+    "finally", "for", "fun", "if", "import", "in", "init", "inline", "interface",
+    "internal", "is", "lateinit", "null", "object", "open", "operator",
+    "override", "package", "private", "protected", "public", "return", "sealed",
+    "super", "suspend", "this", "throw", "true", "try", "typealias", "val",
+    "var", "when", "where", "while", NULL
+};
+
+static const char *const KW_GO[] = {
+    "bool", "break", "byte", "case", "chan", "const", "continue", "default",
+    "defer", "else", "error", "fallthrough", "false", "float32", "float64", "for",
+    "func", "go", "goto", "if", "import", "int", "int16", "int32", "int64",
+    "int8", "interface", "map", "nil", "package", "range", "return", "rune",
+    "select", "string", "struct", "switch", "true", "type", "uint", "uint16",
+    "uint32", "uint64", "uint8", "var", NULL
+};
+
+static const char *const KW_SWIFT[] = {
+    "as", "associatedtype", "async", "await", "break", "case", "catch", "class",
+    "continue", "default", "defer", "deinit", "do", "else", "enum", "extension",
+    "fallthrough", "false", "fileprivate", "final", "for", "func", "guard", "if",
+    "import", "in", "init", "inout", "internal", "is", "let", "mutating", "nil",
+    "open", "operator", "override", "private", "protocol", "public", "repeat",
+    "rethrows", "return", "self", "Self", "static", "struct", "subscript",
+    "super", "switch", "throw", "throws", "true", "try", "typealias", "var",
+    "weak", "where", "while", NULL
+};
+
+static const char *const KW_JSON[] = { "false", "null", "true", NULL };
+
+// The directives assemblers share; the mnemonics need no list - whatever
+// opens a line is one (see scan_code).
+static const char *const KW_ASM[] = {
+    "byte", "db", "dd", "dq", "ds", "dw", "dword", "equ", "include", "org",
+    "ptr", "qword", "word", NULL
+};
+
+// x86 (16/32/64-bit and segments), Z80 pairs, 68000 data/address. 6502's A,
+// X and Y are left out: one letter is as likely a label.
+static const char *const REG_ASM[] = {
+    "ah", "al", "ax", "bh", "bl", "bp", "bx", "ch", "cl", "cs", "cx", "dh",
+    "di", "dl", "ds", "dx", "eax", "ebp", "ebx", "ecx", "edi", "edx", "es",
+    "esi", "esp", "fs", "gs", "ip", "rax", "rbp", "rbx", "rcx", "rdi", "rdx",
+    "rip", "rsi", "rsp", "si", "sp", "ss", "r8", "r9", "r10", "r11", "r12",
+    "r13", "r14", "r15", "af", "bc", "de", "hl", "ix", "iy", "pc", "d0", "d1",
+    "d2", "d3", "d4", "d5", "d6", "d7", "a0", "a1", "a2", "a3", "a4", "a5",
+    "a6", "a7", NULL
+};
+
+static const char *const KW_BASIC[] = {
+    "ABS", "AND", "AS", "ASC", "BEEP", "CALL", "CASE", "CHR$", "CLOSE", "CLS",
+    "COLOR", "CONST", "DATA", "DECLARE", "DEF", "DIM", "DO", "DOUBLE", "ELSE",
+    "ELSEIF", "END", "EXIT", "FOR", "FUNCTION", "GOSUB", "GOTO", "IF", "INKEY$",
+    "INPUT", "INT", "INTEGER", "KEY", "LEFT$", "LEN", "LET", "LINE", "LOCATE",
+    "LONG", "LOOP", "MID$", "MOD", "NEXT", "NOT", "ON", "OPEN", "OR", "PEEK",
+    "PLAY", "POKE", "PRINT", "RANDOMIZE", "READ", "RESTORE", "RETURN", "RIGHT$",
+    "RND", "RUN", "SCREEN", "SELECT", "SHARED", "SINGLE", "SOUND", "SPC", "STEP",
+    "STOP", "STR$", "STRING", "SUB", "SWAP", "TAB", "THEN", "TO", "TYPE", "UNTIL",
+    "VAL", "WEND", "WHILE", "XOR", NULL
+};
+
+static const char *const KW_PASCAL[] = {
+    "and", "array", "asm", "begin", "boolean", "byte", "case", "char", "const",
+    "constructor", "destructor", "div", "do", "downto", "else", "end", "false",
+    "file", "for", "function", "goto", "if", "implementation", "in", "inherited",
+    "inline", "integer", "interface", "label", "longint", "mod", "nil", "not",
+    "object", "of", "or", "packed", "procedure", "program", "real", "record",
+    "repeat", "set", "shl", "shr", "string", "then", "to", "true", "type",
+    "unit", "until", "uses", "var", "while", "with", "word", "xor", NULL
+};
+
+static const char *const KW_BATCH[] = {
+    "call", "cd", "choice", "cls", "copy", "defined", "del", "dir", "do", "echo",
+    "else", "endlocal", "equ", "errorlevel", "exist", "exit", "for", "geq",
+    "goto", "gtr", "if", "in", "leq", "lss", "md", "mkdir", "move", "neq", "not",
+    "nul", "off", "on", "pause", "rd", "ren", "set", "setlocal", "shift", "start",
+    "type", NULL
+};
+
 static const LangDef LANGS[] = {
     { .key = "javascript", .display = "JavaScript", .keywords = KW_JS,
       .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
@@ -96,7 +227,7 @@ static const LangDef LANGS[] = {
       .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
       .quotes = "\"'", .c_preproc = 1 },
     { .key = "python", .display = "Python", .keywords = KW_PYTHON,
-      .line_comment = { "#" }, .quotes = "\"'", .triple_quotes = 1 },
+      .line_comment = { "#" }, .quotes = "\"'", .triple_quotes = 1, .annotations = 1 },
     { .key = "css", .display = "CSS", .block_open = "/*", .block_close = "*/",
       .quotes = "\"'", .css = 1 },
     { .key = "php", .display = "PHP", .keywords = KW_PHP,
@@ -109,6 +240,42 @@ static const LangDef LANGS[] = {
     { .key = "sql", .display = "SQL", .keywords = KW_SQL,
       .line_comment = { "--" }, .block_open = "/*", .block_close = "*/",
       .quotes = "\"'`", .nocase = 1 },
+    { .key = "typescript", .display = "TypeScript", .keywords = KW_TS,
+      .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
+      .quotes = "\"'`", .dollar_ident = 1, .annotations = 1 },
+    { .key = "java", .display = "Java", .keywords = KW_JAVA,
+      .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
+      .quotes = "\"'", .triple_quotes = 1, .annotations = 1 },
+    { .key = "csharp", .display = "C#", .keywords = KW_CSHARP,
+      .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
+      .quotes = "\"'", .c_preproc = 1 },
+    { .key = "kotlin", .display = "Kotlin", .keywords = KW_KOTLIN,
+      .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
+      .quotes = "\"'", .triple_quotes = 1, .annotations = 1 },
+    { .key = "go", .display = "Go", .keywords = KW_GO,
+      .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
+      .quotes = "\"'`" },
+    { .key = "swift", .display = "Swift", .keywords = KW_SWIFT,
+      .line_comment = { "//" }, .block_open = "/*", .block_close = "*/",
+      .quotes = "\"", .triple_quotes = 1, .c_preproc = 1, .annotations = 1 },
+    { .key = "json", .display = "JSON", .keywords = KW_JSON,
+      .quotes = "\"", .json_keys = 1 },
+    { .key = "xml", .display = "XML", .html = 1 },
+    { .key = "ini", .display = "INI / config", .line_comment = { ";", "#" },
+      .quotes = "\"", .hash_word_start = 1, .ini = 1 },
+    { .key = "asm", .display = "Assembly", .keywords = KW_ASM,
+      .line_comment = { ";" }, .quotes = "\"'", .nocase = 1, .hex_dollar = 1, .asm = 1 },
+    { .key = "basic", .display = "BASIC", .keywords = KW_BASIC,
+      .line_comment = { "'" }, .quotes = "\"", .nocase = 1, .no_escapes = 1,
+      .rem_comments = 1, .type_suffix = 1 },
+    { .key = "pascal", .display = "Pascal", .keywords = KW_PASCAL,
+      .line_comment = { "//" }, .block_open = "{", .block_close = "}",
+      .block_open2 = "(*", .block_close2 = "*)", .quotes = "'", .nocase = 1,
+      .no_escapes = 1, .hex_dollar = 1, .brace_directives = 1 },
+    { .key = "batch", .display = "DOS Batch", .keywords = KW_BATCH,
+      .line_comment = { "::" }, .quotes = "\"", .nocase = 1, .no_escapes = 1,
+      .rem_comments = 1, .percent_vars = 1 },
+    { .key = "diff", .display = "Diff", .diff = 1 },
 };
 
 static const LangDef *find_lang(const char *key) {
@@ -297,13 +464,17 @@ static int is_ident_start(const LangDef *L, const char *s, size_t i, size_t n) {
            (isalpha((unsigned char)s[i + 1]) || s[i + 1] == '-');
 }
 
-static int is_keyword(const LangDef *L, const char *w, size_t len) {
-    if (!L->keywords) return 0;
-    for (const char *const *k = L->keywords; *k; k++) {
+static int in_list(const char *const *list, int nocase, const char *w, size_t len) {
+    if (!list) return 0;
+    for (const char *const *k = list; *k; k++) {
         if (strlen(*k) != len) continue;
-        if ((L->nocase ? strncasecmp(*k, w, len) : strncmp(*k, w, len)) == 0) return 1;
+        if ((nocase ? strncasecmp(*k, w, len) : strncmp(*k, w, len)) == 0) return 1;
     }
     return 0;
+}
+
+static int is_keyword(const LangDef *L, const char *w, size_t len) {
+    return in_list(L->keywords, L->nocase, w, len);
 }
 
 static int line_comment_at(const LangDef *L, const char *s, size_t i, size_t n) {
@@ -330,7 +501,7 @@ static size_t string_len(const LangDef *L, const char *s, size_t i, size_t n) {
     }
     int multiline = L->multiline_strings || q == '`';
     for (size_t j = i + 1; j < n; j++) {
-        if (s[j] == '\\' && j + 1 < n) { j++; continue; }
+        if (s[j] == '\\' && j + 1 < n && !L->no_escapes) { j++; continue; }
         if (s[j] == q) return j + 1 - i;
         // An unterminated quote (an apostrophe in prose, a typo) stops at
         // the end of its line instead of coloring the rest of the block.
@@ -339,15 +510,32 @@ static size_t string_len(const LangDef *L, const char *s, size_t i, size_t n) {
     return n - i;
 }
 
+// The next character after s[from] that isn't a space or tab, '\0' at the end.
+static char next_nonblank(const char *s, size_t from, size_t n) {
+    while (from < n && (s[from] == ' ' || s[from] == '\t')) from++;
+    return from < n ? s[from] : '\0';
+}
+
 static void scan_code(Out *sb, const char *s, size_t n, const LangDef *L) {
     size_t i = 0, plain = 0;
-    int depth = 0; // CSS brace depth: property names only exist inside a rule
+    int depth = 0;      // CSS brace depth: property names only exist inside a rule
+    int first_word = 1; // assembly: no word read yet on this line - the next is the mnemonic
 
     while (i < n) {
         char c = s[i];
 
+        if (L->brace_directives && starts_with(s + i, n - i, "{$")) {
+            TOKEN(span_to(s, i + 2, n, "}") - i, "pre");
+            continue;
+        }
+
         if (L->block_open && starts_with(s + i, n - i, L->block_open)) {
             TOKEN(span_to(s, i + strlen(L->block_open), n, L->block_close) - i, "com");
+            continue;
+        }
+
+        if (L->block_open2 && starts_with(s + i, n - i, L->block_open2)) {
+            TOKEN(span_to(s, i + strlen(L->block_open2), n, L->block_close2) - i, "com");
             continue;
         }
 
@@ -386,9 +574,75 @@ static void scan_code(Out *sb, const char *s, size_t n, const LangDef *L) {
         }
         if (marker) continue;
 
-        if (L->quotes && c && strchr(L->quotes, c)) {
-            TOKEN(string_len(L, s, i, n), "str");
+        if (L->ini && c == '[' && at_line_start(s, i)) {
+            size_t j = i + 1;
+            while (j < n && s[j] != ']' && s[j] != '\n') j++;
+            TOKEN((j < n && s[j] == ']' ? j + 1 : j) - i, "tag");
             continue;
+        }
+
+        if (L->percent_vars) {
+            // %%i (a FOR variable), %1 and %~dp0 (arguments), %NAME%, !NAME!
+            size_t j = 0;
+            if (c == '%' && i + 2 < n && s[i + 1] == '%' && isalpha((unsigned char)s[i + 2])) {
+                j = i + 3;
+            } else if (c == '%' && i + 1 < n && (isdigit((unsigned char)s[i + 1]) || s[i + 1] == '~' || s[i + 1] == '*')) {
+                j = i + 1;
+                if (s[j] == '~') while (j + 1 < n && isalpha((unsigned char)s[j + 1])) j++;
+                j++;
+                if (s[i + 1] == '~' && j < n && isdigit((unsigned char)s[j])) j++;
+            } else if ((c == '%' || c == '!') && i + 1 < n && (isalpha((unsigned char)s[i + 1]) || s[i + 1] == '_')) {
+                size_t k = i + 1;
+                while (k < n && s[k] != c && s[k] != '\n' && s[k] != ' ') k++;
+                if (k < n && s[k] == c) j = k + 1;
+            } else if (c == ':' && at_line_start(s, i) && i + 1 < n && isalpha((unsigned char)s[i + 1])) {
+                size_t k = i + 1;
+                while (k < n && !isspace((unsigned char)s[k])) k++;
+                TOKEN(k - i, "attr");
+                continue;
+            }
+            if (j) { TOKEN(j - i, "var"); continue; }
+        }
+
+        if (L->quotes && c && strchr(L->quotes, c)) {
+            size_t len = string_len(L, s, i, n);
+            TOKEN(len, L->json_keys && next_nonblank(s, i + len, n) == ':' ? "attr" : "str");
+            continue;
+        }
+
+        if (L->hex_dollar && c == '$' && i + 1 < n && isxdigit((unsigned char)s[i + 1])) {
+            size_t j = i + 1;
+            while (j < n && isxdigit((unsigned char)s[j])) j++;
+            TOKEN(j - i, "num");
+            continue;
+        }
+
+        if (L->asm && c == '%' && i + 1 < n) {
+            // %1010 (binary), %define (a NASM macro), %eax (an AT&T register)
+            size_t j = i + 1;
+            if (s[j] == '0' || s[j] == '1') {
+                while (j < n && (s[j] == '0' || s[j] == '1')) j++;
+                TOKEN(j - i, "num");
+                continue;
+            }
+            if (isalpha((unsigned char)s[j])) {
+                while (j < n && is_ident(L, s[j])) j++;
+                TOKEN(j - i, at_line_start(s, i) ? "pre" : "var");
+                first_word = 0;
+                continue;
+            }
+        }
+
+        if ((L->annotations && c == '@') || (L->asm && c == '.')) {
+            // @Override, @dataclass / .org, .byte - not "a.b" or "x@y"
+            if (i + 1 < n && (isalpha((unsigned char)s[i + 1]) || s[i + 1] == '_') &&
+                (i == 0 || !is_ident(L, s[i - 1]))) {
+                size_t j = i + 1;
+                while (j < n && (is_ident(L, s[j]) || (c == '@' && s[j] == '.'))) j++;
+                TOKEN(j - i, "pre");
+                first_word = 0;
+                continue;
+            }
         }
 
         if (L->dollar_vars && c == '$' && i + 1 < n) {
@@ -441,16 +695,34 @@ static void scan_code(Out *sb, const char *s, size_t n, const LangDef *L) {
         if (is_ident_start(L, s, i, n)) {
             size_t j = i + 1;
             while (j < n && is_ident(L, s[j])) j++;
+            if (L->type_suffix && j < n && (s[j] == '$' || s[j] == '%')) j++;
             size_t len = j - i;
 
+            if (L->rem_comments && len == 3 && strncasecmp(s + i, "rem", 3) == 0) {
+                while (j < n && s[j] != '\n') j++;
+                TOKEN(j - i, "com");
+                continue;
+            }
+
             const char *cls = NULL;
-            if (L->css && depth > 0) {
+            if (L->asm) {
+                // "loop:" labels a line, the first other word on it is the
+                // instruction, a register is a variable
+                if (first_word && j < n && s[j] == ':') cls = "attr";
+                else if (first_word) { cls = "kw"; first_word = 0; }
+                else if (in_list(REG_ASM, 1, s + i, len)) cls = "var";
+            }
+            if (L->ini && at_line_start(s, i)) {
+                char next = next_nonblank(s, j, n);
+                if (next == '=' || next == ':') cls = "attr";
+            }
+            if (!cls && L->css && depth > 0) {
                 size_t k = j;
                 while (k < n && (s[k] == ' ' || s[k] == '\t')) k++;
                 if (k < n && s[k] == ':') cls = "attr";
             }
             if (!cls && is_keyword(L, s + i, len)) cls = "kw";
-            if (!cls && j < n && s[j] == '(') cls = "fn";
+            if (!cls && !L->ini && j < n && s[j] == '(') cls = "fn";
 
             if (cls) TOKEN(len, cls);
             else i = j;
@@ -461,7 +733,32 @@ static void scan_code(Out *sb, const char *s, size_t n, const LangDef *L) {
             if (c == '{') depth++;
             else if (c == '}' && depth > 0) depth--;
         }
+        if (c == '\n') first_word = 1;
         i++;
+    }
+    FLUSH();
+}
+
+// A patch: each line colored whole by how it starts.
+static void scan_diff(Out *sb, const char *s, size_t n) {
+    size_t i = 0, plain = 0;
+
+    while (i < n) {
+        size_t j = i;
+        while (j < n && s[j] != '\n') j++;
+        const char *line = s + i;
+        size_t len = j - i;
+        const char *cls = NULL;
+        if (starts_with(line, len, "+++") || starts_with(line, len, "---") ||
+            starts_with(line, len, "diff ") || starts_with(line, len, "index "))
+            cls = "kw";
+        else if (starts_with(line, len, "@@")) cls = "pre";
+        else if (len && line[0] == '+') cls = "str";
+        else if (len && line[0] == '-') cls = "var";
+        else if (len && line[0] == '\\') cls = "com"; // "\ No newline at end of file"
+        if (cls && len) TOKEN(len, cls);
+        else i = j;
+        if (i < n) i++; // the newline, left in the plain run
     }
     FLUSH();
 }
@@ -472,6 +769,16 @@ static void scan_html(Out *sb, const char *s, size_t n) {
     while (i < n) {
         if (starts_with(s + i, n - i, "<!--")) {
             TOKEN(span_to(s, i + 4, n, "-->") - i, "com");
+            continue;
+        }
+
+        if (starts_with(s + i, n - i, "<![CDATA[")) {
+            TOKEN(span_to(s, i + 9, n, "]]>") - i, "str");
+            continue;
+        }
+
+        if (starts_with(s + i, n - i, "<?")) { // <?xml ...?>, processing instructions
+            TOKEN(span_to(s, i + 2, n, "?>") - i, "pre");
             continue;
         }
 
@@ -536,6 +843,7 @@ static char *highlight(const char *code, const char *lang, const CodeHighlightPa
     const LangDef *L = find_lang(lang);
     if (!L)           emit(&o, src, len, NULL);
     else if (L->html) scan_html(&o, src, len);
+    else if (L->diff) scan_diff(&o, src, len);
     else              scan_code(&o, src, len, L);
     line_end(&o);
     free(src);

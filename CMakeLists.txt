@@ -232,3 +232,6 @@ add_test(NAME proxy_protocol COMMAND proxy_protocol_test)
 add_executable(css_compat_test tests/css_compat_test.c src/utils/css_compat.c src/utils/detect_epoch.c)
 target_link_libraries(css_compat_test Threads::Threads)
 add_test(NAME css_compat COMMAND css_compat_test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(code_highlight_test tests/code_highlight_test.c src/utils/code_highlight.c)
+add_test(NAME code_highlight COMMAND code_highlight_test)

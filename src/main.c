@@ -8,6 +8,7 @@
 #include "db/cms_comments.h"
 #include "extensions/extensions.h"
 #include "utils/mailer.h"
+#include "utils/translator.h"
 #include "modules/analytics/geoip.h"
 #include "utils/config_loader.h"
 #include "utils/log.h"
@@ -182,6 +183,9 @@ int main(int argc, char *argv[]) {
 
     geoip_init(GEOIP_DEFAULT_DB_PATH);
 
+    // libcurl's global setup isn't thread-safe: before any request thread.
+    translator_init();
+
     install_signal_handlers();
 
     if (server_start(root_directory, ssl_enabled, ssl_cert, ssl_key,
@@ -211,6 +215,7 @@ int main(int argc, char *argv[]) {
     wap_gateway_stop();
     server_stop();
     geoip_cleanup();
+    translator_cleanup();
     mongodb_manager_cleanup();
     free(root_directory);
 

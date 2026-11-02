@@ -1,4 +1,4 @@
-<article class="boat-rudder-entry-editor" id="entryEditor" data-entry-id="%s" data-langs='%s'>
+<article class="boat-rudder-entry-editor" id="entryEditor" data-entry-id="%s" data-langs='%s'%s>
 
   <!-- Fixed top bar -->
   <div class="boat-rudder-entry-editor__topbar">
@@ -17,6 +17,16 @@
       </div>
     </div>
     <div class="boat-rudder-entry-editor__topbar-right">
+      <div class="boat-rudder-entry-editor-translate" id="translateBox" hidden>
+        <button class="boat-rudder-btn boat-rudder-btn--sm" type="button" onclick="toggleTranslatePanel()">&#127760; Translate</button>
+        <div class="boat-rudder-entry-editor-translate__panel" id="translatePanel">
+          <p class="boat-rudder-entry-editor-translate__from">From <strong id="translateFrom"></strong> to:</p>
+          <div id="translateTargets"></div>
+          <p class="boat-rudder-entry-editor-translate__hint">Only empty fields are filled; what is already written stays.</p>
+          <p class="boat-rudder-entry-editor-translate__message" id="translateMessage" role="status"></p>
+          <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="runTranslation()">Translate</button>
+        </div>
+      </div>
       <div class="boat-rudder-entry-editor-publish-toggle" onclick="togglePublish()">
         <span class="boat-rudder-entry-editor-publish-toggle__status" id="publish-status-label">Draft</span>
         <div class="boat-rudder-switch" id="publish-switch">
@@ -209,7 +219,7 @@
   // only on a second press the block being edited.
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || overlayOpen()) return;
-    if (closeAddBlockMenu()) return;
+    if (closeAddBlockMenu() || closeTranslatePanel()) return;
     if (activeEditBlock) deactivateBlock(activeEditBlock);
   });
 
@@ -224,6 +234,7 @@
     var t = pressTarget || e.target;
     pressTarget = null;
     if (document.contains(t) && !t.closest('.boat-rudder-entry-editor-add-block')) closeAddBlockMenu();
+    if (document.contains(t) && !t.closest('.boat-rudder-entry-editor-translate')) closeTranslatePanel();
     if (!activeEditBlock || overlayOpen()) return;
     if (!document.contains(t)) return; // removed by its own handler (a deleted table row...)
     if (activeEditBlock.contains(t) || t.closest('#modalContainer, #imageModal')) return;
@@ -910,6 +921,225 @@
     return Promise.all([saveMeta(), saveHeader(), saveContent()]).then(function (results) {
       dirty = results.some(function (data) { return !data.ok; });
       setStatus(dirty ? 'Save failed' : 'Saved', dirty ? 'error' : 'saved');
+    });
+  };
+
+  /* ---- Translation ---- */
+  // Fills the other languages' empty fields from the one being edited
+  // (entry-translation-plan.md). Azure goes through the server, which holds
+  // the key; a local translator is called straight from here, since the
+  // server can't reach the editor's computer. Either way translateBatch()
+  // turns a list of texts into a list of translations.
+  var translateProvider = root.dataset.translateProvider || '';
+  var translateBusy = false;
+  var TRANSLATE_MAX_TEXTS = 50;
+  var TRANSLATE_MAX_CHARS = 40000;
+
+  function langName(code) {
+    var btn = root.querySelector('.boat-rudder-entry-editor__lang-btn[data-lang="' + code + '"]');
+    return btn ? btn.textContent.trim() : code;
+  }
+
+  if (translateProvider && langs.length > 1) document.getElementById('translateBox').hidden = false;
+
+  window.toggleTranslatePanel = function () {
+    var panel = document.getElementById('translatePanel');
+    if (panel.classList.contains('boat-rudder-entry-editor-translate__panel--open')) { closeTranslatePanel(); return; }
+    translateMessage('');
+    document.getElementById('translateFrom').textContent = langName(currentLang);
+    document.getElementById('translateTargets').innerHTML = langs.filter(function (code) {
+      return code !== currentLang;
+    }).map(function (code) {
+      return '<label class="boat-rudder-entry-editor-translate__target"><input type="checkbox" value="' +
+        escapeHtml(code) + '" checked> ' + escapeHtml(langName(code)) + '</label>';
+    }).join('');
+    panel.classList.add('boat-rudder-entry-editor-translate__panel--open');
+  };
+
+  function closeTranslatePanel() {
+    var panel = document.getElementById('translatePanel');
+    if (!panel || !panel.classList.contains('boat-rudder-entry-editor-translate__panel--open')) return false;
+    panel.classList.remove('boat-rudder-entry-editor-translate__panel--open');
+    return true;
+  }
+  window.closeTranslatePanel = closeTranslatePanel;
+
+  // The panel's own line: progress, and why a run stopped or did nothing -
+  // the top bar's status alone is easy to miss.
+  function translateMessage(text, cls) {
+    var el = document.getElementById('translateMessage');
+    el.textContent = text;
+    el.className = 'boat-rudder-entry-editor-translate__message' +
+      (cls ? ' boat-rudder-entry-editor-translate__message--' + cls : '');
+  }
+
+  function translateBatch(texts, source, target, format) {
+    if (translateProvider === 'azure') {
+      var params = new URLSearchParams();
+      params.set('source', source);
+      params.set('target', target);
+      params.set('format', format);
+      texts.forEach(function (t) { params.append('text', t); });
+      return postForm('/dashboard/api/translate', params).then(function (data) {
+        if (!data.ok) throw new Error(data.error || 'translation failed');
+        return data.texts;
+      });
+    }
+    var url = (root.dataset.translateUrl || '').replace(/\/+$/, '') + '/translate';
+    var body = { q: texts, source: source, target: target, format: format };
+    if (root.dataset.translateKey) body.api_key = root.dataset.translateKey;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(function () {
+      throw new Error('the local translator at ' + url + ' did not answer');
+    }).then(function (res) {
+      return res.json().catch(function () { throw new Error('the local translator answered ' + res.status); });
+    }).then(function (data) {
+      if (data.error) throw new Error(data.error);
+      var out = Array.isArray(data.translatedText) ? data.translatedText : [data.translatedText];
+      if (out.length !== texts.length) throw new Error('the local translator answered a different number of texts');
+      return out;
+    });
+  }
+
+  function langField(scope, lang, name) {
+    var panel = scope.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"]');
+    return panel ? panel.querySelector('[name="' + name + '"]') : null;
+  }
+
+  // An opened table block shows a starter grid ("Column 1"...) even in a
+  // language nobody has written yet; that still counts as empty.
+  function isBlankTable(text) {
+    return text.split('\n').every(function (row) {
+      return row.split('|').every(function (c) { return !c.trim() || /^Column \d+$/.test(c.trim()); });
+    });
+  }
+
+  // The jobs of one target language: each has a format, the texts to send
+  // and apply(translations). Only fields empty in `target` whose `source`
+  // has text; a list goes line by line and a table cell by cell, so their
+  // separators survive.
+  function translationJobs(source, target) {
+    var jobs = [];
+    var header = document.getElementById('headerSidebar');
+    ['title', 'summary'].forEach(function (name) {
+      var from = langField(header, source, name), to = langField(header, target, name);
+      if (!from || !to || !from.value.trim() || to.value.trim()) return;
+      jobs.push({ format: 'text', texts: [from.value], apply: function (t) { to.value = t[0]; } });
+    });
+
+    document.querySelectorAll('#entryBlocks .boat-rudder-entry-editor-block').forEach(function (block) {
+      var type = block.dataset.type;
+      var from = langField(block, source, 'text'), to = langField(block, target, 'text');
+      if (!from || !to || !from.value.trim()) return;
+      var done = function (value) {
+        to.value = value;
+        refreshBlockPreview(block);
+      };
+      if (type === 'paragraph') {
+        if (to.value.trim()) return;
+        jobs.push({ format: 'html', texts: [from.value], apply: function (t) {
+          setParagraphText(block, target, t[0]);
+          refreshBlockPreview(block);
+        } });
+      } else if (type === 'title' || type === 'link') {
+        if (to.value.trim()) return;
+        jobs.push({ format: 'text', texts: [from.value], apply: function (t) { done(t[0]); } });
+      } else if (type === 'list' || type === 'table') {
+        if (type === 'list' ? to.value.trim() : !isBlankTable(to.value)) return;
+        var sep = type === 'list' ? null : '|';
+        var rows = from.value.replace(/\r\n?/g, '\n').split('\n');
+        var cells = rows.map(function (row) { return sep ? row.split(sep) : [row]; });
+        var texts = [];
+        cells.forEach(function (row) { row.forEach(function (c) { if (c.trim()) texts.push(c); }); });
+        jobs.push({ format: 'text', texts: texts, apply: function (t) {
+          var i = 0;
+          done(cells.map(function (row) {
+            return row.map(function (c) { return c.trim() ? t[i++] : c; }).join(sep || '');
+          }).join('\n'));
+          var grid = to.parentNode.querySelector('.boat-rudder-entry-editor__table-editor');
+          if (grid) buildTableGrid(grid, parseTableRows(to.value), tableHasHeader(block), to);
+        } });
+      }
+    });
+    return jobs;
+  }
+
+  // Sends `jobs` in batches of up to TRANSLATE_MAX_TEXTS texts per format,
+  // one after another, then hands each job its translations and calls
+  // applied() for it.
+  function runJobs(jobs, source, target, progress, applied) {
+    var batches = [];
+    ['text', 'html'].forEach(function (format) {
+      var batch = null;
+      jobs.filter(function (j) { return j.format === format; }).forEach(function (job) {
+        var size = job.texts.join('').length;
+        if (!batch || batch.texts.length + job.texts.length > TRANSLATE_MAX_TEXTS ||
+            batch.size + size > TRANSLATE_MAX_CHARS) {
+          batch = { format: format, texts: [], jobs: [], size: 0 };
+          batches.push(batch);
+        }
+        batch.jobs.push(job);
+        batch.texts = batch.texts.concat(job.texts);
+        batch.size += size;
+      });
+    });
+    return batches.reduce(function (chain, batch, i) {
+      return chain.then(function () {
+        progress(i + 1, batches.length);
+        return translateBatch(batch.texts, source, target, batch.format).then(function (out) {
+          var at = 0;
+          batch.jobs.forEach(function (job) {
+            job.apply(out.slice(at, at + job.texts.length));
+            at += job.texts.length;
+            applied();
+          });
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  window.runTranslation = function () {
+    if (translateBusy) return;
+    var source = currentLang;
+    var targets = Array.from(document.querySelectorAll('#translateTargets input:checked'))
+      .map(function (cb) { return cb.value; });
+    var work = targets.map(function (target) {
+      return { target: target, jobs: translationJobs(source, target) };
+    }).filter(function (w) { return w.jobs.length; });
+    if (!work.length) {
+      translateMessage('Nothing to translate: no field written in ' + langName(source) +
+        ' is empty in the other languages. Write in the tab you translate from.', 'error');
+      return;
+    }
+
+    translateBusy = true;
+    var filled = 0;
+    work.reduce(function (chain, w) {
+      return chain.then(function () {
+        return runJobs(w.jobs, source, w.target, function (i, n) {
+          var text = 'Translating to ' + langName(w.target) + (n > 1 ? ' ' + i + '/' + n : '') + '...';
+          setStatus(text);
+          translateMessage(text);
+        }, function () { filled++; });
+      });
+    }, Promise.resolve()).then(function () {
+      translateBusy = false;
+      closeTranslatePanel();
+      setContentChanged();
+      if (autoSaveEnabled) {
+        clearTimeout(autoSaveTimer);
+        editorSaveAll();
+      } else {
+        setStatus('Translated ' + filled + ' field' + (filled === 1 ? '' : 's') + ' - not saved yet', 'saved');
+      }
+    }, function (err) {
+      translateBusy = false;
+      if (filled) setContentChanged();
+      setStatus('Translation stopped: ' + err.message, 'error');
+      translateMessage('Translation stopped: ' + err.message, 'error');
     });
   };
 

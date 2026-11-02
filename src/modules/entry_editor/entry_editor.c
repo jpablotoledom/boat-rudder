@@ -1,6 +1,7 @@
 #include "entry_editor.h"
 #include "entry_editor_blocks.h"
 #include "../../utils/generate_url_theme.h"
+#include "../../utils/http_utils.h"
 #include "../../utils/read_file.h"
 #include "../../utils/template_utils.h"
 #include <stdlib.h>
@@ -128,25 +129,41 @@ static char *build_editor_langs_json(const CmsLanguageItem *langs, size_t lang_c
     return result;
 }
 
+// The #entryEditor attributes the translation script reads: data-translate-
+// provider, and for a local translator its URL and key ("" with no provider).
+static char *build_translate_attrs(const CmsTranslateSettings *t) {
+    if (!t || !t->provider[0]) return strdup("");
+    if (strcmp(t->provider, "local") != 0)
+        return render_template(" data-translate-provider=\"%s\"", "azure");
+    char url[sizeof(t->local_url) * 6], key[sizeof(t->local_key) * 6];
+    html_encode(url, t->local_url, sizeof(url));
+    html_encode(key, t->local_key, sizeof(key));
+    return render_template(" data-translate-provider=\"local\" data-translate-url=\"%s\" data-translate-key=\"%s\"",
+                           url, key);
+}
+
 char *entry_editor_page(int epoch, const CmsEntryEdit *entry,
                          const CmsCategoryItem *categories, size_t category_count,
-                         const CmsLanguageItem *langs, size_t lang_count) {
+                         const CmsLanguageItem *langs, size_t lang_count,
+                         const CmsTranslateSettings *translate) {
     char *container_tpl = load_template("dashboard/entries/editor/container_epoch%d.html", epoch);
     if (!container_tpl) return NULL;
 
     char *langs_json   = build_editor_langs_json(langs, lang_count);
+    char *translate_attrs = build_translate_attrs(translate);
     char *lang_tabs    = render_lang_tab_buttons(langs, lang_count, epoch);
     char *meta_html    = render_meta_sidebar(entry, categories, category_count, epoch);
     char *header_html  = render_header_sidebar(entry, langs, lang_count, epoch);
     char *blocks_html  = entry_editor_render_blocks(entry, langs, lang_count, epoch);
 
     char *result = NULL;
-    if (langs_json && lang_tabs && meta_html && header_html && blocks_html) {
-        result = render_template(container_tpl, entry->id, langs_json, lang_tabs,
+    if (langs_json && translate_attrs && lang_tabs && meta_html && header_html && blocks_html) {
+        result = render_template(container_tpl, entry->id, langs_json, translate_attrs, lang_tabs,
                                   meta_html, header_html, blocks_html);
     }
 
     free(langs_json);
+    free(translate_attrs);
     free(lang_tabs);
     free(meta_html);
     free(header_html);

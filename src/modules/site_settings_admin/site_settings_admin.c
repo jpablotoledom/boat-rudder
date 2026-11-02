@@ -138,6 +138,36 @@ static char *comments_panel(int epoch, const char *mail_notice) {
     return panel ? panel : strdup("");
 }
 
+// The Translation panel (settings-translation_epoch3.html): the provider,
+// whether an Azure key is saved - its last four characters, never the key -
+// its region, and the local translator's address and key.
+static char *translation_panel(int epoch) {
+    char *tpl = load_template("dashboard/settings/settings-translation_epoch%d.html", epoch);
+    if (!tpl) return strdup("");
+    CmsTranslateSettings t;
+    cms_get_translate_settings(&t);
+    char key_status[64];
+    size_t key_len = strlen(t.azure_key);
+    if (key_len >= 4)
+        snprintf(key_status, sizeof(key_status), "A key is saved (...%s)", t.azure_key + key_len - 4);
+    else
+        snprintf(key_status, sizeof(key_status), key_len ? "A key is saved" : "No key saved");
+    char *region = html_encode_alloc(t.azure_region);
+    char *url = html_encode_alloc(t.local_url);
+    char *key = html_encode_alloc(t.local_key);
+    char *panel = region && url && key
+        ? render_template(tpl, t.provider[0] ? "" : " selected",
+                          strcmp(t.provider, "azure") == 0 ? " selected" : "",
+                          strcmp(t.provider, "local") == 0 ? " selected" : "",
+                          key_status, key_len ? "" : " disabled", url, key, region)
+        : NULL;
+    free(region);
+    free(url);
+    free(key);
+    free(tpl);
+    return panel ? panel : strdup("");
+}
+
 char *site_settings_general_page(int epoch, const char *lang, const char *site_name,
                                  const SiteHomeSettings *home, const char *error_message,
                                  const char *mail_notice) {
@@ -149,6 +179,7 @@ char *site_settings_general_page(int epoch, const char *lang, const char *site_n
     char *favicons = NULL;
     char *pages = NULL;
     char *comments = NULL;
+    char *translation = NULL;
     char *result = NULL;
 
     if (!page_tpl) goto cleanup;
@@ -160,12 +191,13 @@ char *site_settings_general_page(int epoch, const char *lang, const char *site_n
     favicons = favicon_panels(epoch);
     pages = page_options(epoch, lang, home->under_construction_page);
     comments = comments_panel(epoch, mail_notice);
-    if (!encoded_name || !favicons || !pages || !comments) goto cleanup;
+    translation = translation_panel(epoch);
+    if (!encoded_name || !favicons || !pages || !comments || !translation) goto cleanup;
 
     result = render_template(page_tpl, error_html ? error_html : "", encoded_name, favicons,
                              BOAT_RUDDER_VERSION, home->hide_home_blog ? " checked" : "",
                              home->under_construction ? " checked" : "", pages, comments,
-                             home->under_construction_authors ? " checked" : "");
+                             home->under_construction_authors ? " checked" : "", translation);
 
 cleanup:
     free(page_tpl);
@@ -175,6 +207,7 @@ cleanup:
     free(favicons);
     free(pages);
     free(comments);
+    free(translation);
     return result;
 }
 

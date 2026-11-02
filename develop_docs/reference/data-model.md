@@ -327,6 +327,12 @@ sent_at, last_error}`; index `{status, next_attempt_at}`. See [comments.md](comm
 - `entries.comments_closed` (bool) - no new comments on that blog entry.
 - `site_settings.comments_enabled` (bool) - comments on/off for the site.
 - `site_settings.secret` (64 hex) - the site's HMAC key (`cms_get_site_secret()`), generated once.
+- `site_settings.translate_provider` (`""` off, `"azure"`, `"local"`), `translate_azure_key`,
+  `translate_azure_region` (`""` for a global resource), `translate_local_url` (absent means
+  `http://localhost:5000`), `translate_local_key` - the entry editor's *Translate* button
+  ([entry-editor.md](entry-editor.md#translation)). The Azure key is
+  kept here rather than in `settings.conf`, so each site has its own and it never reaches a commit;
+  the dashboard never shows it back.
 
 ### `extensions`
 

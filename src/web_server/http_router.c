@@ -65,6 +65,7 @@
 #include "../utils/request_theme.h"
 #include "../utils/request_site.h"
 #include "../utils/mailer.h"
+#include "../utils/translator.h"
 #include "../utils/theme_catalog.h"
 #include "../utils/request_user.h"
 #include "../utils/config_loader.h"
@@ -76,6 +77,7 @@
 #include "../utils/http_utils.h"
 #include "../utils/template_utils.h"
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
@@ -1608,6 +1610,74 @@ static size_t parse_urlencoded_multi(const char *body, int body_length, const ch
     return count;
 }
 
+// Whether `code` is one of the site's languages.
+static int is_site_language(const char *code) {
+    CmsLanguageItem *langs = NULL;
+    size_t count = 0;
+    cms_get_languages(&langs, &count);
+    int found = 0;
+    for (size_t i = 0; i < count && !found; i++) found = strcmp(langs[i].code, code) == 0;
+    cms_languages_free(langs, count);
+    return found;
+}
+
+// POST /dashboard/api/translate: `source`, `target`, `format` (text|html)
+// and up to TRANSLATOR_MAX_TEXTS `text` fields, translated through Azure
+// (the "local" provider is called by the editor's browser instead) ->
+// {"ok":true,"texts":[...]} | {"ok":false,"error":"..."}.
+static char *translate_api_response(HttpRequest *req) {
+    char source[16], target[16], format[8];
+    parse_urlencoded_field(req->body, req->body_length, "source", source, sizeof(source));
+    parse_urlencoded_field(req->body, req->body_length, "target", target, sizeof(target));
+    parse_urlencoded_field(req->body, req->body_length, "format", format, sizeof(format));
+
+    CmsTranslateSettings settings;
+    cms_get_translate_settings(&settings);
+    if (strcmp(settings.provider, "azure") != 0)
+        return build_json_response_status("{\"ok\":false,\"error\":\"Azure is not the translator\"}",
+                                          "400 Bad Request");
+    if (strcmp(source, target) == 0 || !is_site_language(source) || !is_site_language(target))
+        return build_json_response_status("{\"ok\":false,\"error\":\"unknown language\"}",
+                                          "400 Bad Request");
+
+    char *texts[TRANSLATOR_MAX_TEXTS];
+    size_t count = parse_urlencoded_multi(req->body, req->body_length, "text", texts, TRANSLATOR_MAX_TEXTS);
+    // Characters, as Azure counts them: every UTF-8 byte but continuations.
+    size_t chars = 0;
+    for (size_t i = 0; i < count; i++)
+        for (const unsigned char *p = (const unsigned char *)texts[i]; *p; p++) chars += (*p & 0xC0) != 0x80;
+
+    char *out[TRANSLATOR_MAX_TEXTS];
+    char error[200] = "";
+    char *response = NULL;
+    if (count == 0 || chars > TRANSLATOR_MAX_CHARS) {
+        response = build_json_response_status("{\"ok\":false,\"error\":\"nothing to translate, or too much\"}",
+                                              "400 Bad Request");
+    } else if (translator_azure(settings.azure_key, settings.azure_region, (const char *const *)texts, count,
+                                source, target, strcmp(format, "html") == 0, out, error, sizeof(error)) != 0) {
+        char *escaped = json_escape_alloc(error);
+        char *json = escaped ? render_template("{\"ok\":false,\"error\":\"%s\"}", escaped) : NULL;
+        response = json ? build_json_response_status(json, "502 Bad Gateway") : NULL;
+        free(escaped);
+        free(json);
+    } else {
+        char *json = strdup("{\"ok\":true,\"texts\":[");
+        for (size_t i = 0; i < count; i++) {
+            char *escaped = json ? json_escape_alloc(out[i]) : NULL;
+            char *item = escaped ? render_template(i ? ",\"%s\"" : "\"%s\"", escaped) : NULL;
+            json = item ? str_append(json, item) : (free(json), NULL);
+            free(escaped);
+            free(item);
+            free(out[i]);
+        }
+        json = json ? str_append(json, "]}") : NULL;
+        response = json ? build_json_response(json) : NULL;
+        free(json);
+    }
+    for (size_t i = 0; i < count; i++) free(texts[i]);
+    return response;
+}
+
 // Fills values[i] (caller-allocated, lang_count entries) with the url-decoded
 // "name_<langs[i].code>" field from req's body, for
 // cms_create_category()/cms_update_category(). Each values[i] is malloc'd
@@ -2687,7 +2757,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 size_t category_count = 0;
                                 cms_get_categories(content_lang, &categories, &category_count);
 
-                                char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count);
+                                CmsTranslateSettings translate;
+                                cms_get_translate_settings(&translate);
+                                char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count,
+                                                                   &translate);
                                 char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                                 free(body);
@@ -4094,6 +4167,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 }
             }
 
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/api/translate") == 0) {
+            // The entry editor's Translate button, with Azure: the key stays here.
+            int epoch = resolve_epoch(&req);
+
+            if (!dashboard_allowed(&req, epoch)) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char *response = translate_api_response(&req);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
+            }
+
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/entries/new") == 0) {
             int epoch = resolve_epoch(&req);
 
@@ -4567,6 +4654,52 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 cms_update_comments_enabled(on);
                 send_or_error(ctx, build_redirect_response("/dashboard/settings#comments", "", epoch),
                               req.method, epoch);
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/translation") == 0) {
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            if (require_admin_session(ctx, &req, epoch, user_id)) {
+                char provider[16], key[128], clear[8], region[64], url[256], local_key[128];
+                parse_urlencoded_field(req.body, req.body_length, "translate_provider", provider, sizeof(provider));
+                parse_urlencoded_field(req.body, req.body_length, "translate_azure_key", key, sizeof(key));
+                bool clear_key = parse_urlencoded_field(req.body, req.body_length, "translate_azure_key_clear",
+                                                        clear, sizeof(clear)) != 0;
+                parse_urlencoded_field(req.body, req.body_length, "translate_azure_region", region, sizeof(region));
+                parse_urlencoded_field(req.body, req.body_length, "translate_local_url", url, sizeof(url));
+                parse_urlencoded_field(req.body, req.body_length, "translate_local_key", local_key, sizeof(local_key));
+                // An empty key field keeps the stored key: the form never shows it.
+                const char *new_key = key[0] ? key : clear_key ? "" : NULL;
+                if (!url[0]) snprintf(url, sizeof(url), "%s", TRANSLATE_LOCAL_URL_DEFAULT);
+                CmsTranslateSettings stored;
+                cms_get_translate_settings(&stored);
+
+                const char *error_message = NULL;
+                // The region goes into a request header: letters, digits and dashes only.
+                bool region_ok = true;
+                for (const char *p = region; *p; p++)
+                    region_ok = region_ok && (isalnum((unsigned char)*p) || *p == '-');
+                if (strcmp(provider, "") != 0 && strcmp(provider, "azure") != 0 && strcmp(provider, "local") != 0)
+                    error_message = "Choose a translator.";
+                else if (strcmp(provider, "azure") == 0 && !(new_key ? new_key : stored.azure_key)[0])
+                    error_message = "Azure needs an API key.";
+                else if (!region_ok)
+                    error_message = "The Azure region is a name like westeurope or eastus.";
+                else if (new_key && strpbrk(new_key, "\r\n"))
+                    error_message = "The Azure key can't have line breaks.";
+                else if (strncmp(url, "http://", 7) != 0 && strncmp(url, "https://", 8) != 0)
+                    error_message = "The local translator's address must start with http:// or https://.";
+                else if (cms_update_translate_settings(provider, new_key, region, url, local_key) != 0)
+                    error_message = "Could not save the translation settings.";
+
+                if (!error_message) {
+                    send_or_error(ctx, build_redirect_response("/dashboard/settings#translation", "", epoch),
+                                  req.method, epoch);
+                } else {
+                    char *name = cms_get_site_name();
+                    send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL, error_message, NULL);
+                    free(name);
+                }
             }
 
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/mail/test") == 0) {

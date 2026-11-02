@@ -83,6 +83,9 @@ mail_smtp_user=
 mail_smtp_password=
 mail_from=                     # sender address
 mail_from_name=                # sender name; empty = the site name
+
+# Entry translation (entry-editor.md#translation); the provider and key are set in the dashboard
+translate_azure_url=           # replaces Azure Translator's address (a proxy, a test server); empty = Azure's own
 ```
 
 ---
@@ -172,6 +175,7 @@ comments' email confirmation ([comments.md](comments.md)); without `mail_smtp_ur
 | `mail_smtp_password` | string | (empty) | SMTP password. The file then holds a secret: keep it readable by the server's user only |
 | `mail_from` | string | (empty) | Sender address (envelope and `From:`) |
 | `mail_from_name` | string | site name | Sender display name |
+| `translate_azure_url` | string | (empty) | Where the entry editor's translations go instead of Azure AI Translator's global endpoint (`https://api.cognitive.microsofttranslator.com/translate`) - a proxy or a test server |
 
 ---
 

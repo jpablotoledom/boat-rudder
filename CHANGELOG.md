@@ -6,6 +6,17 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Entry translation
+
+**Added**
+- A *Translate* button in the entry editor fills the other languages' empty fields - title,
+  summary and the text blocks - from the language being edited. Text already written is never
+  replaced; with autosave on, the result is saved right away.
+- *Settings → Translation* picks the translator: **Azure AI Translator** (its F0 tier is free,
+  2 million characters a month), called by the server with a key that is never shown again, or
+  **a translator on this computer** - a LibreTranslate-compatible server the browser calls
+  directly.
+
 ### Commenters' names
 
 **Changed**

@@ -25,7 +25,7 @@ find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
-# libcurl: outgoing mail over SMTP (utils/mailer.c).
+# libcurl: outgoing mail over SMTP (utils/mailer.c) and Azure AI Translator (utils/translator.c).
 pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 
 # Optional: MaxMind GeoLite2 for country detection in analytics (src/modules/
@@ -151,6 +151,7 @@ set(SOURCES
     src/db/cms_search.c
     src/db/cms_comments.c
     src/utils/mailer.c
+    src/utils/translator.c
     src/utils/captcha.c
     src/extensions/extensions.c
     src/db/cms_fonts.c

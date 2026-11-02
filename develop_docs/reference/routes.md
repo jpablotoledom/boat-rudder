@@ -130,6 +130,7 @@ title `{{SITE_NAME}} - Dashboard`.
 | `POST` | `/dashboard/comments/<id>/reply` · `/reply/delete` | E3, S+R, Own entry | `comments_reply()` / `cms_comments_delete_reply()` | Fields `text`, `back`. Saves the one reply (approves a pending comment, emails the commenter at the first one): `302 …&done=replied\|replied-approved\|reply-deleted`; a refused text shows the page again with the reason |
 | `POST` | `/dashboard/comments/commenter/<id>/block` · `/unblock` · `/block-delete` | E3, A | `cms_comments_block()` | Block (and delete everything from) a commenter's email |
 | `POST` | `/dashboard/settings/comments` | E3, A | `cms_update_comments_enabled()` | Field `comments_enabled`; can't turn on without mail |
+| `POST` | `/dashboard/settings/translation` | E3, A | `cms_update_translate_settings()` | Fields `translate_provider` (`""`/`azure`/`local`), `translate_azure_key` (empty keeps the stored one), `translate_azure_key_clear`, `translate_azure_region` (letters, digits, dashes), `translate_local_url`, `translate_local_key`; `302 /dashboard/settings#translation`, or the page with the reason |
 | `POST` | `/dashboard/settings/mail/test` | E3, A | `mailer_enqueue()` | Test email to the admin's own address; `302 /dashboard/settings?mail=queued\|no-email\|failed#comments` |
 | `GET` | `/dashboard/categories` | E3, A | `categories_admin_list()` | |
 | `GET`/`POST` | `/dashboard/categories/new` | E3, A | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
@@ -201,7 +202,7 @@ All **E3** (`403` plain text otherwise). Responses are JSON (`build_json_respons
 
 ### Entry editor
 
-Guards **S+R** and **Own** on every route except `block-preview` (**S**). Detailed in
+Guards **S+R** and **Own** on every route except `block-preview` and `translate` (**S**). Detailed in
 [entry-editor.md](entry-editor.md).
 
 | Method | Path | Handler | Response |
@@ -212,6 +213,7 @@ Guards **S+R** and **Own** on every route except `block-preview` (**S**). Detail
 | `POST` | `/dashboard/api/entries/<id>/blocks` | `cms_add_entry_content_block()` | `{ok, block_id, html}` - the new block's editor markup |
 | `POST` | `/dashboard/api/entries/<id>/blocks/<block-id>/delete` | `cms_remove_entry_content_block()` | `{ok}` |
 | `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
+| `POST` | `/dashboard/api/translate` | `translator_azure()` | `{ok, texts:[…]}` - fields `source`, `target` (site languages), `format` (`text`/`html`), `text` (repeated, up to 50, 50,000 characters). Azure only: `400` with another provider; `502 {ok:false, error}` when Azure fails. A viewer is refused (**RO**) |
 
 ### Media library
 

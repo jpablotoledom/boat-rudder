@@ -121,4 +121,9 @@ extern char mail_smtp_password[256];
 extern char mail_from[256];
 extern char mail_from_name[128];
 
+// Replaces Azure AI Translator's address for the entry editor's
+// translations (utils/translator.h) - a proxy, or a test server. Empty =
+// Azure's global endpoint.
+extern char translate_azure_url[256];
+
 #endif // CONFIG_LOADER_H

@@ -67,6 +67,29 @@ bool cms_get_comments_enabled(void);
 // Returns 0 on success, -1 on a DB error or if mongodb is not ready.
 int cms_update_comments_enabled(bool enabled);
 
+// Machine translation in the entry editor (entry-translation-plan.md):
+// site_settings.translate_provider ("" off, "azure" Azure AI Translator
+// through the server, "local" a LibreTranslate-compatible server the
+// editor's browser calls), the Azure key and its resource's region, and the
+// local server's URL and optional key.
+#define TRANSLATE_LOCAL_URL_DEFAULT "http://localhost:5000"
+typedef struct {
+    char provider[8];
+    char azure_key[128];
+    char azure_region[64];
+    char local_url[256];
+    char local_key[128];
+} CmsTranslateSettings;
+
+// Fills `out`: provider "" and local_url TRANSLATE_LOCAL_URL_DEFAULT where
+// unset/unreachable, "" for the keys.
+void cms_get_translate_settings(CmsTranslateSettings *out);
+
+// $set of the five fields, upserted; a NULL `azure_key` keeps the stored
+// one. Returns 0 on success, -1 on a DB error or if mongodb is not ready.
+int cms_update_translate_settings(const char *provider, const char *azure_key, const char *azure_region,
+                                  const char *local_url, const char *local_key);
+
 #define SITE_SECRET_BYTES 32
 
 // The site's secret key: 32 random bytes generated once (libsodium) and kept

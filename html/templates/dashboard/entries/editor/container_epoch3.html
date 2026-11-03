@@ -1070,6 +1070,12 @@
           var grid = to.parentNode.querySelector('.boat-rudder-entry-editor__table-editor');
           if (grid) buildTableGrid(grid, parseTableRows(to.value), tableHasHeader(block), to);
         } });
+      } else if (type === 'code-text' || type === 'terminal') {
+        // Code and commands are the same in every language - a translator
+        // would rename keywords, paths and options - so they are copied as
+        // they are, or the block would show nothing in the other language.
+        if (to.value.trim()) return;
+        jobs.push({ format: 'copy', texts: [from.value], apply: function (t) { done(t[0]); } });
       }
     });
     return jobs;
@@ -1079,6 +1085,11 @@
   // one after another, then hands each job its translations and calls
   // applied() for it.
   function runJobs(jobs, source, target, progress, applied) {
+    // Copied fields (code, terminal) need no translator: filled right away.
+    jobs.filter(function (j) { return j.format === 'copy'; }).forEach(function (job) {
+      job.apply(job.texts);
+      applied();
+    });
     var batches = [];
     ['text', 'html'].forEach(function (format) {
       var batch = null;

@@ -257,9 +257,12 @@ site has more than one language) fills the other languages from the one being ed
 - The panel lists every other language, all checked; *Translate* runs `runTranslation()`.
 - **Only empty fields are filled**, and only where the source has text: header title and summary,
   and the `title`, `paragraph` (as HTML, tags kept), `list` (line by line), `table` (cell by cell,
-  so `|` and line breaks survive) and `link` blocks. `image`, `gallery`, `byline`, `code-text`,
-  `terminal`, `youtube-embed`, `separator`, `social-networks` and `generic` are left alone. An opened table's
-  starter grid (`Column 1`...) still counts as empty.
+  so `|` and line breaks survive) and `link` blocks. `code-text` and `terminal` are **copied** as
+  they are, never sent to the translator: code and commands are the same in every language, and a
+  translator would rename keywords, paths and options - but left empty, the block would show
+  nothing in that language. `image`, `gallery`, `byline`, `youtube-embed`, `separator`,
+  `social-networks` and `generic` are left alone. An opened table's starter grid (`Column 1`...)
+  still counts as empty.
 - The texts go in batches - up to 50 texts and 40,000 characters, one format each - so an entry is
   one or two calls per language. `translateBatch()` is the only part that depends on the provider:
   - **Azure**: `POST /dashboard/api/translate` (§5); the server calls Azure AI Translator

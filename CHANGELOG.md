@@ -39,6 +39,8 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   2 million characters a month), called by the server with a key that is never shown again, or
   **a translator on this computer** - a LibreTranslate-compatible server the browser calls
   directly.
+- Code and terminal blocks are copied as they are into the empty languages, never translated: a
+  translator would rename keywords, paths and options.
 
 ### Commenters' names
 

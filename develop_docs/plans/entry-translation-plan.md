@@ -69,7 +69,8 @@ set and the site has more than one language. It opens a small panel:
 | `list` | line by line, so its lines survive |
 | `paragraph` | HTML - tags kept |
 | `table` | cell by cell, so the `\|` separators survive |
-| `image`, `gallery`, `byline`, `youtube-embed`, `code-text`, `separator`, `social-networks`, `generic` | not translated (paths, names, URLs, code, raw HTML) |
+| `code-text`, `terminal` | copied as they are, without the translator (code and commands are the same in every language) |
+| `image`, `gallery`, `byline`, `youtube-embed`, `separator`, `social-networks`, `generic` | not translated (paths, names, URLs, raw HTML) |
 
 Progress shows in the save status (*Translating to English…*). The result goes into the fields (and
 the rich-text editor of an opened paragraph), the entry is marked changed, and with autosave on

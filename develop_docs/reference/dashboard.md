@@ -280,7 +280,7 @@ document instead of a 5-table relational model).
   `/blocks/<block_id>/delete` endpoints and patch the DOM without a full reload.
   `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
   the next `saveContent()` (block `order` = DOM index at save time). Previews of simple blocks
-  are built client-side; `code-text`, `gallery`, `table`, `youtube-embed`, `image` and
+  are built client-side; `code-text`, `terminal`, `gallery`, `table`, `youtube-embed`, `image` and
   `paragraph` are fetched from `POST /dashboard/api/block-preview`, which returns the real epoch 3
   rendering (`entry_page_render_block()`), so the preview can't drift from the public page.
 - **Editor UX** (epoch 3): the editor uses a document-style layout with a fixed top bar (save-all, autosave toggle, publish toggle, language tabs), a block type toolbar, and a two-column layout (left: meta + header sidebars; right: content blocks). Blocks default to a document-like preview mode; clicking a block enters edit mode showing the full form. Paragraph blocks have a WYSIWYG rich-text toolbar. Title blocks have H1-H6 level selectors. Gallery blocks show a thumbnail preview area with drag-and-drop reordering and a "Select photos" button that opens the media picker modal. Blocks support drag-and-drop reordering.
@@ -525,7 +525,7 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 
 | Page | What it edits | Stored in |
 |---|---|---|
-| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere), the *Hide latest blog posts* home page checkbox, the *Maintenance mode* (a page entry picker + checkbox), and the epoch 2 / epoch 3 favicons; shows the running version (`BOAT_RUDDER_VERSION`) with a link to *Updates* | `site_settings.site_name`, `site_settings.hide_home_blog`, `site_settings.under_construction`/`under_construction_page`; `html/favicon2.ico`, `html/favicon3.ico` |
+| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere), the *Hide latest blog posts* home page checkbox, the *Maintenance mode* (a page entry picker + checkbox, and *Authors can sign in and edit*), the *Translation* panel (the entry editor's translator: Azure AI Translator or a local one), and the epoch 2 / epoch 3 favicons; shows the running version (`BOAT_RUDDER_VERSION`) with a link to *Updates* | `site_settings.site_name`, `site_settings.hide_home_blog`, `site_settings.under_construction`/`under_construction_page`/`under_construction_authors`, `site_settings.translate_*`; `html/favicon2.ico`, `html/favicon3.ico` |
 | `/dashboard/settings/themes` | The list of directories under `html/themes/`: each one's name, *Active* or *Set active*, and *Customize* | `site_settings.active_theme` |
 | `…/themes/<key>/customize` | The theme customizer: pick an epoch, then its logo, navbar, banner, content, home blog, footer and data colors, with a live preview (WML translated for epoch −1) and the public CSS layer in a bottom drawer. `…/themes/<key>` redirects here | everything below, plus `themes.home_blog_background`, `themes.home_blog_item_background`, `themes.home_blog_item_color` |
 | `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) in the code editor + the epoch's uploaded images | `themes.banner_html`, `themes.footer_html`, files in `html/content/themes/<key>/` |

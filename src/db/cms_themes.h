@@ -75,6 +75,13 @@ typedef struct {
     char code_variable[8];              // code-text block: $vars (PHP/Bash)
     char code_tag[8];                   // code-text block: #directives, <?php, HTML tags, attributes
     char code_line_number[8];           // code-text block: line-number gutter
+    char terminal_background[8];        // terminal block: screen background
+    char terminal_text[8];              // terminal block: commands
+    char terminal_prompt[8];            // terminal block: the prompt before each command
+    char terminal_output[8];            // terminal block: what the commands printed
+    char terminal_option[8];            // terminal block: a command's -x / --name / /w
+    char terminal_value[8];             // terminal block: an option's value, quoted strings
+    char terminal_variable[8];          // terminal block: $NAME, %NAME%
 } CmsThemeColors;
 
 // body_text/_text_muted/_surface/_surface_raised/_border: the dashboard and

@@ -3,9 +3,9 @@
 
 // Server-side syntax highlighting for the code-text block. `lang` is the
 // block's extra_data - exactly the value the entry editor's language
-// <select> stores ("javascript", "html", "c", "python", "css", "php",
-// "bash", "sql", or "" for plain text), so there is no alias table: adding a
-// language to the editor means adding a LangDef in code_highlight.c too.
+// <select> stores ("javascript", "c", "asm", "diff", ... - the list is in
+// code-highlighting.md - or "" for plain text), so there is no alias table:
+// adding a language to the editor means adding a LangDef in code_highlight.c too.
 //
 // Returns malloc'd HTML (caller frees), NULL only on allocation failure:
 // every source line wrapped in <span class="boat-rudder-code-line">,

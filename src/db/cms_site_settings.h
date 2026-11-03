@@ -41,17 +41,23 @@ bool cms_get_hide_home_blog(void);
 int cms_update_hide_home_blog(bool hide);
 
 // "Under construction" mode: while site_settings.under_construction is true,
-// every visitor but an Administrador gets the page entry whose link is
+// every visitor but an Administrador (and an Autor, with
+// cms_get_under_construction_authors()) gets the page entry whose link is
 // site_settings.under_construction_page instead of the site's content (see
 // http_router.c's serve_under_construction()). Fills *enabled (false if
 // unset/unreachable) and, if page_link is non-NULL, *page_link with a
 // malloc'd copy of the link ("" if unset; NULL only on allocation failure).
 void cms_get_under_construction(bool *enabled, char **page_link);
 
+// site_settings.under_construction_authors: whether Autores may still sign
+// in, edit, and see the real site while it is under construction (an
+// Administrador always may). false if unset/unreachable.
+bool cms_get_under_construction_authors(void);
+
 // db.site_settings.updateOne({}, {$set: {under_construction,
-// under_construction_page}}, {upsert: true}). Returns 0 on success, -1 on a
-// DB error or if mongodb is not ready.
-int cms_update_under_construction(bool enabled, const char *page_link);
+// under_construction_page, under_construction_authors}}, {upsert: true}).
+// Returns 0 on success, -1 on a DB error or if mongodb is not ready.
+int cms_update_under_construction(bool enabled, const char *page_link, bool authors);
 
 // site_settings.comments_enabled: blog comments on/off for the whole site
 // (comments.h). false if unset/unreachable.
@@ -60,6 +66,29 @@ bool cms_get_comments_enabled(void);
 // db.site_settings.updateOne({}, {$set: {comments_enabled}}, {upsert: true}).
 // Returns 0 on success, -1 on a DB error or if mongodb is not ready.
 int cms_update_comments_enabled(bool enabled);
+
+// Machine translation in the entry editor (entry-translation-plan.md):
+// site_settings.translate_provider ("" off, "azure" Azure AI Translator
+// through the server, "local" a LibreTranslate-compatible server the
+// editor's browser calls), the Azure key and its resource's region, and the
+// local server's URL and optional key.
+#define TRANSLATE_LOCAL_URL_DEFAULT "http://localhost:5000"
+typedef struct {
+    char provider[8];
+    char azure_key[128];
+    char azure_region[64];
+    char local_url[256];
+    char local_key[128];
+} CmsTranslateSettings;
+
+// Fills `out`: provider "" and local_url TRANSLATE_LOCAL_URL_DEFAULT where
+// unset/unreachable, "" for the keys.
+void cms_get_translate_settings(CmsTranslateSettings *out);
+
+// $set of the five fields, upserted; a NULL `azure_key` keeps the stored
+// one. Returns 0 on success, -1 on a DB error or if mongodb is not ready.
+int cms_update_translate_settings(const char *provider, const char *azure_key, const char *azure_region,
+                                  const char *local_url, const char *local_key);
 
 #define SITE_SECRET_BYTES 32
 

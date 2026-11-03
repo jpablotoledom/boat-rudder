@@ -122,6 +122,9 @@ char *entry_editor_render_block(const CmsContentBlockEdit *block,
     if (strcmp(block->type, "code-text") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/code-text_epoch%d.html",
                                    langs, lang_count, epoch);
+    if (strcmp(block->type, "terminal") == 0)
+        return render_extra_block(block, "dashboard/entries/editor/blocks/terminal_epoch%d.html",
+                                   langs, lang_count, epoch);
     if (strcmp(block->type, "generic") == 0)
         return render_extra_block(block, "dashboard/entries/editor/blocks/generic_epoch%d.html",
                                    langs, lang_count, epoch);

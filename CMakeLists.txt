@@ -25,7 +25,7 @@ find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
-# libcurl: outgoing mail over SMTP (utils/mailer.c).
+# libcurl: outgoing mail over SMTP (utils/mailer.c) and Azure AI Translator (utils/translator.c).
 pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 
 # Optional: MaxMind GeoLite2 for country detection in analytics (src/modules/
@@ -64,6 +64,7 @@ set(SOURCES
     src/utils/image_size.c
     src/utils/category_tags.c
     src/utils/code_highlight.c
+    src/utils/terminal_session.c
     src/html_builder/page_layout.c
     src/utils/log.c
     src/utils/http_utils.c
@@ -151,6 +152,7 @@ set(SOURCES
     src/db/cms_search.c
     src/db/cms_comments.c
     src/utils/mailer.c
+    src/utils/translator.c
     src/utils/captcha.c
     src/extensions/extensions.c
     src/db/cms_fonts.c
@@ -231,3 +233,9 @@ add_test(NAME proxy_protocol COMMAND proxy_protocol_test)
 add_executable(css_compat_test tests/css_compat_test.c src/utils/css_compat.c src/utils/detect_epoch.c)
 target_link_libraries(css_compat_test Threads::Threads)
 add_test(NAME css_compat COMMAND css_compat_test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(code_highlight_test tests/code_highlight_test.c src/utils/code_highlight.c)
+add_test(NAME code_highlight COMMAND code_highlight_test)
+
+add_executable(terminal_session_test tests/terminal_session_test.c src/utils/terminal_session.c)
+add_test(NAME terminal_session COMMAND terminal_session_test)

@@ -86,8 +86,8 @@ Design rationale: [plans/cms-entry-model-plan.md](../plans/cms-entry-model-plan.
 | Field | Notes |
 |---|---|
 | `enabled` | `false` means **draft**: public routes answer `404` unless the visitor has a valid dashboard session, in which case the entry renders with a `[Draft]` title prefix and `Cache-Control: no-store` (`serve_cms_entry()` + `include_drafts`). New entries are created as drafts. |
-| `content[].type` | One of `title`, `paragraph`, `byline`, `image`, `gallery`, `separator`, `link`, `list`, `youtube-embed`, `code-text`, `generic`, `table`, `social-networks`. Unknown types are skipped when rendering. Per-type `text`/`extra_data` formats: [rendering.md](rendering.md#content-block-types). |
-| `content[].extra_data` | Untranslated, type-specific configuration (e.g. image `caption|width|align`, code-text language, gallery `_id`). |
+| `content[].type` | One of `title`, `paragraph`, `byline`, `image`, `gallery`, `separator`, `link`, `list`, `youtube-embed`, `code-text`, `terminal`, `generic`, `table`, `social-networks`. Unknown types are skipped when rendering. Per-type `text`/`extra_data` formats: [rendering.md](rendering.md#content-block-types). |
+| `content[].extra_data` | Untranslated, type-specific configuration (e.g. image `caption|width|align`, code-text language, terminal shell, gallery `_id`). |
 | `content[].text` | Usually `map<lang,string>`; for `image` the value is the bare image path. |
 
 Readers: `cms_entries.c` (public pages, blog lists, admin listing), `cms_entries_admin.c` (editor),
@@ -226,7 +226,8 @@ A singleton (always updated with filter `{}` and `upsert: true`).
 
 ```jsonc
 { "_id": ObjectId, "site_name": "My Site", "active_theme": "dark", "hide_home_blog": false,
-  "under_construction": false, "under_construction_page": "coming-soon" }
+  "under_construction": false, "under_construction_page": "coming-soon",
+  "under_construction_authors": false }
 ```
 
 `site_name` defaults to `"Boat Rudder"` and replaces the `{{SITE_NAME}}` token in titles and
@@ -235,7 +236,9 @@ templates. `active_theme` is only honored if `html/themes/<key>/` exists. `hide_
 (absent means `false`) puts the site in maintenance mode (the code's historical name is "under
 construction"): every visitor but an Administrador gets
 the `page` entry whose `link` is `under_construction_page` (see
-[rendering.md](rendering.md#under-construction-mode)).
+[rendering.md](rendering.md#under-construction-mode)), and only an Administrador can sign in -
+and also an Autor, who then sees the real site too, while `under_construction_authors` is
+`true` (absent means `false`), so content can be prepared before the site opens.
 
 ### `themes`
 
@@ -324,6 +327,12 @@ sent_at, last_error}`; index `{status, next_attempt_at}`. See [comments.md](comm
 - `entries.comments_closed` (bool) - no new comments on that blog entry.
 - `site_settings.comments_enabled` (bool) - comments on/off for the site.
 - `site_settings.secret` (64 hex) - the site's HMAC key (`cms_get_site_secret()`), generated once.
+- `site_settings.translate_provider` (`""` off, `"azure"`, `"local"`), `translate_azure_key`,
+  `translate_azure_region` (`""` for a global resource), `translate_local_url` (absent means
+  `http://localhost:5000`), `translate_local_key` - the entry editor's *Translate* button
+  ([entry-editor.md](entry-editor.md#translation)). The Azure key is
+  kept here rather than in `settings.conf`, so each site has its own and it never reaches a commit;
+  the dashboard never shows it back.
 
 ### `extensions`
 

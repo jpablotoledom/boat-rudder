@@ -8,11 +8,12 @@
 
 // The values of /dashboard/settings' "Home page" and "Under construction"
 // forms (site_settings.hide_home_blog / under_construction /
-// under_construction_page).
+// under_construction_page / under_construction_authors).
 typedef struct {
     bool        hide_home_blog;
     bool        under_construction;
     const char *under_construction_page; // entries.link of a "page" entry, "" for none
+    bool        under_construction_authors; // Autores may still sign in and edit
 } SiteHomeSettings;
 
 // /dashboard/settings - the site name form, the home page and under

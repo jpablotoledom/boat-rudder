@@ -45,6 +45,7 @@ char mail_smtp_user[256]     = {0};
 char mail_smtp_password[256] = {0};
 char mail_from[256]          = {0};
 char mail_from_name[128]     = {0};
+char translate_azure_url[256] = {0};
 
 int load_config(const char *filename) {
     FILE *file = fopen(filename, "r");
@@ -155,6 +156,8 @@ int load_config(const char *filename) {
             snprintf(mail_from, sizeof(mail_from), "%s", value);
         } else if (strcmp(key, "mail_from_name") == 0) {
             snprintf(mail_from_name, sizeof(mail_from_name), "%s", value);
+        } else if (strcmp(key, "translate_azure_url") == 0) {
+            snprintf(translate_azure_url, sizeof(translate_azure_url), "%s", value);
         }
     }
 

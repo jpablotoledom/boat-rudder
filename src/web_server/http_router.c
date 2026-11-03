@@ -65,6 +65,7 @@
 #include "../utils/request_theme.h"
 #include "../utils/request_site.h"
 #include "../utils/mailer.h"
+#include "../utils/translator.h"
 #include "../utils/theme_catalog.h"
 #include "../utils/request_user.h"
 #include "../utils/config_loader.h"
@@ -76,6 +77,7 @@
 #include "../utils/http_utils.h"
 #include "../utils/template_utils.h"
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <errno.h>
@@ -744,16 +746,25 @@ static void send_read_only_refusal(void *ctx, HttpRequest *req, int epoch) {
     "The site is under maintenance: only administrators can sign in right now."
 
 // Under construction mode (cms_get_under_construction()) closes the
-// dashboard to every role but an Administrador's - at sign-in, and for a
-// session already open when the mode was turned on. Fails closed: a role
-// that can't be read is locked out too.
+// dashboard to every role but an Administrador's - and an Autor's when the
+// Administrador lets authors keep editing (cms_get_under_construction_authors())
+// - at sign-in, and for a session already open when the mode was turned on.
+// Fails closed: a role that can't be read is locked out too.
 static int maintenance_locks_out(const char *user_id) {
     bool under_construction = false;
     cms_get_under_construction(&under_construction, NULL);
     if (!under_construction) return 0;
 
     char role[USER_ROLE_BUF_SIZE];
-    return cms_get_user_role(user_id, role, sizeof(role)) != 0 || strcmp(role, "admin") != 0;
+    if (cms_get_user_role(user_id, role, sizeof(role)) != 0) return 1;
+    if (strcmp(role, "admin") == 0) return 0;
+    return strcmp(role, "author") != 0 || !cms_get_under_construction_authors();
+}
+
+// Whether this request's signed-in user sees the real site while it is
+// under construction: an Administrador, or an Autor allowed in (as above).
+static int sees_site_under_construction(void) {
+    return request_user_is_admin() || (request_user_is_author() && cms_get_under_construction_authors());
 }
 
 // Ends `req`'s session (a non-admin's, see maintenance_locks_out()) and
@@ -913,6 +924,40 @@ static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *u
 
 // The reason phrase for an extension's status code - only the code comes
 // from the extension, so nothing it sends lands in the status line.
+// The image types an extension may answer, by the type its answer names
+// ("image/jpeg", parameters ignored). NULL for any other: an image of
+// another type (SVG can carry scripts) is refused like any unknown answer.
+static const char *extension_image_type(const char *content_type) {
+    static const char *const types[] = { "image/jpeg", "image/png", "image/gif", "image/webp" };
+    size_t len = strcspn(content_type, "; \t");
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++)
+        if (len == strlen(types[i]) && strncasecmp(content_type, types[i], len) == 0) return types[i];
+    return NULL;
+}
+
+static const char *extension_status_line(int status);
+
+// Passes an extension's image through as it is, binary: only to the session
+// that asked (the route already required it), so private to the browser's
+// cache. An extension never reuses an image's URL for other bytes, so it
+// may stay there a day.
+static void send_extension_image(void *ctx, const HttpRequest *req, const ExtensionResponse *rs,
+                                 const char *type) {
+    char header[512];
+    int n = snprintf(header, sizeof(header),
+        "HTTP/1.1 %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %zu\r\n"
+        "Cache-Control: private, max-age=86400\r\n"
+        "X-Content-Type-Options: nosniff\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        extension_status_line(rs->status), type, rs->body_len);
+    if (n < 0 || (size_t)n >= sizeof(header)) return;
+    connection_write(ctx, header, (size_t)n);
+    if (strcmp(req->method, "HEAD") != 0 && rs->body_len) connection_write(ctx, rs->body, rs->body_len);
+}
+
 static const char *extension_status_line(int status) {
     switch (status) {
     case 200: return "200 OK";
@@ -1023,6 +1068,8 @@ static void serve_extension(void *ctx, HttpRequest *req, const char *decoded_url
         } else {
             send_error_response(ctx, 500, "500 Internal Server Error", epoch);
         }
+    } else if (extension_image_type(rs.content_type)) {
+        send_extension_image(ctx, req, &rs, extension_image_type(rs.content_type));
     } else {
         LOG_WARN("Extension %s: unsupported Content-Type \"%s\"", name, rs.content_type);
         send_error_response(ctx, 502, "502 Bad Gateway", epoch);
@@ -1042,6 +1089,7 @@ static void send_settings_general_page(void *ctx, HttpRequest *req, int epoch, c
         stored.hide_home_blog = cms_get_hide_home_blog();
         cms_get_under_construction(&stored.under_construction, &stored_page);
         stored.under_construction_page = stored_page ? stored_page : "";
+        stored.under_construction_authors = cms_get_under_construction_authors();
         home = &stored;
     }
 
@@ -1069,7 +1117,7 @@ static int is_site_content_route(const char *url) {
 // content, and no menu or blog list - or, if the entry can't be found, the
 // 503 error content there, so the site stays closed - and returns 1. Returns 0, sending
 // nothing, when the mode is off. The caller skips this for an Administrador
-// (request_user_is_admin()). no-store, so nobody keeps it once the site opens.
+// and an allowed Autor (sees_site_under_construction()). no-store, so nobody keeps it once the site opens.
 static int serve_under_construction(void *ctx, HttpRequest *req, const char *lang) {
     bool enabled = false;
     char *link = NULL;
@@ -1562,6 +1610,74 @@ static size_t parse_urlencoded_multi(const char *body, int body_length, const ch
     return count;
 }
 
+// Whether `code` is one of the site's languages.
+static int is_site_language(const char *code) {
+    CmsLanguageItem *langs = NULL;
+    size_t count = 0;
+    cms_get_languages(&langs, &count);
+    int found = 0;
+    for (size_t i = 0; i < count && !found; i++) found = strcmp(langs[i].code, code) == 0;
+    cms_languages_free(langs, count);
+    return found;
+}
+
+// POST /dashboard/api/translate: `source`, `target`, `format` (text|html)
+// and up to TRANSLATOR_MAX_TEXTS `text` fields, translated through Azure
+// (the "local" provider is called by the editor's browser instead) ->
+// {"ok":true,"texts":[...]} | {"ok":false,"error":"..."}.
+static char *translate_api_response(HttpRequest *req) {
+    char source[16], target[16], format[8];
+    parse_urlencoded_field(req->body, req->body_length, "source", source, sizeof(source));
+    parse_urlencoded_field(req->body, req->body_length, "target", target, sizeof(target));
+    parse_urlencoded_field(req->body, req->body_length, "format", format, sizeof(format));
+
+    CmsTranslateSettings settings;
+    cms_get_translate_settings(&settings);
+    if (strcmp(settings.provider, "azure") != 0)
+        return build_json_response_status("{\"ok\":false,\"error\":\"Azure is not the translator\"}",
+                                          "400 Bad Request");
+    if (strcmp(source, target) == 0 || !is_site_language(source) || !is_site_language(target))
+        return build_json_response_status("{\"ok\":false,\"error\":\"unknown language\"}",
+                                          "400 Bad Request");
+
+    char *texts[TRANSLATOR_MAX_TEXTS];
+    size_t count = parse_urlencoded_multi(req->body, req->body_length, "text", texts, TRANSLATOR_MAX_TEXTS);
+    // Characters, as Azure counts them: every UTF-8 byte but continuations.
+    size_t chars = 0;
+    for (size_t i = 0; i < count; i++)
+        for (const unsigned char *p = (const unsigned char *)texts[i]; *p; p++) chars += (*p & 0xC0) != 0x80;
+
+    char *out[TRANSLATOR_MAX_TEXTS];
+    char error[200] = "";
+    char *response = NULL;
+    if (count == 0 || chars > TRANSLATOR_MAX_CHARS) {
+        response = build_json_response_status("{\"ok\":false,\"error\":\"nothing to translate, or too much\"}",
+                                              "400 Bad Request");
+    } else if (translator_azure(settings.azure_key, settings.azure_region, (const char *const *)texts, count,
+                                source, target, strcmp(format, "html") == 0, out, error, sizeof(error)) != 0) {
+        char *escaped = json_escape_alloc(error);
+        char *json = escaped ? render_template("{\"ok\":false,\"error\":\"%s\"}", escaped) : NULL;
+        response = json ? build_json_response_status(json, "502 Bad Gateway") : NULL;
+        free(escaped);
+        free(json);
+    } else {
+        char *json = strdup("{\"ok\":true,\"texts\":[");
+        for (size_t i = 0; i < count; i++) {
+            char *escaped = json ? json_escape_alloc(out[i]) : NULL;
+            char *item = escaped ? render_template(i ? ",\"%s\"" : "\"%s\"", escaped) : NULL;
+            json = item ? str_append(json, item) : (free(json), NULL);
+            free(escaped);
+            free(item);
+            free(out[i]);
+        }
+        json = json ? str_append(json, "]}") : NULL;
+        response = json ? build_json_response(json) : NULL;
+        free(json);
+    }
+    for (size_t i = 0; i < count; i++) free(texts[i]);
+    return response;
+}
+
 // Fills values[i] (caller-allocated, lang_count entries) with the url-decoded
 // "name_<langs[i].code>" field from req's body, for
 // cms_create_category()/cms_update_category(). Each values[i] is malloc'd
@@ -1918,7 +2034,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 free(body);
                 send_or_error(ctx, response, req.method, epoch);
 
-            } else if (is_site_content_route(decoded_url) && !request_user_is_admin() &&
+            } else if (is_site_content_route(decoded_url) && !sees_site_under_construction() &&
                 serve_under_construction(ctx, &req, content_lang)) {
                 // Sent: the under-construction page stands in for the site.
 
@@ -2641,7 +2757,10 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                 size_t category_count = 0;
                                 cms_get_categories(content_lang, &categories, &category_count);
 
-                                char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count);
+                                CmsTranslateSettings translate;
+                                cms_get_translate_settings(&translate);
+                                char *content  = entry_editor_page(epoch, &entry, categories, category_count, langs, lang_count,
+                                                                   &translate);
                                 char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                                 char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                                 free(body);
@@ -4004,7 +4123,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/api/block-preview") == 0) {
             // The entry editor's preview of an unselected block, for the
             // types whose public rendering is server-made (code-text's
-            // highlighting, gallery's thumbnails, table's themed rows, the YouTube
+            // highlighting, terminal's prompts, gallery's thumbnails, table's themed rows, the YouTube
             // iframe, image's size/float, paragraph's style): the same epoch 3 output a
             // reader gets, so the editor never shows a second, drifting copy.
             int epoch = resolve_epoch(&req);
@@ -4023,7 +4142,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
                         parse_urlencoded_field(req.body, req.body_length, "text", text, cap);
                         parse_urlencoded_field(req.body, req.body_length, "extra", extra, sizeof(extra));
-                        if (strcmp(type, "code-text") == 0 || strcmp(type, "gallery") == 0 ||
+                        if (strcmp(type, "code-text") == 0 || strcmp(type, "terminal") == 0 ||
+                            strcmp(type, "gallery") == 0 ||
                             strcmp(type, "table") == 0 || strcmp(type, "youtube-embed") == 0 ||
                             strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0)
                             html = entry_page_render_block(type, text, extra, EPOCH_MODERN);
@@ -4045,6 +4165,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         send_simple(ctx, "500 Internal Server Error", "Error");
                     }
                     connection_close(ctx);
+                }
+            }
+
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/api/translate") == 0) {
+            // The entry editor's Translate button, with Azure: the key stays here.
+            int epoch = resolve_epoch(&req);
+
+            if (!dashboard_allowed(&req, epoch)) {
+                send_simple(ctx, "403 Forbidden", "Forbidden");
+            } else {
+                char user_id[USER_ID_HEX_BUF_SIZE];
+                if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                    char *response = translate_api_response(&req);
+                    send_or_error(ctx, response, req.method, epoch);
                 }
             }
 
@@ -4523,6 +4657,52 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                               req.method, epoch);
             }
 
+        } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/translation") == 0) {
+            int epoch = resolve_epoch(&req);
+            char user_id[USER_ID_HEX_BUF_SIZE];
+            if (require_admin_session(ctx, &req, epoch, user_id)) {
+                char provider[16], key[128], clear[8], region[64], url[256], local_key[128];
+                parse_urlencoded_field(req.body, req.body_length, "translate_provider", provider, sizeof(provider));
+                parse_urlencoded_field(req.body, req.body_length, "translate_azure_key", key, sizeof(key));
+                bool clear_key = parse_urlencoded_field(req.body, req.body_length, "translate_azure_key_clear",
+                                                        clear, sizeof(clear)) != 0;
+                parse_urlencoded_field(req.body, req.body_length, "translate_azure_region", region, sizeof(region));
+                parse_urlencoded_field(req.body, req.body_length, "translate_local_url", url, sizeof(url));
+                parse_urlencoded_field(req.body, req.body_length, "translate_local_key", local_key, sizeof(local_key));
+                // An empty key field keeps the stored key: the form never shows it.
+                const char *new_key = key[0] ? key : clear_key ? "" : NULL;
+                if (!url[0]) snprintf(url, sizeof(url), "%s", TRANSLATE_LOCAL_URL_DEFAULT);
+                CmsTranslateSettings stored;
+                cms_get_translate_settings(&stored);
+
+                const char *error_message = NULL;
+                // The region goes into a request header: letters, digits and dashes only.
+                bool region_ok = true;
+                for (const char *p = region; *p; p++)
+                    region_ok = region_ok && (isalnum((unsigned char)*p) || *p == '-');
+                if (strcmp(provider, "") != 0 && strcmp(provider, "azure") != 0 && strcmp(provider, "local") != 0)
+                    error_message = "Choose a translator.";
+                else if (strcmp(provider, "azure") == 0 && !(new_key ? new_key : stored.azure_key)[0])
+                    error_message = "Azure needs an API key.";
+                else if (!region_ok)
+                    error_message = "The Azure region is a name like westeurope or eastus.";
+                else if (new_key && strpbrk(new_key, "\r\n"))
+                    error_message = "The Azure key can't have line breaks.";
+                else if (strncmp(url, "http://", 7) != 0 && strncmp(url, "https://", 8) != 0)
+                    error_message = "The local translator's address must start with http:// or https://.";
+                else if (cms_update_translate_settings(provider, new_key, region, url, local_key) != 0)
+                    error_message = "Could not save the translation settings.";
+
+                if (!error_message) {
+                    send_or_error(ctx, build_redirect_response("/dashboard/settings#translation", "", epoch),
+                                  req.method, epoch);
+                } else {
+                    char *name = cms_get_site_name();
+                    send_settings_general_page(ctx, &req, epoch, content_lang, name, NULL, error_message, NULL);
+                    free(name);
+                }
+            }
+
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/settings/mail/test") == 0) {
             int epoch = resolve_epoch(&req);
             char user_id[USER_ID_HEX_BUF_SIZE];
@@ -4569,7 +4749,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         bool under_construction = false;
                         char *page = NULL;
                         cms_get_under_construction(&under_construction, &page);
-                        SiteHomeSettings home = { hide, under_construction, page ? page : "" };
+                        SiteHomeSettings home = { hide, under_construction, page ? page : "",
+                                                  cms_get_under_construction_authors() };
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
                             "Could not save the home page settings.", NULL);
@@ -4596,6 +4777,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     char page[256];
                     parse_urlencoded_field(req.body, req.body_length, "under_construction_page",
                                            page, sizeof(page));
+                    bool authors = parse_urlencoded_field(req.body, req.body_length, "under_construction_authors",
+                                                          enabled_str, sizeof(enabled_str)) != 0;
 
                     // Turning it on needs a page to show: a "page" entry, drafts included.
                     const char *error_message = NULL;
@@ -4606,14 +4789,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         cms_entry_free(&entry);
                         if (!found) error_message = "Choose the page to show while the site is in maintenance.";
                     }
-                    if (!error_message && cms_update_under_construction(enabled, page) != 0)
+                    if (!error_message && cms_update_under_construction(enabled, page, authors) != 0)
                         error_message = "Could not save the maintenance mode.";
 
                     if (!error_message) {
                         char *response = build_redirect_response("/dashboard/settings", "", epoch);
                         send_or_error(ctx, response, req.method, epoch);
                     } else {
-                        SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page };
+                        SiteHomeSettings home = { cms_get_hide_home_blog(), enabled, page, authors };
                         char *name = cms_get_site_name();
                         send_settings_general_page(ctx, &req, epoch, content_lang, name, &home,
                                                    error_message, NULL);
@@ -4740,6 +4923,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                                 colors.code_tag, sizeof(colors.code_tag));
                         parse_urlencoded_field(req.body, req.body_length, "code-line-number",
                                                 colors.code_line_number, sizeof(colors.code_line_number));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-background",
+                                                colors.terminal_background, sizeof(colors.terminal_background));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-text",
+                                                colors.terminal_text, sizeof(colors.terminal_text));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-prompt",
+                                                colors.terminal_prompt, sizeof(colors.terminal_prompt));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-output",
+                                                colors.terminal_output, sizeof(colors.terminal_output));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-option",
+                                                colors.terminal_option, sizeof(colors.terminal_option));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-value",
+                                                colors.terminal_value, sizeof(colors.terminal_value));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-variable",
+                                                colors.terminal_variable, sizeof(colors.terminal_variable));
                         parse_urlencoded_field(req.body, req.body_length, "footer-logo",
                                                 colors.footer_logo, sizeof(colors.footer_logo));
                         parse_bg_color_field(req.body, req.body_length, "footer-logo-background",

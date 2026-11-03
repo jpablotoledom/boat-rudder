@@ -23,6 +23,20 @@ alias table.
 | `php` | PHP | `<?php`, `<?=`, `?>` markers, `$vars`, case-insensitive keywords, `//` and `#` comments |
 | `bash` | Bash | `$var`, `${...}`, `$1 $# $?`, `#` only at a word boundary, multi-line strings |
 | `sql` | SQL | `--` comments, case-insensitive keywords |
+| `typescript` | TypeScript | JavaScript's rules, type keywords, `@decorators` |
+| `java` | Java | `@Annotations`, `"""` text blocks |
+| `csharp` | C# | `#region`/`#if` directives |
+| `kotlin` | Kotlin | `@Annotations`, `"""` raw strings |
+| `go` | Go | `` ` `` raw strings span lines |
+| `swift` | Swift | `#if` directives, `@attributes`, `"""` strings |
+| `json` | JSON | A string followed by `:` is a key (`attr`); `true`/`false`/`null` |
+| `xml` | XML | The HTML scanner, which also knows `<?xml …?>` (`pre`) and `<![CDATA[…]]>` (`str`) - HTML gets them too |
+| `ini` | INI / config | `[section]` (`tag`), `key =` / `key:` at a line's start (`attr`), `;` comments, `#` comments at a word boundary (`color=#fff` isn't one) |
+| `asm` | Assembly | `;` comments; the first word of a line is the instruction (`kw`), so no mnemonic list - x86, 6502, Z80 and 68000 all work; `label:`, `.directives` and NASM `%macros` (`pre`), registers (`var`, not 6502's one-letter ones), `$FF` / `0FFh` / `%1010` numbers |
+| `basic` | BASIC | `REM` and `'` comments, `A$` / `N%` names, `LEFT$` as a keyword, case-insensitive |
+| `pascal` | Pascal | `{ }` and `(* *)` comments, `{$I+}` directives (`pre`), `$FF` numbers, no `\` escapes in strings |
+| `batch` | DOS Batch | `REM` and `::` comments, `%VAR%` / `%1` / `%~dp0` / `%%i` / `!VAR!` (`var`), `:label` (`attr`), no `\` escapes (paths) |
+| `diff` | Diff | Whole lines: `---`/`+++`/`diff`/`index` (`kw`), `@@` (`pre`), `+` (`str`), `-` (`var`) |
 
 An unknown key behaves like plain text and is labeled "Plain text".
 
@@ -32,8 +46,9 @@ An unknown key behaves like plain text and is labeled "Plain text".
    `code_highlight.c` - its `key` is the stored value, `display` the label; set the flags that
    apply (comments, quotes, `nocase`, `c_preproc`, `dollar_vars`, …).
 2. Add the matching `<option value="<key>"><display></option>` to the editor's
-   `code-text_epoch3.html`.
-3. Nothing else: the CSS classes and theme colors are shared by every language.
+   `code-text_epoch3.html`, in its `<optgroup>` (Web, Languages, Retro, Data and shell).
+3. Add a line for it to `tests/code_highlight_test.c`.
+4. Nothing else: the CSS classes and theme colors are shared by every language.
 
 ---
 

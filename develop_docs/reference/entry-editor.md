@@ -98,7 +98,8 @@ templates, which now cover every epoch:
 | `link` | `blocks/link_epoch3.html` | target URL |
 | `list` | `blocks/list_epoch3.html` | `"ol"` for ordered, else unordered |
 | `table` | `blocks/table_epoch3.html` | `"header"` to make row 0 a header row |
-| `code-text` | `blocks/code-text_epoch3.html` | language (`<select>`: Plain text, JavaScript, HTML, C / C++, Python, CSS, PHP, Bash, SQL) |
+| `code-text` | `blocks/code-text_epoch3.html` | language (`<select>` grouped Web / Languages / Retro / Data and shell - the keys are in [code-highlighting.md](code-highlighting.md#languages)) |
+| `terminal` | `blocks/terminal_epoch3.html` | shell (`<select>`: Linux / Unix `""`, MS-DOS / Windows `dos`, PowerShell `powershell`) - see [rendering.md](rendering.md#terminal-block) |
 | `youtube-embed` | `blocks/youtube-embed_epoch3.html` | video URL |
 | `social-networks` | `blocks/social-networks_epoch3.html` | `"<icon>\|<url>"` |
 | `generic` | `blocks/generic_epoch3.html` | unused |
@@ -154,8 +155,8 @@ No external `.js` file - same convention as `layout/layout_epoch3.html`. An IIFE
 - `refreshBlockPreview(blockEl)` - builds the preview of a closed block from the current
   language's text field and `extra_data`. Two strategies:
   - **Server-rendered** (`fetchServerPreview()`, see [Block preview](#block-preview)):
-    `paragraph`, `image`, `gallery`, `table`, `youtube-embed`, `code-text` - the exact epoch 3
-    markup a reader gets (highlighting, gallery "+N" tiles, themed table rows, the real iframe,
+    `paragraph`, `image`, `gallery`, `table`, `youtube-embed`, `code-text`, `terminal` - the exact
+    epoch 3 markup a reader gets (highlighting, the terminal window, gallery "+N" tiles, themed table rows, the real iframe,
     image size/float classes, paragraph style). A client-side approximation fills the gap until
     the response arrives, or if it fails.
   - **Client-side**: `title` (`<hN>` from `extra_data`), `byline`, `separator` (`<hr>`), `link`,
@@ -191,7 +192,8 @@ The merge button is enabled only when the block above is also a paragraph
 (`updateMergeButton()`).
 
 ### Type-specific controls
-- `code-text`: language `<select>` → `syncCodeLang()` writes the key into `extra_data`.
+- `code-text`, `terminal`: the language / shell `<select>` → `syncCodeLang()` writes the key into
+  `extra_data`; `initCodeBlock()` sets the `<select>` from it when the block opens.
 - `table`: a cell grid editor (`initTableBlock()`, `buildTableGrid()`) with
   `addTableRow/Col()`, `delTableRow/Col()` and a header-row toggle (`setTableHeader()`),
   serialized back to the `|`-separated text by `syncTableEditor()`.
@@ -241,9 +243,42 @@ arrows are what work on touch screens and from the keyboard, where HTML5 drag-an
 - `openBlogPreview()` - the top bar's *View post* button: opens `/blog/<link>` or
   `/page/<link>` in a new tab - works for drafts too, since the tab carries the session cookie.
 - `toggleAutoSave()` - enables/disables the 3-second autosave timer.
+- `toggleTranslatePanel()` / `runTranslation()` - the *Translate* button, see [Translation](#translation).
 - `insertNewComponent(type)` / `removeComponent(btn)` - POST to `.../blocks` / `.../blocks/<id>/delete`; patch `#entryBlocks` directly.
 - `moveBlockUp/Down(btn)` - client-side DOM reorder; persisted on next `saveContent()`.
 - Drag-and-drop block reorder - mousedown on `.boat-rudder-entry-editor-block__grip` or `.boat-rudder-entry-editor-block__drag`, ghost clone, placeholder indicator; reindexes order on mouseup.
+
+### Translation
+
+The top bar's **Translate** button (shown when *Settings → Translation* has a provider and the
+site has more than one language) fills the other languages from the one being edited. Plan:
+[entry-translation-plan.md](../plans/entry-translation-plan.md).
+
+- The panel lists every other language, all checked; *Translate* runs `runTranslation()`.
+- **Only empty fields are filled**, and only where the source has text: header title and summary,
+  and the `title`, `paragraph` (as HTML, tags kept), `list` (line by line), `table` (cell by cell,
+  so `|` and line breaks survive) and `link` blocks. `code-text` and `terminal` are **copied** as
+  they are, never sent to the translator: code and commands are the same in every language, and a
+  translator would rename keywords, paths and options - but left empty, the block would show
+  nothing in that language. `image`, `gallery`, `byline`, `youtube-embed`, `separator`,
+  `social-networks` and `generic` are left alone. An opened table's starter grid (`Column 1`...)
+  still counts as empty.
+- The texts go in batches - up to 50 texts and 40,000 characters, one format each - so an entry is
+  one or two calls per language. `translateBatch()` is the only part that depends on the provider:
+  - **Azure**: `POST /dashboard/api/translate` (§5); the server calls Azure AI Translator
+    (`/translate?api-version=3.0&from=…&to=…&textType=plain|html`) with the stored key and region
+    (`src/utils/translator.c`); the key never reaches the page. Azure takes the site's ISO 639-1
+    codes as they are (only `zh` becomes `zh-Hans`).
+  - **Local**: the browser POSTs straight to `data-translate-url` + `/translate`, LibreTranslate's
+    API - `{"q": [...], "source", "target", "format", "api_key"}` → `{"translatedText": [...]}` -
+    since the server (on a VPS) can't reach the editor's computer. Browsers treat
+    `http://localhost` as secure, so this works from a site served over HTTPS; the translator
+    must answer CORS (and Chrome may ask once to allow access to the local network).
+- Progress shows in the panel and the save status. The panel stays open until the run ends, so
+  *Nothing to translate* or an error (Azure's reason - a refused key names the region sent, or
+  that none is saved) is shown where the editor is looking. With autosave on, `editorSaveAll()` runs as soon as it
+  ends; otherwise the fields wait for *Save all* (*Translated 7 fields - not saved yet*). An
+  error stops the run and is shown there; what was already filled stays, marked as changed.
 
 ---
 
@@ -267,6 +302,7 @@ All of them answer `application/json; charset=UTF-8`.
 | `.../api/entries/<id>/content` | `POST` | `content_count` (capped at 200) plus `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>` per block → `CmsContentBlockEdit[]` → `cms_update_entry_content()` (full `content[]` replace) + gallery upsert (§6) → `{"ok":true,"ids":[...]}` (see below) |
 | `.../api/entries/<id>/blocks` | `POST` | `type`, `order` → `cms_add_entry_content_block()` (`$push` of an empty block), rendered via `entry_editor_render_block()` → `{"ok":true,"block_id":"...","html":"..."}` (HTML escaped with `json_escape_alloc()`) \| `400 ... "create failed"` |
 | `.../api/entries/<id>/blocks/<block_id>/delete` | `POST` | `cms_remove_entry_content_block()` (`$pull` by `_id`) → same shape (`"error":"remove failed"`) |
+| `/dashboard/api/translate` | `POST` | `require_dashboard_session()` only (a viewer is refused, as for any write). Azure provider only. `source`, `target`, `format` (`text`\|`html`), `text` × up to 50 → `{"ok":true,"texts":[...]}` \| `400`/`502 {"ok":false,"error":"..."}` |
 | `/dashboard/api/block-preview` | `POST` | `require_dashboard_session()` only (no entry id, no ownership). `type`, `text`, `extra` → `text/html` from `entry_page_render_block()`; `403` plain text on non-epoch-3 |
 
 ---

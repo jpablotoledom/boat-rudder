@@ -32,6 +32,7 @@ const char *brext_name(void)        { return env_or_empty("BR_EXTENSION"); }
 const char *brext_dir(void)         { return env_or_empty("BR_EXTENSION_DIR"); }
 const char *brext_mongodb_uri(void) { return env_or_empty("BR_MONGODB_URI"); }
 const char *brext_mongodb_db(void)  { return env_or_empty("BR_MONGODB_DB"); }
+const char *brext_public_url(void)  { return env_or_empty("BR_PUBLIC_URL"); }
 int         brext_log_level(void)   { const char *v = getenv("BR_LOG_LEVEL"); return v ? atoi(v) : 3; }
 
 void brext_log(int level, const char *fmt, ...) {
@@ -153,9 +154,9 @@ int brext_route(const BrextRequest *req, const char *method, const char *pattern
 
 // ---- Response -------------------------------------------------------------------
 
-void brext_append(BrextResponse *res, const char *text) {
-    if (res->failed || !text) return;
-    size_t n = strlen(text);
+// Appends n bytes, any bytes, keeping a NUL after them.
+static void append_bytes(BrextResponse *res, const void *data, size_t n) {
+    if (res->failed) return;
     if (res->len + n + 1 > res->cap) {
         size_t cap = res->cap ? res->cap : 4096;
         while (res->len + n + 1 > cap) cap *= 2;
@@ -164,8 +165,13 @@ void brext_append(BrextResponse *res, const char *text) {
         res->body = nb;
         res->cap = cap;
     }
-    memcpy(res->body + res->len, text, n + 1);
+    if (n) memcpy(res->body + res->len, data, n);
     res->len += n;
+    res->body[res->len] = '\0';
+}
+
+void brext_append(BrextResponse *res, const char *text) {
+    if (text) append_bytes(res, text, strlen(text));
 }
 
 void brext_appendf(BrextResponse *res, const char *fmt, ...) {
@@ -202,6 +208,12 @@ void brext_html(BrextResponse *res, const char *title) {
 
 void brext_json(BrextResponse *res) {
     snprintf(res->content_type, sizeof(res->content_type), "application/json");
+}
+
+void brext_bytes(BrextResponse *res, const char *content_type, const void *data, size_t len) {
+    snprintf(res->content_type, sizeof(res->content_type), "%s", content_type ? content_type : "");
+    res->len = 0;
+    append_bytes(res, data, len);
 }
 
 void brext_redirect(BrextResponse *res, const char *path) {

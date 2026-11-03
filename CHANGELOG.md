@@ -6,6 +6,42 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Terminal block
+
+**Added**
+- A *Terminal* block for shell sessions: paste it as it is, and each line that starts with the
+  prompt shows as a command, the rest as its output, in a console window titled by the shell -
+  Linux / Unix (`$`, `#`), MS-DOS / Windows (`C:\>`) or PowerShell (`PS C:\>`). Commands
+  written without any prompt are all shown as commands, after the shell's prompt. In each
+  command, options (`-la`, `--user`, `/w`), their values, quoted strings, variables (`$HOME`,
+  `%PATH%`) and operators (`|`, `&&`, `>`) get their own colors. *Copy* copies only the commands,
+  without prompts or output.
+- *Terminal colors* in the theme customizer: background, commands, prompt, output, options,
+  values and variables. They also
+  color the block on Netscape-era browsers; text-only browsers and WAP phones get the commands in
+  bold.
+
+### Code block languages
+
+**Added**
+- The code block highlights 14 more languages: TypeScript, Java, C#, Kotlin, Go, Swift, JSON,
+  XML, INI, Diff and, for retro code, Assembly (x86, 6502, Z80, 68000), BASIC, Pascal and DOS
+  Batch. The editor's language list is grouped: Web, Languages, Retro, Data and shell.
+- HTML code blocks color `<?...?>` and `<![CDATA[...]]>`; Python colors `@decorators`.
+
+### Entry translation
+
+**Added**
+- A *Translate* button in the entry editor fills the other languages' empty fields - title,
+  summary and the text blocks - from the language being edited. Text already written is never
+  replaced; with autosave on, the result is saved right away.
+- *Settings → Translation* picks the translator: **Azure AI Translator** (its F0 tier is free,
+  2 million characters a month), called by the server with a key that is never shown again, or
+  **a translator on this computer** - a LibreTranslate-compatible server the browser calls
+  directly.
+- Code and terminal blocks are copied as they are into the empty languages, never translated: a
+  translator would rename keywords, paths and options.
+
 ### Commenters' names
 
 **Changed**
@@ -17,6 +53,26 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   sign-in name.
 - At startup, existing commenters get a `user-<n>` username in the order they first commented,
   replacing the one taken from their email address.
+
+### Maintenance mode
+
+**Added**
+- *Authors can sign in and edit*, next to *Site in maintenance*: Authors keep the dashboard
+  and see the real site while it is in maintenance, so content can be prepared before it
+  opens. Off by default; Moderators and Viewers stay out either way.
+
+### Extensions
+
+**Added**
+- An extension can answer images (JPEG, PNG, GIF, WebP) under its own address, shown only to the
+  signed-in user who asks: photos in an extension stay private. New SDK call `brext_bytes()`.
+- Extensions get the site's public address (`BR_PUBLIC_URL`, SDK `brext_public_url()`), for
+  absolute links such as QR codes on printed labels.
+
+**Fixed**
+- An extension stopped or restarted after the server had run any other program (an update check,
+  an image) stayed "Starting" for ever: the server only collected its first finished child
+  process, and later ones were left as zombies it took for still running.
 
 ## v0.0.7
 ### 2026-10-29

@@ -74,6 +74,13 @@ static const ThemeDefaultEntry THEME_DEFAULTS[] = {
             .code_variable             = "#ffaa55",
             .code_tag                  = "#ff5555",
             .code_line_number          = "#8080c0",
+            .terminal_background       = "#000000",
+            .terminal_text             = "#ffffff",
+            .terminal_prompt           = "#55ff55",
+            .terminal_output           = "#aaaaaa",
+            .terminal_option           = "#55ffff",
+            .terminal_value            = "#ffff55",
+            .terminal_variable         = "#ff55ff",
         },
     },
     // Values from the project's Figma file, "Color palette Light" variable
@@ -121,6 +128,13 @@ static const ThemeDefaultEntry THEME_DEFAULTS[] = {
             .code_variable             = "#ffaa55",
             .code_tag                  = "#ff5555",
             .code_line_number          = "#8080c0",
+            .terminal_background       = "#000000",
+            .terminal_text             = "#ffffff",
+            .terminal_prompt           = "#55ff55",
+            .terminal_output           = "#aaaaaa",
+            .terminal_option           = "#55ffff",
+            .terminal_value            = "#ffff55",
+            .terminal_variable         = "#ff55ff",
         },
     },
 };
@@ -261,6 +275,13 @@ int cms_get_theme_colors(const char *key, CmsThemeColors *out) {
             copy_field(&colors, "code-variable", out->code_variable, sizeof(out->code_variable));
             copy_field(&colors, "code-tag", out->code_tag, sizeof(out->code_tag));
             copy_field(&colors, "code-line-number", out->code_line_number, sizeof(out->code_line_number));
+            copy_field(&colors, "terminal-background", out->terminal_background, sizeof(out->terminal_background));
+            copy_field(&colors, "terminal-text", out->terminal_text, sizeof(out->terminal_text));
+            copy_field(&colors, "terminal-prompt", out->terminal_prompt, sizeof(out->terminal_prompt));
+            copy_field(&colors, "terminal-output", out->terminal_output, sizeof(out->terminal_output));
+            copy_field(&colors, "terminal-option", out->terminal_option, sizeof(out->terminal_option));
+            copy_field(&colors, "terminal-value", out->terminal_value, sizeof(out->terminal_value));
+            copy_field(&colors, "terminal-variable", out->terminal_variable, sizeof(out->terminal_variable));
         }
     }
 
@@ -325,6 +346,13 @@ int cms_update_theme_colors(const char *key, const CmsThemeColors *colors) {
                 "code-variable", BCON_UTF8(colors->code_variable),
                 "code-tag", BCON_UTF8(colors->code_tag),
                 "code-line-number", BCON_UTF8(colors->code_line_number),
+                "terminal-background", BCON_UTF8(colors->terminal_background),
+                "terminal-text", BCON_UTF8(colors->terminal_text),
+                "terminal-prompt", BCON_UTF8(colors->terminal_prompt),
+                "terminal-output", BCON_UTF8(colors->terminal_output),
+                "terminal-option", BCON_UTF8(colors->terminal_option),
+                "terminal-value", BCON_UTF8(colors->terminal_value),
+                "terminal-variable", BCON_UTF8(colors->terminal_variable),
             "}",
         "}"
     );

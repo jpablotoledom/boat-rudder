@@ -1465,6 +1465,7 @@
   gap: 10px;
   flex-wrap: wrap;
   justify-content: end;
+  padding: 10px 0;
 }
 
 .boat-rudder-dashboard__inline-form form,
@@ -1717,7 +1718,7 @@ h2.boat-rudder-dashboard__options-title {
 
 .boat-rudder-dashboard__title-cell {
   font-weight: 600;
-  min-width: 160px;
+  min-width: 130px;
 }
 
 /* Summary capped at two lines so a long one doesn't stretch the row. */
@@ -1731,6 +1732,75 @@ h2.boat-rudder-dashboard__options-title {
 
 .boat-rudder-dashboard__nowrap {
   white-space: nowrap;
+}
+
+/* Entries and users lists (entries/, users/list-row_epoch3.html): title
+   over summary (username over email) in one cell, then icon buttons that
+   drop their text below 600px. */
+.boat-rudder-dashboard__entry-cell {
+  min-width: 220px;
+}
+
+.boat-rudder-dashboard__entry-title,
+.boat-rudder-dashboard__user-name {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.boat-rudder-dashboard__entry-summary,
+.boat-rudder-dashboard__user-email {
+  margin-top: 4px;
+  font-size: var(--br-admin-font-md);
+  color: var(--br-admin-text-muted);
+  line-height: 1.4;
+}
+
+.boat-rudder-dashboard__row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 6px;
+}
+
+.boat-rudder-dashboard__row-actions form {
+  margin: 0;
+}
+
+/* A long address wraps instead of widening the table past the page. */
+.boat-rudder-dashboard__user-name,
+.boat-rudder-dashboard__user-email {
+  overflow-wrap: anywhere;
+}
+
+.boat-rudder-btn__icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 599px) {
+  .boat-rudder-dashboard__row-actions .boat-rudder-btn {
+    padding: 7px;
+  }
+
+  /* Still read by screen readers; the title attribute is the tooltip. */
+  .boat-rudder-dashboard__row-actions .boat-rudder-btn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .boat-rudder-dashboard__entry-cell {
+    min-width: 180px;
+  }
 }
 
 /* "No entries ..." row (entries/list-empty_epoch3.html), with its own
@@ -2335,6 +2405,39 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--br-admin-border);
+}
+
+/* Under 600px the directory column becomes a drawer over the grid, opened
+   by the mobile bar's toggle (toggleMediaDirectories() in media_epoch3.html). */
+.boat-rudder-media__mobile-bar,
+.boat-rudder-media__dirs-backdrop { display: none; }
+
+@media (max-width: 599px) {
+  .boat-rudder-media { position: relative; overflow: hidden; }
+  .boat-rudder-media__sidebar {
+    position: absolute; top: 0; bottom: 0; left: 0; z-index: 3;
+    width: min(260px, 85%);
+    background: var(--br-admin-surface);
+    box-shadow: var(--br-admin-shadow);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s, visibility 0.2s;
+  }
+  .boat-rudder-media--dirs-open .boat-rudder-media__sidebar { transform: none; visibility: visible; }
+  .boat-rudder-media--dirs-open .boat-rudder-media__dirs-backdrop {
+    display: block; position: absolute; inset: 0; z-index: 2;
+    background: var(--br-admin-overlay);
+  }
+  .boat-rudder-media__mobile-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--br-admin-border);
+  }
+  .boat-rudder-media__dirs-current {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: var(--br-admin-font-md); color: var(--br-admin-text-muted);
+  }
+  .boat-rudder-media__grid-toolbar { flex-wrap: wrap; }
 }
 
 .boat-rudder-media__move-picker { margin: 0 12px 10px; padding: 10px 12px; border-radius: var(--br-admin-radius); }

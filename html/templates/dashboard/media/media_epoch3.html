@@ -2,7 +2,8 @@
 
 <div class="boat-rudder-media">
 
-  <!-- Left: Directories -->
+  <!-- Left: Directories (a drawer under 600px, opened by the toggle below) -->
+  <div class="boat-rudder-media__dirs-backdrop" onclick="toggleMediaDirectories(false)"></div>
   <div class="boat-rudder-media__sidebar">
     <div class="boat-rudder-media__sidebar-header">
       <span class="boat-rudder-media__sidebar-title boat-rudder-caption">Directories</span>
@@ -17,6 +18,14 @@
 
   <!-- Right: Content -->
   <div class="boat-rudder-media__main">
+
+    <div class="boat-rudder-media__mobile-bar">
+      <button class="boat-rudder-media__dirs-toggle boat-rudder-btn boat-rudder-btn--sm" type="button" onclick="toggleMediaDirectories()" aria-expanded="false">
+        <svg class="boat-rudder-btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+        <span>Directories</span>
+      </button>
+      <span id="media-dirs-current" class="boat-rudder-media__dirs-current">Latest uploads</span>
+    </div>
 
     <div class="boat-rudder-media__upload-zone" id="drop-zone">
       <div class="boat-rudder-media__upload-label">
@@ -157,6 +166,8 @@
       var viewer = document.getElementById('imageModal');
       if (viewer && viewer.classList.contains('boat-rudder-modal--active')) return;
       if (e.key === 'Escape') {
+        var media = document.querySelector('.boat-rudder-media--dirs-open');
+        if (media) { window.toggleMediaDirectories(false); return; }
         document.querySelectorAll('.boat-rudder-media__photo').forEach(function (item) {
           item.querySelector('input[type="checkbox"]').checked = false;
           item.classList.remove('boat-rudder-media__photo--selected');
@@ -168,6 +179,17 @@
       }
     }, true);
   }
+
+  // Under 600px the directory list is a drawer over the grid. open: true,
+  // false, or omitted to flip it.
+  window.toggleMediaDirectories = function (open) {
+    var root = document.querySelector('.boat-rudder-media');
+    if (!root) return;
+    if (typeof open !== 'boolean') open = !root.classList.contains('boat-rudder-media--dirs-open');
+    root.classList.toggle('boat-rudder-media--dirs-open', open);
+    var toggle = root.querySelector('.boat-rudder-media__dirs-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', String(open));
+  };
 
   // Directory operations
   window.newDirectoryBtnHandler = function () {
@@ -222,6 +244,12 @@
     var btnDelete = document.getElementById('btn-dir-delete');
     if (btnRename) btnRename.disabled = false;
     if (btnDelete) btnDelete.disabled = false;
+
+    var nameInput = document.getElementById('media-directory-name_' + directoryId);
+    var current = document.getElementById('media-dirs-current');
+    if (nameInput && current) current.textContent = nameInput.value;
+    // A click into the rename field also lands here; keep the drawer open for it.
+    if (!document.activeElement || document.activeElement.tagName !== 'INPUT') toggleMediaDirectories(false);
 
     reloadMediaGrid(directoryId);
   };

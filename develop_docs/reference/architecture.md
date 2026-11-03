@@ -103,7 +103,7 @@ boat-rudder/
 │   │   ├── language_page/               # /language page + language_sanitize_return()
 │   │   ├── theme_page/                  # /theme page (epoch 1-3 theme picker)
 │   │   ├── entry_editor/                # AJAX entry editor (dashboard, EPOCH_MODERN only)
-│   │   │   ├── entry_editor.c/h         # Page renderer (meta + header sidebars + blocks)
+│   │   │   ├── entry_editor.c/h         # Page renderer (settings panel + context bar + blocks)
 │   │   │   └── entry_editor_blocks.c/h  # Per-block editor form renderer
 │   │   ├── media_admin/media_admin.c/h  # /dashboard/media page + directory/photo rendering
 │   │   ├── entries_admin/entries_admin.c/h # Entries table rows (dashboard)

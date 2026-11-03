@@ -173,6 +173,14 @@ All functions are declared on `window` so they remain available after `activateS
 - Every POST carries the CSRF token through `/assets/js/csrf.js` (loaded by the page layout), not
   through code in this template.
 - `validarCaracter(e)` - keypress validator for directory name input (`[a-zA-Z0-9_-]` only).
+- **Under 600px** the directory column is a drawer over the grid: a bar at the top of the
+  content area holds a **Directories** button and the current directory's name
+  (`#media-dirs-current`, "Latest uploads" until one is picked). `toggleMediaDirectories(open)`
+  sets `.boat-rudder-media--dirs-open` on `.boat-rudder-media` (and the button's
+  `aria-expanded`); picking a directory closes it - except a click into the rename field - as do
+  its backdrop and Escape (which then leaves the selection alone). The grid toolbar's buttons
+  wrap onto a second line instead of being cut off. From 600px up the bar and the backdrop are
+  hidden and the column shows as before. The same applies inside the editor's picker modal.
 
 **Content loading**:
 - `getMediaContents(directoryId, start, end)` - GET `/dashboard/api/media/contents?...`, appends returned HTML to `#media-content-dynamically`.
@@ -208,7 +216,7 @@ a grid reload and on load; it also closes an open *Move to…* list once the sel
   - `image-block` type: all lang text fields of `window._galleryTargetBlock`
   - `gallery-block` type: all lang text fields + calls `renderGalleryThumbs()`
   - Closes the modal.
-- ESC key clears selection.
+- ESC key clears selection (or, while the directory drawer is open, only closes it).
 
 ---
 

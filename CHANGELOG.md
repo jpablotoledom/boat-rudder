@@ -6,6 +6,64 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Entry editor
+
+**Changed**
+- The entry editor is written like the page it makes. Paragraphs and headings are typed straight
+  on a sheet that looks like the published entry - its background, text color, 18px text and the
+  site's heading sizes and spacing - with no frame or header around each block. Other blocks
+  (images, code, tables...) show as readers see them until clicked.
+- One bar under the top bar holds the tools of the block being edited - formatting for a
+  paragraph, H1-H6 for a heading, language, shell, list type, photo, size and alignment - and its
+  actions: Split, Merge, move up and down, Advanced and delete.
+- Slug, type, categories, cover image, date, title and summary moved to a *Settings* panel opened
+  from the top bar: beside the sheet on a wide screen, over it on a small one. The editor
+  remembers whether it was open.
+- **+ Insert** adds a block after the one being edited; on an empty paragraph it turns that
+  paragraph into the new block. The row of block buttons is gone.
+
+**Added**
+- Writing across blocks: Enter after a heading, a selected image or the like starts a paragraph
+  below (Ctrl+Enter, or Enter on an empty last line, in code, terminal and list blocks); Enter in
+  a paragraph is a line break; Backspace at the start of a paragraph joins it to the one above;
+  the arrow keys move from block to block; a click below the last block writes there.
+- Type `/` in an empty paragraph for a menu of every block, filtered as you type (`/ima`,
+  `/shell`).
+- Markdown shortcuts in an empty paragraph: `# `, `## `, `### ` for headings, `- ` and `1. ` for
+  lists, ```` ``` ```` for code, `---` for a separator.
+- A paragraph, heading or list can be turned into another of the three from the bar, keeping its
+  text in every language.
+- Image and gallery blocks have *Select photo* / *+ Add photos* in the bar; a click on an open
+  image block's picture also changes it.
+- On a phone, the open block's tools sit in a row at the bottom of the screen.
+
+### Dashboard lists
+
+**Changed**
+- Entries are listed with the title over the summary in one column, and their Edit, View and
+  Delete buttons in one row, with icons. Users, Menu, Categories, Languages and Themes use the
+  same icon buttons. Under 600px wide only the icons show.
+- The users list shows the username over the email.
+
+**Fixed**
+- The users list ran off the page on a phone; it and the other lists (categories, fonts,
+  languages, menu) now scroll inside themselves when too wide.
+- The "Entries pending publication" table on the dashboard home showed its columns under the
+  wrong headings.
+- The default language's row in Languages said "Sí" instead of "Yes".
+
+### Media library
+
+**Changed**
+- Under 600px wide the directories column is hidden behind a *Directories* button, next to the
+  name of the directory shown; picking one closes it. The selection buttons wrap instead of being
+  cut off. Also in the editor's image picker.
+
+### Published pages
+
+**Changed**
+- List blocks use the same 18px text as paragraphs (they were 16px).
+
 ### Terminal block
 
 **Added**

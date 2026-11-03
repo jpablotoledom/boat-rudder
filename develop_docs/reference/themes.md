@@ -244,7 +244,7 @@ today, only part 1 differs.
 
    | Block | Modifiers / elements | Replaces |
    |---|---|---|
-   | `boat-rudder-btn` | `--primary`, `--danger`, `--ghost`, `--sm`, `--icon`, `--active` | `dashboard__button*`, the login button and ~20 editor, media and analytics buttons |
+   | `boat-rudder-btn` | `--primary`, `--danger`, `--ghost`, `--sm`, `--icon`, `--active`; `__icon` (an inline `<svg>` stroked in `currentColor`), `__label` (its text - hidden visually under 600px in a list's `dashboard__row-actions`) | `dashboard__button*`, the login button and ~20 editor, media and analytics buttons |
    | `boat-rudder-input` | `--sm` | `dashboard__input`, the login fields and every editor field (bare `<input>`s inside `__meta-group` and block `<textarea>`s share the rule) |
    | `boat-rudder-card` | | Login/dashboard forms, option groups, stat cards, report blocks, period bar, move picker |
    | `boat-rudder-caption` | | The small uppercase headings (option groups, meta sections, report blocks, stat labels) |
@@ -256,8 +256,10 @@ today, only part 1 differs.
 
 3. **Pages** - login, dashboard, entry editor, media library, analytics: layout only.
 
-Entry previews and the rich-text editor show the entry as the public site does, so they read the
-public palette directly (`home-content-text`, `link-normal`, `table-*`, `code-*`).
+The entry editor's sheet and its previews show the entry as the public site does, so they read
+the public palette directly: the sheet is `page-content-background` over `body-background`, in
+the published entry's text color, and previews use `link-normal`, `table-*`, `code-*` and
+`terminal-*`.
 
 ### 6.2 Code editor
 

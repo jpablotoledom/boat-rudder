@@ -58,7 +58,7 @@ BROWSER -> BROWSER : copy ids back into data-block-id
 
 BROWSER -> BROWSER : setStatus("Saved" | "Save failed")\n(or scheduled via editorScheduleAutoSave(), 3s debounce)
 
-== insertNewComponent(type): "+ Add block" dropdown ==
+== createBlockAfter(): "+ Insert" / "+ Add block", the "/" menu, Enter after a block ==
 
 BROWSER -> ROUTER : POST .../blocks\ntype, order
 ROUTER -> ADMIN : cms_add_entry_content_block(id, type, order)
@@ -71,7 +71,7 @@ ROUTER -> JSONUTIL : json_escape_alloc(html)
 JSONUTIL --> ROUTER : html_json
 ROUTER --> BROWSER : {"ok":true,"block_id":"...","html":"..."}
 
-BROWSER -> BROWSER : append block to #entryBlocks,\napplyLangVisibility(blockEl)\nrefreshBlockPreview(blockEl)
+BROWSER -> BROWSER : insert block after the open one in #entryBlocks,\napplyLangVisibility(blockEl), initInlineBlock(blockEl)\nrefreshBlockPreview(blockEl), activateBlock(blockEl)
 
 == removeComponent(): delete a block ==
 

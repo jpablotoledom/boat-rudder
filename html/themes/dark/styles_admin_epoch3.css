@@ -303,6 +303,7 @@
 /* Tabs: .boat-rudder-tabs > a.boat-rudder-tabs__tab. */
 .boat-rudder-tabs {
   display: flex;
+  overflow-x: scroll;
   gap: 4px;
   margin: 16px 0;
   border-bottom: 1px solid var(--br-admin-border);
@@ -1461,6 +1462,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: end;
 }
 
 .boat-rudder-dashboard__inline-form form,
@@ -1477,7 +1480,6 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
   border-bottom: 1px solid #4a4a4a;
@@ -1550,10 +1552,10 @@ h2.boat-rudder-dashboard__options-title {
   top: calc(100% + 6px);
   right: 0;
   z-index: 60;
-  display: flex;
-  flex-wrap: wrap;
+  /* display: flex; */
+  /* flex-wrap: wrap; */
   width: max-content;
-  max-width: calc(100vw - 32px);
+  max-width: calc(70vw - 32px);
   margin: 0;
   gap: 0;
   background: var(--br-admin-surface);
@@ -2436,6 +2438,7 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
 .boat-rudder-analytics__range-form {
   display: inline-flex; align-items: center; gap: 6px;
   margin: 0; padding: 0; background: transparent; border: none;
+  flex-wrap: wrap; justify-content: space-between;
 }
 .boat-rudder-analytics__range-form--active .boat-rudder-analytics__date-input { border-color: var(--br-admin-accent); }
 .boat-rudder-analytics__date-input { width: 120px; }

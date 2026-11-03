@@ -303,6 +303,7 @@
 /* Tabs: .boat-rudder-tabs > a.boat-rudder-tabs__tab. */
 .boat-rudder-tabs {
   display: flex;
+  overflow-x: scroll;
   gap: 4px;
   margin: 16px 0;
   border-bottom: 1px solid var(--br-admin-border);
@@ -1461,6 +1462,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: end;
 }
 
 .boat-rudder-dashboard__inline-form form,
@@ -1482,7 +1485,6 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
   border-bottom: 1px solid #b3b3b3;

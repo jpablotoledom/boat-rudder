@@ -2098,7 +2098,9 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-block:is([data-type="paragraph"], [data-type="title"]) { cursor: text; }
 .boat-rudder-entry-editor-block:is([data-type="paragraph"], [data-type="title"]) .boat-rudder-entry-editor-block__body { display: block; padding: 0; }
 .boat-rudder-entry-editor-block:is([data-type="paragraph"], [data-type="title"]) .boat-rudder-entry-editor-block__preview { display: none; }
-.boat-rudder-entry-editor-block--editing:is([data-type="paragraph"], [data-type="title"]) { outline: none; }
+/* Opening one keeps it where it is: still wrapped around a floated image
+   above, as on the page - only an open form (an object block's) clears it. */
+.boat-rudder-entry-editor-block--editing:is([data-type="paragraph"], [data-type="title"]) { outline: none; clear: none; }
 /* Their Advanced panel shows only once opened from the context bar. */
 .boat-rudder-entry-editor-block .boat-rudder-entry-editor-advanced__toggle { display: none; }
 .boat-rudder-entry-editor-block .boat-rudder-entry-editor-advanced:not(:has(.boat-rudder-entry-editor-advanced__panel--open)) { display: none; }

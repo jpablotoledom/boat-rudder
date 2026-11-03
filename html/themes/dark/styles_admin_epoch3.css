@@ -1973,13 +1973,26 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   color: var(--br-admin-on-accent); background: var(--br-admin-accent); border-color: var(--br-admin-accent);
 }
 
-/* The sheet: the public site's colors, one reading-width column. */
+/* The sheet: drawn as the published entry is (styles_epoch3.css's
+   .boat-rudder-page-entry) - a column of the page content background, at
+   most 980px wide, over the body background. Its blocks pad themselves
+   14px, which with the column's 10px makes the entry's 24px. */
 .boat-rudder-entry-editor__main {
-  flex: 1; min-width: 0; overflow-y: auto; padding: 32px 48px 120px;
-  color: var(--br-color-home-content-text, inherit);
+  flex: 1; min-width: 0; overflow-y: auto; padding: 32px 48px 0;
+  display: flex; flex-direction: column;
+  color: #ffffff;
   background: var(--br-color-body-background, transparent);
 }
-.boat-rudder-entry-editor__main > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+.boat-rudder-entry-editor__main > * {
+  width: 100%; max-width: 980px; margin-left: auto; margin-right: auto; flex-shrink: 0;
+  box-sizing: border-box; padding-left: 10px; padding-right: 10px;
+  background-color: var(--br-color-page-content-background, #1b0b35);
+}
+.boat-rudder-entry-editor__main > #entryBlocks { padding-top: 12px; }
+/* "+ Add block" closes the column and stretches it to the bottom of the
+   screen on a short entry, at least tall enough to scroll the last block
+   clear of the bottom tool row on a phone. */
+.boat-rudder-entry-editor__main > .boat-rudder-entry-editor-add-block { flex-grow: 1; margin-top: 0; padding-top: 16px; padding-bottom: 120px; }
 
 /* Metadata form (its fields are .boat-rudder-input's) */
 .boat-rudder-entry-editor-meta-section { margin-bottom: 6px; }
@@ -2034,10 +2047,13 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 /* ---- Content blocks ---- */
 
 /* Default (preview mode): document-like appearance */
+/* No border and no padding of its own: the margins of a block's heading
+   and the next one's paragraph collapse into each other, as they do on the
+   published page. (The open block is marked by an outline, which takes no
+   room.) */
 .boat-rudder-entry-editor-block {
   cursor: pointer; position: relative;
-  background: transparent; border: 1px solid transparent;
-  border-left: 2px solid transparent; border-radius: 0;
+  background: transparent; border: none; border-radius: 0;
   margin-bottom: 0; overflow: visible;
 }
 .boat-rudder-entry-editor-block__body { display: none; }
@@ -2054,10 +2070,10 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-block__preview .boat-rudder-entry-image--float-left,
 .boat-rudder-entry-editor-block__preview .boat-rudder-entry-image--float-right {
   position: relative; z-index: 1;
-  /* The page's 4px, plus the 6px the editor adds between this figure and
-     the wrapped text that the page doesn't have: this block's bottom border
-     (1px), the next block's top border (1px) and its preview padding (4px). */
-  margin-top: 10px;
+  /* The page's 4px, plus the 4px the editor adds between this figure and
+     the wrapped text that the page doesn't have: the next block's preview
+     padding. */
+  margin-top: 8px;
 }
 /* On the page a floated figure's block takes no height of its own; here its
    preview's padding and min-height would push the next block (and its text)
@@ -2154,9 +2170,9 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
    the public site's colors. */
 .boat-rudder-entry-editor__richtext {
   width: 100%; box-sizing: border-box; min-height: 1.75em;
-  margin: 6px 0; padding: 0 14px; font-family: inherit; font-size: 15px; line-height: 1.75;
+  margin: 16px 0; padding: 0 14px; font-family: inherit; font-size: 18px; line-height: 26px;
   outline: none; cursor: text;
-  color: var(--br-color-home-content-text, #ffffff);
+  color: inherit;
   background-color: var(--br-color-body-background, #241144);
   background-color: transparent; border: none;
 }
@@ -2225,24 +2241,33 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   border-bottom: 2px solid var(--br-admin-accent);
 }
 
-/* Title: its textarea drawn as the heading (autosizeTitle() sets its height) */
+/* Title: its textarea drawn as the heading (autosizeTitle() sets its
+   height), with the published page's sizes and spacing - styles_epoch3.css's
+   h1-h3, the browser's own for h4-h6. Its side margins (not padding) keep
+   the h2 underline as wide as the text, as on the page. */
 .boat-rudder-entry-editor-block[data-type="title"] textarea {
-  display: block; min-height: 0; margin: 12px 0 4px; padding: 0 14px;
+  display: block; width: calc(100% - 28px); min-height: 0;
+  margin: 30px 14px 16px; padding: 0;
   overflow: hidden; resize: none;
-  font-size: 22px; font-weight: 700; line-height: 1.3;
-  color: var(--br-color-home-content-text, inherit);
+  font-size: 24px; font-weight: 700; line-height: normal;
+  color: inherit;
   background: transparent; border: none; border-radius: 0;
 }
 .boat-rudder-entry-editor-block[data-type="title"] textarea::placeholder { color: var(--br-admin-text-muted); }
-.boat-rudder-entry-editor-block[data-type="title"][data-level="1"] textarea { font-size: 28px; }
-.boat-rudder-entry-editor-block[data-type="title"][data-level="3"] textarea { font-size: 18px; }
-.boat-rudder-entry-editor-block[data-type="title"][data-level="4"] textarea { font-size: 16px; font-weight: 600; }
-.boat-rudder-entry-editor-block[data-type="title"][data-level="5"] textarea { font-size: 14px; font-weight: 600; }
-.boat-rudder-entry-editor-block[data-type="title"][data-level="6"] textarea { font-size: 13px; font-weight: 600; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="1"] textarea { font-size: 32px; margin: 20px 14px; padding: 10px 0; }
+.boat-rudder-entry-editor-block[data-type="title"]:not([data-level="1"], [data-level="3"], [data-level="4"], [data-level="5"], [data-level="6"]) textarea {
+  padding-bottom: 12px; border-bottom: 1px solid #4a4a4a;
+}
+.boat-rudder-entry-editor-block[data-type="title"][data-level="3"] textarea { font-size: 20px; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="4"] textarea { font-size: 16px; margin: 21px 14px; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="5"] textarea { font-size: 13.28px; margin: 22px 14px; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="6"] textarea { font-size: 10.72px; margin: 25px 14px; }
 
-/* An open image block's picture: a click on it opens the media library. */
-.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor__image-preview { cursor: pointer; }
-.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor__image-preview:hover { opacity: 0.85; }
+/* Lists: the page's text size (styles_epoch3.css's .boat-rudder-paragraph),
+   in the preview and in the box they are written in. */
+.boat-rudder-entry-editor-preview__list { margin: 8px 0; padding-left: 24px; font-size: 18px; line-height: 26px; }
+.boat-rudder-entry-editor-preview__list li { margin: 4px 0; }
+.boat-rudder-entry-editor-block[data-type="list"] textarea { font-size: 18px; line-height: 26px; }
 
 /* Code and terminal: written in the code block's own colors */
 .boat-rudder-entry-editor-block:is([data-type="code-text"], [data-type="terminal"]) textarea {
@@ -2304,7 +2329,7 @@ h5.boat-rudder-entry-editor-preview__title { font-size: 14px; font-weight: 600; 
 h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; }
 
 .boat-rudder-entry-editor-preview__paragraph {
-  margin: 6px 0; font-size: 15px; line-height: 1.75;
+  margin: 6px 0; font-size: 18px; line-height: 26px;
   color: var(--br-color-home-content-text, #ffffff);
 }
 .boat-rudder-entry-editor-preview__paragraph a { color: var(--br-color-link-normal, #ffffff); }
@@ -2406,7 +2431,7 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
     display: block; position: fixed; inset: 84px 0 0 0; z-index: 201;
     background: var(--br-admin-overlay);
   }
-  .boat-rudder-entry-editor__main { padding: 24px 28px 120px; }
+  .boat-rudder-entry-editor__main { padding: 24px 28px 0; }
 }
 
 @media (max-width: 599px) {
@@ -2418,7 +2443,7 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   .boat-rudder-entry-editor-context__label,
   .boat-rudder-entry-editor-context__type { display: none; }
   .boat-rudder-entry-editor-context { gap: 4px; padding: 0 6px; }
-  .boat-rudder-entry-editor__main { padding: 16px 16px 120px; }
+  .boat-rudder-entry-editor__main { padding: 12px 8px 0; }
   .boat-rudder-entry-editor-block__grip { display: none; }
   /* Too little room beside "+ Insert" and the actions: the open block's
      tools get their own row at the bottom of the screen. */

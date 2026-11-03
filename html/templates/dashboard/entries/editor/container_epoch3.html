@@ -1144,7 +1144,7 @@
   // that block if it is a paragraph, in a new paragraph otherwise. Deferred,
   // so the document's click handler closes the old block first.
   document.querySelector('.boat-rudder-entry-editor__main').addEventListener('click', function (e) {
-    if (e.target.closest('.boat-rudder-entry-editor-block, .boat-rudder-entry-editor-add-block')) return;
+    if (e.target.closest('.boat-rudder-entry-editor-block, .boat-rudder-entry-editor-add-block__btn, #addBlockMenu')) return;
     var blocksEl = document.getElementById('entryBlocks');
     var last = blocksEl.lastElementChild;
     if (last && e.clientY < last.getBoundingClientRect().bottom) return;

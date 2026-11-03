@@ -725,9 +725,12 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder-terminal__var { color: var(--br-color-terminal-variable); }
 .boat-rudder-terminal__op  { color: var(--br-color-terminal-prompt); }
 
+/* The list block, at the paragraph's text size (.boat-rudder-paragraph). */
 .boat-rudder-list-container {
   padding-left: 24px;
   margin: 8px 0;
+  font-size: 18px;
+  line-height: 26px;
 }
 .boat-rudder-list-container li { margin: 4px 0; }
 .boat-rudder-container-table {

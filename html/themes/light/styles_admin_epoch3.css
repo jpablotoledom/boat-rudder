@@ -1855,7 +1855,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor__topbar {
   position: fixed; top: 0; left: 0; width: 100%; height: 44px;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px; z-index: 200; box-sizing: border-box;
+  padding: 0 16px; z-index: 205; box-sizing: border-box;
   background: var(--br-admin-surface);
   border-bottom: 1px solid var(--br-admin-border);
 }
@@ -1902,36 +1902,83 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-translate__message:empty { display: none; }
 .boat-rudder-entry-editor-translate__message--error { color: var(--br-admin-danger); }
 
-/* Block type toolbar (second fixed bar) */
-.boat-rudder-entry-editor-block-toolbar {
-  position: fixed; top: 44px; left: 0; width: 100%; height: 36px;
-  display: flex; align-items: center; gap: 3px;
-  padding: 0 10px; overflow-x: auto; z-index: 199;
-  scrollbar-width: none; box-sizing: border-box;
+/* Context bar (second fixed bar): "+ Insert", the open block's name, its
+   tools - its own .boat-rudder-entry-editor-block__tools row, pinned over
+   the __tools slot (placeContextTools() measures it) - and its actions. */
+.boat-rudder-entry-editor-context {
+  position: fixed; top: 44px; left: 0; width: 100%; height: 40px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; z-index: 203; box-sizing: border-box;
   background: var(--br-admin-surface);
   border-bottom: 1px solid var(--br-admin-border);
 }
-.boat-rudder-entry-editor-block-toolbar::-webkit-scrollbar { display: none; }
-.boat-rudder-entry-editor-block-toolbar__btn { flex-shrink: 0; }
+.boat-rudder-entry-editor-context .boat-rudder-entry-editor-context__insert { margin-top: 0; flex-shrink: 0; }
+.boat-rudder-entry-editor-context__insert .boat-rudder-entry-editor-add-block__dropdown {
+  bottom: auto; top: calc(100% + 6px); right: auto; width: 220px;
+  max-height: calc(100vh - 100px); overflow-y: auto;
+}
+.boat-rudder-entry-editor-context__type {
+  flex-shrink: 0; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap;
+  color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor-context__type:empty { display: none; }
+.boat-rudder-entry-editor-context__tools { flex: 1; min-width: 0; height: 100%; }
+.boat-rudder-entry-editor-context__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.boat-rudder-entry-editor-context__actions[hidden],
+.boat-rudder-entry-editor-context__actions [hidden] { display: none; }
+.boat-rudder-entry-editor-context__delete:hover { color: var(--br-admin-danger); }
 
-/* Body layout */
-.boat-rudder-entry-editor { padding-top: 80px; }
+/* The open block's tool row, lifted into the bar. */
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__tools {
+  position: fixed; top: 44px; z-index: 204;
+  left: var(--br-editor-tools-left, 200px); width: var(--br-editor-tools-width, 50vw);
+  height: 40px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+  margin: 0; padding: 0; border: none;
+  overflow-x: auto; scrollbar-width: none;
+}
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__tools::-webkit-scrollbar { display: none; }
+.boat-rudder-entry-editor-block__tools .boat-rudder-entry-editor-toolbar { margin: 0; flex-wrap: nowrap; flex-shrink: 0; }
+.boat-rudder-entry-editor-block__tools :is(.boat-rudder-entry-editor__meta-group, .boat-rudder-entry-editor__meta-group > label, label) {
+  display: flex; align-items: center; gap: 6px; margin: 0; white-space: nowrap; flex-shrink: 0;
+}
+.boat-rudder-entry-editor-block__tools .boat-rudder-entry-editor-advanced__label,
+.boat-rudder-entry-editor-block__tools .boat-rudder-entry-editor__meta-group > label { margin: 0; }
+.boat-rudder-entry-editor-block .boat-rudder-entry-editor-block__tools :is(select, select[class]) { width: auto; padding: 3px 6px; font-size: var(--br-admin-font-sm); }
+/* In the bar each group takes only its own width (the image options
+   stretch theirs in the block). */
+.boat-rudder-entry-editor-block .boat-rudder-entry-editor-block__tools .boat-rudder-entry-editor__meta-group { flex: 0 0 auto; }
+.boat-rudder-entry-editor-block:not(.boat-rudder-entry-editor-block--editing) .boat-rudder-entry-editor-block__tools { display: none; }
+
+/* Body layout: the sheet, and the settings panel on its right */
+.boat-rudder-entry-editor { padding-top: 84px; }
 .boat-rudder-entry-editor__body {
-  display: flex; height: calc(100vh - 80px); overflow: hidden;
+  display: flex; height: calc(100vh - 84px); overflow: hidden;
 }
 
-/* Sidebar */
+/* Settings panel (toggleEditorSettings()): a column beside the sheet,
+   a drawer over it under 900px. */
 .boat-rudder-entry-editor__sidebar {
-  width: 290px; min-width: 290px; overflow-y: auto; flex-shrink: 0;
+  order: 2; display: none;
+  width: 320px; min-width: 320px; overflow-y: auto; flex-shrink: 0;
   background: var(--br-admin-surface);
-  border-right: 1px solid var(--br-admin-border);
+  border-left: 1px solid var(--br-admin-border);
 }
-.boat-rudder-entry-editor__sidebar-inner { padding: 12px; }
+.boat-rudder-entry-editor--settings-open .boat-rudder-entry-editor__sidebar { display: block; }
+.boat-rudder-entry-editor__sidebar-inner { padding: 14px 16px; }
+.boat-rudder-entry-editor__settings-backdrop { display: none; }
+.boat-rudder-entry-editor--settings-open .boat-rudder-entry-editor__settings-btn {
+  color: var(--br-admin-on-accent); background: var(--br-admin-accent); border-color: var(--br-admin-accent);
+}
 
-/* Main content area */
+/* The sheet: the public site's colors, one reading-width column. */
 .boat-rudder-entry-editor__main {
-  flex: 1; overflow-y: auto; padding: 16px 20px;
+  flex: 1; min-width: 0; overflow-y: auto; padding: 32px 48px 120px;
+  color: var(--br-color-home-content-text, inherit);
+  background: var(--br-color-body-background, transparent);
 }
+.boat-rudder-entry-editor__main > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 
 /* Metadata form (its fields are .boat-rudder-input's) */
 .boat-rudder-entry-editor-meta-section { margin-bottom: 6px; }
@@ -1992,7 +2039,6 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   border-left: 2px solid transparent; border-radius: 0;
   margin-bottom: 0; overflow: visible;
 }
-.boat-rudder-entry-editor-block__header { display: none; }
 .boat-rudder-entry-editor-block__body { display: none; }
 .boat-rudder-entry-editor-block__preview { padding: 4px 14px; min-height: 10px; }
 /* A floated image's preview deliberately escapes its own block, so the
@@ -2020,36 +2066,30 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   padding-top: 0; padding-bottom: 0; min-height: 0;
 }
 
-/* Hover: subtle left accent */
-.boat-rudder-entry-editor-block:not(.boat-rudder-entry-editor-block--editing):hover {
-  background: var(--br-admin-hover-overlay);
-  border-left: 2px solid var(--br-admin-text-muted);
-}
-
-/* Edit mode: full block appearance */
+/* Open: the block's form in place of its preview, outlined - no card of
+   its own; its tools and actions are in the context bar. */
 .boat-rudder-entry-editor-block--editing {
   clear: both;
   cursor: default;
-  margin-bottom: 10px;
-  background: var(--br-admin-surface-raised);
-  border: 1px solid var(--br-admin-accent);
-  border-radius: var(--br-admin-radius-lg);
+  border-radius: var(--br-admin-radius);
+  outline: 1px solid var(--br-admin-accent); outline-offset: 2px;
 }
-.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__header { display: flex; }
 .boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__body { display: block; }
 .boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__preview { display: none; }
 
-/* Block header bar - display controlled by .boat-rudder-entry-editor-block--editing above.
-   It drags the block from any empty spot (setupDragHandles()); its own
-   controls keep their normal pointer. */
-.boat-rudder-entry-editor-block__header {
-  align-items: center; justify-content: space-between;
-  padding: 5px 10px; user-select: none; cursor: grab;
-  background: var(--br-admin-surface);
-  border-bottom: 1px solid var(--br-admin-border);
-  border-radius: var(--br-admin-radius-lg) var(--br-admin-radius-lg) 0 0;
-}
-.boat-rudder-entry-editor-block__header :is(button, input, select, a, label) { cursor: pointer; }
+/* Paragraphs and titles are always their editor (initInlineBlock()), open or
+   not, and no outline marks them: the sheet reads as one page. */
+.boat-rudder-entry-editor-block:is([data-type="paragraph"], [data-type="title"]) { cursor: text; }
+.boat-rudder-entry-editor-block:is([data-type="paragraph"], [data-type="title"]) .boat-rudder-entry-editor-block__body { display: block; padding: 0; }
+.boat-rudder-entry-editor-block:is([data-type="paragraph"], [data-type="title"]) .boat-rudder-entry-editor-block__preview { display: none; }
+.boat-rudder-entry-editor-block--editing:is([data-type="paragraph"], [data-type="title"]) { outline: none; }
+/* Their Advanced panel shows only once opened from the context bar. */
+.boat-rudder-entry-editor-block .boat-rudder-entry-editor-advanced__toggle { display: none; }
+.boat-rudder-entry-editor-block .boat-rudder-entry-editor-advanced:not(:has(.boat-rudder-entry-editor-advanced__panel--open)) { display: none; }
+.boat-rudder-entry-editor-block:not(.boat-rudder-entry-editor-block--editing) .boat-rudder-entry-editor-advanced { display: none; }
+
+/* Block header: only its type label is used, copied into the context bar. */
+.boat-rudder-entry-editor-block__header { display: none; }
 
 /* Block type labels: one color per block type (--br-admin-block-*). */
 .boat-rudder-entry-editor-block__type-label {
@@ -2073,15 +2113,16 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 
 .boat-rudder-entry-editor-block__header-actions { display: flex; align-items: center; gap: 6px; }
 
-/* Grip overlay in preview mode */
+/* Drag grip, in the sheet's left margin: shown on hover */
 .boat-rudder-entry-editor-block__grip {
-  position: absolute; top: 4px; right: 6px;
+  position: absolute; top: 6px; left: -26px; padding: 2px 4px;
   color: transparent; font-size: 15px; cursor: grab;
   user-select: none; z-index: 2; line-height: 1;
-  transition: color 0.15s;
+  border-radius: var(--br-admin-radius);
+  transition: color 0.15s, background 0.15s;
 }
-.boat-rudder-entry-editor-block:not(.boat-rudder-entry-editor-block--editing):hover .boat-rudder-entry-editor-block__grip { color: var(--br-admin-text-muted); }
-.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__grip { display: none; }
+.boat-rudder-entry-editor-block:hover .boat-rudder-entry-editor-block__grip { color: var(--br-admin-text-muted); }
+.boat-rudder-entry-editor-block__grip:hover { background: var(--br-admin-hover); }
 
 /* Trash button (a ghost icon button): shown while editing, red on hover */
 .boat-rudder-entry-editor-block__trash-btn { opacity: 0; transition: opacity 0.15s, color 0.15s; }
@@ -2094,7 +2135,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   color: var(--br-admin-text-muted);
 }
 
-.boat-rudder-entry-editor-block__body { padding: 10px 12px; }
+.boat-rudder-entry-editor-block__body { padding: 8px 14px; }
 
 .boat-rudder-entry-editor-block__lang-content { display: none; }
 .boat-rudder-entry-editor-block__lang-content--active { display: block; }
@@ -2111,14 +2152,16 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 /* Rich text editor (contenteditable): the entry's content, so it shows in
    the public site's colors. */
 .boat-rudder-entry-editor__richtext {
-  width: 100%; box-sizing: border-box; min-height: 80px;
-  padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.7;
+  width: 100%; box-sizing: border-box; min-height: 1.75em;
+  margin: 6px 0; padding: 0 14px; font-family: inherit; font-size: 15px; line-height: 1.75;
   outline: none; cursor: text;
   color: var(--br-color-home-content-text, #000000);
   background-color: var(--br-color-body-background, #8dd3ff);
-  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+  background-color: transparent; border: none;
 }
-.boat-rudder-entry-editor__richtext:focus { border-color: var(--br-admin-accent); }
+.boat-rudder-entry-editor__richtext:empty::before {
+  content: attr(data-placeholder); color: var(--br-admin-text-muted); pointer-events: none;
+}
 .boat-rudder-entry-editor__richtext i, .boat-rudder-entry-editor__richtext em { font-style: italic; }
 .boat-rudder-entry-editor__richtext a { color: var(--br-color-link-normal, #680072); text-decoration: underline; }
 .boat-rudder-entry-editor__richtext p { margin: 0 0 8px; }
@@ -2180,6 +2223,32 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   border-bottom: 2px solid var(--br-admin-accent);
 }
 
+/* Title: its textarea drawn as the heading (autosizeTitle() sets its height) */
+.boat-rudder-entry-editor-block[data-type="title"] textarea {
+  display: block; min-height: 0; margin: 12px 0 4px; padding: 0 14px;
+  overflow: hidden; resize: none;
+  font-size: 22px; font-weight: 700; line-height: 1.3;
+  color: var(--br-color-home-content-text, inherit);
+  background: transparent; border: none; border-radius: 0;
+}
+.boat-rudder-entry-editor-block[data-type="title"] textarea::placeholder { color: var(--br-admin-text-muted); }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="1"] textarea { font-size: 28px; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="3"] textarea { font-size: 18px; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="4"] textarea { font-size: 16px; font-weight: 600; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="5"] textarea { font-size: 14px; font-weight: 600; }
+.boat-rudder-entry-editor-block[data-type="title"][data-level="6"] textarea { font-size: 13px; font-weight: 600; }
+
+/* An open image block's picture: a click on it opens the media library. */
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor__image-preview { cursor: pointer; }
+.boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor__image-preview:hover { opacity: 0.85; }
+
+/* Code and terminal: written in the code block's own colors */
+.boat-rudder-entry-editor-block:is([data-type="code-text"], [data-type="terminal"]) textarea {
+  font-family: 'Courier New', Courier, monospace; font-size: var(--br-admin-font-md); line-height: 1.5;
+  color: var(--br-color-code-text, #ffffff);
+  background: var(--br-color-code-background, #000080);
+}
+
 /* Heading level buttons (.boat-rudder-btn--sm) */
 .boat-rudder-entry-editor__heading-btns {
   display: flex; align-items: center; gap: 4px;
@@ -2216,10 +2285,9 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   min-height: 0; height: auto; resize: vertical;
 }
 
-/* Block vertical rhythm */
+/* Block vertical rhythm: an open object block keeps room for its outline */
 .boat-rudder-entry-editor-block + .boat-rudder-entry-editor-block { margin-top: 0; }
-.boat-rudder-entry-editor-block--editing + .boat-rudder-entry-editor-block { margin-top: 10px; }
-.boat-rudder-entry-editor-block + .boat-rudder-entry-editor-block--editing { margin-top: 10px; }
+.boat-rudder-entry-editor-block--editing:not([data-type="paragraph"], [data-type="title"]) { margin: 8px 0; }
 
 /* Preview content typography: the entry as the public site shows it */
 .boat-rudder-entry-editor-preview__title {
@@ -2263,13 +2331,13 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
 }
 
 /* + Add block (a ghost button with a dashed outline) */
-.boat-rudder-entry-editor-add-block { position: relative; margin-top: 6px; }
+.boat-rudder-entry-editor-add-block { position: relative; margin-top: 16px; }
 .boat-rudder-entry-editor-add-block__btn,
 .boat-rudder-entry-editor-add-block__btn:hover {
   width: 100%; padding: 8px;
-  border: 1px dashed var(--br-admin-border);
+  border: 1px dashed transparent;
 }
-.boat-rudder-entry-editor-add-block__btn:hover { border-color: var(--br-admin-accent); }
+.boat-rudder-entry-editor-add-block__btn:hover { border-color: var(--br-admin-border); }
 .boat-rudder-entry-editor-add-block__dropdown {
   display: none; position: absolute; bottom: calc(100% + 4px); left: 0; right: 0;
   padding: 5px; z-index: 100;
@@ -2287,6 +2355,77 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   border: none; border-radius: var(--br-admin-radius);
 }
 .boat-rudder-entry-editor-add-block__option:hover { background: var(--br-admin-hover); }
+
+/* "/" menu (openSlashMenu()): the blocks an empty paragraph can become */
+.boat-rudder-entry-editor-slash {
+  position: fixed; z-index: 210; width: 230px; max-height: 260px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--br-admin-border) transparent;
+  padding: 5px; box-sizing: border-box;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius-lg);
+  box-shadow: var(--br-admin-shadow);
+}
+.boat-rudder-entry-editor-slash__item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 8px; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--br-admin-font-md);
+  color: var(--br-admin-text); background: none;
+  border: none; border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-slash__item:hover,
+.boat-rudder-entry-editor-slash__item--active { background: var(--br-admin-hover); }
+.boat-rudder-entry-editor-slash__item--active { box-shadow: inset 2px 0 0 var(--br-admin-accent); }
+.boat-rudder-entry-editor-slash__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 22px; flex-shrink: 0;
+  font-size: var(--br-admin-font-xs); font-weight: 700;
+  color: var(--br-admin-text-muted);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-slash__none { padding: 8px; font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted); }
+
+/* The context bar's block type switch */
+.boat-rudder-entry-editor-context__switch {
+  flex-shrink: 0; width: auto; padding: 3px 6px;
+  font: inherit; font-size: var(--br-admin-font-sm); font-weight: 600;
+  color: var(--br-admin-text); background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-context__switch[hidden] { display: none; }
+
+/* Editor, narrow screens */
+@media (max-width: 899px) {
+  .boat-rudder-entry-editor__sidebar {
+    position: fixed; top: 84px; right: 0; bottom: 0; z-index: 202;
+    width: min(360px, 100%); min-width: 0;
+    box-shadow: var(--br-admin-shadow);
+  }
+  .boat-rudder-entry-editor--settings-open .boat-rudder-entry-editor__settings-backdrop {
+    display: block; position: fixed; inset: 84px 0 0 0; z-index: 201;
+    background: var(--br-admin-overlay);
+  }
+  .boat-rudder-entry-editor__main { padding: 24px 28px 120px; }
+}
+
+@media (max-width: 599px) {
+  /* The top bar scrolls sideways instead of squeezing its controls. */
+  .boat-rudder-entry-editor__topbar { gap: 10px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; }
+  .boat-rudder-entry-editor__topbar::-webkit-scrollbar { display: none; }
+  .boat-rudder-entry-editor__topbar > * { flex-wrap: nowrap; flex-shrink: 0; }
+  .boat-rudder-entry-editor__save-status,
+  .boat-rudder-entry-editor-context__label,
+  .boat-rudder-entry-editor-context__type { display: none; }
+  .boat-rudder-entry-editor-context { gap: 4px; padding: 0 6px; }
+  .boat-rudder-entry-editor__main { padding: 16px 16px 120px; }
+  .boat-rudder-entry-editor-block__grip { display: none; }
+  /* Too little room beside "+ Insert" and the actions: the open block's
+     tools get their own row at the bottom of the screen. */
+  .boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__tools {
+    top: auto; bottom: 0; left: 0; width: 100%; height: 44px; padding: 0 8px;
+    background: var(--br-admin-surface);
+    border-top: 1px solid var(--br-admin-border);
+  }
+}
 
 /* Media library modal (the editor's image picker) */
 .boat-rudder-modal-overlay {

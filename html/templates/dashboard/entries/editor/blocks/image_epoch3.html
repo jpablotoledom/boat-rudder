@@ -17,7 +17,8 @@
       <div class="boat-rudder-entry-editor-block__preview"></div>
 
       <div class="boat-rudder-entry-editor-block__body">
-        <div class="boat-rudder-entry-editor__image-preview">
+        <div class="boat-rudder-entry-editor__image-preview" title="Choose another photo"
+             onclick="event.stopPropagation();openImageGallery(this)">
           <span class="boat-rudder-entry-editor__gallery-empty">No image selected</span>
         </div>
 
@@ -27,7 +28,9 @@
                  onclick="event.stopPropagation()" oninput="syncImageOptions(this)">
         </div>
 
-        <div class="boat-rudder-entry-editor__image-options">
+        <div class="boat-rudder-entry-editor__image-options boat-rudder-entry-editor-block__tools">
+          <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button"
+                  onclick="event.stopPropagation();openImageGallery(this)">&#9633; Select photo</button>
           <div class="boat-rudder-entry-editor__meta-group">
             <label>Size</label>
             <select class="boat-rudder-entry-editor__image-size"

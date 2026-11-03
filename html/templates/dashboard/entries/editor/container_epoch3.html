@@ -36,38 +36,57 @@
       <div class="boat-rudder-entry-editor__lang-toggle">
 %s
       </div>
+      <button class="boat-rudder-btn boat-rudder-btn--sm boat-rudder-entry-editor__settings-btn" id="editorSettingsBtn" type="button" onclick="toggleEditorSettings()" aria-expanded="false" title="Entry settings: slug, type, categories, cover, title, summary">&#9881;<span class="boat-rudder-entry-editor-context__label"> Settings</span></button>
     </div>
   </div>
 
-  <!-- Block type toolbar -->
-  <div class="boat-rudder-entry-editor-block-toolbar">
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('title')">&sect; Title</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('image')">&square; Image</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('gallery')">&#9632; Gallery</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('byline')">&#9998; Byline</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('separator')">&#9135; Separator</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('link')">&#128279; Link</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('list')">&#9776; List</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('terminal')">&gt;_ Terminal</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('generic')">&#9965; HTML</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('table')">&#9974; Table</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
+  <!-- Context bar: one place for the tools of whichever block is being
+       edited. A block's own tool row (.boat-rudder-entry-editor-block__tools)
+       stays in the block - so its handlers still find it with closest() -
+       and is pinned over #editorContextTools while the block is open
+       (placeContextTools()). -->
+  <div class="boat-rudder-entry-editor-context" id="editorContext">
+    <div class="boat-rudder-entry-editor-add-block boat-rudder-entry-editor-context__insert">
+      <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="toggleAddBlockDropdown(this)" title="Insert a block after the one being edited">+ Insert</button>
+    </div>
+    <span class="boat-rudder-entry-editor-context__type" id="editorContextType"></span>
+    <!-- Paragraphs, headings and lists turn into one another, text kept. -->
+    <select class="boat-rudder-entry-editor-context__switch" id="editorContextSwitch" onchange="switchActiveBlockType(this)" title="Change this block's type" hidden>
+      <option value="paragraph">&para; Paragraph</option>
+      <option value="title:1">Heading 1</option>
+      <option value="title:2">Heading 2</option>
+      <option value="title:3">Heading 3</option>
+      <option value="title:4">Heading 4</option>
+      <option value="title:5">Heading 5</option>
+      <option value="title:6">Heading 6</option>
+      <option value="list:ul">&bull; Bulleted list</option>
+      <option value="list:ol">1. Numbered list</option>
+    </select>
+    <div class="boat-rudder-entry-editor-context__tools" id="editorContextTools"></div>
+    <div class="boat-rudder-entry-editor-context__actions" id="editorContextActions" hidden>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" data-para-only onmousedown="event.preventDefault()" onclick="contextAction('split')"
+              title="Split: move everything after the cursor into a new paragraph below">&#9986;<span class="boat-rudder-entry-editor-context__label"> Split</span></button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" data-para-only id="editorContextMerge" onclick="contextAction('merge')"
+              title="Merge: join this paragraph onto the end of the one above">&#8613;<span class="boat-rudder-entry-editor-context__label"> Merge</span></button>
+      <span class="boat-rudder-entry-editor-toolbar__sep" data-para-only></span>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" onclick="contextAction('up')" title="Move up">&#8679;</button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" onclick="contextAction('down')" title="Move down">&#8681;</button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" onclick="contextAction('advanced')" title="Advanced (extra_data)">&#9881;</button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm boat-rudder-entry-editor-context__delete" type="button" onclick="contextAction('delete')" title="Delete block">&#128465;</button>
+    </div>
   </div>
 
-  <!-- Two-column body -->
+  <!-- Body: the sheet, and the settings panel the top bar's Settings opens -->
   <div class="boat-rudder-entry-editor__body">
-    <!-- Left sidebar -->
-    <div class="boat-rudder-entry-editor__sidebar">
+    <div class="boat-rudder-entry-editor__settings-backdrop" onclick="toggleEditorSettings(false)"></div>
+    <div class="boat-rudder-entry-editor__sidebar" id="editorSettings">
       <div class="boat-rudder-entry-editor__sidebar-inner">
 %s
         <hr class="boat-rudder-entry-editor__sidebar-divider">
 %s
       </div>
     </div>
-    <!-- Right: content blocks -->
+    <!-- The sheet: the content blocks -->
     <div class="boat-rudder-entry-editor__main">
 %s
     </div>
@@ -175,6 +194,7 @@
     }
     applyLangVisibility(document);
     refreshAllPreviews();
+    document.querySelectorAll('#entryBlocks [data-type="title"]').forEach(autosizeTitle);
   };
 
   /* ---- Block preview/edit ---- */
@@ -188,6 +208,7 @@
     block.classList.add('boat-rudder-entry-editor-block--editing');
     activeEditBlock = block;
     initBlockEditors(block);
+    updateContextBar();
   };
 
   window.deactivateBlock = function (el) {
@@ -197,6 +218,70 @@
     block.classList.remove('boat-rudder-entry-editor-block--editing');
     if (activeEditBlock === block) activeEditBlock = null;
     refreshBlockPreview(block);
+    updateContextBar();
+  };
+
+  /* ---- Context bar ---- */
+  // Paragraphs and titles are written straight on the sheet: always in edit
+  // form, with no preview of their own (see initInlineBlock()).
+  function isInlineType(type) {
+    return type === 'paragraph' || type === 'title';
+  }
+
+  // The open block's name, tools and actions in the context bar - or only
+  // "+ Insert" while none is open.
+  function updateContextBar() {
+    var block = activeEditBlock;
+    var typeEl = document.getElementById('editorContextType');
+    var actions = document.getElementById('editorContextActions');
+    var label = block && block.querySelector('.boat-rudder-entry-editor-block__type-label');
+    var sw = document.getElementById('editorContextSwitch');
+    var switchable = !!block && /^(paragraph|title|list)$/.test(block.dataset.type);
+    sw.hidden = !switchable;
+    if (switchable) sw.value = blockVariantValue(block);
+    typeEl.innerHTML = label && !switchable ? label.innerHTML : '';
+    actions.hidden = !block;
+    var isPara = !!block && block.dataset.type === 'paragraph';
+    actions.querySelectorAll('[data-para-only]').forEach(function (b) { b.hidden = !isPara; });
+    if (isPara) {
+      var prev = block.previousElementSibling;
+      document.getElementById('editorContextMerge').disabled = !(prev && prev.dataset.type === 'paragraph');
+    }
+    placeContextTools();
+  }
+
+  // A block's tool row is position: fixed over #editorContextTools; it gets
+  // that slot's box here, measured again whenever the bar's layout changes.
+  function placeContextTools() {
+    var slot = document.getElementById('editorContextTools').getBoundingClientRect();
+    root.style.setProperty('--br-editor-tools-left', slot.left + 'px');
+    root.style.setProperty('--br-editor-tools-width', Math.max(slot.width, 0) + 'px');
+  }
+  window.addEventListener('resize', placeContextTools);
+
+  window.contextAction = function (action) {
+    var block = activeEditBlock;
+    if (!block) return;
+    if (action === 'split') splitParagraph(block);
+    else if (action === 'merge') mergeParagraphUp(block);
+    else if (action === 'up') { moveBlockUp(block); block.scrollIntoView({ block: 'nearest' }); updateContextBar(); }
+    else if (action === 'down') { moveBlockDown(block); block.scrollIntoView({ block: 'nearest' }); updateContextBar(); }
+    else if (action === 'delete') removeComponent(block);
+    else if (action === 'advanced') {
+      var toggle = block.querySelector('.boat-rudder-entry-editor-advanced__toggle');
+      if (toggle) { toggleAdvanced(toggle); toggle.parentNode.scrollIntoView({ block: 'nearest' }); }
+    }
+  };
+
+  /* ---- Settings panel ---- */
+  // Slug, type, categories and the post header, folded away from the sheet.
+  // Remembered per browser; storage may be unavailable (private mode).
+  window.toggleEditorSettings = function (open) {
+    if (typeof open !== 'boolean') open = !root.classList.contains('boat-rudder-entry-editor--settings-open');
+    root.classList.toggle('boat-rudder-entry-editor--settings-open', open);
+    document.getElementById('editorSettingsBtn').setAttribute('aria-expanded', String(open));
+    try { localStorage.setItem('br-editor-settings-open', open ? '1' : '0'); } catch (e) {}
+    placeContextTools();
   };
 
   // Escape, or a click anywhere outside the block being edited, closes it -
@@ -221,7 +306,13 @@
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || overlayOpen()) return;
     if (closeAddBlockMenu() || closeTranslatePanel()) return;
-    if (activeEditBlock) deactivateBlock(activeEditBlock);
+    if (root.classList.contains('boat-rudder-entry-editor--settings-open') &&
+        window.matchMedia('(max-width: 899px)').matches) { toggleEditorSettings(false); return; }
+    if (activeEditBlock) {
+      var focused = document.activeElement;
+      if (focused && activeEditBlock.contains(focused)) focused.blur();
+      deactivateBlock(activeEditBlock);
+    }
   });
 
   // Judged by where the press started, not where the click lands: a text
@@ -246,7 +337,16 @@
     // The top bar's controls act on the whole entry (language, save,
     // publish...): switching language or saving mid-edit keeps the block open.
     if (t.closest('.boat-rudder-entry-editor__topbar')) return;
+    // The context bar's tools and actions work on the open block.
+    if (t.closest('.boat-rudder-entry-editor-context')) return;
     deactivateBlock(activeEditBlock);
+  });
+
+  // Tabbing (or clicking) into a paragraph or title opens it like a click on
+  // its block does.
+  document.getElementById('entryBlocks').addEventListener('focusin', function (e) {
+    var block = e.target.closest('.boat-rudder-entry-editor-block');
+    if (block && block !== activeEditBlock) activateBlock(block);
   });
 
   function initBlockEditors(block) {
@@ -310,6 +410,7 @@
   window.refreshBlockPreview = function (blockEl) {
     if (!blockEl) return;
     var type = blockEl.dataset.type;
+    if (isInlineType(type)) { autosizeTitle(blockEl); return; }
     var preview = blockEl.querySelector('.boat-rudder-entry-editor-block__preview');
     if (!preview) return;
 
@@ -536,6 +637,7 @@
       var lang = lc.dataset.lang;
 
       var toolbarHtml =
+        '<div class="boat-rudder-entry-editor-block__tools">' +
         '<div class="boat-rudder-entry-editor-toolbar">' +
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Bold" onmousedown="event.preventDefault();document.execCommand(\'bold\')"><b>B</b></button>' +
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Italic" onmousedown="event.preventDefault();document.execCommand(\'italic\')"><i>I</i></button>' +
@@ -560,6 +662,7 @@
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Redo" onmousedown="event.preventDefault();document.execCommand(\'redo\')">&#8618;</button>' +
         '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="HTML source" onclick="toggleSource(this)">HTML</button>' +
+        '</div>' +
         '</div>';
 
       lc.insertAdjacentHTML('afterbegin', toolbarHtml);
@@ -569,6 +672,7 @@
       div.contentEditable = 'true';
       div.spellcheck = true;
       div.dataset.for = lang;
+      div.dataset.placeholder = 'Write something, or type / to insert a block';
       div.innerHTML = ta.value;
 
       ta.style.display = 'none';
@@ -579,7 +683,11 @@
       sourceTA.style.display = 'none';
       lc.insertBefore(sourceTA, ta);
 
-      div.addEventListener('input', function () { syncRichtext(div); });
+      div.addEventListener('input', function () {
+        // Emptied, the browser leaves a lone <br>, which hides the placeholder.
+        if (!div.textContent && /^(<br>)?$/i.test(div.innerHTML)) div.innerHTML = '';
+        syncRichtext(div);
+      });
       div.addEventListener('mouseup', saveRichSelection);
       div.addEventListener('keyup', saveRichSelection);
       div.addEventListener('paste', function (e) {
@@ -678,13 +786,10 @@
 
   // Merge is only possible from the second paragraph of a run onward.
   function updateMergeButton(block) {
-    var btn = block && block.querySelector('.boat-rudder-entry-editor__merge-btn');
-    if (!btn) return;
-    var prev = block.previousElementSibling;
-    btn.disabled = !(prev && prev.dataset.type === 'paragraph');
+    if (block && block === activeEditBlock) updateContextBar();
   }
   new MutationObserver(function () {
-    if (activeEditBlock) updateMergeButton(activeEditBlock);
+    if (activeEditBlock) updateContextBar();
   }).observe(document.getElementById('entryBlocks'), { childList: true });
 
   // Moves everything after the cursor into a new paragraph block right
@@ -759,11 +864,12 @@
   };
 
   // Appends this paragraph block's text, in every language, to the end of
-  // the paragraph block right above it, and removes this one.
+  // the paragraph block right above it, and removes this one. Resolves with
+  // the block above once merged, or null.
   window.mergeParagraphUp = function (btn) {
     var block = btn.closest('.boat-rudder-entry-editor-block');
     var prev = block.previousElementSibling;
-    if (!prev || prev.dataset.type !== 'paragraph') return;
+    if (!prev || prev.dataset.type !== 'paragraph') return Promise.resolve(null);
 
     var joined = {};
     block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
@@ -773,10 +879,10 @@
       joined[lang] = joinParagraphHtml(prevTa ? prevTa.value : '', ta ? ta.value : '');
     });
 
-    postForm(apiUrl('/blocks/' + block.dataset.blockId + '/delete'), new URLSearchParams()).then(function (data) {
+    return postForm(apiUrl('/blocks/' + block.dataset.blockId + '/delete'), new URLSearchParams()).then(function (data) {
       if (!data.ok) {
         setStatus('Error: ' + data.error, 'error');
-        return;
+        return null;
       }
       Object.keys(joined).forEach(function (lang) { setParagraphText(prev, lang, joined[lang]); });
       if (activeEditBlock === block) activeEditBlock = null;
@@ -787,8 +893,498 @@
       // only in this page (in the block above) until saved - save right away
       // so leaving without saving can't lose it.
       saveContent();
+      return prev;
     });
   };
+
+  /* ---- Keyboard: writing across blocks ----
+     The sheet behaves like one page: Enter in a paragraph is a line break
+     (Split in the context bar cuts it in two), Enter at the end of any other
+     block starts a paragraph below it (or moves into the empty one already
+     there), Backspace at a paragraph's start joins it to the one above, and the arrows cross from block to block. A selected
+     block with no field focused (an image, a gallery...) takes Enter and the
+     arrows too. */
+
+  // The field the writer types into, in the language being edited: a
+  // paragraph's rich-text editor, a title's textarea.
+  function inlineField(block) {
+    if (!block) return null;
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
+    if (!panel) return null;
+    return block.dataset.type === 'paragraph'
+      ? panel.querySelector('.boat-rudder-entry-editor__richtext')
+      : panel.querySelector('textarea[name="text"]');
+  }
+
+  function isEmptyParagraph(block) {
+    if (!block || block.dataset.type !== 'paragraph') return false;
+    var field = inlineField(block);
+    return !!field && !Array.from(field.childNodes).some(function (n) { return !isEmptyNode(n); });
+  }
+
+  // Puts the caret at the start (atEnd false) or the end of a block's field;
+  // a block without one is selected instead.
+  function focusBlock(block, atEnd) {
+    var field = inlineField(block);
+    if (!field || !isInlineType(block.dataset.type)) {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      activateBlock(block);
+      block.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    field.focus({ preventScroll: true });
+    if (field.tagName === 'TEXTAREA') {
+      var pos = atEnd ? field.value.length : 0;
+      field.setSelectionRange(pos, pos);
+    } else {
+      var r = document.createRange();
+      r.selectNodeContents(field);
+      r.collapse(!atEnd);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    activateBlock(block);
+    block.scrollIntoView({ block: 'nearest' });
+  }
+
+  // The caret `offset` characters into a rich-text field's text.
+  function placeCaretAtText(field, offset) {
+    var walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+    var node, r = document.createRange();
+    while ((node = walker.nextNode())) {
+      if (offset <= node.length) { r.setStart(node, offset); break; }
+      offset -= node.length;
+    }
+    if (!node) { r.selectNodeContents(field); r.collapse(false); }
+    r.collapse(true);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
+  // A paragraph right below `block` to write in: the empty one already there,
+  // or a new one. One at a time - a second Enter while the server is still
+  // making it would make two.
+  var creatingParagraph = false;
+  function paragraphAfter(block) {
+    var next = block.nextElementSibling;
+    if (isEmptyParagraph(next)) { focusBlock(next, false); return; }
+    if (creatingParagraph) return;
+    creatingParagraph = true;
+    createBlockAfter(block, 'paragraph').then(function (nb) {
+      creatingParagraph = false;
+      if (nb) focusBlock(nb, false);
+    }, function () { creatingParagraph = false; });
+  }
+
+  // Whether the caret has only empty content before it / after it in `field`.
+  function caretEdges(field, range) {
+    var before = document.createRange();
+    before.setStart(field, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    var after = document.createRange();
+    after.setStart(range.endContainer, range.endOffset);
+    after.setEnd(field, field.childNodes.length);
+    var head = document.createElement('div');
+    head.appendChild(before.cloneContents());
+    trimEdges(head);
+    var tail = document.createElement('div');
+    tail.appendChild(after.cloneContents());
+    trimEdges(tail);
+    return { atStart: !head.innerHTML, atEnd: !tail.innerHTML };
+  }
+
+  // Whether the caret sits on the field's first (up) or last (down) line,
+  // so an arrow key leaves the block instead of moving inside it.
+  function caretOnEdgeLine(field, range, up) {
+    if (field.tagName === 'TEXTAREA') {
+      var oneLine = field.scrollHeight <= parseFloat(getComputedStyle(field).lineHeight) * 1.5;
+      if (oneLine) return true;
+      return up ? field.selectionStart === 0 : field.selectionEnd === field.value.length;
+    }
+    var edges = caretEdges(field, range);
+    if (up ? edges.atStart : edges.atEnd) return true;
+    var rect = range.getBoundingClientRect();
+    if (!rect.height) return false;
+    var box = field.getBoundingClientRect();
+    var line = parseFloat(getComputedStyle(field).lineHeight) || 24;
+    return up ? rect.top - box.top < line * 0.8 : box.bottom - rect.bottom < line * 0.8;
+  }
+
+  // Enter inside a list item, a quote or a <pre> of the rich text keeps the
+  // browser's own behavior (a new item, a new line...).
+  function inNestedBlock(field, range) {
+    for (var n = range.startContainer; n && n !== field; n = n.parentNode) {
+      if (n.nodeType === 1 && /^(LI|PRE|BLOCKQUOTE)$/.test(n.tagName)) return true;
+    }
+    return false;
+  }
+
+  function onParagraphKey(e, block, field) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    var range = sel.getRangeAt(0);
+
+    // Enter is a line break inside the paragraph, as <br> like the stored
+    // text has them (the browser would wrap the line in a <div>). In a list
+    // item, a quote or a <pre> the browser's own Enter stays.
+    if (e.key === 'Enter') {
+      if (inNestedBlock(field, range)) return;
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+      return;
+    }
+
+    if (e.key === 'Backspace' && sel.isCollapsed && caretEdges(field, range).atStart) {
+      var prev = block.previousElementSibling;
+      if (!prev) return;
+      e.preventDefault();
+      if (prev.dataset.type === 'paragraph') {
+        var prevField = inlineField(prev);
+        var joinAt = prevField ? prevField.textContent.length : 0;
+        mergeParagraphUp(block).then(function (merged) {
+          if (!merged) return;
+          var f = inlineField(merged);
+          if (!f) return;
+          f.focus({ preventScroll: true });
+          placeCaretAtText(f, joinAt);
+        });
+      } else if (isEmptyParagraph(block)) {
+        removeComponent(block);
+        focusBlock(prev, true);
+      } else {
+        focusBlock(prev, true);
+      }
+      return;
+    }
+
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      var up = e.key === 'ArrowUp';
+      var target = up ? block.previousElementSibling : block.nextElementSibling;
+      if (target && caretOnEdgeLine(field, range, up)) {
+        e.preventDefault();
+        focusBlock(target, up);
+      }
+    }
+  }
+
+  function onTitleKey(e, block, field) {
+    if (e.key === 'Enter') {
+      // A heading is one line: Enter goes on to the text under it.
+      e.preventDefault();
+      paragraphAfter(block);
+      return;
+    }
+    if (e.key === 'Backspace' && !field.value && block.previousElementSibling) {
+      e.preventDefault();
+      var prev = block.previousElementSibling;
+      removeComponent(block);
+      focusBlock(prev, true);
+      return;
+    }
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      var up = e.key === 'ArrowUp';
+      var target = up ? block.previousElementSibling : block.nextElementSibling;
+      if (target && caretOnEdgeLine(field, null, up)) {
+        e.preventDefault();
+        focusBlock(target, up);
+      }
+    }
+  }
+
+  // Code, terminal, list and HTML keep Enter for their own new lines: Ctrl
+  // (or Cmd) + Enter leaves them for a paragraph below - and so does Enter
+  // on an empty last line of code, a session or a list, which is dropped.
+  function onMultilineKey(e, block, field) {
+    if (e.key !== 'Enter' || e.shiftKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      paragraphAfter(block);
+      return;
+    }
+    if (block.dataset.type === 'generic') return;
+    var v = field.value;
+    if (field.selectionStart === v.length && field.selectionEnd === v.length && /\n[ \t]*$/.test(v)) {
+      e.preventDefault();
+      field.value = v.replace(/\n[ \t]*$/, '');
+      onBlockInput(field);
+      paragraphAfter(block);
+    }
+  }
+
+  document.getElementById('entryBlocks').addEventListener('keydown', function (e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    var block = e.target.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var type = block.dataset.type;
+    if (type === 'paragraph' && e.target.classList.contains('boat-rudder-entry-editor__richtext')) {
+      onParagraphKey(e, block, e.target);
+    } else if (type === 'title' && e.target.name === 'text') {
+      onTitleKey(e, block, e.target);
+    } else if (/^(code-text|terminal|list|generic)$/.test(type) && e.target.tagName === 'TEXTAREA' && e.target.name === 'text') {
+      onMultilineKey(e, block, e.target);
+    }
+  });
+
+  // A selected block with no field focused: Enter writes below it, the
+  // arrows move to its neighbours.
+  document.addEventListener('keydown', function (e) {
+    var block = activeEditBlock;
+    if (!block || isInlineType(block.dataset.type) || overlayOpen()) return;
+    var focused = document.activeElement;
+    if (focused && focused !== document.body && focused.closest('input, textarea, select, button, [contenteditable="true"], .boat-rudder-entry-editor-context, .boat-rudder-entry-editor__topbar, #editorSettings')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); paragraphAfter(block); }
+    else if (e.key === 'ArrowUp' && block.previousElementSibling) { e.preventDefault(); focusBlock(block.previousElementSibling, true); }
+    else if (e.key === 'ArrowDown' && block.nextElementSibling) { e.preventDefault(); focusBlock(block.nextElementSibling, false); }
+  });
+
+  // A click on the sheet below the last block writes there: at the end of
+  // that block if it is a paragraph, in a new paragraph otherwise. Deferred,
+  // so the document's click handler closes the old block first.
+  document.querySelector('.boat-rudder-entry-editor__main').addEventListener('click', function (e) {
+    if (e.target.closest('.boat-rudder-entry-editor-block, .boat-rudder-entry-editor-add-block__btn, #addBlockMenu')) return;
+    var blocksEl = document.getElementById('entryBlocks');
+    var last = blocksEl.lastElementChild;
+    if (last && e.clientY < last.getBoundingClientRect().bottom) return;
+    setTimeout(function () {
+      if (last && last.dataset.type === 'paragraph') focusBlock(last, true);
+      else if (last) paragraphAfter(last);
+      else createBlockAfter(null, 'paragraph').then(function (nb) { if (nb) focusBlock(nb, false); });
+    }, 0);
+  });
+
+  /* ---- Block types: switching, "/" menu, Markdown shortcuts ---- */
+
+  // "paragraph", "title:2", "list:ol" - the context bar's type <select> value.
+  function blockVariantValue(block) {
+    var extra = (block.querySelector('[name="extra_data"]') || {}).value || '';
+    if (block.dataset.type === 'title') return 'title:' + (parseInt(extra) || 2);
+    if (block.dataset.type === 'list') return 'list:' + (extra === 'ol' ? 'ol' : 'ul');
+    return block.dataset.type;
+  }
+
+  // A heading's level, a list's kind.
+  function applyVariant(block, variant) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (!hidden || !variant) return;
+    hidden.value = variant;
+    if (block.dataset.type === 'title') { initBlockHeadingBtns(block); autosizeTitle(block); }
+    if (block.dataset.type === 'list') { initListBlock(block); refreshBlockPreview(block); }
+  }
+
+  // A paragraph's HTML as plain lines: one per <br> or block element.
+  function htmlLines(html) {
+    var box = htmlBox(html);
+    box.querySelectorAll('br').forEach(function (br) { br.replaceWith('\n'); });
+    box.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre').forEach(function (el) { el.append('\n'); });
+    return box.textContent.split('\n').map(function (l) { return l.replace(/[\s ]+/g, ' ').trim(); }).filter(Boolean);
+  }
+
+  // One language's stored text, carried from a `from` block to a `to` one.
+  function convertText(from, to, text) {
+    if (!text) return '';
+    var lines = from === 'paragraph' ? htmlLines(text)
+              : text.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    if (to === 'paragraph') return lines.map(escapeHtml).join('<br>');
+    if (to === 'title') return lines.join(' ');
+    if (to === 'list') return lines.join('\n');
+    return '';
+  }
+
+  // Turns `block` into a `type` block (`variant`: a heading level, a list
+  // kind), its text kept in every language when both are text blocks.
+  // Same type: only the variant changes. Resolves with the block now there.
+  function convertBlock(block, type, variant) {
+    if (block.dataset.type === type) {
+      applyVariant(block, variant);
+      setContentChanged();
+      return Promise.resolve(block);
+    }
+    var from = block.dataset.type;
+    var texts = {};
+    langs.forEach(function (l) {
+      var f = langField(block, l, 'text');
+      texts[l] = f ? f.value : '';
+    });
+    return createBlockAfter(block, type).then(function (nb) {
+      if (!nb) return null;
+      langs.forEach(function (l) {
+        var text = convertText(from, type, texts[l]);
+        if (type === 'paragraph') setParagraphText(nb, l, text);
+        else {
+          var f = langField(nb, l, 'text');
+          if (f && /^(title|list)$/.test(type)) f.value = text;
+        }
+      });
+      applyVariant(nb, variant);
+      if (activeEditBlock === block) activeEditBlock = null;
+      block.hidden = true;           // gone at once; the server delete follows
+      removeComponent(block);
+      refreshBlockPreview(nb);
+      return nb;
+    });
+  }
+
+  // Where the writer goes on in a block just made by a switch, "/" or a
+  // shortcut: its text, its first field - or the media library, for the
+  // blocks that are nothing but pictures.
+  function enterBlock(block) {
+    var type = block.dataset.type;
+    if (isInlineType(type)) { focusBlock(block, true); return; }
+    activateBlock(block);
+    block.scrollIntoView({ block: 'nearest' });
+    if (type === 'image') { openImageGallery(block); return; }
+    if (type === 'gallery') { openGalleryForBlock(block); return; }
+    if (type === 'separator') { paragraphAfter(block); return; }
+    var field = block.querySelector('.boat-rudder-entry-editor-block__lang-content--active textarea, ' +
+      '.boat-rudder-entry-editor-block__body input[type="text"]:not([name="extra_data"]), ' +
+      '.boat-rudder-entry-editor__table-cell');
+    if (field && field.offsetParent) field.focus();
+  }
+
+  window.switchActiveBlockType = function (sel) {
+    var block = activeEditBlock;
+    if (!block) return;
+    var parts = sel.value.split(':');
+    convertBlock(block, parts[0], parts[1]).then(function (nb) {
+      if (nb && nb !== block) enterBlock(nb);
+      else updateContextBar();
+    });
+  };
+
+  // The "/" menu: typed alone at the start of an empty paragraph, it lists
+  // the blocks; the letters after it filter them (keywords too), the arrows
+  // and Enter pick one, Escape or deleting the "/" closes it. The paragraph
+  // becomes the picked block.
+  var SLASH_ITEMS = [
+    ['&para;', 'Paragraph', 'paragraph', '', 'text p'],
+    ['H1', 'Heading 1', 'title', '1', 'title h1 heading'],
+    ['H2', 'Heading 2', 'title', '2', 'title h2 heading subtitle'],
+    ['H3', 'Heading 3', 'title', '3', 'title h3 heading'],
+    ['&bull;', 'Bulleted list', 'list', 'ul', 'ul bullet list'],
+    ['1.', 'Numbered list', 'list', 'ol', 'ol number list ordered'],
+    ['&#9633;', 'Image', 'image', '', 'picture photo img'],
+    ['&#9632;', 'Gallery', 'gallery', '', 'photos pictures images'],
+    ['&lt;/&gt;', 'Code', 'code-text', '', 'code pre source snippet'],
+    ['&gt;_', 'Terminal', 'terminal', '', 'shell console command dos powershell'],
+    ['&#9974;', 'Table', 'table', '', 'grid rows columns'],
+    ['&#9135;', 'Separator', 'separator', '', 'hr divider line rule'],
+    ['&#128279;', 'Link', 'link', '', 'url button'],
+    ['&#9654;', 'YouTube', 'youtube-embed', '', 'video embed'],
+    ['&#9835;', 'Social', 'social-networks', '', 'network profile'],
+    ['&#9998;', 'Byline', 'byline', '', 'author date'],
+    ['&#9965;', 'HTML', 'generic', '', 'generic raw embed html']
+  ];
+  var slash = null;   // { block, field, menu, items, index }
+
+  function closeSlashMenu() {
+    if (!slash) return false;
+    slash.menu.remove();
+    slash = null;
+    return true;
+  }
+
+  function renderSlashMenu(query) {
+    var q = query.toLowerCase();
+    slash.items = SLASH_ITEMS.filter(function (it) {
+      return !q || (it[1] + ' ' + it[4]).toLowerCase().split(/\s+/).some(function (w) { return w.indexOf(q) === 0; });
+    });
+    slash.index = Math.min(slash.index, Math.max(slash.items.length - 1, 0));
+    slash.menu.innerHTML = slash.items.length
+      ? slash.items.map(function (it, i) {
+          return '<button type="button" class="boat-rudder-entry-editor-slash__item' +
+            (i === slash.index ? ' boat-rudder-entry-editor-slash__item--active' : '') + '" data-index="' + i + '">' +
+            '<span class="boat-rudder-entry-editor-slash__icon">' + it[0] + '</span>' + it[1] + '</button>';
+        }).join('')
+      : '<div class="boat-rudder-entry-editor-slash__none">No block matches</div>';
+    var active = slash.menu.querySelector('.boat-rudder-entry-editor-slash__item--active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openSlashMenu(block, field) {
+    if (!slash || slash.block !== block) {
+      closeSlashMenu();
+      var menu = document.createElement('div');
+      menu.className = 'boat-rudder-entry-editor-slash';
+      menu.setAttribute('role', 'listbox');
+      // Keeps the caret in the paragraph while an item is clicked.
+      menu.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      menu.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-index]');
+        if (btn) pickSlashItem(parseInt(btn.dataset.index));
+      });
+      document.body.appendChild(menu);
+      slash = { block: block, field: field, menu: menu, items: [], index: 0 };
+    }
+    var r = field.getBoundingClientRect();
+    var below = window.innerHeight - r.bottom > 260;
+    slash.menu.style.left = Math.min(r.left + 14, window.innerWidth - 250) + 'px';
+    slash.menu.style.top = below ? (r.bottom + 4) + 'px' : '';
+    slash.menu.style.bottom = below ? '' : (window.innerHeight - r.top + 4) + 'px';
+    renderSlashMenu(field.textContent.replace(/ /g, ' ').slice(1));
+  }
+
+  function pickSlashItem(i) {
+    if (!slash || !slash.items[i]) return;
+    var it = slash.items[i], block = slash.block;
+    closeSlashMenu();
+    setParagraphText(block, currentLang, '');
+    if (it[2] === 'paragraph') { focusBlock(block, false); setContentChanged(); return; }
+    convertBlock(block, it[2], it[3]).then(function (nb) { if (nb) enterBlock(nb); });
+  }
+
+  // Typed alone in an empty paragraph, these turn it into another block.
+  var MARKDOWN_SHORTCUTS = [
+    [/^# $/, 'title', '1'], [/^## $/, 'title', '2'], [/^### $/, 'title', '3'],
+    [/^[-*] $/, 'list', 'ul'], [/^1[.)] $/, 'list', 'ol'],
+    [/^```$/, 'code-text', ''], [/^---$/, 'separator', '']
+  ];
+
+  document.getElementById('entryBlocks').addEventListener('input', function (e) {
+    var field = e.target;
+    if (!field.classList || !field.classList.contains('boat-rudder-entry-editor__richtext')) return;
+    var block = field.closest('.boat-rudder-entry-editor-block');
+    var text = field.textContent.replace(/ /g, ' ');
+    var onlyText = !field.querySelector('img, iframe, video, hr, table');
+
+    if (onlyText && /^\/[\w-]*$/.test(text)) openSlashMenu(block, field);
+    else closeSlashMenu();
+
+    if (!onlyText || text.length > 4) return;
+    for (var i = 0; i < MARKDOWN_SHORTCUTS.length; i++) {
+      var sc = MARKDOWN_SHORTCUTS[i];
+      if (!sc[0].test(text)) continue;
+      setParagraphText(block, currentLang, '');
+      convertBlock(block, sc[1], sc[2]).then(function (nb) { if (nb) enterBlock(nb); });
+      return;
+    }
+  });
+
+  // Capture phase: the "/" menu's keys come before the paragraph's own
+  // (Enter would otherwise split it).
+  document.getElementById('entryBlocks').addEventListener('keydown', function (e) {
+    if (!slash || e.target !== slash.field) return;
+    var n = slash.items.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!n) return;
+      slash.index = (slash.index + (e.key === 'ArrowDown' ? 1 : n - 1)) %% n;
+      renderSlashMenu(slash.field.textContent.replace(/ /g, ' ').slice(1));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (!n) { closeSlashMenu(); return; }
+      pickSlashItem(slash.index);
+    } else if (e.key === 'Escape') {
+      closeSlashMenu();
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
+  document.getElementById('entryBlocks').addEventListener('focusout', function (e) {
+    if (slash && e.target === slash.field) closeSlashMenu();
+  });
+  document.querySelector('.boat-rudder-entry-editor__main').addEventListener('scroll', closeSlashMenu);
 
   /* ---- Heading level ---- */
   window.setHeadingLevel = function (btn, level) {
@@ -799,6 +1395,8 @@
     block.querySelectorAll('.boat-rudder-entry-editor__heading-btn').forEach(function (b) {
       b.classList.toggle('boat-rudder-btn--active', parseInt(b.dataset.level) === level);
     });
+    block.dataset.level = level;
+    autosizeTitle(block);
     setContentChanged();
   };
 
@@ -809,6 +1407,33 @@
     block.querySelectorAll('.boat-rudder-entry-editor__heading-btn').forEach(function (b) {
       b.classList.toggle('boat-rudder-btn--active', parseInt(b.dataset.level) === level);
     });
+    block.dataset.level = level;
+  }
+
+  // A title is a one-line textarea drawn as its heading: it grows with its
+  // text instead of scrolling. Only the visible language's box can be
+  // measured, so setLang() runs it again.
+  function autosizeTitle(block) {
+    if (!block || block.dataset.type !== 'title') return;
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content--active [name="text"]').forEach(function (ta) {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+  }
+
+  // Paragraphs and titles are editable on the sheet from the start, not
+  // only once opened.
+  function initInlineBlock(block) {
+    var type = block.dataset.type;
+    if (type === 'paragraph') initParagraphEditors(block);
+    if (type === 'title') {
+      initBlockHeadingBtns(block);
+      block.querySelectorAll('[name="text"]').forEach(function (ta) {
+        ta.rows = 1;
+        ta.placeholder = 'Heading';
+      });
+      autosizeTitle(block);
+    }
   }
 
   /* ---- Advanced panel ---- */
@@ -1163,11 +1788,18 @@
   };
 
   /* ---- Add / remove blocks ---- */
-  window.toggleAddBlockDropdown = function () {
+  window.toggleAddBlockDropdown = function (opener) {
     var menu = document.getElementById('addBlockMenu');
+    // One menu serves the context bar's "+ Insert" and the sheet's
+    // "+ Add block": it moves next to the button that opened it.
+    if (opener && opener.nextElementSibling !== menu) {
+      opener.after(menu);
+      menu.classList.remove('boat-rudder-entry-editor-add-block__dropdown--open');
+    }
     var opening = !menu.classList.contains('boat-rudder-entry-editor-add-block__dropdown--open');
     menu.classList.toggle('boat-rudder-entry-editor-add-block__dropdown--open', opening);
     if (!opening) return;
+    if (menu.closest('.boat-rudder-entry-editor-context')) return;  // always opens downward there
 
     // The menu opens upward, since the button sits under the last block. The
     // editor area scrolls (overflow-y: auto), so with little or nothing above
@@ -1186,12 +1818,13 @@
   };
 
   // Creates a block of `type` server-side right after `anchor` (or at the
-  // end when there's none), puts it on the page and resolves with its
-  // element, or null on failure - shared by the add-block buttons and
-  // splitParagraph().
-  function createBlockAfter(anchor, type) {
+  // end when there's none) - or right before `before`, when given - puts it
+  // on the page and resolves with its element, or null on failure. Shared by
+  // the add-block buttons, splitParagraph() and the keyboard.
+  function createBlockAfter(anchor, type, before) {
     var blocksEl = document.getElementById('entryBlocks');
-    var order = anchor ? Array.from(blocksEl.children).indexOf(anchor) + 1 : blocksEl.children.length;
+    var order = before ? Array.from(blocksEl.children).indexOf(before)
+              : anchor ? Array.from(blocksEl.children).indexOf(anchor) + 1 : blocksEl.children.length;
     var params = new URLSearchParams();
     params.set('type', type);
     params.set('order', order);
@@ -1204,12 +1837,15 @@
       var wrapper = document.createElement('div');
       wrapper.innerHTML = data.html;
       var blockEl = wrapper.firstElementChild;
-      if (anchor && anchor.parentNode === blocksEl) {
+      if (before && before.parentNode === blocksEl) {
+        before.before(blockEl);
+      } else if (anchor && anchor.parentNode === blocksEl) {
         anchor.after(blockEl);
       } else {
         blocksEl.appendChild(blockEl);
       }
       applyLangVisibility(blockEl);
+      initInlineBlock(blockEl);
       setupDragHandles();
       setContentChanged();
       return blockEl;
@@ -1221,6 +1857,12 @@
     // always at the end - captured now, since activateBlock() below will
     // clear activeEditBlock once the new block takes its place.
     var anchor = activeEditBlock;
+    // An empty paragraph (where Enter just landed) becomes the new block.
+    if (isEmptyParagraph(anchor) && type !== 'paragraph') {
+      closeAddBlockMenu();
+      convertBlock(anchor, type).then(function (nb) { if (nb) enterBlock(nb); });
+      return;
+    }
     createBlockAfter(anchor, type).then(function (blockEl) {
       if (!blockEl) return;
       refreshBlockPreview(blockEl);
@@ -1228,6 +1870,9 @@
       if (menu) menu.classList.remove('boat-rudder-entry-editor-add-block__dropdown--open');
       activateBlock(blockEl);
       blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      var field = blockEl.querySelector('.boat-rudder-entry-editor-block__lang-content--active .boat-rudder-entry-editor__richtext, ' +
+                                        '.boat-rudder-entry-editor-block__lang-content--active textarea');
+      if (field && isInlineType(blockEl.dataset.type)) field.focus({ preventScroll: true });
     });
   };
 
@@ -1238,6 +1883,7 @@
       if (data.ok) {
         if (activeEditBlock === blockEl) activeEditBlock = null;
         blockEl.remove();
+        updateContextBar();
         setContentChanged();
       } else {
         setStatus('Error: ' + data.error, 'error');
@@ -1271,8 +1917,7 @@
     getBlockRows().forEach(function (row) {
       // The open block's whole header bar drags too, from any spot that
       // isn't one of its own controls (trash, Split/Merge, move, close...).
-      var grips = [row.querySelector('.boat-rudder-entry-editor-block__grip'),
-                   row.querySelector('.boat-rudder-entry-editor-block__header')].filter(Boolean);
+      var grips = [row.querySelector('.boat-rudder-entry-editor-block__grip')].filter(Boolean);
       grips.forEach(function (grip) {
         if (grip.dataset.dragInit) return;
         grip.dataset.dragInit = '1';
@@ -1289,6 +1934,9 @@
           placeholder.style.cssText = 'height:4px;background:rgba(37,99,235,0.6);border-radius:2px;margin:2px 0;pointer-events:none;';
 
           clone = row.cloneNode(true);
+          // An open block's tool row is pinned to the context bar; the
+          // dragged copy must not put a second one there.
+          clone.classList.remove('boat-rudder-entry-editor-block--editing');
           clone.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;opacity:0.88;pointer-events:none;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#222;border:1px solid #2563eb;border-radius:5px;box-sizing:border-box';
 
           document.body.appendChild(clone);
@@ -1334,6 +1982,7 @@
     if (placeholder) placeholder.remove();
     document.body.classList.remove('boat-rudder-entry-editor-mode--dragging');
     dragging = null; clone = null; placeholder = null;
+    updateContextBar();
     setContentChanged();
   });
 
@@ -1893,10 +2542,16 @@
   /* ---- Initialize ---- */
   function init() {
     initPublishToggle();
+    document.querySelectorAll('#entryBlocks > .boat-rudder-entry-editor-block').forEach(initInlineBlock);
+    var settingsOpen = null;
+    try { settingsOpen = localStorage.getItem('br-editor-settings-open'); } catch (e) {}
+    // First visit: open beside the sheet on a wide screen, folded on a small one.
+    toggleEditorSettings(settingsOpen === null ? window.matchMedia('(min-width: 1200px)').matches : settingsOpen === '1');
     setLang(currentLang);
     refreshAllPreviews();
     setupDragHandles();
     updateHeaderImagePreview();
+    updateContextBar();
 
     var imgInput = document.querySelector('#headerSidebar [name="image_url"]');
     if (imgInput) imgInput.addEventListener('input', updateHeaderImagePreview);

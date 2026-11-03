@@ -15,16 +15,15 @@
       <div class="boat-rudder-entry-editor-block__preview"></div>
 
       <div class="boat-rudder-entry-editor-block__body">
-        <div class="boat-rudder-entry-editor__meta-group">
+        <div class="boat-rudder-entry-editor__meta-group boat-rudder-entry-editor-block__tools">
           <label class="boat-rudder-entry-editor-advanced__label">Shell</label>
-          <select class="boat-rudder-entry-editor__code-lang-select" onclick="event.stopPropagation()" onchange="syncCodeLang(this)"
-                  style="width:100%%;">
+          <select class="boat-rudder-entry-editor__code-lang-select" onclick="event.stopPropagation()" onchange="syncCodeLang(this)">
             <option value="">Linux / Unix ($ and #)</option>
             <option value="dos">MS-DOS / Windows (C:\&gt;)</option>
             <option value="powershell">PowerShell (PS C:\&gt;)</option>
           </select>
-          <p class="boat-rudder-dashboard__hint">Paste the session as it is: a line starting with the prompt is a command, every other line is its output.</p>
         </div>
+        <p class="boat-rudder-dashboard__hint">Paste the session as it is: a line starting with the prompt is a command, every other line is its output.</p>
 %s
         <div class="boat-rudder-entry-editor-advanced">
           <button class="boat-rudder-entry-editor-advanced__toggle" onclick="toggleAdvanced(this)">&#9881; Advanced &#9656;</button>

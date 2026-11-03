@@ -51,6 +51,7 @@
     <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('list')">&#9776; List</button>
     <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
     <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
+    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('terminal')">&gt;_ Terminal</button>
     <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('generic')">&#9965; HTML</button>
     <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('table')">&#9974; Table</button>
     <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
@@ -257,7 +258,7 @@
     if (type === 'link') initLinkBlock(block);
     if (type === 'list') initListBlock(block);
     if (type === 'youtube-embed') initYouTubeBlock(block);
-    if (type === 'code-text') initCodeBlock(block);
+    if (type === 'code-text' || type === 'terminal') initCodeBlock(block);
     if (type === 'table') initTableBlock(block);
     if (type === 'social-networks') initSocialBlock(block);
     applyLangVisibility(block);
@@ -266,7 +267,7 @@
   /* ---- Block preview rendering ---- */
 
   // Block types whose public rendering is made server-side (code-text's
-  // highlighting, gallery's thumbnails/tiles, table's rows, image's size/align
+  // highlighting, terminal's prompts, gallery's thumbnails/tiles, table's rows, image's size/align
   // classes, paragraph's style variant) get previewed with that exact
   // epoch 3 output from /dashboard/api/block-preview, so the editor can't
   // drift from what readers see. `fallbackHtml` only fills the gap before the
@@ -395,6 +396,13 @@
           '<pre class="boat-rudder-entry-editor-preview__code"><code>' + escapeHtml(text) + '</code></pre>');
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty code block</span>';
+      }
+    } else if (type === 'terminal') {
+      if (text) {
+        fetchServerPreview(blockEl, preview, 'terminal', text, extra,
+          '<pre class="boat-rudder-entry-editor-preview__code"><code>' + escapeHtml(text) + '</code></pre>');
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty terminal block</span>';
       }
     } else if (type === 'generic') {
       if (text) {
@@ -1400,7 +1408,8 @@
     preview.innerHTML = '<iframe width="100%%" height="180" src="' + escapeHtml(embed) + '" frameborder="0" allowfullscreen></iframe>';
   }
 
-  /* ---- Code-text block ---- */
+  /* ---- Code-text and terminal blocks: the <select> holds extra_data (the
+     language, or the shell) ---- */
   function initCodeBlock(block) {
     var hidden = block.querySelector('[name="extra_data"]');
     var sel = block.querySelector('.boat-rudder-entry-editor__code-lang-select');

@@ -86,6 +86,7 @@ that has a notion of color (1, 2, 3). Stored under `themes.colors` with hyphenat
 | Links | `link-normal`, `link-hover`, `link-visited`, `link-active` | In-content links, independent of the menu colors. `link-hover` applies to epochs 2/3 only |
 | Table block | `table-header`, `table-border`, `table-row-a`, `table-row-b` | Plain `#rrggbb` - epoch 2 uses them as `bgcolor` |
 | Code block | `code-background`, `code-text`, `code-keyword`, `code-string`, `code-comment`, `code-number`, `code-variable`, `code-tag`, `code-line-number` | Syntax highlighting palette ([code-highlighting.md](code-highlighting.md)). Defaults: CGA/Turbo C on navy |
+| Terminal block | `terminal-background`, `terminal-text` (commands), `terminal-prompt` (also the operators), `terminal-output`, `terminal-option`, `terminal-value`, `terminal-variable` | The terminal block's screen ([rendering.md](rendering.md#terminal-block)), epochs 1-3. Defaults: a DOS console - white commands, green prompt, gray output on black, CGA cyan options, yellow values, magenta variables |
 
 ᵅ The six `*-background` tokens accept `#rrggbbaa`. The admin form shows a color picker plus an
 opacity slider (`*-alpha` field, 0-100) joined by `cms_join_hex_alpha()`; alpha only has an

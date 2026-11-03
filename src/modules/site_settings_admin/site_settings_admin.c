@@ -623,6 +623,9 @@ static char *colors_panel(int epoch, const ThemeEntry *theme) {
                              c->code_background, c->code_text, c->code_keyword,
                              c->code_string, c->code_comment, c->code_number,
                              c->code_variable, c->code_tag, c->code_line_number,
+                             c->terminal_background, c->terminal_text,
+                             c->terminal_prompt, c->terminal_output,
+                             c->terminal_option, c->terminal_value, c->terminal_variable,
                              c->footer_logo, footer_bg.rgb, footer_bg.alpha)
                        : NULL;
     free(font_options);

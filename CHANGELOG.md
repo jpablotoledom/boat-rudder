@@ -6,6 +6,21 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Terminal block
+
+**Added**
+- A *Terminal* block for shell sessions: paste it as it is, and each line that starts with the
+  prompt shows as a command, the rest as its output, in a console window titled by the shell -
+  Linux / Unix (`$`, `#`), MS-DOS / Windows (`C:\>`) or PowerShell (`PS C:\>`). Commands
+  written without any prompt are all shown as commands, after the shell's prompt. In each
+  command, options (`-la`, `--user`, `/w`), their values, quoted strings, variables (`$HOME`,
+  `%PATH%`) and operators (`|`, `&&`, `>`) get their own colors. *Copy* copies only the commands,
+  without prompts or output.
+- *Terminal colors* in the theme customizer: background, commands, prompt, output, options,
+  values and variables. They also
+  color the block on Netscape-era browsers; text-only browsers and WAP phones get the commands in
+  bold.
+
 ### Code block languages
 
 **Added**

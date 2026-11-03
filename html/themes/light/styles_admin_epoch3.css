@@ -51,6 +51,7 @@
   --br-admin-block-list:             #086d2d;
   --br-admin-block-youtube-embed:    #8c1b1b;
   --br-admin-block-code-text:        #9b7108;
+  --br-admin-block-terminal:         #1f5130;
   --br-admin-block-generic:          #000000;
   --br-admin-block-table:            #293812;
   --br-admin-block-social-networks:  #402f22;
@@ -1993,6 +1994,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-block__type-label--list            { color: var(--br-admin-block-list); }
 .boat-rudder-entry-editor-block__type-label--youtube-embed   { color: var(--br-admin-block-youtube-embed); }
 .boat-rudder-entry-editor-block__type-label--code-text       { color: var(--br-admin-block-code-text); }
+.boat-rudder-entry-editor-block__type-label--terminal        { color: var(--br-admin-block-terminal); }
 .boat-rudder-entry-editor-block__type-label--generic         { color: var(--br-admin-block-generic); }
 .boat-rudder-entry-editor-block__type-label--table           { color: var(--br-admin-block-table); }
 .boat-rudder-entry-editor-block__type-label--social-networks { color: var(--br-admin-block-social-networks); }

@@ -166,7 +166,7 @@ All **E3, A**. Detailed behavior in [themes.md](themes.md) and [fonts.md](fonts.
 | `GET` | `/dashboard/settings/themes/<key>/customize` | `site_settings_customize_page()` | The theme customizer: per-epoch panels, live preview, CSS drawer ([themes.md](themes.md#81-theme-customizer)). Guard: Theme |
 | `GET` | `/dashboard/settings/themes/<key>` | - | `302` to `…/<key>/customize` (to the list for an unknown key) |
 | `POST` | `/dashboard/settings/themes/<key>/activate` | `cms_set_active_theme()` | Sets `site_settings.active_theme`; `302` to the field `return` when it is this theme's customizer, else to the list |
-| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 40 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's customizer. Guard: Theme |
+| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 47 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's customizer. Guard: Theme |
 | `GET` | `/dashboard/settings/themes/<key>/banner` | `site_settings_banner_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/banner/<epoch>` | `cms_update_theme_banner()` | Field `html` (≤ 128 KiB); `""` restores the file |
 | `GET` | `/dashboard/settings/themes/<key>/footer` | `site_settings_footer_page()` | Guard: Theme |
@@ -212,7 +212,7 @@ Guards **S+R** and **Own** on every route except `block-preview` and `translate`
 | `POST` | `/dashboard/api/entries/<id>/content` | `cms_update_entry_content()` + `cms_upsert_media_gallery()` | `{ok, ids:[…]}` - the block ids, including any minted for blocks sent without one |
 | `POST` | `/dashboard/api/entries/<id>/blocks` | `cms_add_entry_content_block()` | `{ok, block_id, html}` - the new block's editor markup |
 | `POST` | `/dashboard/api/entries/<id>/blocks/<block-id>/delete` | `cms_remove_entry_content_block()` | `{ok}` |
-| `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
+| `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `terminal`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
 | `POST` | `/dashboard/api/translate` | `translator_azure()` | `{ok, texts:[…]}` - fields `source`, `target` (site languages), `format` (`text`/`html`), `text` (repeated, up to 50, 50,000 characters). Azure only: `400` with another provider; `502 {ok:false, error}` when Azure fails. A viewer is refused (**RO**) |
 
 ### Media library

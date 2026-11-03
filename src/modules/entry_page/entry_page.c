@@ -4,6 +4,7 @@
 #include "../../db/short_links.h"
 #include "../../utils/category_tags.h"
 #include "../../utils/code_highlight.h"
+#include "../../utils/terminal_session.h"
 #include "../../utils/image_size.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
@@ -916,6 +917,44 @@ static char *render_code_text(const CmsContentBlock *block, int epoch) {
     return result ? result : strdup("");
 }
 
+// A pasted shell session: commands (after their prompt) and what they
+// printed, in a console window titled by the shell. Epoch 3 colors it with
+// the theme's --br-color-terminal-* properties and copies only the commands;
+// epochs 1-2 get <font color> from the same "Terminal colors" (epoch 1's
+// lines end in <br>, like the code block's); epoch 0 and WML plain text with
+// the commands bold.
+static char *render_terminal(const CmsContentBlock *block, int epoch) {
+    if (!block->text || !block->text[0]) return strdup("");
+    char *tpl = load_template("elements/terminal/terminal_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+
+    const char *shell = block->extra_data ? block->extra_data : "";
+    CmsThemeColors colors = {0};
+    char *text;
+    if (epoch >= EPOCH_MODERN) {
+        text = terminal_html(block->text, shell);
+    } else {
+        // Epoch 0 and WML: no color; WML also has no <pre> to keep the lines.
+        int plain = (epoch <= EPOCH_PRESTANDARD);
+        if (!plain) cms_get_theme_colors(request_theme(), &colors);
+        TerminalPalette pal = {
+            .text = colors.terminal_text, .prompt = colors.terminal_prompt,
+            .output = colors.terminal_output, .option = colors.terminal_option,
+            .value = colors.terminal_value, .variable = colors.terminal_variable,
+            .no_color = plain,
+            .newline = epoch == EPOCH_EARLY ? "<br>" : epoch == EPOCH_WML ? "<br/>" : NULL,
+        };
+        text = terminal_html_fonts(block->text, shell, &pal);
+    }
+    // Arguments: the shell's title, the lines, then the screen's background
+    // and text colors that only epochs 1-2 use.
+    char *result = text ? render_template(tpl, terminal_shell_title(shell), text,
+                                          colors.terminal_background, colors.terminal_text) : NULL;
+    free(text);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
 static char *render_generic(const CmsContentBlock *block, int epoch) {
     char *tpl = load_template("elements/generic/generic_epoch%d.html", epoch);
     if (!tpl) return NULL;
@@ -1353,6 +1392,7 @@ static char *render_block(const CmsContentBlock *block, int epoch) {
     if (strcmp(block->type, "list") == 0)            return render_list(block, epoch);
     if (strcmp(block->type, "youtube-embed") == 0)   return render_youtube_embed(block, epoch);
     if (strcmp(block->type, "code-text") == 0)       return render_code_text(block, epoch);
+    if (strcmp(block->type, "terminal") == 0)        return render_terminal(block, epoch);
     if (strcmp(block->type, "generic") == 0)         return render_generic(block, epoch);
     if (strcmp(block->type, "table") == 0)           return render_table(block, epoch);
     if (strcmp(block->type, "social-networks") == 0) return render_social_networks(block, epoch);

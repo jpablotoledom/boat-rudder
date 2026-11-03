@@ -280,7 +280,7 @@ document instead of a 5-table relational model).
   `/blocks/<block_id>/delete` endpoints and patch the DOM without a full reload.
   `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
   the next `saveContent()` (block `order` = DOM index at save time). Previews of simple blocks
-  are built client-side; `code-text`, `gallery`, `table`, `youtube-embed`, `image` and
+  are built client-side; `code-text`, `terminal`, `gallery`, `table`, `youtube-embed`, `image` and
   `paragraph` are fetched from `POST /dashboard/api/block-preview`, which returns the real epoch 3
   rendering (`entry_page_render_block()`), so the preview can't drift from the public page.
 - **Editor UX** (epoch 3): the editor uses a document-style layout with a fixed top bar (save-all, autosave toggle, publish toggle, language tabs), a block type toolbar, and a two-column layout (left: meta + header sidebars; right: content blocks). Blocks default to a document-like preview mode; clicking a block enters edit mode showing the full form. Paragraph blocks have a WYSIWYG rich-text toolbar. Title blocks have H1-H6 level selectors. Gallery blocks show a thumbnail preview area with drag-and-drop reordering and a "Select photos" button that opens the media picker modal. Blocks support drag-and-drop reordering.

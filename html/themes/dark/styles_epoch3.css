@@ -672,6 +672,59 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
 .boat-rudder-code-token--tag,
 .boat-rudder-code-token--attr { color: var(--br-color-code-tag); }
 
+/* Terminal block: a console window titled by its shell, colored by the
+   theme's "Terminal colors" (cms_themes.h terminal_*). */
+.boat-rudder-terminal {
+  margin-top: 25px;
+  margin-bottom: 20px;
+  border: 2px solid rgba(240, 248, 255, 0.35);
+  background-color: var(--br-color-terminal-background);
+}
+.boat-rudder-terminal__bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 4px 12px;
+  background: #2a2a2a;
+  color: aliceblue;
+  font-family: monospace;
+  font-weight: bold;
+}
+.boat-rudder-terminal__copy {
+  background: transparent;
+  border: 1px solid aliceblue;
+  color: aliceblue;
+  font: inherit;
+  font-weight: normal;
+  padding: 2px 12px;
+  cursor: pointer;
+}
+.boat-rudder-terminal__copy:hover { background: aliceblue; color: #2a2a2a; }
+.boat-rudder-terminal__screen {
+  margin: 0;
+  padding: 16px;
+  max-height: 400px;
+  overflow: auto;
+  color: var(--br-color-terminal-output);
+}
+.boat-rudder-terminal__screen code { font-family: monospace; white-space: pre; }
+/* The prompt can't be selected, so selecting the session picks up only
+   what was typed and printed; the Copy button takes the commands alone. */
+.boat-rudder-terminal__prompt {
+  color: var(--br-color-terminal-prompt);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.boat-rudder-terminal__cmd { color: var(--br-color-terminal-text); font-weight: bold; }
+.boat-rudder-terminal__out { color: var(--br-color-terminal-output); }
+/* A command's parts, see terminal_session.h; operators (|, &&, >) take the
+   prompt's color. */
+.boat-rudder-terminal__opt { color: var(--br-color-terminal-option); }
+.boat-rudder-terminal__val { color: var(--br-color-terminal-value); }
+.boat-rudder-terminal__var { color: var(--br-color-terminal-variable); }
+.boat-rudder-terminal__op  { color: var(--br-color-terminal-prompt); }
+
 .boat-rudder-list-container {
   padding-left: 24px;
   margin: 8px 0;

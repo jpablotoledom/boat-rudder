@@ -390,6 +390,7 @@ interprets those two fields differently:
 | `list` | one item per line | `"ol"` for ordered, anything else = unordered | -1..3 |
 | `table` | rows by line, cells by `\|` | `"header"` makes row 0 a header row | -1..3 |
 | `code-text` | code body | language key (`javascript`, `c`, `python`, …, `""` = plain) - see [code-highlighting.md](code-highlighting.md) | -1..3 |
+| `terminal` | a shell session: commands after their prompt, and their output | shell: `""` Linux / Unix, `dos`, `powershell` - see [Terminal block](#terminal-block) | -1..3 |
 | `youtube-embed` | caption / link label | watch/short/embed URL, normalized to `/embed/<id>` | -1..3 |
 | `social-networks` | display name (falls back to the icon name) | `"<icon>\|<url>"` | -1..3 |
 | `generic` | raw HTML passthrough | unused | -1..3 |
@@ -412,6 +413,42 @@ rules, and NCSA Mosaic 1.x/Cello-era engines don't consistently - live-tested, a
 entire code block onto one line - so epoch 1 ends each highlighted line with `<br>`, and WML (no
 `<pre>` at all) goes through `expand_newlines()`. Full behavior:
 [code-highlighting.md](code-highlighting.md).
+
+### Terminal block
+
+`terminal` shows a pasted shell session in a console window titled by its shell
+(`src/utils/terminal_session.c`). A line starting with the shell's prompt is a **command**,
+every other line is **output**. A block where **no line has a prompt** is a list of commands
+(what a how-to shows): every non-empty line is a command, drawn after the shell's own prompt -
+`$ `, `C:\>` or `PS> `:
+
+| Shell (`extra_data`) | Title | A command line starts with |
+|---|---|---|
+| `""` | Terminal | a first word ending in `$`, `#` or `%` and a space: `$ `, `# `, `user@host:~$ ` - not `$HOME`, `#include` or `50%` (a digit before the sign) |
+| `dos` | MS-DOS | a drive, `:\`, a path and `>`: `C:\>`, `C:\GAMES>`, `C:\Program Files>` |
+| `powershell` | PowerShell | `PS>` or `PS <path>> ` |
+
+Inside a command, its parts get their own colors (`command()`):
+
+| Part | Examples | Class / color |
+|---|---|---|
+| Option | `-la`, `--protocol`, PowerShell's `-Path`, DOS's `/w` | `__opt` / `terminal-option` |
+| Value | the word after an option without `=` (`--servercert <HASH>`), what follows `=` (`--protocol=gp`), a quoted string | `__val` / `terminal-value` |
+| Variable | `$HOME`, `${USER}`, `$1`, `$?`; DOS `%PATH%`, `%1`, `%%i` - also inside a value | `__var` / `terminal-variable` |
+| Operator | `\|`, `\|\|`, `&`, `&&`, `;`, `>`, `>>`, `2>`, `<` | `__op` / `terminal-prompt` |
+
+The program and its plain arguments keep the command's color. `<NAME>` with no space in it is a
+placeholder to fill in, not a redirection.
+
+| Epoch | Output |
+|---|---|
+| 3 | `boat-rudder-terminal__prompt` / `__cmd` / `__out` spans in a `<pre>`, colored by `--br-color-terminal-*`. The prompt has `user-select: none`, and *Copy* copies the commands alone (the whole text when there are none) |
+| 1-2 | `<font color>` from the theme's *Terminal colors*, commands bold, on a `bgcolor` screen; epoch 1 ends lines with `<br>` like `code-text` |
+| 0 | Plain text in a `<pre>`, commands bold |
+| −1 (WML) | Plain text, commands bold, lines joined by `<br/>` |
+
+Everything is HTML-escaped on every epoch (a DOS prompt is full of `>`). The text is per language
+like `code-text`'s, and translation leaves it alone.
 
 A run of 2+ consecutive `<br>` marks a paragraph break rather than a mid-paragraph line break -
 whether it got there as literal HTML typed into the rich-text editor, or was just produced by

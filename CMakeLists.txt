@@ -64,6 +64,7 @@ set(SOURCES
     src/utils/image_size.c
     src/utils/category_tags.c
     src/utils/code_highlight.c
+    src/utils/terminal_session.c
     src/html_builder/page_layout.c
     src/utils/log.c
     src/utils/http_utils.c
@@ -235,3 +236,6 @@ add_test(NAME css_compat COMMAND css_compat_test WORKING_DIRECTORY ${CMAKE_SOURC
 
 add_executable(code_highlight_test tests/code_highlight_test.c src/utils/code_highlight.c)
 add_test(NAME code_highlight COMMAND code_highlight_test)
+
+add_executable(terminal_session_test tests/terminal_session_test.c src/utils/terminal_session.c)
+add_test(NAME terminal_session COMMAND terminal_session_test)

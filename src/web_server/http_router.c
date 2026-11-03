@@ -4123,7 +4123,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/api/block-preview") == 0) {
             // The entry editor's preview of an unselected block, for the
             // types whose public rendering is server-made (code-text's
-            // highlighting, gallery's thumbnails, table's themed rows, the YouTube
+            // highlighting, terminal's prompts, gallery's thumbnails, table's themed rows, the YouTube
             // iframe, image's size/float, paragraph's style): the same epoch 3 output a
             // reader gets, so the editor never shows a second, drifting copy.
             int epoch = resolve_epoch(&req);
@@ -4142,7 +4142,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
                         parse_urlencoded_field(req.body, req.body_length, "text", text, cap);
                         parse_urlencoded_field(req.body, req.body_length, "extra", extra, sizeof(extra));
-                        if (strcmp(type, "code-text") == 0 || strcmp(type, "gallery") == 0 ||
+                        if (strcmp(type, "code-text") == 0 || strcmp(type, "terminal") == 0 ||
+                            strcmp(type, "gallery") == 0 ||
                             strcmp(type, "table") == 0 || strcmp(type, "youtube-embed") == 0 ||
                             strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0)
                             html = entry_page_render_block(type, text, extra, EPOCH_MODERN);
@@ -4922,6 +4923,20 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                                                 colors.code_tag, sizeof(colors.code_tag));
                         parse_urlencoded_field(req.body, req.body_length, "code-line-number",
                                                 colors.code_line_number, sizeof(colors.code_line_number));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-background",
+                                                colors.terminal_background, sizeof(colors.terminal_background));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-text",
+                                                colors.terminal_text, sizeof(colors.terminal_text));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-prompt",
+                                                colors.terminal_prompt, sizeof(colors.terminal_prompt));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-output",
+                                                colors.terminal_output, sizeof(colors.terminal_output));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-option",
+                                                colors.terminal_option, sizeof(colors.terminal_option));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-value",
+                                                colors.terminal_value, sizeof(colors.terminal_value));
+                        parse_urlencoded_field(req.body, req.body_length, "terminal-variable",
+                                                colors.terminal_variable, sizeof(colors.terminal_variable));
                         parse_urlencoded_field(req.body, req.body_length, "footer-logo",
                                                 colors.footer_logo, sizeof(colors.footer_logo));
                         parse_bg_color_field(req.body, req.body_length, "footer-logo-background",

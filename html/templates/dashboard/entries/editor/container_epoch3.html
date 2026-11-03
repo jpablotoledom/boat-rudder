@@ -898,10 +898,10 @@
   };
 
   /* ---- Keyboard: writing across blocks ----
-     The sheet behaves like one page: Enter in a paragraph splits it, Enter
-     at the end of any other block starts a paragraph below it (or moves into
-     the empty one already there), Backspace at a paragraph's start joins it
-     to the one above, and the arrows cross from block to block. A selected
+     The sheet behaves like one page: Enter in a paragraph is a line break
+     (Split in the context bar cuts it in two), Enter at the end of any other
+     block starts a paragraph below it (or moves into the empty one already
+     there), Backspace at a paragraph's start joins it to the one above, and the arrows cross from block to block. A selected
      block with no field focused (an image, a gallery...) takes Enter and the
      arrows too. */
 
@@ -1026,20 +1026,13 @@
     if (!sel.rangeCount) return;
     var range = sel.getRangeAt(0);
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Enter is a line break inside the paragraph, as <br> like the stored
+    // text has them (the browser would wrap the line in a <div>). In a list
+    // item, a quote or a <pre> the browser's own Enter stays.
+    if (e.key === 'Enter') {
       if (inNestedBlock(field, range)) return;
       e.preventDefault();
-      var edges = caretEdges(field, range);
-      if (edges.atEnd) paragraphAfter(block);
-      else if (edges.atStart) {
-        // Nothing before the caret: an empty paragraph opens above, and the
-        // text stays where it is, caret included.
-        if (!creatingParagraph) {
-          creatingParagraph = true;
-          createBlockAfter(null, 'paragraph', block).then(function () { creatingParagraph = false; },
-                                                         function () { creatingParagraph = false; });
-        }
-      } else splitParagraph(block);
+      document.execCommand('insertLineBreak');
       return;
     }
 

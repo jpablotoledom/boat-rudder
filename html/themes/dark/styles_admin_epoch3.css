@@ -2160,7 +2160,8 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
   background-color: var(--br-color-body-background, #241144);
   background-color: transparent; border: none;
 }
-.boat-rudder-entry-editor__richtext:empty::before {
+/* Only where the caret is: a stack of empty paragraphs would repeat it. */
+.boat-rudder-entry-editor__richtext:empty:focus::before {
   content: attr(data-placeholder); color: var(--br-admin-text-muted); pointer-events: none;
 }
 .boat-rudder-entry-editor__richtext i, .boat-rudder-entry-editor__richtext em { font-style: italic; }

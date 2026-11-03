@@ -526,8 +526,12 @@ static char *build_menu(const char *current_url, int epoch, int with_items) {
             theme_html = (theme_html && themes) ? str_append(theme_html, themes) : (free(theme_html), NULL);
             free(themes);
 
+            // No menu items (menu_without_items()): the modifier lets the
+            // stylesheet centre the title without :has(), which part of the
+            // browsers served epoch 3 lack.
+            const char *content_mod = with_items ? "" : " boat-rudder-navbar__content--no-items";
             result = (title_html && user_html && items && theme_html)
-                ? render_template(menu_tpl, user_html, title_html, items, theme_html, lang_html)
+                ? render_template(menu_tpl, user_html, content_mod, title_html, items, theme_html, lang_html)
                 : NULL;
             free(site_name);
             free(custom_logo);

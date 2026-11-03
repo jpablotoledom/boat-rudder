@@ -34,6 +34,7 @@ traffic is not routed here directly - it re-enters this table over loopback HTTP
 | **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token |
 | **S+R** | `require_dashboard_session_role()`: session, role loaded (missing role = `admin`) | as **S** |
 | **A** | `require_admin_session()`: session with role `admin` - or `viewer` (Observador), whose writes **S** already refused | as **S**, plus `302 /dashboard` for an `author` |
+| **A+Au** | `require_category_creator_session()`: as **A**, or role `author` | as **S**, plus `302 /dashboard` for any other role |
 | **Own** | `can_edit_entry()`: `admin` or `viewer`, or `author` on a `blog` entry they created | `302 /dashboard` (page) or JSON `403` (API) |
 | **RO** | Part of **S**: on any `POST` but `/dashboard/api/block-preview` and `/dashboard/api/browsers/preview`, a `viewer` session is refused - every dashboard write is a `POST` | `403`: JSON `{"ok":false,"error":"read-only account"}` under `/dashboard/api/`, else the error page |
 | **OwnMedia** | `media_can_manage()`: `admin`, or `author` on a media directory/item whose `author_id` is theirs | `403` (plain text) |
@@ -132,8 +133,8 @@ title `{{SITE_NAME}} - Dashboard`.
 | `POST` | `/dashboard/settings/comments` | E3, A | `cms_update_comments_enabled()` | Field `comments_enabled`; can't turn on without mail |
 | `POST` | `/dashboard/settings/translation` | E3, A | `cms_update_translate_settings()` | Fields `translate_provider` (`""`/`azure`/`local`), `translate_azure_key` (empty keeps the stored one), `translate_azure_key_clear`, `translate_azure_region` (letters, digits, dashes), `translate_local_url`, `translate_local_key`; `302 /dashboard/settings#translation`, or the page with the reason |
 | `POST` | `/dashboard/settings/mail/test` | E3, A | `mailer_enqueue()` | Test email to the admin's own address; `302 /dashboard/settings?mail=queued\|no-email\|failed#comments` |
-| `GET` | `/dashboard/categories` | E3, A | `categories_admin_list()` | |
-| `GET`/`POST` | `/dashboard/categories/new` | E3, A | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
+| `GET` | `/dashboard/categories` | E3, A+Au | `categories_admin_list()` | Edit / Delete buttons only for **A** |
+| `GET`/`POST` | `/dashboard/categories/new` | E3, A+Au | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
 | `GET`/`POST` | `/dashboard/categories/<id>/edit` | E3, A | same / `cms_update_category()` | |
 | `POST` | `/dashboard/categories/<id>/delete` | E3, A | `cms_delete_category()` | |
 | `GET` | `/dashboard/menu` | E3, A | `menu_admin_list()` | |

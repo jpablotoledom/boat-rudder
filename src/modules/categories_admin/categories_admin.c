@@ -13,9 +13,11 @@ static char *load_template(const char *subpath_fmt, int epoch) {
     return tpl;
 }
 
-char *categories_admin_list(int epoch, const char *lang) {
-    char *row_tpl  = load_template("dashboard/categories/list-row_epoch%d.html", epoch);
-    char *list_tpl = load_template("dashboard/categories/list_epoch%d.html", epoch);
+char *categories_admin_list(int epoch, const char *lang, int can_manage) {
+    char *row_tpl     = load_template("dashboard/categories/list-row_epoch%d.html", epoch);
+    char *list_tpl    = load_template("dashboard/categories/list_epoch%d.html", epoch);
+    char *actions_tpl = can_manage ? load_template("dashboard/categories/list-row-actions_epoch%d.html", epoch)
+                                   : NULL;
 
     char *rows   = NULL;
     char *result = NULL;
@@ -23,7 +25,7 @@ char *categories_admin_list(int epoch, const char *lang) {
     CmsCategoryItem *items = NULL;
     size_t item_count = 0;
 
-    if (!row_tpl || !list_tpl) goto cleanup;
+    if (!row_tpl || !list_tpl || (can_manage && !actions_tpl)) goto cleanup;
 
     cms_get_categories(lang, &items, &item_count);
 
@@ -32,9 +34,11 @@ char *categories_admin_list(int epoch, const char *lang) {
     } else {
         rows = strdup("");
         for (size_t i = 0; rows && i < item_count; i++) {
-            char *row = render_template(row_tpl, items[i].name, items[i].id, items[i].id);
+            char *actions = actions_tpl ? render_template(actions_tpl, items[i].id, items[i].id) : strdup("");
+            char *row = actions ? render_template(row_tpl, items[i].name, actions) : NULL;
             rows = row ? str_append(rows, row) : NULL;
             free(row);
+            free(actions);
         }
     }
 
@@ -44,6 +48,7 @@ cleanup:
     cms_categories_free(items, item_count);
     free(row_tpl);
     free(list_tpl);
+    free(actions_tpl);
     free(rows);
     return result;
 }

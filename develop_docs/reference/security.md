@@ -138,7 +138,7 @@ startup (`SSL_CTX_check_private_key()`).
 | Role | Can |
 |---|---|
 | `admin` (also: missing `role` field) | Everything |
-| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; in the media library, see, upload into, rename, delete and move **only their own** directories and images |
+| `author` | Dashboard home, create **blog** entries, edit/preview **their own** blog entries; see the categories and **add** new ones (not edit or delete them - they are shared); in the media library, see, upload into, rename, delete and move **only their own** directories and images |
 | `viewer` (Observador) | **Read-only**: opens every page an `admin` opens and sees every value - the entry editor included - but **changes nothing**. Meant for a public demo account whose password can be published |
 | `moderator` | The dashboard home and `/dashboard/comments` only: reviews every blog comment and approves or rejects it - no deleting, no blocking, no drafts preview |
 | `commenter` | **Never signs in**: a blog commenter ([comments.md](comments.md)), created by the comment form with no password. `auth_login_user()` refuses the role even with a password, and making someone a commenter ends their sessions |

@@ -922,6 +922,24 @@ static int require_admin_session(void *ctx, HttpRequest *req, int epoch, char *u
     return 1;
 }
 
+// require_dashboard_session_role() + a role that may add categories: what an
+// Administrador sees (admin, viewer) or an Autor, who files their posts under
+// them -> else 302 /dashboard, return 0. Editing and deleting one stay
+// require_admin_session(): categories are shared, so an Autor's change would
+// reach other authors' entries.
+static int require_category_creator_session(void *ctx, HttpRequest *req, int epoch,
+                                            char *user_id_out, char *role_out, size_t role_size) {
+    if (!require_dashboard_session_role(ctx, req, epoch, user_id_out, role_out, role_size)) return 0;
+
+    if (!role_sees_everything(role_out) && strcmp(role_out, "author") != 0) {
+        char *response = build_redirect_response("/dashboard", "", epoch);
+        send_or_error(ctx, response, req->method, epoch);
+        return 0;
+    }
+
+    return 1;
+}
+
 // The reason phrase for an extension's status code - only the code comes
 // from the extension, so nothing it sends lands in the status line.
 // The image types an extension may answer, by the type its answer names
@@ -2127,8 +2145,9 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_admin_session(ctx, &req, epoch, user_id)) {
-                        char *content  = categories_admin_list(epoch, content_lang);
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_category_creator_session(ctx, &req, epoch, user_id, role, sizeof(role))) {
+                        char *content  = categories_admin_list(epoch, content_lang, role_sees_everything(role));
                         char *body     = buildPageWebSite(epoch, "{{SITE_NAME}} - Dashboard", content);
                         char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                         free(body);
@@ -2144,7 +2163,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     send_or_error(ctx, response, req.method, epoch);
                 } else {
                     char user_id[USER_ID_HEX_BUF_SIZE];
-                    if (require_admin_session(ctx, &req, epoch, user_id)) {
+                    char role[USER_ROLE_BUF_SIZE];
+                    if (require_category_creator_session(ctx, &req, epoch, user_id, role, sizeof(role))) {
                         CmsLanguageItem *langs = NULL;
                         size_t lang_count = 0;
                         cms_get_languages(&langs, &lang_count);
@@ -3982,7 +4002,8 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                 send_or_error(ctx, response, req.method, epoch);
             } else {
                 char user_id[USER_ID_HEX_BUF_SIZE];
-                if (require_admin_session(ctx, &req, epoch, user_id)) {
+                char role[USER_ROLE_BUF_SIZE];
+                if (require_category_creator_session(ctx, &req, epoch, user_id, role, sizeof(role))) {
                     CmsLanguageItem *langs = NULL;
                     size_t lang_count = 0;
                     cms_get_languages(&langs, &lang_count);

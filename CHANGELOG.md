@@ -37,6 +37,13 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   image block's picture also changes it.
 - On a phone, the open block's tools sit in a row at the bottom of the screen.
 
+### Categories
+
+**Added**
+- Authors can add categories: *Categories* is in their dashboard menu, with the list and
+  *+ New category*. Editing and deleting a category stay with Administrators, since every
+  author's entries share them.
+
 ### Dashboard lists
 
 **Changed**

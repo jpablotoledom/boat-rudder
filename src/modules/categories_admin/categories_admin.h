@@ -5,9 +5,11 @@
 #include <stddef.h>
 
 // /dashboard/categories - table of every entry_categories document (name
-// resolved to `lang`), plus a "new category" link. Returns a malloc'd
-// string, or NULL on a missing template / allocation failure.
-char *categories_admin_list(int epoch, const char *lang);
+// resolved to `lang`), plus a "new category" link. Each row gets its Edit /
+// Delete buttons (list-row-actions_epoch<N>.html) only when `can_manage` -
+// an Autor may add categories but not change shared ones. Returns a
+// malloc'd string, or NULL on a missing template / allocation failure.
+char *categories_admin_list(int epoch, const char *lang, int can_manage);
 
 // /dashboard/categories/new (id == "") and /dashboard/categories/<id>/edit
 // (id == hex ObjectId). `langs`/`values` are parallel arrays of `lang_count`

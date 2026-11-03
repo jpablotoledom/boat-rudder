@@ -798,8 +798,9 @@ a Moderador, an Observador, an Autor otherwise - gets the page too:
 - The **home page layout** (`buildUnderConstructionWebSite()`, which shares
   `build_home_layout()` with `buildHomeWebSite()`): navigation bar, main banner and footer
   as usual, but the bar **without menu items** (`menu_without_items()`: logo, language
-  and theme selectors and user link stay, `#navbarMenu` is empty; WML shows this bar instead of
-  its compact `[Menu]` link) and **no blog list**, and in the home content region the content blocks of the
+  and theme selectors and user link stay, `#navbarMenu` is empty, and on epoch 3
+  `.boat-rudder-navbar__content` carries `--no-items`, which centres the logo with no menu to
+  make room for; WML shows this bar instead of its compact `[Menu]` link) and **no blog list**, and in the home content region the content blocks of the
   `page` entry whose `link` is `site_settings.under_construction_page` (drafts included) - in
   the same `home-content` wrapper the `/` entry gets (`home_content_entry()`). Its title is the
   entry's, or the site name when it has none.

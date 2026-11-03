@@ -132,11 +132,11 @@ h3 {
 /* Under construction (menu_without_items()): #navbarMenu holds only the
    mobile user link, hidden at desktop widths, so there is no menu to make
    room for - drop its margin and keep the title centred in both states. */
-.boat-rudder-navbar__content:not(:has(.boat-rudder-navbar__menu-item:not(.boat-rudder-navbar__menu-item--user))) .boat-rudder-navbar__menu {
+.boat-rudder-navbar__content--no-items .boat-rudder-navbar__menu {
   margin-left: 0;
 }
 
-.boat-rudder-navbar__content:not(:has(.boat-rudder-navbar__menu-item:not(.boat-rudder-navbar__menu-item--user))) .boat-rudder-navbar__title {
+.boat-rudder-navbar__content--no-items .boat-rudder-navbar__title {
   left: 50%;
   transform: translateX(-50%);
 }

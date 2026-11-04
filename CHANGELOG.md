@@ -106,6 +106,8 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   directly.
 - Code and terminal blocks are copied as they are into the empty languages, never translated: a
   translator would rename keywords, paths and options.
+- *Replace what is already written*, in the Translate panel, translates the whole entry again,
+  replacing the other languages' text. It asks first, and is off each time the panel opens.
 
 ### Commenters' names
 

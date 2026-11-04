@@ -1896,6 +1896,9 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-translate__panel--open { display: block; }
 .boat-rudder-entry-editor-translate__from { margin: 0 0 8px; font-size: var(--br-admin-font-sm); }
 .boat-rudder-entry-editor-translate__target { display: block; padding: 3px 0; cursor: pointer; }
+.boat-rudder-entry-editor-translate__overwrite {
+  margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--br-admin-border);
+}
 .boat-rudder-entry-editor-translate__hint {
   margin: 8px 0 10px; font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted);
 }

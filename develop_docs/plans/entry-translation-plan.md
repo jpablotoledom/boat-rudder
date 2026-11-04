@@ -13,7 +13,9 @@ Decided:
 
 1. **Two providers**: **Azure AI Translator** (its F0 tier: 2 million characters a month, free
    for good) and a **local translator** - a LibreTranslate-compatible server on the editor's own computer. A desktop app that runs one comes later; Boat Rudder only needs the option to be ready.
-2. **Only empty fields are filled**: a translation already written is never overwritten.
+2. **Only empty fields are filled**: a translation already written is never overwritten - unless
+   the panel's *Replace what is already written* is checked (added later: off on every opening,
+   and it asks first).
 3. **Saving**: with autosave on, the result is saved right away; otherwise it waits in the form
    for *Save all*, like any other edit.
 

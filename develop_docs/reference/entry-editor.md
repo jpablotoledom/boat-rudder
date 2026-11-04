@@ -373,7 +373,10 @@ site has more than one language) fills the other languages from the one being ed
 [entry-translation-plan.md](../plans/entry-translation-plan.md).
 
 - The panel lists every other language, all checked; *Translate* runs `runTranslation()`.
-- **Only empty fields are filled**, and only where the source has text: header title and summary,
+- **Replace what is already written** (`#translateOverwrite`) redoes every field that has source
+  text, written or not, after a `confirm()` naming the languages. It is unchecked every time the
+  panel opens, so it can't be left on by mistake; the hint under it says which mode is on.
+- Otherwise **only empty fields are filled**, and only where the source has text: header title and summary,
   and the `title`, `paragraph` (as HTML, tags kept), `list` (line by line), `table` (cell by cell,
   so `|` and line breaks survive) and `link` blocks. `code-text` and `terminal` are **copied** as
   they are, never sent to the translator: code and commands are the same in every language, and a

@@ -22,7 +22,8 @@
         <div class="boat-rudder-entry-editor-translate__panel" id="translatePanel">
           <p class="boat-rudder-entry-editor-translate__from">From <strong id="translateFrom"></strong> to:</p>
           <div id="translateTargets"></div>
-          <p class="boat-rudder-entry-editor-translate__hint">Only empty fields are filled; what is already written stays.</p>
+          <label class="boat-rudder-entry-editor-translate__target boat-rudder-entry-editor-translate__overwrite"><input type="checkbox" id="translateOverwrite" onchange="updateTranslateHint()"> Replace what is already written</label>
+          <p class="boat-rudder-entry-editor-translate__hint" id="translateHint"></p>
           <p class="boat-rudder-entry-editor-translate__message" id="translateMessage" role="status"></p>
           <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="runTranslation()">Translate</button>
         </div>
@@ -1586,7 +1587,17 @@
       return '<label class="boat-rudder-entry-editor-translate__target"><input type="checkbox" value="' +
         escapeHtml(code) + '" checked> ' + escapeHtml(langName(code)) + '</label>';
     }).join('');
+    // Off every time the panel opens: replacing is the exception, and a
+    // checkbox left on from an earlier run would overwrite by surprise.
+    document.getElementById('translateOverwrite').checked = false;
+    updateTranslateHint();
     panel.classList.add('boat-rudder-entry-editor-translate__panel--open');
+  };
+
+  window.updateTranslateHint = function () {
+    document.getElementById('translateHint').textContent = document.getElementById('translateOverwrite').checked
+      ? 'Every field is translated again from ' + langName(currentLang) + ', replacing what the other languages have.'
+      : 'Only empty fields are filled; what is already written stays.';
   };
 
   function closeTranslatePanel() {
@@ -1651,15 +1662,16 @@
   }
 
   // The jobs of one target language: each has a format, the texts to send
-  // and apply(translations). Only fields empty in `target` whose `source`
-  // has text; a list goes line by line and a table cell by cell, so their
-  // separators survive.
-  function translationJobs(source, target) {
+  // and apply(translations). Only fields empty in `target` - or every one,
+  // with `overwrite` - whose `source` has text; a list goes line by line and
+  // a table cell by cell, so their separators survive.
+  function translationJobs(source, target, overwrite) {
     var jobs = [];
     var header = document.getElementById('headerSidebar');
+    var written = function (value) { return !overwrite && value.trim(); };
     ['title', 'summary'].forEach(function (name) {
       var from = langField(header, source, name), to = langField(header, target, name);
-      if (!from || !to || !from.value.trim() || to.value.trim()) return;
+      if (!from || !to || !from.value.trim() || written(to.value)) return;
       jobs.push({ format: 'text', texts: [from.value], apply: function (t) { to.value = t[0]; } });
     });
 
@@ -1672,16 +1684,16 @@
         refreshBlockPreview(block);
       };
       if (type === 'paragraph') {
-        if (to.value.trim()) return;
+        if (written(to.value)) return;
         jobs.push({ format: 'html', texts: [from.value], apply: function (t) {
           setParagraphText(block, target, t[0]);
           refreshBlockPreview(block);
         } });
       } else if (type === 'title' || type === 'link') {
-        if (to.value.trim()) return;
+        if (written(to.value)) return;
         jobs.push({ format: 'text', texts: [from.value], apply: function (t) { done(t[0]); } });
       } else if (type === 'list' || type === 'table') {
-        if (type === 'list' ? to.value.trim() : !isBlankTable(to.value)) return;
+        if (!overwrite && (type === 'list' ? to.value.trim() : !isBlankTable(to.value))) return;
         var sep = type === 'list' ? null : '|';
         var rows = from.value.replace(/\r\n?/g, '\n').split('\n');
         var cells = rows.map(function (row) { return sep ? row.split(sep) : [row]; });
@@ -1699,7 +1711,7 @@
         // Code and commands are the same in every language - a translator
         // would rename keywords, paths and options - so they are copied as
         // they are, or the block would show nothing in the other language.
-        if (to.value.trim()) return;
+        if (written(to.value)) return;
         jobs.push({ format: 'copy', texts: [from.value], apply: function (t) { done(t[0]); } });
       }
     });
@@ -1750,9 +1762,13 @@
     var source = currentLang;
     var targets = Array.from(document.querySelectorAll('#translateTargets input:checked'))
       .map(function (cb) { return cb.value; });
+    var overwrite = document.getElementById('translateOverwrite').checked;
     var work = targets.map(function (target) {
-      return { target: target, jobs: translationJobs(source, target) };
+      return { target: target, jobs: translationJobs(source, target, overwrite) };
     }).filter(function (w) { return w.jobs.length; });
+    if (overwrite && work.length && !confirm('Replace everything already written in ' +
+        work.map(function (w) { return langName(w.target); }).join(', ') + ' with a new translation from ' +
+        langName(source) + '?')) return;
     if (!work.length) {
       translateMessage('Nothing to translate: no field written in ' + langName(source) +
         ' is empty in the other languages. Write in the tab you translate from.', 'error');

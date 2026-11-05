@@ -809,6 +809,23 @@ static int role_may_open(const char *role, const char *url) {
 static int require_dashboard_session_ex(void *ctx, HttpRequest *req, int epoch, char *user_id_out,
                                         char *role_out, size_t role_size);
 
+// No session (expired, signed out elsewhere): a page goes to /login, but an
+// API call answers 401 JSON - a redirect would hand the editor's fetch() the
+// login page's HTML, which it can't tell from a hung save. The editor keeps
+// the unsaved work and asks the writer to sign in again (see
+// /dashboard/api/session).
+static void send_session_required(void *ctx, HttpRequest *req, int epoch) {
+    if (strncmp(req->url, "/dashboard/api/", 15) == 0) {
+        char *response = build_json_response_status(
+            "{\"ok\":false,\"error\":\"session expired\",\"session\":\"expired\"}",
+            "401 Unauthorized");
+        send_or_error(ctx, response, req->method, epoch);
+        return;
+    }
+    char *response = build_redirect_response("/login", "", epoch);
+    send_or_error(ctx, response, req->method, epoch);
+}
+
 static int require_dashboard_session(void *ctx, HttpRequest *req, int epoch, char *user_id_out) {
     char role[USER_ROLE_BUF_SIZE];
     return require_dashboard_session_ex(ctx, req, epoch, user_id_out, role, sizeof(role));
@@ -823,8 +840,7 @@ static int require_dashboard_session_ex(void *ctx, HttpRequest *req, int epoch, 
 
     const char *cookie = get_header_value(req, "Cookie");
     if (validate_session_cookie(cookie, user_id_out) != 1) {
-        char *response = build_redirect_response("/login", "", epoch);
-        send_or_error(ctx, response, req->method, epoch);
+        send_session_required(ctx, req, epoch);
         return 0;
     }
 
@@ -836,8 +852,7 @@ static int require_dashboard_session_ex(void *ctx, HttpRequest *req, int epoch, 
     // The session's user must still exist: a role that can't be read opens
     // nothing (it used to fall back to "admin").
     if (cms_get_user_role(user_id_out, role_out, role_size) != 0) {
-        char *response = build_redirect_response("/login", "", epoch);
-        send_or_error(ctx, response, req->method, epoch);
+        send_session_required(ctx, req, epoch);
         return 0;
     }
     if (!role_may_open(role_out, req->url)) {
@@ -856,7 +871,17 @@ static int require_dashboard_session_ex(void *ctx, HttpRequest *req, int epoch, 
         request_csrf_token_value(req, supplied, sizeof(supplied));
         if (!verify_csrf_token(cookie, supplied)) {
             LOG_WARN("CSRF check failed: %s %s", req->method, req->url);
-            send_simple(ctx, "403 Forbidden", "Invalid or missing CSRF token. Reload the page and try again.");
+            // An open page whose writer signed in again since (another tab):
+            // its token belongs to the old session. JSON for the API, so the
+            // editor can fetch the new one and retry.
+            if (strncmp(req->url, "/dashboard/api/", 15) == 0) {
+                char *response = build_json_response_status(
+                    "{\"ok\":false,\"error\":\"invalid CSRF token\",\"session\":\"csrf\"}",
+                    "403 Forbidden");
+                send_or_error(ctx, response, req->method, epoch);
+            } else {
+                send_simple(ctx, "403 Forbidden", "Invalid or missing CSRF token. Reload the page and try again.");
+            }
             return 0;
         }
 
@@ -2882,6 +2907,25 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             free(response);
                             connection_close(ctx);
                         }
+                    }
+                }
+
+            } else if (strcmp(decoded_url, "/dashboard/api/session") == 0) {
+                // Whether the page's session is still open, and its CSRF token:
+                // the entry editor polls it, to warn before a save fails, and
+                // calls it after the writer signs in again in another tab, so
+                // its next save carries the new session's token.
+                int epoch = resolve_epoch(&req);
+
+                if (!dashboard_allowed(&req, epoch)) {
+                    send_simple(ctx, "403 Forbidden", "Forbidden");
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        char json[CSRF_TOKEN_BUF_SIZE + 32];
+                        snprintf(json, sizeof(json), "{\"ok\":true,\"csrf\":\"%s\"}", request_csrf_token());
+                        char *response = build_json_response(json);
+                        send_or_error(ctx, response, req.method, epoch);
                     }
                 }
 

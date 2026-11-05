@@ -37,6 +37,15 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   image block's picture also changes it.
 - On a phone, the open block's tools sit in a row at the bottom of the screen.
 
+### Entry editor: signed out while writing
+
+**Fixed**
+- When the session ended while an entry was open, saving stayed on "Saving..." for ever and the
+  unsaved work was lost on reload. Now the editor checks the session every few minutes and when
+  its tab comes back, and as soon as it has ended says so - the changes stay on the page: sign in
+  again in a new tab, then *Save again*. A failed save always says why.
+- Leaving the editor with unsaved changes (reload, close, *Dashboard*) asks first.
+
 ### Categories
 
 **Added**

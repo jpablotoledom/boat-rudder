@@ -31,7 +31,7 @@ traffic is not routed here directly - it re-enters this table over loopback HTTP
 |---|---|---|
 | - | Public | - |
 | **E3** | `dashboard_allowed()`: `resolve_epoch() == 3` **and** the browser detection rules grant the real `User-Agent` the dashboard (factory: Chrome 111, Firefox 121, Safari 16.2) | Page routes: `302 /dashboard`. API routes (`/dashboard/api/*`): `403 Forbidden` (plain text). |
-| **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token |
+| **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token. Under `/dashboard/api/` both are JSON instead: `401 {"ok":false,"session":"expired",...}` and `403 {"ok":false,"session":"csrf",...}` - a redirect would hand a `fetch()` the login page |
 | **S+R** | `require_dashboard_session_role()`: session, role loaded (missing role = `admin`) | as **S** |
 | **A** | `require_admin_session()`: session with role `admin` - or `viewer` (Observador), whose writes **S** already refused | as **S**, plus `302 /dashboard` for an `author` |
 | **A+Au** | `require_category_creator_session()`: as **A**, or role `author` | as **S**, plus `302 /dashboard` for any other role |
@@ -213,6 +213,7 @@ Guards **S+R** and **Own** on every route except `block-preview` and `translate`
 | `POST` | `/dashboard/api/entries/<id>/content` | `cms_update_entry_content()` + `cms_upsert_media_gallery()` | `{ok, ids:[…]}` - the block ids, including any minted for blocks sent without one |
 | `POST` | `/dashboard/api/entries/<id>/blocks` | `cms_add_entry_content_block()` | `{ok, block_id, html}` - the new block's editor markup |
 | `POST` | `/dashboard/api/entries/<id>/blocks/<block-id>/delete` | `cms_remove_entry_content_block()` | `{ok}` |
+| `GET` | `/dashboard/api/session` | `request_csrf_token()` | `{"ok":true,"csrf":"<token>"}` - the session is open, and its CSRF token (guard **S** only: `401` JSON without one). The entry editor polls it and fetches the token again after the writer signs in in another tab |
 | `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `terminal`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
 | `POST` | `/dashboard/api/translate` | `translator_azure()` | `{ok, texts:[…]}` - fields `source`, `target` (site languages), `format` (`text`/`html`), `text` (repeated, up to 50, 50,000 characters). Azure only: `400` with another provider; `502 {ok:false, error}` when Azure fails. A viewer is refused (**RO**) |
 

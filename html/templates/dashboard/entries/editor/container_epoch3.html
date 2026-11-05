@@ -77,6 +77,18 @@
     </div>
   </div>
 
+  <!-- Shown once the session has ended (sessionLost()): nothing can be saved
+       until the writer signs in again, and the unsaved work stays here. -->
+  <div class="boat-rudder-entry-editor-session" id="editorSession" role="alert" hidden>
+    <div class="boat-rudder-entry-editor-session__text">
+      <strong>Your session has ended, so your changes can't be saved.</strong>
+      They are still on this page - don't reload or close it. Sign in again in a new tab, then save.
+    </div>
+    <a class="boat-rudder-btn boat-rudder-btn--sm" href="/login" target="_blank" rel="noopener">Sign in in a new tab</a>
+    <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="retryAfterSignIn()">Save again</button>
+    <span class="boat-rudder-entry-editor-session__note" id="editorSessionNote" role="status"></span>
+  </div>
+
   <!-- Body: the sheet, and the settings panel the top bar's Settings opens -->
   <div class="boat-rudder-entry-editor__body">
     <div class="boat-rudder-entry-editor__settings-backdrop" onclick="toggleEditorSettings(false)"></div>
@@ -112,14 +124,90 @@
     return '/dashboard/api/entries/' + entryId + suffix;
   }
 
+  // Every editor write. Resolves with the server's JSON ({ok, ...}); rejects
+  // when there is none to read - no session (401, err.session "expired"), a
+  // token from an older session (err.session "csrf"), an answer that isn't
+  // JSON, no answer at all - so a save can never hang on "Saving...".
   function postForm(url, params) {
     return fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
-    }).then(function (res) { return res.json(); });
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        if (res.status === 401 || (data && data.session === 'expired')) throw sessionError('expired');
+        if (data && data.session === 'csrf') throw sessionError('csrf');
+        if (!data) throw new Error('the server answered ' + res.status);
+        return data;
+      });
+    }).catch(function (err) {
+      if (err.session === 'expired') sessionLost();
+      throw err;
+    });
   }
+
+  /* ---- Session ----
+     A session ends on its own (session_ttl_seconds), or in another tab. The
+     editor checks it every few minutes and whenever its tab comes back, so
+     the writer hears of it before saving, not after; then it keeps the work
+     on the page, and once they sign in again (in a new tab) it fetches the
+     new session's CSRF token and saves. */
+  var SESSION_CHECK_MS = 5 * 60 * 1000;
+
+  function sessionError(kind) {
+    var err = new Error(kind === 'csrf' ? 'signed in again since the page loaded' : 'session expired');
+    err.session = kind;
+    return err;
+  }
+
+  function sessionLost() {
+    document.getElementById('editorSession').hidden = false;
+    setStatus('Signed out - not saved', 'error');
+  }
+
+  // true: signed in (and the page now holds this session's token); false:
+  // signed out; null: no answer (offline, server down) - nothing known.
+  function checkSession() {
+    return fetch('/dashboard/api/session', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (data) {
+          if (res.ok && data && data.ok) {
+            if (window.boatRudderSetCsrfToken) window.boatRudderSetCsrfToken(data.csrf);
+            return true;
+          }
+          if (res.status === 401 || (data && data.ok === false)) { sessionLost(); return false; }
+          return null;
+        });
+      }, function () { return null; });
+  }
+
+  window.retryAfterSignIn = function () {
+    var note = document.getElementById('editorSessionNote');
+    note.textContent = 'Checking...';
+    checkSession().then(function (ok) {
+      if (ok) {
+        note.textContent = '';
+        document.getElementById('editorSession').hidden = true;
+        editorSaveAll();
+      } else {
+        note.textContent = ok === false ? 'Still signed out: sign in in the other tab first.'
+                                        : 'The server did not answer. Try again in a moment.';
+      }
+    });
+  };
+
+  setInterval(checkSession, SESSION_CHECK_MS);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkSession();
+  });
+
+  // Leaving with unsaved changes (reload, close, "Dashboard") asks first.
+  window.addEventListener('beforeunload', function (e) {
+    if (!dirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
 
   function setStatus(text, cls) {
     var el = document.getElementById('editor-save-status');
@@ -1550,11 +1638,25 @@
     });
   };
 
-  window.editorSaveAll = function () {
+  // `retried`: already a second try, after fetching a newer session's token.
+  window.editorSaveAll = function (retried) {
     setStatus('Saving...');
     return Promise.all([saveMeta(), saveHeader(), saveContent()]).then(function (results) {
-      dirty = results.some(function (data) { return !data.ok; });
-      setStatus(dirty ? 'Save failed' : 'Saved', dirty ? 'error' : 'saved');
+      var failed = results.filter(function (data) { return !data.ok; });
+      dirty = failed.length > 0;
+      setStatus(dirty ? 'Save failed: ' + (failed[0].error || 'unknown error') : 'Saved', dirty ? 'error' : 'saved');
+    }, function (err) {
+      dirty = true;
+      // Signed in again in another tab: this page still sends the old
+      // session's token. Take the new one and save once more.
+      if (err.session === 'csrf' && retried !== true) {
+        return checkSession().then(function (ok) {
+          if (ok) return editorSaveAll(true);
+          if (ok === null) setStatus('Not saved: no answer from the server', 'error');
+        });
+      }
+      if (err.session) sessionLost();
+      else setStatus('Not saved: ' + (err.message || 'no answer from the server'), 'error');
     });
   };
 

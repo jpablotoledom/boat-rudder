@@ -2388,6 +2388,24 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
 }
 .boat-rudder-entry-editor-add-block__option:hover { background: var(--br-admin-hover); }
 
+/* Session ended (sessionLost()): pinned under the context bar until the
+   writer signs in again and saves. */
+.boat-rudder-entry-editor-session {
+  position: fixed; top: 84px; left: 0; right: 0; z-index: 206;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  padding: 10px 16px; box-sizing: border-box;
+  font-size: var(--br-admin-font-md); color: var(--br-admin-text);
+  background: var(--br-admin-surface-raised);
+  border-bottom: 1px solid var(--br-admin-border);
+  border-left: 4px solid var(--br-admin-danger);
+  box-shadow: var(--br-admin-shadow);
+}
+.boat-rudder-entry-editor-session[hidden] { display: none; }
+.boat-rudder-entry-editor-session__text { flex: 1 1 320px; }
+.boat-rudder-entry-editor-session__text strong { color: var(--br-admin-danger); }
+.boat-rudder-entry-editor-session__note { font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted); }
+.boat-rudder-entry-editor-session__note:empty { display: none; }
+
 /* "/" menu (openSlashMenu()): the blocks an empty paragraph can become */
 .boat-rudder-entry-editor-slash {
   position: fixed; z-index: 210; width: 230px; max-height: 260px; overflow-y: auto;

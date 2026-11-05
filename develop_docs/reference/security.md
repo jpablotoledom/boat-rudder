@@ -190,7 +190,13 @@ author's directories and images; an `author` only their own - the library page, 
   themselves.
 - **Check**: `require_dashboard_session()` reads the header, else the `csrf_token` field of an
   urlencoded or multipart body, and compares in constant time (`verify_csrf_token()`).
-  Failures are logged (`CSRF check failed`) and answered `403`.
+  Failures are logged (`CSRF check failed`) and answered `403` - plain text for a page, JSON
+  (`{"ok":false,"session":"csrf"}`) under `/dashboard/api/`.
+- **Refresh**: `GET /dashboard/api/session` answers the current session's token as JSON, so an
+  open editor whose writer signed in again in another tab (a new session, so a new token) can
+  keep saving: it hands the token to `window.boatRudderSetCsrfToken()` (`csrf.js`). Another
+  site can make the request but not read the answer (same-origin policy; no CORS headers are
+  sent), and a `GET` changes nothing.
 - `POST /logout` runs the same check inline (it doesn't go through
   `require_dashboard_session()`, so an expired session can still clear its cookie).
 - `SameSite=Lax` on the cookie stays as a second layer. `/login` (no session yet) is not

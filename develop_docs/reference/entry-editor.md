@@ -352,7 +352,30 @@ arrows are what work on touch screens and from the keyboard, where HTML5 drag-an
   the API still answered `{"ok":true}`. Such a block now gets a fresh ObjectId, and the response
   carries the ids so the editor's `data-block-id` attributes stay in sync with what was stored -
   otherwise per-block delete and gallery edits would target the wrong block.
-- `editorSaveAll()` - runs all three in parallel via `Promise.all()`.
+- `editorSaveAll(retried)` - runs all three in parallel via `Promise.all()`. A save never hangs:
+  `postForm()` rejects when there is no JSON to read (see [Session](#session)), and the status
+  then says why (`Save failed: <error>`, `Not saved: ...`, `Signed out - not saved`), with the
+  page left marked as changed.
+
+### Session
+
+A session ends on its own after `session_ttl_seconds` (24 h by default, not renewed while
+writing - see [configuration.md](configuration.md)) or in another tab. The editor:
+
+- **Knows**: `/dashboard/api/*` answers `401` JSON (`"session":"expired"`) without a session
+  instead of redirecting to `/login` (which `fetch()` would follow, handing `res.json()` the login
+  page), and `403` JSON (`"session":"csrf"`) for a token of an older session. `postForm()` turns
+  both into rejections with `err.session` set.
+- **Warns early**: `checkSession()` polls `GET /dashboard/api/session` every 5 minutes
+  (`SESSION_CHECK_MS`) and whenever the tab becomes visible again, so the writer hears of it
+  before saving, not after.
+- **Keeps the work**: `sessionLost()` shows `#editorSession` under the context bar - the changes
+  are still on the page, *Sign in in a new tab* (`/login`), then *Save again*
+  (`retryAfterSignIn()`: checks the session, takes its new CSRF token through
+  `window.boatRudderSetCsrfToken()`, hides the notice and runs `editorSaveAll()`). A save that
+  fails only on the token (signed in again elsewhere) fetches it and retries once on its own.
+- **Asks before leaving**: a `beforeunload` handler stops a reload, a close or the *Dashboard*
+  link while there are unsaved changes.
 
 ### Other
 - `togglePublish()` - toggles the hidden `enabled` checkbox + publish-switch UI. Unpublished =
@@ -423,6 +446,7 @@ All of them answer `application/json; charset=UTF-8`.
 | `.../api/entries/<id>/content` | `POST` | `content_count` (capped at 200) plus `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>` per block → `CmsContentBlockEdit[]` → `cms_update_entry_content()` (full `content[]` replace) + gallery upsert (§6) → `{"ok":true,"ids":[...]}` (see below) |
 | `.../api/entries/<id>/blocks` | `POST` | `type`, `order` → `cms_add_entry_content_block()` (`$push` of an empty block), rendered via `entry_editor_render_block()` → `{"ok":true,"block_id":"...","html":"..."}` (HTML escaped with `json_escape_alloc()`) \| `400 ... "create failed"` |
 | `.../api/entries/<id>/blocks/<block_id>/delete` | `POST` | `cms_remove_entry_content_block()` (`$pull` by `_id`) → same shape (`"error":"remove failed"`) |
+| `/dashboard/api/session` | `GET` | `require_dashboard_session()` only. `{"ok":true,"csrf":"<token>"}`, or `401 {"ok":false,"session":"expired"}` - see [Session](#session) |
 | `/dashboard/api/translate` | `POST` | `require_dashboard_session()` only (a viewer is refused, as for any write). Azure provider only. `source`, `target`, `format` (`text`\|`html`), `text` × up to 50 → `{"ok":true,"texts":[...]}` \| `400`/`502 {"ok":false,"error":"..."}` |
 | `/dashboard/api/block-preview` | `POST` | `require_dashboard_session()` only (no entry id, no ownership). `type`, `text`, `extra` → `text/html` from `entry_page_render_block()`; `403` plain text on non-epoch-3 |
 

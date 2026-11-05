@@ -65,8 +65,16 @@ template (3 `%s`: block_id, lang_fields, extra_data).
 `dashboard/entries/editor/container_epoch3.html` with:
 
 - **Top bar** (fixed, 44px): back link, *View post*, *Save all*, save status, autosave toggle,
-  *Translate*, publish toggle (wired to the hidden `enabled` checkbox), language tabs and
-  **⚙ Settings**. Under 600px it scrolls sideways instead of squeezing its controls.
+  *Translate*, publish toggle (wired to the hidden `enabled` checkbox), the theme `<select>`,
+  language tabs and **⚙ Settings**. Under 600px it scrolls sideways instead of squeezing its
+  controls.
+- **Theme** (`#editorTheme`, only with two themes or more): `entry_editor.c` puts every theme in
+  the root's `data-themes` and the one in use in `data-theme`. Choosing one goes through
+  `/theme/set?key=<key>&return=<this editor>` - the site navbar's switch, so the dashboard and
+  the site both change - which reloads the editor. `switchEditorTheme()` saves unsaved work first
+  (`editorSaveAll()`; when that fails the `<select>` goes back and nothing switches) and leaves the
+  language tab and scroll in `sessionStorage` (`br-editor-theme-restore`), which
+  `restoreAfterThemeSwitch()` puts back once on load.
 - **Context bar** (`#editorContext`, fixed, 40px under the top bar): **+ Insert**, the open
   block's type (a `<select>` for paragraph / heading / list, see [Block types](#block-types-switching--menu-markdown-shortcuts)),
   a slot for the open block's tools (`#editorContextTools`) and its actions (Split, Merge,

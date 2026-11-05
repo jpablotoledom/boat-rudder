@@ -3,7 +3,9 @@
 #include "../../utils/generate_url_theme.h"
 #include "../../utils/http_utils.h"
 #include "../../utils/read_file.h"
+#include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
+#include "../../utils/theme_catalog.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -142,6 +144,27 @@ static char *build_translate_attrs(const CmsTranslateSettings *t) {
                            url, key);
 }
 
+// The editor's theme switch: data-themes (every theme, comma-separated) and
+// data-theme (the one in use). "" with a single theme - nothing to switch to.
+static char *build_theme_attrs(void) {
+    char **keys = NULL;
+    size_t count = 0;
+    list_theme_keys(&keys, &count);
+    char *list = strdup("");
+    for (size_t i = 0; list && count > 1 && i < count; i++) {
+        if (i > 0) list = str_append(list, ",");
+        if (list) list = str_append(list, keys[i]);
+    }
+    free_theme_keys(keys, count);
+    if (!list || !list[0]) return list;
+
+    char list_enc[1024], active_enc[256];
+    html_encode(list_enc, list, sizeof(list_enc));
+    html_encode(active_enc, request_theme(), sizeof(active_enc));
+    free(list);
+    return render_template(" data-themes=\"%s\" data-theme=\"%s\"", list_enc, active_enc);
+}
+
 char *entry_editor_page(int epoch, const CmsEntryEdit *entry,
                          const CmsCategoryItem *categories, size_t category_count,
                          const CmsLanguageItem *langs, size_t lang_count,
@@ -151,6 +174,8 @@ char *entry_editor_page(int epoch, const CmsEntryEdit *entry,
 
     char *langs_json   = build_editor_langs_json(langs, lang_count);
     char *translate_attrs = build_translate_attrs(translate);
+    char *theme_attrs  = build_theme_attrs();
+    if (translate_attrs && theme_attrs) translate_attrs = str_append(translate_attrs, theme_attrs);
     char *lang_tabs    = render_lang_tab_buttons(langs, lang_count, epoch);
     char *meta_html    = render_meta_sidebar(entry, categories, category_count, epoch);
     char *header_html  = render_header_sidebar(entry, langs, lang_count, epoch);
@@ -164,6 +189,7 @@ char *entry_editor_page(int epoch, const CmsEntryEdit *entry,
 
     free(langs_json);
     free(translate_attrs);
+    free(theme_attrs);
     free(lang_tabs);
     free(meta_html);
     free(header_html);

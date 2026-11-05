@@ -6,6 +6,13 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Entry editor
+
+**Added**
+- A theme switch in the entry editor's top bar, next to the language tabs. It changes the theme
+  the same way the site's menu does, saving unsaved work first, and the editor comes back on the
+  same language tab and at the same place.
+
 ### Media picker
 
 **Changed**

@@ -1884,6 +1884,15 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor__lang-btn { border-radius: 0; letter-spacing: 0.5px; }
 
 /* Translate button and its panel (entry-translation-plan.md) */
+/* The editor's theme switch, beside the language tabs. */
+.boat-rudder-entry-editor__theme-select {
+  height: 28px; padding: 0 6px;
+  font: inherit; font-size: var(--br-admin-font-sm);
+  color: var(--br-admin-text); background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+  cursor: pointer;
+}
+.boat-rudder-entry-editor__theme-select[hidden] { display: none; }
 .boat-rudder-entry-editor-translate { position: relative; }
 .boat-rudder-entry-editor-translate[hidden] { display: none; }
 .boat-rudder-entry-editor-translate__panel {

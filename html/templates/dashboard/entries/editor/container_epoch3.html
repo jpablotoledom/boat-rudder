@@ -34,6 +34,8 @@
           <div class="boat-rudder-switch__knob"></div>
         </div>
       </div>
+      <select class="boat-rudder-entry-editor__theme-select" id="editorTheme" title="Theme: how the dashboard and the site look to you"
+              onchange="switchEditorTheme(this)" hidden></select>
       <div class="boat-rudder-entry-editor__lang-toggle">
 %s
       </div>
@@ -2725,6 +2727,62 @@
   }
 
 
+  /* ---- Theme ----
+     The same switch as the site's navbar: /theme/set sets the theme cookie
+     and comes back here. It reloads the editor, so unsaved work is saved
+     first (a failed save switches nothing), and the language tab and scroll
+     come back after the reload. */
+  var THEME_RESTORE = 'br-editor-theme-restore';
+
+  (function initThemeSelect() {
+    var themes = (root.dataset.themes || '').split(',').filter(Boolean);
+    var sel = document.getElementById('editorTheme');
+    if (themes.length < 2 || !sel) return;
+    sel.innerHTML = themes.map(function (key) {
+      return '<option value="' + escapeHtml(key) + '"' + (key === root.dataset.theme ? ' selected' : '') + '>' +
+             escapeHtml(key.charAt(0).toUpperCase() + key.slice(1)) + '</option>';
+    }).join('');
+    sel.hidden = false;
+  })();
+
+  function editorScroller() {
+    return document.querySelector('.boat-rudder-entry-editor__main');
+  }
+
+  window.switchEditorTheme = function (sel) {
+    var key = sel.value;
+    var go = function () {
+      var scroller = editorScroller();
+      try {
+        sessionStorage.setItem(THEME_RESTORE, JSON.stringify({
+          path: location.pathname, lang: currentLang,
+          scroll: scroller ? scroller.scrollTop : 0, pageScroll: window.scrollY
+        }));
+      } catch (e) {}
+      location.href = '/theme/set?key=' + encodeURIComponent(key) +
+                      '&return=' + encodeURIComponent(location.pathname + location.search);
+    };
+    if (!dirty) { go(); return; }
+    Promise.resolve(editorSaveAll()).then(function () {
+      if (dirty) sel.value = root.dataset.theme; // the save status says why
+      else go();
+    });
+  };
+
+  // After a theme switch: the tab and the place the editor was left at.
+  function restoreAfterThemeSwitch() {
+    var saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(THEME_RESTORE) || 'null');
+      sessionStorage.removeItem(THEME_RESTORE);
+    } catch (e) {}
+    if (!saved || saved.path !== location.pathname) return;
+    if (langs.indexOf(saved.lang) >= 0) setLang(saved.lang);
+    var scroller = editorScroller();
+    if (scroller) scroller.scrollTop = saved.scroll || 0;
+    window.scrollTo(0, saved.pageScroll || 0);
+  }
+
   /* ---- Initialize ---- */
   function init() {
     initPublishToggle();
@@ -2734,6 +2792,7 @@
     // First visit: open beside the sheet on a wide screen, folded on a small one.
     toggleEditorSettings(settingsOpen === null ? window.matchMedia('(min-width: 1200px)').matches : settingsOpen === '1');
     setLang(currentLang);
+    restoreAfterThemeSwitch();
     refreshAllPreviews();
     setupDragHandles();
     updateHeaderImagePreview();

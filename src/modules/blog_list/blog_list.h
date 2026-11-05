@@ -20,11 +20,15 @@
 // Up to HOME_BLOG_LIMIT entries, newest first, under "Latest Blog Posts".
 char *home_blog(int epoch, const char *lang);
 
-// Up to BLOG_LIST_LIMIT entries, newest first, under "Blog".
-char *blog_list(int epoch, const char *lang);
+// Page `page` (1 = newest) of BLOG_LIST_LIMIT entries, newest first, under
+// "Blog", with a pager under them when there is more than one page - its
+// links are `base_url` ("/blog") and `base_url?page=N`. A page past the last
+// one sets *found to 0 (the caller answers 404); otherwise *found is 1.
+char *blog_list(int epoch, const char *lang, const char *base_url, int page, int *found);
 
 // As blog_list(), restricted to entries carrying `category_id_hex`
-// (a 24-char hex ObjectId).
-char *blog_list_category(int epoch, const char *lang, const char *category_id_hex);
+// (a 24-char hex ObjectId); `base_url` is the category's "/blog/category/<slug>".
+char *blog_list_category(int epoch, const char *lang, const char *category_id_hex,
+                         const char *base_url, int page, int *found);
 
 #endif // BLOG_LIST_H

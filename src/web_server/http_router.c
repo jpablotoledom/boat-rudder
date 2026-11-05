@@ -8,6 +8,7 @@
 #include "utils/static_file_server.h"
 #include "../db/auth.h"
 #include "../db/cms_categories.h"
+#include "../db/cms_category_ranking.h"
 #include "../db/cms_entries.h"
 #include "../db/cms_entries_admin.h"
 #include "../db/cms_languages.h"
@@ -1558,6 +1559,24 @@ static const char *get_query_param(QueryParam *params, int count, const char *ke
         if (strcmp(params[i].key, key) == 0) return params[i].value;
     }
     return "";
+}
+
+// The blog listings' ?page=N: 1 when absent, 0 (answered 404) when it isn't
+// a whole number from 1 up - "?page=0", "?page=2x" are no page.
+static int blog_page_param(QueryParam *params, int count) {
+    const char *v = get_query_param(params, count, "page");
+    if (!v[0]) return 1;
+    long page = 0;
+    for (const char *p = v; *p; p++) {
+        if (*p < '0' || *p > '9' || page > 100000) return 0;
+        page = page * 10 + (*p - '0');
+    }
+    return (int)page;
+}
+
+static int category_by_name(const void *a, const void *b) {
+    const CmsCategoryItem *x = a, *y = b;
+    return strcasecmp(x->name ? x->name : "", y->name ? y->name : "");
 }
 
 // Extracts the url-decoded value of `key` from an
@@ -3590,18 +3609,29 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
             } else if (strcmp(decoded_url, "/blog") == 0) {
                 int epoch = resolve_epoch(&req);
+                int page = blog_page_param(params, param_count);
+                int found = 0;
+                char *content = page ? blog_list(epoch, content_lang, "/blog", page, &found) : NULL;
 
-                CmsCategoryItem *cats = NULL;
-                size_t cat_count = 0;
-                cms_get_categories(content_lang, &cats, &cat_count);
-                char *cat_menu = category_menu_render(cats, cat_count, NULL, epoch);
-                cms_categories_free(cats, cat_count);
+                if (!found) {
+                    free(content);
+                    send_error_response(ctx, 404, "404 Not Found", epoch);
+                } else {
+                    CmsCategoryItem *cats = NULL;
+                    size_t cat_count = 0;
+                    cms_get_categories(content_lang, &cats, &cat_count);
+                    category_ranking_sort(cats, cat_count);
+                    char *cat_menu = category_menu_render(cats, cat_count, NULL, epoch, CATEGORY_MENU_MAX);
+                    cms_categories_free(cats, cat_count);
 
-                char *content  = blog_list(epoch, content_lang);
-                char *body     = buildBlogListWebSiteAtUrl(epoch, "{{SITE_NAME}} - Blog", content, "/blog", cat_menu);
-                char *response = body ? build_epoch_response(body, "", epoch) : NULL;
-                free(body);
-                send_or_error(ctx, response, req.method, epoch);
+                    char *title = page > 1 ? render_template("{{SITE_NAME}} - Blog - Page %d", page)
+                                           : strdup("{{SITE_NAME}} - Blog");
+                    char *body     = buildBlogListWebSiteAtUrl(epoch, title ? title : "Blog", content, "/blog", cat_menu);
+                    free(title);
+                    char *response = body ? build_epoch_response(body, "", epoch) : NULL;
+                    free(body);
+                    send_or_error(ctx, response, req.method, epoch);
+                }
 
             } else if (strncmp(decoded_url, "/blog/category/", 15) == 0 && decoded_url[15] != '\0') {
                 int epoch = resolve_epoch(&req);
@@ -3623,17 +3653,31 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     if (cat_id) break;
                 }
 
-                if (!cat_id) {
+                int page = blog_page_param(params, param_count);
+                int found = 0;
+                char *content = NULL;
+                if (cat_id && page) {
+                    char *base_url = render_template("/blog/category/%s", cat_slug);
+                    content = base_url ? blog_list_category(epoch, content_lang, cat_id, base_url, page, &found)
+                                       : NULL;
+                    free(base_url);
+                }
+
+                if (!found) {
+                    free(content);
+                    free(cat_id);
+                    free(cat_name);
                     cms_categories_free(cats, cat_count);
                     send_error_response(ctx, 404, "404 Not Found", epoch);
                 } else {
-                    char *cat_menu = category_menu_render(cats, cat_count, cat_slug, epoch);
+                    category_ranking_sort(cats, cat_count);
+                    char *cat_menu = category_menu_render(cats, cat_count, cat_slug, epoch, CATEGORY_MENU_MAX);
                     cms_categories_free(cats, cat_count);
-
-                    char *content = blog_list_category(epoch, content_lang, cat_id);
                     free(cat_id);
 
-                    char *page_title = render_template("Blog - %s", cat_name ? cat_name : cat_slug);
+                    char *page_title = page > 1
+                        ? render_template("Blog - %s - Page %d", cat_name ? cat_name : cat_slug, page)
+                        : render_template("Blog - %s", cat_name ? cat_name : cat_slug);
                     free(cat_name);
 
                     char *body     = buildBlogListWebSiteAtUrl(epoch, page_title ? page_title : "Blog",
@@ -3671,14 +3715,16 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     CmsCategoryItem *cats = NULL;
                     size_t cat_count = 0;
                     cms_get_categories(content_lang, &cats, &cat_count);
+                    // The full list is for finding one: by name, not by visits.
+                    qsort(cats, cat_count, sizeof(CmsCategoryItem), category_by_name);
                     char *cat_menu = category_menu_render(cats, cat_count,
-                                                          current[0] ? current : NULL, epoch);
+                                                          current[0] ? current : NULL, epoch, 0);
                     cms_categories_free(cats, cat_count);
 
                     char *content = render_template(tpl, cat_menu ? cat_menu : "", safe_return);
                     free(cat_menu);
                     free(tpl);
-                    char *body = content ? buildPageWebSite(epoch, "Categories", content) : NULL;
+                    char *body = content ? buildPageWebSiteAtUrl(epoch, "Categories", content, "/blog") : NULL;
                     char *response = body ? build_epoch_response(body, "", epoch) : NULL;
                     free(body);
                     send_or_error(ctx, response, req.method, epoch);

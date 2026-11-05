@@ -139,6 +139,7 @@ set(SOURCES
     src/db/cms_entries_admin.c
     src/db/cms_menu.c
     src/db/cms_categories.c
+    src/db/cms_category_ranking.c
     src/db/cms_languages.c
     src/db/cms_users_admin.c
     src/db/cms_media.c

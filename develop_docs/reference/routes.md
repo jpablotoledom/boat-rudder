@@ -55,9 +55,9 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 |---|---|---|---|
 | `/` | - | `buildHomeWebSite()` (orchestrator: banner, home content, blog list) | Home page |
 | `/` *(no `Host`, no `?site=`, `site_directory` set)* | `site` | `site_page()` | Site chooser for `Host`-less browsers behind a multi-site front (see `site_key` in [configuration.md](configuration.md)) |
-| `/blog` | - | `blog_list()` + `category_menu_render()` + `buildBlogListWebSiteAtUrl()` | Blog listing (≤ `BLOG_LIST_LIMIT` = 50) |
+| `/blog` | `page` | `blog_list()` + `category_menu_render()` + `buildBlogListWebSiteAtUrl()` | Blog listing, 10 entries a page (`BLOG_LIST_LIMIT`), newest first, with a pager; `404` for a `page` past the last or not a whole number from 1 up. The category bar shows the 15 most visited categories and *See more...* ([rendering.md](rendering.md#category-menu-blog-blogcategoryslug)) |
 | `/blog/category/<slug>` | - | `blog_list_category()`; `<slug>` matched against `slugify(category name)` | Filtered listing, `404` if no category matches |
-| `/blog/categories` | `return` | `category-menu/category-menu-page_epoch<N>.html` | Full category menu + back link. Only epochs with that template (today: −1); others `404` |
+| `/blog/categories` | `return` | `category-menu/category-menu-page_epoch<N>.html` | Every category, by name, + back link to `return` - the bar's *See more...* and WML's `[Categories]` target. Every epoch |
 | `/blog/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "blog")` → `entry_page()` | Entry, `404` if missing / not `blog` / draft without session |
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |

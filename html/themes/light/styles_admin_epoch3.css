@@ -2686,6 +2686,14 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   background-color: var(--br-color-body-background, #8dd3ff);
   border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
 }
+/* Which language's picture the image block shows (container_epoch3.html's
+   renderImageLangNote()). */
+.boat-rudder-entry-editor__image-lang {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 6px 0 0; font-size: var(--br-admin-font-sm); color: var(--br-admin-text-muted);
+}
+.boat-rudder-entry-editor__image-lang[hidden],
+.boat-rudder-entry-editor__image-lang button[hidden] { display: none; }
 .boat-rudder-entry-editor__gallery-preview {
   background-color: var(--br-color-body-background, #8dd3ff);
 }

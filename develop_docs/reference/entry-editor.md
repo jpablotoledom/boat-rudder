@@ -307,6 +307,14 @@ object with a key is not offered (there's no undo); the context bar's delete doe
   library, `separator` starts a paragraph below.
 
 ### Type-specific controls
+- `image`: a picture per language, English's the default. *Select photo* (`setBlockImage()`, called
+  by the media picker) sets the picture of the language being edited: on English it replaces
+  every other language's that had none of its own - or a copy of English's previous one, how
+  blocks were stored before - and on another language it gives that one its own (picking
+  English's picture there, or *Use the English image*, empties it again). The first picture of a
+  block is English's, whatever tab it was picked on. On another language, a note under the
+  picture says which one it shows. A language left empty shows English's picture, in the editor
+  and on the site.
 - `code-text`, `terminal`: the language / shell `<select>` (in the context bar) → `syncCodeLang()`
   writes the key into `extra_data`; `initCodeBlock()` sets the `<select>` from it when the block
   opens. Their textarea is written in the code block's colors.

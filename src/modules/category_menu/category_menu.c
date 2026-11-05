@@ -11,7 +11,7 @@
 #include <string.h>
 
 char *category_menu_render(const CmsCategoryItem *categories, size_t count,
-                            const char *current_slug, int epoch) {
+                            const char *current_slug, int epoch, size_t max_items) {
     if (count == 0) return strdup("");
 
     // WML: same reasoning as menu.c's compact "[Menu]" - the full row of
@@ -65,10 +65,13 @@ char *category_menu_render(const CmsCategoryItem *categories, size_t count,
     CmsThemeColors colors;
     if (needs_color) cms_get_theme_colors(request_theme(), &colors);
 
+    int capped = max_items > 0 && count > max_items;
     char *items = strdup("");
+    size_t shown = 0;
     for (size_t i = 0; items && i < count; i++) {
         char *slug = slugify(categories[i].name);
         int is_selected = (current_slug && slug && strcmp(slug, current_slug) == 0);
+        if (capped && i >= max_items && !is_selected) { free(slug); continue; }
         const char *tpl = is_selected ? selected_tpl : item_tpl;
         char *item = needs_color
             ? render_template(tpl, slug ? slug : "",
@@ -76,9 +79,27 @@ char *category_menu_render(const CmsCategoryItem *categories, size_t count,
                                categories[i].name)
             : render_template(tpl, slug ? slug : "", categories[i].name);
         free(slug);
-        if (separator_tpl && i > 0) items = str_append(items, separator_tpl);
+        if (separator_tpl && shown > 0) items = str_append(items, separator_tpl);
         if (items && item) items = str_append(items, item);
         free(item);
+        shown++;
+    }
+
+    if (items && capped) {
+        path = generate_url_theme("category-menu/category-menu-more_epoch%d.html", epoch);
+        char *more_tpl = path ? read_file_to_string(path) : NULL;
+        free(path);
+        char ret[1024];
+        url_encode(ret, request_path(), sizeof(ret));
+        char *more = !more_tpl ? NULL
+                   : needs_color ? render_template(more_tpl, ret, colors.navbar_menu_normal)
+                   : render_template(more_tpl, ret);
+        if (more) {
+            if (separator_tpl) items = str_append(items, separator_tpl);
+            if (items) items = str_append(items, more);
+        }
+        free(more);
+        free(more_tpl);
     }
 
     char *result = NULL;

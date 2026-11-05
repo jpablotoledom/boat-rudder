@@ -7,6 +7,7 @@
 #include "../../utils/read_file.h"
 #include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -170,10 +171,88 @@ static char *epoch2_image_url(char *file) {
     return url;
 }
 
+// Page numbers either side of the current one in the pager; the first and
+// last pages always show, with a gap ("...") for what lies between.
+#define PAGER_SPAN 2
+
+static char *pager_piece(const char *name, int epoch, const char *a, const char *b) {
+    char fmt[64];
+    snprintf(fmt, sizeof(fmt), "blog-pager/%s_epoch%%d.html", name);
+    char *tpl = load_template(fmt, epoch);
+    char *out = tpl ? render_template(tpl, a ? a : "", b ? b : "") : NULL;
+    free(tpl);
+    return out;
+}
+
+static char *page_url(const char *base_url, int page) {
+    return page <= 1 ? strdup(base_url) : render_template("%s?page=%d", base_url, page);
+}
+
+// "<< Previous  1 ... 4 [5] 6 ... 12  Next >>" (WML: "< Prev 5/12 Next >"),
+// "" for a single page. NULL only on allocation failure.
+static char *render_pager(int epoch, const char *base_url, int page, int pages) {
+    if (pages <= 1) return strdup("");
+    char *parts = strdup("");
+    char *url = NULL, *piece = NULL;
+
+#define ADD(p) do { piece = (p); if (parts && piece) { if (parts[0]) parts = str_append(parts, " "); \
+                    if (parts) parts = str_append(parts, piece); } free(piece); } while (0)
+    if (page > 1) {
+        url = page_url(base_url, page - 1);
+        ADD(url ? pager_piece("pager-prev", epoch, url, NULL) : NULL);
+        free(url);
+    }
+    if (epoch == EPOCH_WML) {
+        char label[32];
+        snprintf(label, sizeof(label), "%d/%d", page, pages);
+        ADD(pager_piece("pager-current", epoch, label, NULL));
+    } else {
+        for (int p = 1; p <= pages; p++) {
+            int shown = p == 1 || p == pages || (p >= page - PAGER_SPAN && p <= page + PAGER_SPAN);
+            if (!shown) {
+                // One gap for the whole run of hidden pages.
+                if (p == 2 || p == page + PAGER_SPAN + 1) ADD(pager_piece("pager-gap", epoch, NULL, NULL));
+                continue;
+            }
+            char label[16];
+            snprintf(label, sizeof(label), "%d", p);
+            if (p == page) {
+                ADD(pager_piece("pager-current", epoch, label, NULL));
+            } else {
+                url = page_url(base_url, p);
+                ADD(url ? pager_piece("pager-link", epoch, url, label) : NULL);
+                free(url);
+            }
+        }
+    }
+    if (page < pages) {
+        url = page_url(base_url, page + 1);
+        ADD(url ? pager_piece("pager-next", epoch, url, NULL) : NULL);
+        free(url);
+    }
+#undef ADD
+
+    char *result = NULL;
+    if (parts) {
+        if (epoch == EPOCH_EARLY) {
+            CmsThemeColors colors;
+            cms_get_theme_colors(request_theme(), &colors);
+            result = pager_piece("pager", epoch, colors.home_content_text, parts);
+        } else {
+            result = pager_piece("pager", epoch, parts, NULL);
+        }
+    }
+    free(parts);
+    return result;
+}
+
 // The one implementation. `heading` is printed above the list; `limit` caps
-// the query; `category_id_hex` filters it when non-NULL.
+// the query; `category_id_hex` filters it when non-NULL. With a `base_url`,
+// the list is page `page` of all the entries, with a pager; without one
+// (the home), just the newest `limit`.
 static char *render_list(int epoch, const char *lang, const char *heading,
-                          int limit, const char *category_id_hex) {
+                          int limit, const char *category_id_hex,
+                          const char *base_url, int page, int *found) {
     char *item_path    = generate_url_theme("home-blog/home-blog-item_epoch%d.html", epoch);
     char *content_path = generate_url_theme("home-blog/home-blog_epoch%d.html", epoch);
 
@@ -185,16 +264,29 @@ static char *render_list(int epoch, const char *lang, const char *heading,
 
     char *items  = NULL;
     char *result = NULL;
+    char *pager  = NULL;
+    if (found) *found = 1;
+    if (page < 1) page = 1;
 
     CmsBlogListItem *entries     = NULL;
     size_t           entry_count = 0;
 
     if (!item_tpl || !content_tpl) goto cleanup;
 
+    int pages = 1;
+    if (base_url) {
+        size_t total = cms_count_blog_entries(category_id_hex);
+        pages = total ? (int)((total + (size_t)limit - 1) / (size_t)limit) : 1;
+        if (page > pages) {
+            if (found) *found = 0;
+            goto cleanup;
+        }
+    }
+    size_t skip = (size_t)(page - 1) * (size_t)limit;
     if (category_id_hex)
-        cms_get_blog_entries_by_category(lang, limit, category_id_hex, &entries, &entry_count);
+        cms_get_blog_entries_by_category(lang, skip, limit, category_id_hex, &entries, &entry_count);
     else
-        cms_get_blog_entries(lang, limit, &entries, &entry_count);
+        cms_get_blog_entries(lang, skip, limit, &entries, &entry_count);
 
     // No stylesheet on epoch 1, so both the heading and the "no entries"
     // message's text color have to be a real attribute - were hardcoded
@@ -222,6 +314,10 @@ static char *render_list(int epoch, const char *lang, const char *heading,
             free(item);
         }
         free(item_bg);
+        if (items && base_url) {
+            pager = render_pager(epoch, base_url, page, pages);
+            items = pager ? str_append(items, pager) : NULL;
+        }
     }
 
     if (items) {
@@ -236,6 +332,7 @@ static char *render_list(int epoch, const char *lang, const char *heading,
     }
 
 cleanup:
+    free(pager);
     cms_blog_list_free(entries, entry_count);
     free(item_tpl);
     free(content_tpl);
@@ -244,13 +341,14 @@ cleanup:
 }
 
 char *home_blog(int epoch, const char *lang) {
-    return render_list(epoch, lang, "Latest Blog Posts", HOME_BLOG_LIMIT, NULL);
+    return render_list(epoch, lang, "Latest Blog Posts", HOME_BLOG_LIMIT, NULL, NULL, 1, NULL);
 }
 
-char *blog_list(int epoch, const char *lang) {
-    return render_list(epoch, lang, "Blog", BLOG_LIST_LIMIT, NULL);
+char *blog_list(int epoch, const char *lang, const char *base_url, int page, int *found) {
+    return render_list(epoch, lang, "Blog", BLOG_LIST_LIMIT, NULL, base_url, page, found);
 }
 
-char *blog_list_category(int epoch, const char *lang, const char *category_id_hex) {
-    return render_list(epoch, lang, "Blog", BLOG_LIST_LIMIT, category_id_hex);
+char *blog_list_category(int epoch, const char *lang, const char *category_id_hex,
+                         const char *base_url, int page, int *found) {
+    return render_list(epoch, lang, "Blog", BLOG_LIST_LIMIT, category_id_hex, base_url, page, found);
 }

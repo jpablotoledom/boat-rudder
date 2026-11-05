@@ -6,6 +6,31 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### Media picker
+
+**Changed**
+- Escape closes the photo picker: the first press clears the photos selected, the next one
+  closes it.
+
+### Image block
+
+**Added**
+- An image block can show a different picture in each language. *Select photo* sets the picture
+  of the language being edited; English's is the default, shown in every language that hasn't one
+  of its own, and a note under the picture says which one a language shows, with *Use the English
+  image* to go back to it. Changing English's picture changes it in those languages too.
+
+### Blog list
+
+**Changed**
+- `/blog` and each category's listing show 10 entries a page, newest first, with a pager under
+  them (`/blog?page=2`...) on every epoch - WAP phones get *< Prev 2/5 Next >*. A page past the
+  last one is a 404.
+- The category bar shows at most 15 categories - the ones whose posts were read most in the last
+  30 days, most read first, worked out again every 3 hours - and a *See more...* link to the full
+  list. A category being browsed always shows, even when it isn't among them.
+- `/blog/categories`, the full list by name, now opens on every epoch (it was WAP's only).
+
 ### Entry editor
 
 **Changed**

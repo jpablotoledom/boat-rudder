@@ -398,7 +398,7 @@ Both `ssl_read` and `plain_read` share the `read_func_t` signature so the rest o
   - `/gallery/<id>` → public gallery page per epoch; epoch 3: thumbnail grid with lightbox; epochs 1-2: paginated viewer (main image + prev/next + thumbnail strip); epochs -1/0: a QR code encoding this same page's public URL, since neither a WAP phone nor a text-only browser can show the photos regardless of layout - see [rendering.md](rendering.md).
   - `/blog` → blog list page via `blog_list()` + `buildBlogListWebSiteAtUrl(epoch, title, content, "/blog", category_menu)`.
   - `/blog/category/<slug>` → blog list filtered by category via `blog_list_category()`; `<slug>` is matched against `slugify(category.name)` over `cms_get_categories()`, `404` if no category matches. Same wrapper, with the matching item marked selected in the category menu.
-  - `/blog/categories` → full category menu page (WML's compact `[Categories]` target).
+  - `/blog/categories` → every category, by name (the bar's *See more...* and WML's compact `[Categories]` target).
   - `/blog/<link>` → CMS entry via `serve_cms_entry()`, passes `"/blog"` as active menu URL. Drafts are served (marked `[Draft]`, `no-store`) only to a visitor with a dashboard session (`include_drafts`).
   - `/page/<link>` → CMS entry via `serve_cms_entry()`, passes `"/page/<link>"` as active menu URL. Same draft rule. WML pagination is no longer a route concern: every epoch −1 response is paginated by `build_epoch_response.c` (`?__page=N`, see [rendering.md](rendering.md#wml-pagination)).
   - `/menu`, `/language`, `/language/set`, `/theme`, `/theme/set` → nav menu page (WML), language and theme pickers, and their cookie-setting redirects.

@@ -8,9 +8,9 @@
 // cms_get_blog_entries() for the home blog list, newest header.date first.
 #define HOME_BLOG_LIMIT 10
 
-// Maximum number of "entries" documents (type == "blog", enabled == true) returned by
-// cms_get_blog_entries() for the "/blogs" listing page, newest header.date first.
-#define BLOG_LIST_LIMIT 50
+// Entries per page of the /blog and /blog/category/<slug> listings, newest
+// header.date first; ?page=N moves through the rest.
+#define BLOG_LIST_LIMIT 10
 
 // Maximum number of "entries" documents (any type, enabled == true) returned by
 // cms_get_admin_entries() for the /dashboard/entries listing, newest header.date first.
@@ -88,14 +88,20 @@ typedef struct {
 } CmsBlogListItem;
 
 // Looks up db.entries.find({type: "blog", enabled: true})
-//   .sort({"header.date": -1}).limit(limit),
+//   .sort({"header.date": -1}).skip(skip).limit(limit),
 // resolving header.* and categories[] to `lang` for each match (same lang convention as
 // cms_get_entry_by_link). `limit` is HOME_BLOG_LIMIT for the home blog list or
-// BLOG_LIST_LIMIT for the "/blogs" listing page. On success, *out points to a malloc'd
+// BLOG_LIST_LIMIT for a page of /blog, `skip` the entries of the pages before it. On success, *out points to a malloc'd
 // array of *out_count items (possibly 0) that must be passed to cms_blog_list_free(). On a
 // DB error or if mongodb is not ready, *out = NULL and *out_count = 0 - both callers are
 // decorative and must never fail the page.
-void cms_get_blog_entries(const char *lang, size_t limit, CmsBlogListItem **out, size_t *out_count);
+void cms_get_blog_entries(const char *lang, size_t skip, size_t limit,
+                          CmsBlogListItem **out, size_t *out_count);
+
+// How many entries the two queries above (and below, with `category_id_hex`)
+// page through: published blog entries, in that category when non-NULL. 0 on
+// a DB error or if mongodb is not ready.
+size_t cms_count_blog_entries(const char *category_id_hex);
 
 // Looks up db.entries.find({}).sort({"header.date": -1}).limit(ENTRIES_LIST_LIMIT) - no
 // `enabled` filter, so admins can find and edit disabled/draft entries too - resolving
@@ -115,8 +121,8 @@ void cms_get_admin_entries(const char *lang, const char *type_filter, const char
 
 // Like cms_get_blog_entries() but filtered to entries whose categories[] array
 // contains `category_id_hex` (a 24-char hex ObjectId). Pass BLOG_LIST_LIMIT
-// as `limit`. Same lang convention and allocation contract.
-void cms_get_blog_entries_by_category(const char *lang, size_t limit,
+// as `limit`. Same lang convention, paging and allocation contract.
+void cms_get_blog_entries_by_category(const char *lang, size_t skip, size_t limit,
                                        const char *category_id_hex,
                                        CmsBlogListItem **out, size_t *out_count);
 

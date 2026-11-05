@@ -6,6 +6,7 @@
 #include "db/mongodb_manager.h"
 #include "db/session_manager.h"
 #include "db/cms_comments.h"
+#include "db/cms_category_ranking.h"
 #include "extensions/extensions.h"
 #include "utils/mailer.h"
 #include "utils/translator.h"
@@ -207,9 +208,14 @@ int main(int argc, char *argv[]) {
     if (mailer_start() != 0)
         LOG_WARN("Mail sender could not start - comments' confirmation emails will queue up");
 
+    // Which categories /blog shows first, worked out again every 3 hours.
+    if (category_ranking_start() != 0)
+        LOG_WARN("Category ranking could not start - /blog lists categories in creation order");
+
     while (atomic_load(&running)) sleep(1);
 
     LOG_INFO("Shutting down...");
+    category_ranking_stop();
     mailer_stop();
     extensions_stop();
     wap_gateway_stop();

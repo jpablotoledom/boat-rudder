@@ -213,10 +213,14 @@ a grid reload and on load; it also closes an open *Move to…* list once the sel
   (`media_admin_modal()`; `/dashboard/media` renders it `hidden`, having nothing to hand the
   selection to). Collects selected URLs in selection order; writes to:
   - `header` type: `#headerImageUrl` input + header image preview
-  - `image-block` type: all lang text fields of `window._galleryTargetBlock`
+  - `image-block` type: `setBlockImage()` on `window._galleryTargetBlock` - the picture of the
+    language being edited ([entry-editor.md](entry-editor.md#type-specific-controls))
   - `gallery-block` type: all lang text fields + calls `renderGalleryThumbs()`
   - Closes the modal.
-- ESC key clears selection (or, while the directory drawer is open, only closes it).
+- Escape, in this order: closes the directory drawer if it is open; else clears the selection;
+  else - nothing selected - closes the picker modal, like its ×, and stops there, so the entry
+  editor doesn't also close the block it was opened for. Not while typing in one of its fields
+  (a new directory's name). On `/dashboard/media`, no modal, it only clears the selection.
 
 ---
 

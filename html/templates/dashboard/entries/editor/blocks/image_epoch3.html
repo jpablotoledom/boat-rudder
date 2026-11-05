@@ -21,6 +21,11 @@
              onclick="event.stopPropagation();openImageGallery(this)">
           <span class="boat-rudder-entry-editor__gallery-empty">No image selected</span>
         </div>
+        <p class="boat-rudder-entry-editor__image-lang" hidden>
+          <span class="boat-rudder-entry-editor__image-lang-text"></span>
+          <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button"
+                  onclick="event.stopPropagation();useDefaultImage(this)" hidden></button>
+        </p>
 
         <div class="boat-rudder-entry-editor__meta-group" style="margin-top:8px">
           <label>Caption / alt text</label>

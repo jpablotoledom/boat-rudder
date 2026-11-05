@@ -438,7 +438,7 @@ fragment for a given epoch:
 | `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from the `menu` collection (`cms_get_menu_items()`), joining items with the epoch's separator and marking the item matching `current_url`; falls back to a single built-in `{"/", "Home"}` item if the query returns nothing |
 | `modules/mainbanner` | `char *mainbanner(int epoch)` | Home banner (a banner, not a slider/carousel), personalizable per theme and epoch from `/dashboard/settings/themes/<key>/banner`, falling back to the theme's `mainbanner_epoch<N>.html` - see [reference/themes.md](reference/themes.md) |
 | `modules/home_content` | `char *home_content(int epoch, const char *lang)` | The content blocks of the CMS entry whose `link` is `/`, if one exists; otherwise a built-in "updates" list (`UPDATES[]`) |
-| `modules/blog_list` | `home_blog()`, `blog_list()`, `blog_list_category()` | One component in three appearances. All render `home-blog/home-blog_epoch<N>.html` (2 `%s`: heading, items) with one `home-blog-item_epoch<N>.html` per entry, from the `entries` collection (`type: "blog"`, newest first). They differ only in the heading, the limit (`HOME_BLOG_LIMIT` / `BLOG_LIST_LIMIT`) and whether the query filters by category |
+| `modules/blog_list` | `home_blog()`, `blog_list()`, `blog_list_category()` | One component in three appearances. All render `home-blog/home-blog_epoch<N>.html` (2 `%s`: heading, items) with one `home-blog-item_epoch<N>.html` per entry, from the `entries` collection (`type: "blog"`, newest first). They differ only in the heading, the limit (`HOME_BLOG_LIMIT` / `BLOG_LIST_LIMIT`), whether the query filters by category, and the pager `/blog` and a category listing get (`?page=N`) |
 
 `src/html_builder/orchestrator.c` ties them together:
 
@@ -1027,7 +1027,6 @@ Features added after the initial home-page MVP (dated history in [../CHANGELOG.m
 - A dashboard editor for the home page's content: today it is the `/` entry's blocks if such an
   entry exists, else the built-in `UPDATES[]` list.
 - The `image-single` block type (legacy entries using it were migrated to `image`).
-- Pagination for `/blog` and `/blog/category/<slug>` (both are capped at `BLOG_LIST_LIMIT`, currently 50).
 - Human-readable gallery URLs (`/gallery/<slug>`; today the route takes the `_id` hex only).
 - WAP gateway: connection-oriented WSP (9201), testing connectionless WSP on real phones, a
   per-device page size.

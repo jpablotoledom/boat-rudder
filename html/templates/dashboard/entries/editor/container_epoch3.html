@@ -283,6 +283,8 @@
     }
     applyLangVisibility(document);
     refreshAllPreviews();
+    // An open image block shows its own picture, which may change with the language.
+    if (activeEditBlock && activeEditBlock.dataset.type === 'image') renderImagePreview(activeEditBlock);
     document.querySelectorAll('#entryBlocks [data-type="title"]').forEach(autosizeTitle);
   };
 
@@ -527,6 +529,7 @@
         preview.innerHTML = '<div class="boat-rudder-entry-editor-preview__paragraph"><span class="boat-rudder-empty">Empty paragraph</span></div>';
       }
     } else if (type === 'image') {
+      text = imageUrlFor(blockEl, currentLang);
       if (text) {
         // The stored path has no size suffix; only the generated variants exist
         // on disk, so the fallback asks for the thumbnail like galleries do.
@@ -2402,15 +2405,80 @@
     setContentChanged();
   };
 
-  /* ---- Image block ---- */
+  /* ---- Image block ----
+     Each language may have its own picture. English's is the default: a
+     language whose path is empty shows English's, on the site too
+     (cms_entries.c), so a picture is only stored where it differs. */
+  var IMAGE_DEFAULT_LANG = langs.indexOf('en') >= 0 ? 'en' : langs[0];
+
+  function imageField(block, lang) {
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"]');
+    return panel ? panel.querySelector('[name="text"]') : null;
+  }
+
+  function imageUrlFor(block, lang) {
+    var own = imageField(block, lang), def = imageField(block, IMAGE_DEFAULT_LANG);
+    return (own && own.value.trim()) || (def && def.value.trim()) || '';
+  }
+
+  // The media picker's choice, for the language being edited. Picked for
+  // English, it is every language's that had none of its own - or had
+  // English's previous one copied in, which is how blocks were stored before.
+  window.setBlockImage = function (block, url) {
+    var def = imageField(block, IMAGE_DEFAULT_LANG);
+    if (!def) return;
+    if (currentLang === IMAGE_DEFAULT_LANG) {
+      var old = def.value.trim();
+      def.value = url;
+      langs.forEach(function (lang) {
+        var f = imageField(block, lang);
+        if (lang !== IMAGE_DEFAULT_LANG && f && (f.value.trim() === old || f.value.trim() === url)) f.value = '';
+      });
+    } else if (!def.value.trim()) {
+      // The first picture, whatever tab it was picked on, is the default.
+      def.value = url;
+    } else {
+      var own = imageField(block, currentLang);
+      if (own) own.value = url === def.value.trim() ? '' : url;
+    }
+    renderImagePreview(block);
+    refreshBlockPreview(block);
+  };
+
+  window.useDefaultImage = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    var own = block ? imageField(block, currentLang) : null;
+    if (!own) return;
+    own.value = '';
+    renderImagePreview(block);
+    refreshBlockPreview(block);
+    setContentChanged();
+  };
+
+  // Under the picture, on a language other than English: whose picture it is.
+  function renderImageLangNote(block) {
+    var note = block.querySelector('.boat-rudder-entry-editor__image-lang');
+    if (!note) return;
+    var own = imageField(block, currentLang);
+    var def = imageField(block, IMAGE_DEFAULT_LANG);
+    var hasOwn = currentLang !== IMAGE_DEFAULT_LANG && own && own.value.trim();
+    note.hidden = currentLang === IMAGE_DEFAULT_LANG || !(def && def.value.trim()) && !hasOwn;
+    note.querySelector('.boat-rudder-entry-editor__image-lang-text').textContent = hasOwn
+      ? langName(currentLang) + ' has its own image.'
+      : 'Using the ' + langName(IMAGE_DEFAULT_LANG) + ' image. Select photo to give ' +
+        langName(currentLang) + ' its own.';
+    var reset = note.querySelector('button');
+    reset.hidden = !hasOwn;
+    reset.textContent = 'Use the ' + langName(IMAGE_DEFAULT_LANG) + ' image';
+  }
+
   // Opening a block hides its preview and shows the body, so the body needs its
   // own picture: otherwise editing an image would show only the path textareas.
   window.renderImagePreview = function (block) {
     var container = block.querySelector('.boat-rudder-entry-editor__image-preview');
     if (!container) return;
-    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
-    var field = panel ? panel.querySelector('[name="text"]') : null;
-    var url = field && field.value ? field.value.trim() : '';
+    renderImageLangNote(block);
+    var url = imageUrlFor(block, currentLang);
 
     container.innerHTML = '';
     if (!url) {

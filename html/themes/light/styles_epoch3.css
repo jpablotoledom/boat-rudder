@@ -554,6 +554,39 @@ a.boat-rudder-entry-category:hover {
   margin: 10px;
 }
 
+.boat-rudder-navbar__category-item--more a { font-weight: bold; }
+
+/* The full list (/blog/categories) and its way back. */
+.boat-rudder-category__back { text-align: center; margin-top: 20px; }
+
+/* Blog list pages (/blog?page=N): the item cards' own colors, so it reads
+   on the list's background like they do. */
+.boat-rudder-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 30px;
+}
+.boat-rudder-pager__link,
+.boat-rudder-pager__current,
+.boat-rudder-pager__gap {
+  min-width: 2.2em;
+  padding: 6px 10px;
+  text-align: center;
+  text-decoration: none;
+  background-color: var(--br-color-blog-list-item-background, #ffffff);
+  border: 1px solid var(--br-color-blog-list-item-border, #0009ac);
+}
+.boat-rudder-pager__link:hover { border-width: 2px; padding: 5px 9px; }
+.boat-rudder-pager__current {
+  font-weight: bold;
+  color: #ffffff; /* on the item border color, dark in every shipped theme */
+  background-color: var(--br-color-blog-list-item-border, #0009ac);
+}
+.boat-rudder-pager__gap { border-color: transparent; background: transparent; }
+
 /* ── Public block elements ─────────────────────────────────────────────────── */
 
 .boat-rudder-link {

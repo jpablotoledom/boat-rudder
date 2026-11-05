@@ -383,7 +383,7 @@ interprets those two fields differently:
 | `title` | heading text | heading level `1`-`6` (anything else = `2`) | -1..3 |
 | `paragraph` | rich text (stored as HTML) | style variant: `lead` / `note` (validated modifier) | -1..3 |
 | `byline` | author | date | -1..3 |
-| `image` | image base URL | `"<caption>\|<width>\|<align>"`, align incl. `float-left`/`float-right` (see below) | -1..3 |
+| `image` | image base URL, per language: an empty one is English's (`cms_entries.c` falls back to `text.en` for an image block) | `"<caption>\|<width>\|<align>"`, align incl. `float-left`/`float-right` (see below) | -1..3 |
 | `gallery` | `;`-separated image URLs | `media_galleries._id` | -1..3 |
 | `separator` | unused | style variant (validated modifier) | -1..3 |
 | `link` | link label | target URL (`#` if empty) | -1..3 |
@@ -866,15 +866,16 @@ http_router.c  (route == "/blog" or "/blog/category/<slug>")
   ├─ [/blog/category/<slug> only] resolve <slug> against slugify(cats[i].name)
   │     no match -> 404
   │
-  ├─ category_menu_render(cats, cat_count, current_slug, epoch)
-  │                                                 ── src/modules/category_menu/category_menu.c
+  ├─ page = ?page=N (absent = 1; not a whole number from 1 up -> 404)
   │
-  ├─ blog_list(epoch, lang)                         ── src/modules/blog_list/blog_list.c
-  │  or blog_list_category(epoch, lang, cat_id)     (same, restricted to one category id)
+  ├─ blog_list(epoch, lang, "/blog", page, &found)  ── src/modules/blog_list/blog_list.c
+  │  or blog_list_category(epoch, lang, cat_id, "/blog/category/<slug>", page, &found)
   │     │
-  │     ├─ cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &items, &count) ── src/db/cms_entries.c
+  │     ├─ cms_count_blog_entries(cat_id | NULL) -> pages; page > pages -> found = 0 -> 404
+  │     │
+  │     ├─ cms_get_blog_entries(lang, skip, BLOG_LIST_LIMIT, &items, &count) ── src/db/cms_entries.c
   │     │     db.entries.find({ type: "blog", enabled: true })
-  │     │       .sort({ "header.date": -1 }).limit(BLOG_LIST_LIMIT)
+  │     │       .sort({ "header.date": -1 }).skip((page - 1) * 10).limit(BLOG_LIST_LIMIT)
   │     │     (the category variant adds { categories: {$in: [ObjectId(cat_id)]} })
   │     │
   │     ├─ if count == 0: home-blog/empty_epoch<N>.html ("No blog entries found")
@@ -882,26 +883,51 @@ http_router.c  (route == "/blog" or "/blog/category/<slug>")
   │     ├─ for each item: home-blog/home-blog-item_epoch<N>.html (reused, same as
   │     │     home blog list - link -> "/blog/<item.link>", categories, etc.)
   │     │
+  │     ├─ the pager after the items, when there is more than one page (see below)
+  │     │
   │     └─ home-blog/home-blog_epoch<N>.html (2 `%s`: heading "Blog", items)
+  │
+  ├─ category_ranking_sort(cats) - most visited first, see "Category menu"
+  ├─ category_menu_render(cats, cat_count, current_slug, epoch, CATEGORY_MENU_MAX)
+  │                                                 ── src/modules/category_menu/category_menu.c
   │
   └─ buildBlogListWebSiteAtUrl(epoch, title, content, "/blog", category_menu_html)
 ```
 
-`cms_get_blog_entries()` is shared with `home_blog()`, parameterized by a `limit`:
-`HOME_BLOG_LIMIT` (10) for the home page, `BLOG_LIST_LIMIT` (`src/db/cms_entries.h`, currently
-50) for `/blog`. Same decorative/never-fail behavior: on a DB error or if MongoDB is not
-ready, `*out_count == 0` and the empty-state template is shown instead of failing the page.
+`cms_get_blog_entries()` is shared with `home_blog()`: `HOME_BLOG_LIMIT` (10) newest entries
+on the home page, no pager; pages of `BLOG_LIST_LIMIT` (`src/db/cms_entries.h`, 10) on `/blog`.
+Same decorative/never-fail behavior: on a DB error or if MongoDB is not ready,
+`*out_count == 0` and the empty-state template is shown instead of failing the page.
+
+**Pager.** `render_pager()` builds it from `html/templates/blog-pager/` (shared by every theme):
+`pager-prev`, the page numbers - the first, the last, and two either side of the current one,
+with a `pager-gap` (`...`) for each run left out - as `pager-link` / `pager-current`, `pager-next`,
+joined by spaces into `pager` (epoch 2: a `<tr>` of the list's table; epoch 1 takes
+`home-content-text` as its color). Page 1's links are the bare `/blog`, the rest
+`/blog?page=N`. WML has no numbers: `< Prev 2/5 Next >`.
 
 Both routes pass `"/blog"` as the active menu URL, so the Blog nav item stays highlighted while
-browsing a category. The page title becomes `"Blog - <category name>"` on the filtered route.
+browsing a category. The page title becomes `"Blog - <category name>"` on the filtered route,
+with `" - Page N"` after it from page 2 on.
 
 Each blog article is then served at `/blog/<item.link>` - see "CMS entries" above.
 
 ### Category menu (`/blog`, `/blog/category/<slug>`)
 
-`category_menu_render(categories, count, current_slug, epoch)`
+`category_menu_render(categories, count, current_slug, epoch, max_items)`
 (`modules/category_menu/category_menu.c`) renders the category bar shown directly under the
-navbar on the blog listing pages:
+navbar on the blog listing pages.
+
+**Which categories.** The listings show `CATEGORY_MENU_MAX` (15) categories, the most visited
+first, then a **See more...** link (`category-menu-more_epoch<N>.html`) to
+`/blog/categories?return=<current path>`; a category being browsed that isn't among them is
+added after them, highlighted. The order comes from `src/db/cms_category_ranking.c`: a thread
+started in `main.c` sums, at startup and every 3 hours (`CATEGORY_RANKING_INTERVAL_SECS`), the
+visits of each category's **published** blog posts over the last 30 days
+(`CATEGORY_RANKING_DAYS`) from `entry_visits_daily` - a post in two categories counts for both -
+and keeps the result in memory; `category_ranking_sort()` applies it per request, categories
+with the same visits (none, before the first run) keeping their creation order.
+`/blog/categories` lists every category by name, with a back link to `return`, on every epoch.
 
 ```
 category_menu_render(cats, count, current_slug, epoch)
@@ -913,7 +939,10 @@ category_menu_render(cats, count, current_slug, epoch)
   │     slug = slugify(category.name)
   │     slug == current_slug ? category-menu-item-selected_epoch<N>.html
   │                          : category-menu-item_epoch<N>.html
-  │     (both: 2 %s - slug, name)
+  │     (both: 2 %s - slug, name; epochs 1-2 also a color)
+  │     past max_items: only the current one
+  │
+  ├─ more than max_items: category-menu-more_epoch<N>.html (return path; epochs 1-2 a color)
   │
   └─ category-menu_epoch<N>.html (1 %s: items)
 ```

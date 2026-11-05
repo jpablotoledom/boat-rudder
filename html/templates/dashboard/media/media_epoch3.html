@@ -80,7 +80,8 @@
 
   // "Use selected", "Copy URL", "Move to..." and "Delete selected" act on the
   // selection, so they are disabled while nothing is selected. Called after every change to it:
-  // a checkbox click, Escape, and a grid reload (which drops it).
+  // a checkbox click, Escape (the first press clears the selection, the next
+  // closes the picker), and a grid reload (which drops it).
   window.updateMediaSelectionButtons = function () {
     var none = !document.querySelector('.boat-rudder-media__photo--selected');
     ['btn-media-use', 'btn-media-copy', 'btn-media-move', 'btn-media-delete'].forEach(function (id) {
@@ -168,6 +169,18 @@
       if (e.key === 'Escape') {
         var media = document.querySelector('.boat-rudder-media--dirs-open');
         if (media) { window.toggleMediaDirectories(false); return; }
+        // Nothing selected: Escape closes the picker, like its x - and goes
+        // no further, or the entry editor would close the block it was opened
+        // for too. Not while typing a directory's name.
+        var modal = document.querySelector('.boat-rudder-modal .boat-rudder-media');
+        modal = modal && modal.closest('.boat-rudder-modal');
+        var typing = e.target.matches && e.target.matches('input:not([type=checkbox]), textarea');
+        if (modal && !typing && !document.querySelector('.boat-rudder-media__photo--selected')) {
+          e.stopPropagation();
+          modal.style.display = 'none';
+          modal.remove();
+          return;
+        }
         document.querySelectorAll('.boat-rudder-media__photo').forEach(function (item) {
           item.querySelector('input[type="checkbox"]').checked = false;
           item.classList.remove('boat-rudder-media__photo--selected');
@@ -629,10 +642,16 @@
     if (window.contentEditorGalleryType === 'image-block' && window._galleryTargetBlock && selectedIds.length > 0) {
       // Stored bare, without a size suffix: render_image() picks the variant
       // per epoch, the same way gallery blocks work.
-      var textFields = window._galleryTargetBlock.querySelectorAll('.boat-rudder-entry-editor-block__lang-content [name="text"]');
-      textFields.forEach(function (f) { f.value = selectedIds[0]; });
-      if (typeof renderImagePreview === 'function') renderImagePreview(window._galleryTargetBlock);
-      if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
+      // For the language being edited (setBlockImage(): English's is every
+      // other language's default).
+      if (typeof setBlockImage === 'function') {
+        setBlockImage(window._galleryTargetBlock, selectedIds[0]);
+      } else {
+        var textFields = window._galleryTargetBlock.querySelectorAll('.boat-rudder-entry-editor-block__lang-content [name="text"]');
+        textFields.forEach(function (f) { f.value = selectedIds[0]; });
+        if (typeof renderImagePreview === 'function') renderImagePreview(window._galleryTargetBlock);
+        if (typeof refreshBlockPreview === 'function') refreshBlockPreview(window._galleryTargetBlock);
+      }
       window._galleryTargetBlock = null;
     }
 

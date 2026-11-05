@@ -62,8 +62,9 @@ shipped themes (`dark`, `light`) contain the same set.
 | `home-content/` | `home-content`, `home-content-item` | −1…3 | 1-2 / 3-4 | | home page "welcome" entry (`home_content.c`) |
 | `home-blog/` | `home-blog`, `home-blog-item`, `empty` | −1…3 | 2-3 / 6-11 / 0-1 | | blog list - home section, `/blog`, category listing (`blog_list.c`) |
 | `category-menu/` | `category-menu`, `-item`, `-item-selected`, `-separator` | −1…3 | 1-3 | | category bar on blog pages (`category_menu.c`) |
+| | `category-menu-more` | 0…3 | 1-2 | | *See more...* after the 15 most visited (return path; epochs 1-2 a color) |
 | | `category-menu-compact` | −1 | 1 | | WML: single `[Categories]` link |
-| | `category-menu-page` | −1 | 2 | | `/blog/categories` page body |
+| | `category-menu-page` | −1…3 | 2 | | `/blog/categories` page body (menu, back link) |
 | `page/` | `page-home` | −1…3 | 4 | `FOOTER` | home page wrapper (`buildHomeWebSite()`) |
 | `.` | `styles_epoch3.css` | 3 | - | | public epoch 3 stylesheet, served via `/themes/<key>/styles_epoch3.css` (DB-overridable) |
 | `.` | `styles_admin_epoch3.css` | 3 | - | | admin epoch 3 stylesheet (login, dashboard), served via `/themes/<key>/styles_admin_epoch3.css` (DB-overridable; optional, falls back to the configured `theme`'s) |
@@ -87,6 +88,7 @@ shipped themes (`dark`, `light`) contain the same set.
 | `login/` | `login` | −1…3 | 0-1 | | `/login` (epoch 3 form; other epochs "not available") |
 | | `login-error` | 3 | 1 | | error line |
 | `language/` | `language`, `language-item` | −1…3 | 2 / 3-4 | | `/language` page |
+| `blog-pager/` | `pager`, `pager-link`, `pager-current`, `pager-gap`, `pager-prev`, `pager-next` | −1…3 | 1 (epoch 1: 2) / 2 / 1 / 0 / 1 / 1 | | the pager under a page of `/blog` (`blog_list.c`'s `render_pager()`); epoch 2's `pager` is a `<tr>` of the list's table |
 | `comments/` | `comments`, `comment-item`, `comment-form`, `comment-error`, `comments-notice`, `comments-empty`, `comments-closed` | 0…3 | 5 (positional: count, notice, comments, form or closed, color) / 6 (name, date, text, client icons, reply, color) / 10 (positional: action, error, name, email, text, challenge - image src, or text art on epoch 0 -, token, name max, text max, color) / 2 (message, color) / 2 (message, color) / 1 (color) / 1 (color) | | Blog comments section and form (`comments_section()`); epochs 0 and 3 ignore the color, epochs 0-2 have no honeypot |
 | | `comments`, `comment-item`, `comments-notice`, `comments-empty` | −1 | 4 (positional: count, notice, comments, note - the "Write a comment" link or "closed") / 6 (name, date, text, client, reply, color) / 2 (message, color) / 0 | | Approved comments on WAP (`retro_section()`) |
 | | `comment-form`, `comment-code`, `comment-error`, `comment-sent` | −1 | 3 (positional: name max, text max, step 2 URL) / 4 (WBMP URL, token, action, answer variable suffix) / 3 (message, step 1 URL, step 2 URL) / 2 (message, entry URL) | | WAP's comment form on pages of its own (`comments_wap_form_page()`, `comments_wap_sent_page()`): step 1, step 2, a refusal, the thanks |

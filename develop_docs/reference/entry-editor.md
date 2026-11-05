@@ -196,10 +196,12 @@ left margin on hover (hidden under 600px).
   outside the open block closes it, except on the top bar, the context bar, the media picker or
   the lightbox.
 - `refreshBlockPreview(blockEl)` - builds the preview of a closed block from the current
-  language's text field and `extra_data`. Two strategies:
+  language's text field and `extra_data`. An open block (`--editing`) hides its preview, so it
+  returns at once: typing (`onBlockInput()`) asks the server for nothing, and
+  `deactivateBlock()` draws the preview once, when the block closes. Two strategies:
   - **Server-rendered** (`fetchServerPreview()`, see [Block preview](#block-preview)):
-    `image`, `gallery`, `table`, `youtube-embed`, `code-text`, `terminal` - the exact
-    epoch 3 markup a reader gets (highlighting, the terminal window, gallery "+N" tiles, themed
+    `image`, `gallery`, `table`, `list`, `youtube-embed`, `code-text`, `terminal` - the exact
+    epoch 3 markup a reader gets (highlighting, the terminal window, a list's bold labels, gallery "+N" tiles, themed
     table rows, the real iframe, image size/float classes). A client-side approximation fills
     the gap until the response arrives, or if it fails.
   - **Client-side**: `byline`, `separator` (`<hr>`), `link`, `list` (`<ul>`/`<ol>` per line),

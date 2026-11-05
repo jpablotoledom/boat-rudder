@@ -504,6 +504,10 @@
     if (!blockEl) return;
     var type = blockEl.dataset.type;
     if (isInlineType(type)) { autosizeTitle(blockEl); return; }
+    // An open block hides its preview: nothing to draw - nor to ask the
+    // server for on every keystroke. Closing it (deactivateBlock()) draws it
+    // once, with whatever was typed.
+    if (blockEl.classList.contains('boat-rudder-entry-editor-block--editing')) return;
     var preview = blockEl.querySelector('.boat-rudder-entry-editor-block__preview');
     if (!preview) return;
 
@@ -572,9 +576,16 @@
       if (text) {
         var items = text.split('\n').filter(function (l) { return l.trim(); });
         var tag = extra === 'ol' ? 'ol' : 'ul';
-        preview.innerHTML = '<' + tag + ' class="boat-rudder-entry-editor-preview__list">' +
-          items.map(function (l) { return '<li>' + escapeHtml(l.trim()) + '</li>'; }).join('') +
-          '</' + tag + '>';
+        // The server's own rendering (an item's "label:" in bold); this one
+        // only until it arrives, with the same bold label.
+        fetchServerPreview(blockEl, preview, 'list', text, extra,
+          '<' + tag + ' class="boat-rudder-entry-editor-preview__list">' +
+          items.map(function (l) {
+            var m = /^([^:<]*[^:<\s][^:<]*):(\s|$)/.exec(l.trim());
+            return '<li>' + (m ? '<b>' + escapeHtml(m[1]) + '</b>' + escapeHtml(l.trim().slice(m[1].length))
+                               : escapeHtml(l.trim())) + '</li>';
+          }).join('') +
+          '</' + tag + '>');
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty list</span>';
       }

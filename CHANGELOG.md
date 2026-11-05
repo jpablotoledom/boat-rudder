@@ -6,6 +6,13 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 
 ## Unreleased
 
+### List block
+
+**Changed**
+- A list item's label is bold: in "Intel 486: a processor from the 90s", **Intel 486** - the
+  text before the first colon followed by a space. A colon in a link or a time ("http://",
+  "10:30") makes no label. On every epoch and in the editor's preview.
+
 ### Entry editor
 
 **Added**

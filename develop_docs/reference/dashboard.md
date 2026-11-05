@@ -298,7 +298,7 @@ document instead of a 5-table relational model).
   `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
   the next `saveContent()` (block `order` = DOM index at save time). Paragraphs and titles have no
   preview - they are written in place. Previews of simple blocks are built client-side;
-  `code-text`, `terminal`, `gallery`, `table`, `youtube-embed` and `image` are fetched from
+  `code-text`, `terminal`, `list`, `gallery`, `table`, `youtube-embed` and `image` are fetched from
   `POST /dashboard/api/block-preview`, which returns the real epoch 3 rendering
   (`entry_page_render_block()`), so the preview can't drift from the public page.
 - **Editor UX** (epoch 3): WYSIWYG-style. A fixed top bar (save-all, autosave, translate,

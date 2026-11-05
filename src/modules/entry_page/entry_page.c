@@ -17,6 +17,7 @@
 #include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -717,6 +718,25 @@ static char *render_link(const CmsContentBlock *block, int epoch) {
     return result;
 }
 
+// Where a list item's label ends: "Intel 486: a processor..." -> 9, the
+// text before the first ':' that is followed by a space or ends the item -
+// not "http://", "10:30", nor a ':' inside a tag ('style="color: red"').
+// 0 when the item has no label (or nothing but spaces before the ':').
+static size_t list_label_len(const char *item) {
+    int in_tag = 0;
+    for (size_t i = 0; item[i]; i++) {
+        char c = item[i];
+        if (c == '<') in_tag = 1;
+        else if (c == '>') in_tag = 0;
+        else if (c == ':' && !in_tag && (item[i + 1] == '\0' || isspace((unsigned char)item[i + 1]))) {
+            for (size_t k = 0; k < i; k++)
+                if (!isspace((unsigned char)item[k])) return i;
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static char *render_list(const CmsContentBlock *block, int epoch) {
     if (!block->text || !block->text[0]) return strdup("");
 
@@ -742,7 +762,11 @@ static char *render_list(const CmsContentBlock *block, int epoch) {
         char *end = tok + strlen(tok) - 1;
         while (end >= tok && (*end == '\r' || *end == '\n')) *end-- = '\0';
         if (!*tok) continue;
-        char *item = render_template(item_tpl, tok);
+        // A label before ':' is bold, on every epoch (WML has <b> too).
+        size_t label = list_label_len(tok);
+        char *text = label ? render_template("<b>%.*s</b>%s", (int)label, tok, tok + label) : NULL;
+        char *item = render_template(item_tpl, text ? text : tok);
+        free(text);
         items = item ? str_append(items, item) : NULL;
         free(item);
     }

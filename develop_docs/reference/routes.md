@@ -214,7 +214,7 @@ Guards **S+R** and **Own** on every route except `block-preview` and `translate`
 | `POST` | `/dashboard/api/entries/<id>/blocks` | `cms_add_entry_content_block()` | `{ok, block_id, html}` - the new block's editor markup |
 | `POST` | `/dashboard/api/entries/<id>/blocks/<block-id>/delete` | `cms_remove_entry_content_block()` | `{ok}` |
 | `GET` | `/dashboard/api/session` | `request_csrf_token()` | `{"ok":true,"csrf":"<token>"}` - the session is open, and its CSRF token (guard **S** only: `401` JSON without one). The entry editor polls it and fetches the token again after the writer signs in in another tab |
-| `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `terminal`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
+| `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `terminal`, `list`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
 | `POST` | `/dashboard/api/translate` | `translator_azure()` | `{ok, texts:[…]}` - fields `source`, `target` (site languages), `format` (`text`/`html`), `text` (repeated, up to 50, 50,000 characters). Azure only: `400` with another provider; `502 {ok:false, error}` when Azure fails. A viewer is refused (**RO**) |
 
 ### Media library

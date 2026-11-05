@@ -4234,7 +4234,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
         } else if (strcmp(req.method, "POST") == 0 && strcmp(decoded_url, "/dashboard/api/block-preview") == 0) {
             // The entry editor's preview of an unselected block, for the
             // types whose public rendering is server-made (code-text's
-            // highlighting, terminal's prompts, gallery's thumbnails, table's themed rows, the YouTube
+            // highlighting, terminal's prompts, list's bold labels, gallery's thumbnails, table's themed rows, the YouTube
             // iframe, image's size/float, paragraph's style): the same epoch 3 output a
             // reader gets, so the editor never shows a second, drifting copy.
             int epoch = resolve_epoch(&req);
@@ -4254,7 +4254,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         parse_urlencoded_field(req.body, req.body_length, "text", text, cap);
                         parse_urlencoded_field(req.body, req.body_length, "extra", extra, sizeof(extra));
                         if (strcmp(type, "code-text") == 0 || strcmp(type, "terminal") == 0 ||
-                            strcmp(type, "gallery") == 0 ||
+                            strcmp(type, "gallery") == 0 || strcmp(type, "list") == 0 ||
                             strcmp(type, "table") == 0 || strcmp(type, "youtube-embed") == 0 ||
                             strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0)
                             html = entry_page_render_block(type, text, extra, EPOCH_MODERN);

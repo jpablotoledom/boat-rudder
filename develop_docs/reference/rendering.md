@@ -387,7 +387,7 @@ interprets those two fields differently:
 | `gallery` | `;`-separated image URLs | `media_galleries._id` | -1..3 |
 | `separator` | unused | style variant (validated modifier) | -1..3 |
 | `link` | link label | target URL (`#` if empty) | -1..3 |
-| `list` | one item per line | `"ol"` for ordered, anything else = unordered | -1..3 |
+| `list` | one item per line; an item's label - the text before its first `:` followed by a space or ending the item, not one inside a tag - is bold (`list_label_len()`): `Intel 486: a processor` → **Intel 486**: a processor | `"ol"` for ordered, anything else = unordered | -1..3 |
 | `table` | rows by line, cells by `\|` | `"header"` makes row 0 a header row | -1..3 |
 | `code-text` | code body | language key (`javascript`, `c`, `python`, …, `""` = plain) - see [code-highlighting.md](code-highlighting.md) | -1..3 |
 | `terminal` | a shell session: commands after their prompt, and their output | shell: `""` Linux / Unix, `dos`, `powershell` - see [Terminal block](#terminal-block) | -1..3 |

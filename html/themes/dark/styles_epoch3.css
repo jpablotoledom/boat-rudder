@@ -1084,7 +1084,7 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
   }
 
   .boat-rudder-navbar__menu--open {
-    top: 60px;
+    top: 75px;
     width: 100%;
     flex-direction: column;
     background-color: #000000;

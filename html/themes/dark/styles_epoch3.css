@@ -1078,7 +1078,7 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
     position: fixed;
     top: -230px;
     flex-direction: column;
-    margin-left: 0;
+    margin-left: 0 !important;
     width: 100%;
     padding: 0;
   }

@@ -1,4 +1,5 @@
 #include "entry_page.h"
+#include "../related_posts/related_posts.h"
 #include "../../db/cms_themes.h"
 #include "../../db/mongodb_manager.h"
 #include "../../db/short_links.h"
@@ -1405,7 +1406,7 @@ static char *render_social_networks(const CmsContentBlock *block, int epoch) {
     return result ? result : strdup("");
 }
 
-static char *render_block(const CmsContentBlock *block, int epoch) {
+static char *render_block(const CmsContentBlock *block, const RelatedPostsContext *related, int epoch) {
     if (strcmp(block->type, "title") == 0)          return render_title(block, epoch);
     if (strcmp(block->type, "paragraph") == 0)       return render_paragraph(block, epoch);
     if (strcmp(block->type, "byline") == 0)          return render_byline(block, epoch);
@@ -1420,17 +1421,18 @@ static char *render_block(const CmsContentBlock *block, int epoch) {
     if (strcmp(block->type, "generic") == 0)         return render_generic(block, epoch);
     if (strcmp(block->type, "table") == 0)           return render_table(block, epoch);
     if (strcmp(block->type, "social-networks") == 0) return render_social_networks(block, epoch);
+    if (strcmp(block->type, "related-posts") == 0)   return related_posts_render(block->extra_data, related, epoch);
     return strdup("");
 }
 
 char *entry_page_render_block(const char *type, const char *text,
-                              const char *extra_data, int epoch) {
+                              const char *extra_data, const RelatedPostsContext *related, int epoch) {
     CmsContentBlock block = {
         .type = (char *)type,
         .text = (char *)text,
         .extra_data = (char *)extra_data,
     };
-    return render_block(&block, epoch);
+    return render_block(&block, related, epoch);
 }
 
 // Renders every block individually. *count_out is only meaningful when this
@@ -1440,9 +1442,15 @@ static char **render_blocks(const CmsEntry *entry, int epoch, size_t *count_out)
     char **blocks = calloc(entry->content_count ? entry->content_count : 1, sizeof(char *));
     if (!blocks) return NULL;
 
+    RelatedPostsContext related = {
+        .entry_id = entry->id,
+        .category_ids = (const char *const *)entry->category_ids,
+        .category_count = entry->category_id_count,
+    };
+
     code_block_seq = 0;
     for (size_t i = 0; i < entry->content_count; i++) {
-        blocks[i] = render_block(&entry->content[i], epoch);
+        blocks[i] = render_block(&entry->content[i], &related, epoch);
         if (!blocks[i]) {
             for (size_t j = 0; j < i; j++) free(blocks[j]);
             free(blocks);

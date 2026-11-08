@@ -349,7 +349,7 @@ http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │     │     ├─ entry/entry-meta_epoch3.html          (epoch 3 only: author + categories strip;
   │     │     │     older epochs fall back to the bare categories block)
   │     │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
-  │     │           See "Content block types" below (13 types)
+  │     │           See "Content block types" below (15 types)
   │     │
   │     └─ buildEntryWebSiteAtUrl(epoch, title, content, current_url, cat_menu)
   │           title = "[Draft] <title>" for an unpublished entry
@@ -394,6 +394,7 @@ interprets those two fields differently:
 | `youtube-embed` | caption / link label | watch/short/embed URL, normalized to `/embed/<id>` | -1..3 |
 | `social-networks` | display name (falls back to the icon name) | `"<icon>\|<url>"` | -1..3 |
 | `generic` | raw HTML passthrough | unused | -1..3 |
+| `related-posts` | unused | `""` (automatic), `"<id>"` or `"<left id>\|<right id>"` - see [Related-posts block](#related-posts-block) | -1..3 |
 
 Every type has a template for each epoch (the older-epoch files were ported from the legacy CMS
 in `../the-retro-center-old`) - except `table` on WML, which is built in C (see above). Where a
@@ -413,6 +414,34 @@ rules, and NCSA Mosaic 1.x/Cello-era engines don't consistently - live-tested, a
 entire code block onto one line - so epoch 1 ends each highlighted line with `<br>`, and WML (no
 `<pre>` at all) goes through `expand_newlines()`. Full behavior:
 [code-highlighting.md](code-highlighting.md).
+
+### Related-posts block
+
+`related_posts_render()` (`src/modules/related_posts/`), called by `render_block()` with the
+entry's id and category ids (`RelatedPostsContext`). One or two blog entries as cards - picture,
+title, summary, all linking to the entry. `extra_data` (`utils/related_ids.h`):
+
+| `extra_data` | Shows |
+|---|---|
+| `""` | Automatic: the newest published blog entry, other than this one, sharing at least one category (`cms_get_latest_related_entry()`), at full width |
+| `"<id>"` | That entry, at full width |
+| `"<left id>\|<right id>"` | Side by side, labelled "Previous article" and "Next article" (`pair_label()`) |
+
+Only published `type:"blog"` entries are shown (`cms_get_blog_entries_by_ids()` keeps the order
+chosen). A chosen entry that is gone or back to draft is skipped - one left takes the full width,
+with no label. With nothing to show the block renders `""`: readers see no gap.
+
+The labels are the one fixed text: the site has no translation table, so `pair_label()` spells out
+Spanish and any other language reads English, like the pager's *Next* / *Previous*.
+
+Templates `elements/related-posts/related-posts{,-item,-label,-image}_epoch<N>.html`:
+
+| Epoch | Layout |
+|---|---|
+| 3 | CSS grid of two columns, `--single` for one, stacked under 600px; the card is one link. Colors from the `blog-list-item-*` palette |
+| 2, 1 | One `<table>` row, cells 50% or 100%, with the `blog_list_thumb_url()` GIF |
+| 0 | Title link and summary, no picture |
+| -1 | The title link only |
 
 ### Terminal block
 

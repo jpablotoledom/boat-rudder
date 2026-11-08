@@ -1,5 +1,6 @@
 #include "cms_entries.h"
 #include "bson_lang.h"
+#include "cms_search.h"
 #include "cms_users_admin.h"
 #include "mongodb_manager.h"
 #include "../utils/log.h"
@@ -175,6 +176,24 @@ static void resolve_category_names(const bson_t *doc, const char *lang,
 
 static void parse_categories(const bson_t *doc, const char *lang, CmsEntry *out) {
     resolve_category_names(doc, lang, &out->category_names, &out->category_links, &out->category_count);
+
+    bson_iter_t iter, arr;
+    if (!bson_iter_init_find(&iter, doc, "categories") || !BSON_ITER_HOLDS_ARRAY(&iter) ||
+        !bson_iter_recurse(&iter, &arr)) return;
+
+    size_t cap = 0;
+    while (bson_iter_next(&arr)) cap++;
+    if (cap == 0 || !bson_iter_recurse(&iter, &arr)) return;
+
+    out->category_ids = calloc(cap, sizeof(char *));
+    if (!out->category_ids) return;
+    while (bson_iter_next(&arr) && out->category_id_count < cap) {
+        if (!BSON_ITER_HOLDS_OID(&arr)) continue;
+        char hex[25];
+        bson_oid_to_string(bson_iter_oid(&arr), hex);
+        out->category_ids[out->category_id_count] = strdup(hex);
+        if (out->category_ids[out->category_id_count]) out->category_id_count++;
+    }
 }
 
 static int compare_blocks_by_order(const void *a, const void *b) {
@@ -254,6 +273,11 @@ int cms_get_entry_by_link(const char *link, const char *lang, int include_drafts
     if (mongoc_cursor_next(cursor, &doc)) {
         bson_iter_t iter;
 
+        char id_str[25] = "";
+        if (bson_iter_init_find(&iter, doc, "_id") && BSON_ITER_HOLDS_OID(&iter))
+            bson_oid_to_string(bson_iter_oid(&iter), id_str);
+        out->id = strdup(id_str);
+
         out->link = (bson_iter_init_find(&iter, doc, "link") && BSON_ITER_HOLDS_UTF8(&iter))
             ? strdup(bson_iter_utf8(&iter, NULL)) : strdup(link);
         out->type = (bson_iter_init_find(&iter, doc, "type") && BSON_ITER_HOLDS_UTF8(&iter))
@@ -282,6 +306,7 @@ int cms_get_entry_by_link(const char *link, const char *lang, int include_drafts
 void cms_entry_free(CmsEntry *entry) {
     if (!entry) return;
 
+    free(entry->id);
     free(entry->link);
     free(entry->type);
     free(entry->header_image_url);
@@ -295,6 +320,9 @@ void cms_entry_free(CmsEntry *entry) {
     }
     free(entry->category_names);
     free(entry->category_links);
+
+    for (size_t i = 0; i < entry->category_id_count; i++) free(entry->category_ids[i]);
+    free(entry->category_ids);
 
     for (size_t i = 0; i < entry->content_count; i++) {
         free(entry->content[i].type);
@@ -478,6 +506,148 @@ void cms_get_blog_entries_by_category(const char *lang, size_t skip, size_t limi
 
     *out = items;
     *out_count = count;
+}
+
+// Up to `limit` items of `query` (which it destroys), newest first.
+static void fetch_entry_items(bson_t *query, const char *lang, size_t limit, const char *caller,
+                              CmsBlogListItem **out, size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(ENTRIES_COLLECTION);
+    CmsBlogListItem *items = limit ? calloc(limit, sizeof(CmsBlogListItem)) : NULL;
+    if (!collection || !items) {
+        free(items);
+        if (collection) mongoc_collection_destroy(collection);
+        bson_destroy(query);
+        return;
+    }
+
+    bson_t *opts = BCON_NEW(
+        "sort",  "{", "header.date", BCON_INT32(-1), "}",
+        "limit", BCON_INT64((int64_t)limit)
+    );
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, opts, NULL);
+
+    size_t count = 0;
+    const bson_t *doc;
+    while (count < limit && mongoc_cursor_next(cursor, &doc))
+        populate_entry_list_item(doc, lang, &items[count++]);
+
+    bson_error_t error;
+    if (mongoc_cursor_error(cursor, &error))
+        LOG_ERROR("%s: cursor error: %s", caller, error.message);
+
+    bson_destroy(query);
+    bson_destroy(opts);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+
+    if (count == 0) {
+        free(items);
+        return;
+    }
+    *out = items;
+    *out_count = count;
+}
+
+// Adds {_id: {$ne: <id>}} to `query` when `id_hex` is a valid ObjectId.
+static void append_id_exclusion(bson_t *query, const char *id_hex) {
+    if (!id_hex || !bson_oid_is_valid(id_hex, strlen(id_hex))) return;
+    bson_oid_t oid;
+    bson_oid_init_from_string(&oid, id_hex);
+    BCON_APPEND(query, "_id", "{", "$ne", BCON_OID(&oid), "}");
+}
+
+void cms_get_latest_related_entry(const char *lang, const char *exclude_id_hex,
+                                  const char *const *category_ids, size_t category_count,
+                                  CmsBlogListItem **out, size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+
+    bson_t *query = BCON_NEW("type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
+    append_id_exclusion(query, exclude_id_hex);
+
+    bson_t categories, in;
+    uint32_t added = 0;
+    bson_append_document_begin(query, "categories", -1, &categories);
+    bson_append_array_begin(&categories, "$in", -1, &in);
+    for (size_t i = 0; i < category_count; i++) {
+        if (!category_ids[i] || !bson_oid_is_valid(category_ids[i], strlen(category_ids[i]))) continue;
+        bson_oid_t oid;
+        char key[16];
+        bson_oid_init_from_string(&oid, category_ids[i]);
+        snprintf(key, sizeof(key), "%u", added++);
+        bson_append_oid(&in, key, -1, &oid);
+    }
+    bson_append_array_end(&categories, &in);
+    bson_append_document_end(query, &categories);
+
+    if (added == 0) {
+        bson_destroy(query);
+        return;
+    }
+    fetch_entry_items(query, lang, 1, "cms_get_latest_related_entry", out, out_count);
+}
+
+void cms_get_blog_entries_by_ids(const char *lang, const char *const *ids, size_t id_count,
+                                 CmsBlogListItem **out, size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+    if (id_count == 0) return;
+
+    CmsBlogListItem *items = calloc(id_count, sizeof(CmsBlogListItem));
+    if (!items) return;
+
+    // One query per id: there are two at most, and $in wouldn't keep the
+    // left/right order the author chose.
+    size_t count = 0;
+    for (size_t i = 0; i < id_count; i++) {
+        if (!ids[i] || !bson_oid_is_valid(ids[i], strlen(ids[i]))) continue;
+        bson_oid_t oid;
+        bson_oid_init_from_string(&oid, ids[i]);
+        bson_t *query = BCON_NEW("_id", BCON_OID(&oid), "type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
+
+        CmsBlogListItem *found = NULL;
+        size_t found_count = 0;
+        fetch_entry_items(query, lang, 1, "cms_get_blog_entries_by_ids", &found, &found_count);
+        if (found_count == 1) items[count++] = found[0];
+        free(found);    // its one item now belongs to items[]
+    }
+
+    if (count == 0) {
+        free(items);
+        return;
+    }
+    *out = items;
+    *out_count = count;
+}
+
+void cms_find_blog_entries_by_title(const char *query_text, const char *lang, const char *exclude_id_hex,
+                                    size_t limit, CmsBlogListItem **out, size_t *out_count) {
+    bson_t *query = BCON_NEW("type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
+    append_id_exclusion(query, exclude_id_hex);
+
+    char *re = (query_text && query_text[0]) ? cms_search_regex_literal(query_text) : NULL;
+    if (re) {
+        char field[32], key[16];
+        bson_t or_array, clause;
+        int idx = 0;
+        const char *const field_langs[] = { lang, "en" };
+        bson_append_array_begin(query, "$or", -1, &or_array);
+        for (size_t i = 0; i < 2; i++) {
+            if (i == 1 && strcmp(lang, "en") == 0) break;   // already there
+            snprintf(key, sizeof(key), "%d", idx++);
+            snprintf(field, sizeof(field), "header.title.%s", field_langs[i]);
+            bson_append_document_begin(&or_array, key, -1, &clause);
+            bson_append_regex(&clause, field, -1, re, "i");
+            bson_append_document_end(&or_array, &clause);
+        }
+        bson_append_array_end(query, &or_array);
+        free(re);
+    }
+
+    fetch_entry_items(query, lang, limit, "cms_find_blog_entries_by_title", out, out_count);
 }
 
 size_t cms_count_blog_entries(const char *category_id_hex) {

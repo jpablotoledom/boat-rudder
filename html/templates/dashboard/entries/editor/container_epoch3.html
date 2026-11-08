@@ -454,6 +454,7 @@
     if (type === 'code-text' || type === 'terminal') initCodeBlock(block);
     if (type === 'table') initTableBlock(block);
     if (type === 'social-networks') initSocialBlock(block);
+    if (type === 'related-posts') initRelatedBlock(block);
     applyLangVisibility(block);
   }
 
@@ -470,8 +471,10 @@
   // An unchanged block keeps its current preview: the editor refreshes every
   // preview often (language switch, closing a block), and replacing the
   // markup would reload a YouTube iframe or every gallery image each time.
-  function fetchServerPreview(blockEl, preview, type, text, extra, fallbackHtml, done) {
-    var key = type + '\u0000' + text + '\u0000' + extra;
+  // `context` (related-posts): {lang, entry_id, categories}, what else the
+  // rendering depends on.
+  function fetchServerPreview(blockEl, preview, type, text, extra, fallbackHtml, done, context) {
+    var key = type + '\u0000' + text + '\u0000' + extra + '\u0000' + JSON.stringify(context || '');
     // The node check catches another branch having replaced the preview
     // since (e.g. "Empty table"), which makes the cached key stale.
     if (blockEl._previewKey === key && blockEl._previewNode &&
@@ -483,7 +486,11 @@
     params.set('type', type);
     params.set('text', text);
     params.set('extra', extra);
-    fetch('/dashboard/api/block-preview', {
+    if (context) {
+      params.set('entry_id', context.entry_id);
+      params.set('categories', context.categories);
+    }
+    fetch('/dashboard/api/block-preview' + (context ? '?lang=' + encodeURIComponent(context.lang) : ''), {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -630,6 +637,15 @@
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty table</span>';
       }
+    } else if (type === 'related-posts') {
+      var relatedCats = Array.from(document.getElementById('entryCategories').selectedOptions)
+        .map(function (o) { return o.value; }).join(',');
+      // Readers get nothing when nothing matches; the writer gets told why.
+      var relatedEmpty = extra ? 'The chosen articles are no longer published, so readers won\'t see this block.'
+                               : 'No published article shares a category with this entry, so readers won\'t see this block.';
+      fetchServerPreview(blockEl, preview, type, '', extra, '<span class="boat-rudder-empty">Related articles</span>', function () {
+        if (!preview.firstElementChild) preview.innerHTML = '<span class="boat-rudder-empty">' + relatedEmpty + '</span>';
+      }, { lang: currentLang, entry_id: entryId, categories: relatedCats });
     } else if (type === 'social-networks') {
       if (extra) {
         var parts = extra.split('|');
@@ -658,7 +674,8 @@
   document.getElementById('entryBlocks').addEventListener('click', function (e) {
     var hit = e.target.closest(
       '.boat-rudder-entry-editor-block__preview .boat-rudder-entry-image img,' +
-      '.boat-rudder-entry-editor-block__preview .boat-rudder-gallery-item');
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-gallery-item,' +
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-related-posts a');
     if (!hit) return;
     e.stopPropagation();
     e.preventDefault();
@@ -1379,6 +1396,7 @@
     ['&#128279;', 'Link', 'link', '', 'url button'],
     ['&#9654;', 'YouTube', 'youtube-embed', '', 'video embed'],
     ['&#9835;', 'Social', 'social-networks', '', 'network profile'],
+    ['&#128240;', 'Related articles', 'related-posts', '', 'related articles next previous recommended series posts'],
     ['&#9998;', 'Byline', 'byline', '', 'author date'],
     ['&#9965;', 'HTML', 'generic', '', 'generic raw embed html']
   ];
@@ -1490,6 +1508,135 @@
     if (slash && e.target === slash.field) closeSlashMenu();
   });
   document.querySelector('.boat-rudder-entry-editor__main').addEventListener('scroll', closeSlashMenu);
+
+  /* ---- Related-posts block ----
+     extra_data is "" (automatic) or the chosen ids, "<left>|<right>". The
+     two slots hold {id, title} or null; every change writes them back. */
+  var RELATED_LOOKUP = '/dashboard/api/entries/lookup';
+
+  function relatedLookup(query) {
+    return fetch(RELATED_LOOKUP + '?' + query + '&lang=' + encodeURIComponent(currentLang), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return data.items || []; });
+  }
+
+  function relatedSlotOf(el) {
+    var slot = el.closest('.boat-rudder-entry-editor-related__slot');
+    return parseInt(slot.dataset.slot, 10);
+  }
+
+  function renderRelatedSlots(block) {
+    block.querySelectorAll('.boat-rudder-entry-editor-related__slot').forEach(function (el, i) {
+      var item = block._relatedSlots[i];
+      el.querySelector('.boat-rudder-entry-editor-related__chosen').hidden = !item;
+      el.querySelector('.boat-rudder-entry-editor-related__chosen-title').textContent = item ? item.title : '';
+      el.querySelector('.boat-rudder-entry-editor-related__search').hidden = !!item;
+    });
+  }
+
+  function syncRelatedExtra(block) {
+    var mode = block.querySelector('.boat-rudder-entry-editor-related__mode').value;
+    block.querySelector('[name="extra_data"]').value = mode === 'auto' ? '' :
+      block._relatedSlots.filter(Boolean).map(function (s) { return s.id; }).join('|');
+    setContentChanged();
+  }
+
+  function showRelatedMode(block, mode) {
+    block.querySelector('.boat-rudder-entry-editor-related__mode').value = mode;
+    block.querySelector('.boat-rudder-entry-editor-related__hint').hidden = mode !== 'auto';
+    block.querySelector('.boat-rudder-entry-editor-related').hidden = mode === 'auto';
+  }
+
+  function initRelatedBlock(block) {
+    if (block._relatedSlots) return;
+    var ids = block.querySelector('[name="extra_data"]').value.split('|').filter(Boolean);
+    block._relatedSlots = [null, null];
+    ids.slice(0, 2).forEach(function (id, i) { block._relatedSlots[i] = { id: id, title: '...' }; });
+    showRelatedMode(block, ids.length ? 'pick' : 'auto');
+    renderRelatedSlots(block);
+    if (!ids.length) return;
+    relatedLookup('ids=' + ids.join(',')).then(function (items) {
+      block._relatedSlots.forEach(function (slot) {
+        if (!slot) return;
+        var found = items.filter(function (it) { return it.id === slot.id; })[0];
+        slot.title = found ? found.title : 'No longer published';
+      });
+      renderRelatedSlots(block);
+    }).catch(function () {});
+  }
+
+  window.setRelatedMode = function (sel) {
+    var block = sel.closest('.boat-rudder-entry-editor-block');
+    showRelatedMode(block, sel.value);
+    syncRelatedExtra(block);
+  };
+
+  window.clearRelatedSlot = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    block._relatedSlots[relatedSlotOf(btn)] = null;
+    renderRelatedSlots(block);
+    syncRelatedExtra(block);
+  };
+
+  window.swapRelatedSlots = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    block._relatedSlots.reverse();
+    renderRelatedSlots(block);
+    syncRelatedExtra(block);
+  };
+
+  function pickRelated(input, item) {
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    block._relatedSlots[relatedSlotOf(input)] = { id: item.id, title: item.title };
+    input.value = '';
+    closeRelatedResults(input);
+    renderRelatedSlots(block);
+    syncRelatedExtra(block);
+  }
+
+  function renderRelatedResults(input, items) {
+    var box = input.nextElementSibling;
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    var other = block._relatedSlots[1 - relatedSlotOf(input)];
+    var shown = items.filter(function (it) { return !other || it.id !== other.id; });
+    box.innerHTML = '';
+    shown.forEach(function (it) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'boat-rudder-entry-editor-related__result';
+      b.textContent = it.title + (it.date ? ' - ' + it.date : '');
+      // Keeps the focus in the search box, whose blur closes this list.
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function (e) { e.stopPropagation(); pickRelated(input, it); });
+      box.appendChild(b);
+    });
+    if (!shown.length) {
+      var none = document.createElement('div');
+      none.className = 'boat-rudder-empty';
+      none.textContent = 'No articles found';
+      box.appendChild(none);
+    }
+    box.hidden = false;
+  }
+
+  // A pause after the last key, and a token so a slow answer can't replace a
+  // newer one.
+  window.searchRelated = function (input) {
+    clearTimeout(input._relatedTimer);
+    input._relatedTimer = setTimeout(function () {
+      var token = (input._relatedToken || 0) + 1;
+      input._relatedToken = token;
+      relatedLookup('q=' + encodeURIComponent(input.value.trim()) + '&exclude=' + entryId)
+        .then(function (items) {
+          if (input._relatedToken === token && document.activeElement === input) renderRelatedResults(input, items);
+        }).catch(function () {});
+    }, 200);
+  };
+
+  window.closeRelatedResults = function (input) {
+    clearTimeout(input._relatedTimer);
+    input.nextElementSibling.hidden = true;
+  };
 
   /* ---- Heading level ---- */
   window.setHeadingLevel = function (btn, level) {
@@ -2808,6 +2955,12 @@
     setupDragHandles();
     updateHeaderImagePreview();
     updateContextBar();
+
+    // The related-posts previews follow the categories ticked in Settings.
+    document.getElementById('entryCategories').addEventListener('change', function () {
+      document.querySelectorAll('#entryBlocks [data-type="related-posts"]:not(.boat-rudder-entry-editor-block--editing)')
+        .forEach(refreshBlockPreview);
+    });
 
     var imgInput = document.querySelector('#headerSidebar [name="image_url"]');
     if (imgInput) imgInput.addEventListener('input', updateHeaderImagePreview);

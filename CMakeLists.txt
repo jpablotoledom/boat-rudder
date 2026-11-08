@@ -100,6 +100,8 @@ set(SOURCES
     src/modules/blog_list/blog_list.c
     src/modules/category_menu/category_menu.c
     src/modules/entry_page/entry_page.c
+    src/modules/related_posts/related_posts.c
+    src/utils/related_ids.c
     src/modules/language_page/language_page.c
     src/modules/site_page/site_page.c
     src/modules/theme_page/theme_page.c
@@ -240,3 +242,6 @@ add_test(NAME code_highlight COMMAND code_highlight_test)
 
 add_executable(terminal_session_test tests/terminal_session_test.c src/utils/terminal_session.c)
 add_test(NAME terminal_session COMMAND terminal_session_test)
+
+add_executable(related_ids_test tests/related_ids_test.c src/utils/related_ids.c)
+add_test(NAME related_ids COMMAND related_ids_test)

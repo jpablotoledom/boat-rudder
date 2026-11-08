@@ -31,4 +31,9 @@ char *blog_list(int epoch, const char *lang, const char *base_url, int page, int
 char *blog_list_category(int epoch, const char *lang, const char *category_id_hex,
                          const char *base_url, int page, int *found);
 
+// The cover picture a list card shows for `epoch` (the variant, and a GIF
+// where JPEGs won't do), also used by the related-posts block. Epochs 1-3.
+// Malloc'd; NULL on allocation failure.
+char *blog_list_thumb_url(const char *image_url, int epoch);
+
 #endif // BLOG_LIST_H

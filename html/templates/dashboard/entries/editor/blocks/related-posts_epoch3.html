@@ -1,0 +1,47 @@
+    <div class="boat-rudder-entry-editor-block" data-block-id="%s" data-type="related-posts" onclick="activateBlock(this)">
+      <span class="boat-rudder-entry-editor-block__grip" title="Drag to reorder">&#8942;</span>
+
+      <div class="boat-rudder-entry-editor-block__header">
+        <span class="boat-rudder-entry-editor-block__type-label boat-rudder-entry-editor-block__type-label--related-posts">&#128240; Related articles</span>
+      </div>
+
+      <div class="boat-rudder-entry-editor-block__preview"></div>
+
+      <div class="boat-rudder-entry-editor-block__body">
+        <div class="boat-rudder-entry-editor__meta-group boat-rudder-entry-editor-block__tools">
+          <label class="boat-rudder-entry-editor-advanced__label">Articles</label>
+          <select class="boat-rudder-entry-editor-related__mode" onclick="event.stopPropagation()" onchange="setRelatedMode(this)">
+            <option value="auto">Automatic</option>
+            <option value="pick">Choose articles</option>
+          </select>
+        </div>
+
+        <p class="boat-rudder-dashboard__hint boat-rudder-entry-editor-related__hint">Shows the newest published article that shares a category with this entry. The categories are in Settings.</p>
+
+        <div class="boat-rudder-entry-editor-related" hidden>
+          <div class="boat-rudder-entry-editor-related__slot" data-slot="0">
+            <div class="boat-rudder-caption">Left: previous article</div>
+            <div class="boat-rudder-entry-editor-related__chosen" hidden>
+              <span class="boat-rudder-entry-editor-related__chosen-title"></span>
+              <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" type="button" title="Remove" onclick="event.stopPropagation();clearRelatedSlot(this)">&times;</button>
+            </div>
+            <input class="boat-rudder-entry-editor-related__search boat-rudder-input boat-rudder-input--sm" type="text" placeholder="Search by title..." onclick="event.stopPropagation()" onfocus="searchRelated(this)" oninput="searchRelated(this)" onblur="closeRelatedResults(this)">
+            <div class="boat-rudder-entry-editor-related__results" hidden></div>
+          </div>
+
+          <button class="boat-rudder-entry-editor-related__swap boat-rudder-btn boat-rudder-btn--sm" type="button" title="Swap left and right" onclick="event.stopPropagation();swapRelatedSlots(this)">&#8644;</button>
+
+          <div class="boat-rudder-entry-editor-related__slot" data-slot="1">
+            <div class="boat-rudder-caption">Right: next article</div>
+            <div class="boat-rudder-entry-editor-related__chosen" hidden>
+              <span class="boat-rudder-entry-editor-related__chosen-title"></span>
+              <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon" type="button" title="Remove" onclick="event.stopPropagation();clearRelatedSlot(this)">&times;</button>
+            </div>
+            <input class="boat-rudder-entry-editor-related__search boat-rudder-input boat-rudder-input--sm" type="text" placeholder="Search by title..." onclick="event.stopPropagation()" onfocus="searchRelated(this)" oninput="searchRelated(this)" onblur="closeRelatedResults(this)">
+            <div class="boat-rudder-entry-editor-related__results" hidden></div>
+          </div>
+        </div>
+      </div>
+
+      <input name="extra_data" type="hidden" value="%s">
+    </div>

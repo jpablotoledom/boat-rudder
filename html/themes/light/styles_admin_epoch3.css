@@ -55,6 +55,9 @@
   --br-admin-block-generic:          #000000;
   --br-admin-block-table:            #293812;
   --br-admin-block-social-networks:  #402f22;
+  --br-admin-block-related-posts:    #2dd4bf;
+  --br-admin-sheet-text:             #1a1a1a;
+  --br-admin-sheet-rule:             #b3b3b3;
 
   --br-admin-radius:         3px;
   --br-admin-radius-lg:      6px;
@@ -1991,7 +1994,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor__main {
   flex: 1; min-width: 0; overflow-y: auto; padding: 32px 48px 0;
   display: flex; flex-direction: column;
-  color: #1a1a1a;
+  color: var(--br-admin-sheet-text);
   background: var(--br-color-body-background, transparent);
 }
 .boat-rudder-entry-editor__main > * {
@@ -2140,6 +2143,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-block__type-label--generic         { color: var(--br-admin-block-generic); }
 .boat-rudder-entry-editor-block__type-label--table           { color: var(--br-admin-block-table); }
 .boat-rudder-entry-editor-block__type-label--social-networks { color: var(--br-admin-block-social-networks); }
+.boat-rudder-entry-editor-block__type-label--related-posts   { color: var(--br-admin-block-related-posts); }
 
 .boat-rudder-entry-editor-block__header-actions { display: flex; align-items: center; gap: 6px; }
 
@@ -2269,7 +2273,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-block[data-type="title"] textarea::placeholder { color: var(--br-admin-text-muted); }
 .boat-rudder-entry-editor-block[data-type="title"][data-level="1"] textarea { font-size: 32px; margin: 20px 14px; padding: 10px 0; }
 .boat-rudder-entry-editor-block[data-type="title"]:not([data-level="1"], [data-level="3"], [data-level="4"], [data-level="5"], [data-level="6"]) textarea {
-  padding-bottom: 12px; border-bottom: 1px solid #b3b3b3;
+  padding-bottom: 12px; border-bottom: 1px solid var(--br-admin-sheet-rule);
 }
 .boat-rudder-entry-editor-block[data-type="title"][data-level="3"] textarea { font-size: 20px; }
 .boat-rudder-entry-editor-block[data-type="title"][data-level="4"] textarea { font-size: 16px; margin: 21px 14px; }
@@ -2450,6 +2454,42 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
 }
 .boat-rudder-entry-editor-context__switch[hidden] { display: none; }
+
+/* Related-posts block: its two article slots, with a search under each */
+.boat-rudder-entry-editor-related {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start; gap: 10px;
+}
+.boat-rudder-entry-editor-related[hidden] { display: none; }
+.boat-rudder-entry-editor-related__slot { position: relative; }
+.boat-rudder-entry-editor-related__slot .boat-rudder-caption { margin-bottom: 4px; }
+.boat-rudder-entry-editor-related__swap { margin-top: 20px; }
+.boat-rudder-entry-editor-related__chosen {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; font-size: var(--br-admin-font-md); color: var(--br-admin-text);
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-related__chosen[hidden] { display: none; }
+.boat-rudder-entry-editor-related__chosen-title { min-width: 0; overflow-wrap: anywhere; }
+.boat-rudder-entry-editor-related__results {
+  position: absolute; left: 0; right: 0; z-index: 20; margin-top: 2px; padding: 4px;
+  max-height: 240px; overflow-y: auto;
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
+  box-shadow: var(--br-admin-shadow);
+}
+.boat-rudder-entry-editor-related__results[hidden] { display: none; }
+.boat-rudder-entry-editor-related__result {
+  display: block; width: 100%; padding: 6px 8px; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--br-admin-font-md); color: var(--br-admin-text);
+  background: none; border: none; border-radius: var(--br-admin-radius);
+}
+.boat-rudder-entry-editor-related__result:hover { background: var(--br-admin-hover); }
+@media (max-width: 599px) {
+  .boat-rudder-entry-editor-related { grid-template-columns: minmax(0, 1fr); }
+  .boat-rudder-entry-editor-related__swap { margin-top: 0; justify-self: center; }
+}
 
 /* Editor, narrow screens */
 @media (max-width: 899px) {

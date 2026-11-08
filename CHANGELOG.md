@@ -76,6 +76,19 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   image block's picture also changes it.
 - On a phone, the open block's tools sit in a row at the bottom of the screen.
 
+### Related articles block
+
+**Added**
+- A *Related articles* block for entries. By default it shows the newest published article that
+  shares a category with the entry, at full width; with no match readers see nothing, and the
+  editor says why.
+- The author can choose one article (full width) or two, side by side: left the previous one and
+  right the next, labelled "Previous article" and "Next article" - for articles published in
+  parts. Each card has the article's picture, title and summary, in the reader's language, and
+  links to it. An article that is unpublished later simply stops showing.
+- On every browser era: two columns or a table, down to a text list on text browsers and a link
+  on WAP phones.
+
 ### Entry editor: signed out while writing
 
 **Fixed**

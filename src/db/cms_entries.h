@@ -30,6 +30,7 @@ typedef struct {
 // One self-contained `entries` document, with `header` and `content[]`
 // already resolved to the requested language.
 typedef struct {
+    char *id;   // entries._id as 24-char hex
     char *link;
     char *type; // "page" | "blog" | ...
     bool  enabled; // false = a draft (only ever returned with include_drafts)
@@ -46,6 +47,10 @@ typedef struct {
     char  **category_names; // display name
     char  **category_links; // URL slug: "/blog/category/<slug>"
     size_t  category_count;
+
+    // entries.categories[] as 24-char hex, whatever their names resolve to.
+    char  **category_ids;
+    size_t  category_id_count;
 
     CmsContentBlock *content;
     size_t content_count; // sorted by content[].order
@@ -127,6 +132,24 @@ void cms_get_blog_entries_by_category(const char *lang, size_t skip, size_t limi
                                        CmsBlogListItem **out, size_t *out_count);
 
 // Frees every item's fields and the array itself. Safe to call with items == NULL.
+// The newest published blog entry, other than `exclude_id_hex`, sharing at
+// least one of `category_ids`. *out is NULL and *out_count 0 when there is
+// none (or no categories to compare); else one item for cms_blog_list_free().
+void cms_get_latest_related_entry(const char *lang, const char *exclude_id_hex,
+                                  const char *const *category_ids, size_t category_count,
+                                  CmsBlogListItem **out, size_t *out_count);
+
+// The published blog entries among `ids`, in the order of `ids`: one that is
+// gone, a draft or not a blog entry is left out.
+void cms_get_blog_entries_by_ids(const char *lang, const char *const *ids, size_t id_count,
+                                 CmsBlogListItem **out, size_t *out_count);
+
+// Published blog entries whose title contains `query` (a literal,
+// case-insensitive; "" for any), in `lang` or English, newest first, up to
+// `limit`, without `exclude_id_hex` (may be NULL).
+void cms_find_blog_entries_by_title(const char *query, const char *lang, const char *exclude_id_hex,
+                                    size_t limit, CmsBlogListItem **out, size_t *out_count);
+
 void cms_blog_list_free(CmsBlogListItem *items, size_t count);
 
 #endif // CMS_ENTRIES_H

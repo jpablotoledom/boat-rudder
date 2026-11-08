@@ -771,6 +771,45 @@ a.boat-rudder-social-network img { border-radius: 4px; flex-shrink: 0; }
   line-height: 26px;
 }
 .boat-rudder-list-container li { margin: 4px 0; }
+/* Related-posts block (related_posts.c): one or two blog entries as cards,
+   side by side - a single one takes the whole width. */
+.boat-rudder-related-posts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+.boat-rudder-related-posts--single { grid-template-columns: minmax(0, 1fr); }
+.boat-rudder-related-posts__item,
+.boat-rudder-related-posts__item:link,
+.boat-rudder-related-posts__item:visited {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  color: inherit;
+  text-decoration: none;
+  background-color: var(--br-color-blog-list-item-background, transparent);
+  border: 1px solid var(--br-color-blog-list-item-border, currentColor);
+}
+.boat-rudder-related-posts__item:hover { border-color: var(--br-color-navbar-menu-active, currentColor); }
+.boat-rudder-related-posts__image { display: block; width: 100%; height: 200px; object-fit: cover; }
+.boat-rudder-related-posts--single .boat-rudder-related-posts__image { height: 320px; }
+.boat-rudder-related-posts__label {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--br-color-blog-list-item-date, inherit);
+}
+.boat-rudder-related-posts__title { font-size: 20px; font-weight: 700; line-height: 1.3; }
+.boat-rudder-related-posts__summary { font-size: 16px; line-height: 24px; }
+@media (max-width: 599px) {
+  .boat-rudder-related-posts { grid-template-columns: minmax(0, 1fr); }
+  .boat-rudder-related-posts__image,
+  .boat-rudder-related-posts--single .boat-rudder-related-posts__image { height: 180px; }
+}
+
 .boat-rudder-container-table {
   width: 100%;
   overflow: scroll;

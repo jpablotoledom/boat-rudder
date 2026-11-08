@@ -74,6 +74,8 @@
 #include "../utils/image_convert/image_convert.h"
 #include "../utils/detect_epoch.h"
 #include "../utils/json_utils.h"
+#include "../utils/related_ids.h"
+#include "../db/cms_search.h"
 #include "../utils/log.h"
 #include "../utils/http_utils.h"
 #include "../utils/template_utils.h"
@@ -2929,6 +2931,30 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     }
                 }
 
+            } else if (strcmp(decoded_url, "/dashboard/api/entries/lookup") == 0) {
+                // The related-posts block's picker: published blog entries
+                // by title (?q=), or the ones already chosen (?ids=).
+                int epoch = resolve_epoch(&req);
+
+                if (!dashboard_allowed(&req, epoch)) {
+                    send_simple(ctx, "403 Forbidden", "Forbidden");
+                } else {
+                    char user_id[USER_ID_HEX_BUF_SIZE];
+                    if (require_dashboard_session(ctx, &req, epoch, user_id)) {
+                        const char *raw_q = get_query_param(params, param_count, "q");
+                        const char *raw_ids = get_query_param(params, param_count, "ids");
+                        char query[SEARCH_QUERY_MAX + 1] = "";
+                        char ids[64] = "";
+                        if (raw_q && strlen(raw_q) <= SEARCH_QUERY_MAX) url_decode(query, raw_q);
+                        if (raw_ids && strlen(raw_ids) < sizeof(ids)) url_decode(ids, raw_ids);
+                        char *json = related_posts_lookup_json(query, ids,
+                                                               get_query_param(params, param_count, "exclude"));
+                        char *response = json ? build_json_response(json) : NULL;
+                        free(json);
+                        send_or_error(ctx, response, req.method, epoch);
+                    }
+                }
+
             } else if (strcmp(decoded_url, "/dashboard/api/session") == 0) {
                 // Whether the page's session is still open, and its CSRF token:
                 // the entry editor polls it, to warn before a save fails, and
@@ -4256,8 +4282,23 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         if (strcmp(type, "code-text") == 0 || strcmp(type, "terminal") == 0 ||
                             strcmp(type, "gallery") == 0 || strcmp(type, "list") == 0 ||
                             strcmp(type, "table") == 0 || strcmp(type, "youtube-embed") == 0 ||
-                            strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0)
-                            html = entry_page_render_block(type, text, extra, EPOCH_MODERN);
+                            strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0) {
+                            html = entry_page_render_block(type, text, extra, NULL, EPOCH_MODERN);
+                        } else if (strcmp(type, "related-posts") == 0) {
+                            // The categories ticked in the editor right now,
+                            // saved or not, so the preview follows them.
+                            char entry_id[RELATED_ID_BUF_SIZE];
+                            char categories[1024];
+                            const char *category_ids[32];
+                            parse_urlencoded_field(req.body, req.body_length, "entry_id", entry_id, sizeof(entry_id));
+                            parse_urlencoded_field(req.body, req.body_length, "categories", categories, sizeof(categories));
+                            RelatedPostsContext related = {
+                                .entry_id = entry_id,
+                                .category_ids = category_ids,
+                                .category_count = related_ids_split_csv(categories, category_ids, 32),
+                            };
+                            html = entry_page_render_block(type, text, extra, &related, EPOCH_MODERN);
+                        }
                     }
                     free(text);
 
@@ -4514,7 +4555,14 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                             snprintf(field, sizeof(field), "content_%d_extra_data", i);
                             parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                            blocks[i].extra_data = strdup(value);
+                            if (strcmp(blocks[i].type, "related-posts") == 0) {
+                                // Whatever the page sends: two valid ids at most, never this entry.
+                                char normalized[RELATED_EXTRA_BUF_SIZE];
+                                related_ids_normalize(value, id, normalized);
+                                blocks[i].extra_data = strdup(normalized);
+                            } else {
+                                blocks[i].extra_data = strdup(value);
+                            }
 
                             blocks[i].text_values = calloc(lang_count, sizeof(char *));
                             for (size_t j = 0; j < lang_count; j++) {

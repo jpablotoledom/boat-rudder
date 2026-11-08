@@ -18,6 +18,27 @@ static char *load_template(const char *subpath_fmt, int epoch) {
     return tpl;
 }
 
+char *blog_list_thumb_url(const char *image_url, int epoch) {
+    // Epoch 1 predates progressive JPEG, so it gets the GIF the optimizer
+    // writes - same variant and rewrite as image_for_epoch()/gallery_thumb().
+    // Epoch 2 gets the same lighter `_micro` GIF now instead of `_small`
+    // (a JPEG, and the biggest file of the two by far) - real epoch-2
+    // browsers (Netscape 4 and up, over what was often a slow link) pay
+    // for up to HOME_BLOG_LIMIT of these on the home page alone, and a
+    // small blog-list thumbnail doesn't need `_small`'s extra detail to
+    // read as a thumbnail. Epoch 3 shows the thumbnail as a CSS
+    // background that stretches to the card's full width on narrow
+    // screens, so it alone still gets `_half`.
+    char *thumb = (epoch < EPOCH_MODERN)
+        ? image_url_variant(image_url, "_micro")
+        : image_url_variant(image_url, "_half");
+    if (epoch < EPOCH_MODERN && thumb) {
+        char *dot = strrchr(thumb, '.');
+        if (dot) strcpy(dot, ".gif");
+    }
+    return thumb;
+}
+
 // `show_item_color` only matters on epoch 2: false drops the item <table>'s
 // bgcolor (see cms_get_theme_home_blog_item_color_shown()).
 static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int epoch,
@@ -29,23 +50,7 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, int 
     char *result;
     if (epoch >= EPOCH_EARLY) {
         char *link_url = render_template("/blog/%s", item->link);
-        // Epoch 1 predates progressive JPEG, so it gets the GIF the optimizer
-        // writes - same variant and rewrite as image_for_epoch()/gallery_thumb().
-        // Epoch 2 gets the same lighter `_micro` GIF now instead of `_small`
-        // (a JPEG, and the biggest file of the two by far) - real epoch-2
-        // browsers (Netscape 4 and up, over what was often a slow link) pay
-        // for up to HOME_BLOG_LIMIT of these on the home page alone, and a
-        // small blog-list thumbnail doesn't need `_small`'s extra detail to
-        // read as a thumbnail. Epoch 3 shows the thumbnail as a CSS
-        // background that stretches to the card's full width on narrow
-        // screens, so it alone still gets `_half`.
-        char *thumb = (epoch < EPOCH_MODERN)
-            ? image_url_variant(item->header_image_url, "_micro")
-            : image_url_variant(item->header_image_url, "_half");
-        if (epoch < EPOCH_MODERN && thumb) {
-            char *dot = strrchr(thumb, '.');
-            if (dot) strcpy(dot, ".gif");
-        }
+        char *thumb = blog_list_thumb_url(item->header_image_url, epoch);
 
         if (epoch == EPOCH_MODERN) {
             // home-blog-item_epoch3.html carries its own color via CSS

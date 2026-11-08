@@ -2491,7 +2491,35 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   .boat-rudder-entry-editor-related__swap { margin-top: 0; justify-self: center; }
 }
 
-/* Editor, narrow screens */
+/* Editor, narrow screens. The top bar's groups never wrap (its height is
+   fixed): as the window narrows their secondary text goes first, then the
+   open block's tools leave the context bar for a row of their own. */
+.boat-rudder-entry-editor__topbar { gap: 12px; }
+.boat-rudder-entry-editor__topbar > * { flex-wrap: nowrap; flex-shrink: 0; }
+
+@media (max-width: 1279px) {
+  .boat-rudder-entry-editor-context__label { display: none; }
+  .boat-rudder-entry-editor-context { gap: 6px; }
+}
+
+@media (max-width: 999px) {
+  /* Too little room beside "+ Insert" and the actions: the open block's
+     tools get their own row at the bottom of the screen. */
+  .boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__tools {
+    top: auto; bottom: 0; left: 0; width: 100%; height: 44px; padding: 0 8px;
+    background: var(--br-admin-surface);
+    border-top: 1px solid var(--br-admin-border);
+  }
+}
+
+@media (max-width: 729px) {
+  /* The top bar scrolls sideways instead of squeezing its controls. */
+  .boat-rudder-entry-editor__topbar { gap: 10px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; }
+  .boat-rudder-entry-editor__topbar::-webkit-scrollbar { display: none; }
+  /* Fixed, or that scroll would clip the panel. */
+  .boat-rudder-entry-editor-translate__panel { position: fixed; top: 48px; right: 8px; }
+}
+
 @media (max-width: 899px) {
   .boat-rudder-entry-editor__sidebar {
     position: fixed; top: 84px; right: 0; bottom: 0; z-index: 202;
@@ -2506,23 +2534,11 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
 }
 
 @media (max-width: 599px) {
-  /* The top bar scrolls sideways instead of squeezing its controls. */
-  .boat-rudder-entry-editor__topbar { gap: 10px; padding: 0 10px; overflow-x: auto; scrollbar-width: none; }
-  .boat-rudder-entry-editor__topbar::-webkit-scrollbar { display: none; }
-  .boat-rudder-entry-editor__topbar > * { flex-wrap: nowrap; flex-shrink: 0; }
   .boat-rudder-entry-editor__save-status,
-  .boat-rudder-entry-editor-context__label,
   .boat-rudder-entry-editor-context__type { display: none; }
   .boat-rudder-entry-editor-context { gap: 4px; padding: 0 6px; }
   .boat-rudder-entry-editor__main { padding: 12px 8px 0; }
   .boat-rudder-entry-editor-block__grip { display: none; }
-  /* Too little room beside "+ Insert" and the actions: the open block's
-     tools get their own row at the bottom of the screen. */
-  .boat-rudder-entry-editor-block--editing .boat-rudder-entry-editor-block__tools {
-    top: auto; bottom: 0; left: 0; width: 100%; height: 44px; padding: 0 8px;
-    background: var(--br-admin-surface);
-    border-top: 1px solid var(--br-admin-border);
-  }
 }
 
 /* Media library modal (the editor's image picker) */

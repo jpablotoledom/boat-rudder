@@ -66,8 +66,9 @@ template (3 `%s`: block_id, lang_fields, extra_data).
 
 - **Top bar** (fixed, 44px): back link, *View post*, *Save all*, save status, autosave toggle,
   *Translate*, publish toggle (wired to the hidden `enabled` checkbox), the theme `<select>`,
-  language tabs and **⚙ Settings**. Under 600px it scrolls sideways instead of squeezing its
-  controls.
+  language tabs and **⚙ Settings**. Its groups never wrap (the bar's height is fixed):
+  under 1280px the secondary buttons keep only their icon and a `title`, and under 730px the bar
+  scrolls sideways.
 - **Theme** (`#editorTheme`, only with two themes or more): `entry_editor.c` puts every theme in
   the root's `data-themes` and the one in use in `data-theme`. Choosing one goes through
   `/theme/set?key=<key>&return=<this editor>` - the site navbar's switch, so the dashboard and
@@ -222,7 +223,7 @@ One place for the tools of whichever block is open, instead of a header per bloc
   handlers (`closest('.boat-rudder-entry-editor-block')`, `closest('...__lang-content')`) keep
   working; while the block is open CSS pins it `position: fixed` over `#editorContextTools`,
   whose box `placeContextTools()` measures into `--br-editor-tools-left` / `-width` (again on
-  resize and whenever the bar's layout changes). Under 600px the row goes to the bottom of the
+  resize and whenever the bar's layout changes). Under 1000px the row goes to the bottom of the
   screen instead. The drag clone of an open block drops `--editing`, so it doesn't put a second
   row in the bar.
 - **Actions** (`#editorContextActions`, hidden while no block is open): `contextAction(action)` -

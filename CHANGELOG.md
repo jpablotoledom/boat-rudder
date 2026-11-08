@@ -74,7 +74,8 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   text in every language.
 - Image and gallery blocks have *Select photo* / *+ Add photos* in the bar; a click on an open
   image block's picture also changes it.
-- On a phone, the open block's tools sit in a row at the bottom of the screen.
+- In a narrow window the top bar's secondary buttons keep only their icon, and under 1000px wide
+  the open block's tools sit in a row at the bottom of the screen.
 
 ### Related articles block
 

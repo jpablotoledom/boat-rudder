@@ -3,8 +3,8 @@
   <!-- Fixed top bar -->
   <div class="boat-rudder-entry-editor__topbar">
     <div class="boat-rudder-entry-editor__topbar-left">
-      <a href="/dashboard" class="boat-rudder-entry-editor__back boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm">&#8592; Dashboard</a>
-      <button class="boat-rudder-entry-editor__preview-btn boat-rudder-btn boat-rudder-btn--sm" onclick="openBlogPreview()">&#128065; View post</button>
+      <a href="/dashboard" class="boat-rudder-entry-editor__back boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" title="Dashboard">&#8592;<span class="boat-rudder-entry-editor-context__label"> Dashboard</span></a>
+      <button class="boat-rudder-entry-editor__preview-btn boat-rudder-btn boat-rudder-btn--sm" onclick="openBlogPreview()" title="View post">&#128065;<span class="boat-rudder-entry-editor-context__label"> View post</span></button>
     </div>
     <div class="boat-rudder-entry-editor__topbar-center">
       <button class="boat-rudder-entry-editor__save-btn boat-rudder-btn boat-rudder-btn--primary" id="editor-save-btn" onclick="editorSaveAll()">Save all</button>
@@ -18,7 +18,7 @@
     </div>
     <div class="boat-rudder-entry-editor__topbar-right">
       <div class="boat-rudder-entry-editor-translate" id="translateBox" hidden>
-        <button class="boat-rudder-btn boat-rudder-btn--sm" type="button" onclick="toggleTranslatePanel()">&#127760; Translate</button>
+        <button class="boat-rudder-btn boat-rudder-btn--sm" type="button" onclick="toggleTranslatePanel()" title="Translate">&#127760;<span class="boat-rudder-entry-editor-context__label"> Translate</span></button>
         <div class="boat-rudder-entry-editor-translate__panel" id="translatePanel">
           <p class="boat-rudder-entry-editor-translate__from">From <strong id="translateFrom"></strong> to:</p>
           <div id="translateTargets"></div>

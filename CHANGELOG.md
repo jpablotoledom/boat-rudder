@@ -77,6 +77,15 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 - In a narrow window the top bar's secondary buttons keep only their icon, and under 1000px wide
   the open block's tools sit in a row at the bottom of the screen.
 
+### Article index block
+
+**Added**
+- An *Article index* block lists up to 20 existing articles, in the order the author sets: a
+  table with each article's picture, title and summary, in the reader's language, every row
+  linking to it. An article that is unpublished later simply drops out of the list.
+- On every browser era: a table where there is one, down to a text list on text browsers and links
+  on WAP phones.
+
 ### Related articles block
 
 **Added**

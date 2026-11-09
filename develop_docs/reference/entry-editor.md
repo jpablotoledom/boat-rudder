@@ -18,7 +18,7 @@ Diagrams: [entry-editor-components.puml](../diagrams/entry-editor-components.pum
 ```c
 typedef struct {
     char  *id;          // content[]._id as 24-char hex
-    char  *type;        // one of the 15 block types - see §3
+    char  *type;        // one of the 16 block types - see §3
     int    order;
     char **text_values; // parallel to langs[] - exact text.<lang> ("" if absent)
     char  *extra_data;  // untranslated; heading level for "title", gallery _id for "gallery", ...
@@ -120,8 +120,9 @@ templates, which now cover every epoch:
 | `social-networks` | `blocks/social-networks_epoch3.html` | `"<icon>\|<url>"` |
 | `generic` | `blocks/generic_epoch3.html` | unused |
 | `related-posts` | `blocks/related-posts_epoch3.html` | `""` (automatic), `"<id>"` or `"<left id>\|<right id>"` |
+| `entry-index` | `blocks/entry-index_epoch3.html` | up to 20 entry ids, in order, joined by `\|` |
 
-These are the same 15 types `entry_page.c`'s `render_block()` renders publicly - the editor and
+These are the same 16 types `entry_page.c`'s `render_block()` renders publicly - the editor and
 the public renderer are kept deliberately in sync. Unknown types render `""` in both.
 
 Most blocks share `render_extra_block()`, which feeds the template `(id, lang_fields,
@@ -337,6 +338,7 @@ object with a key is not offered (there's no undo); the context bar's delete doe
 - `link`, `youtube-embed`, `social-networks`: URL/icon inputs synced into `extra_data`
   (`syncLinkUrl()`, `syncYouTubeUrl()`, `syncSocialIcon()/syncSocialUrl()`).
 - `related-posts`: see [Related-posts block](#related-posts-block).
+- `entry-index`: see [Entry-index block](#entry-index-block).
 
 ### Related-posts block
 
@@ -356,6 +358,16 @@ Public rendering: [rendering.md](rendering.md#related-posts-block). It stores no
   there refreshes it). With nothing to show, the preview says why, since readers get nothing.
 - The server has the last word: `.../content` passes this block's `extra_data` through
   `related_ids_normalize()` (two valid ids at most, no repeats, never this entry).
+
+### Entry-index block
+
+Public rendering: [rendering.md](rendering.md#entry-index-block). Like `related-posts` it stores
+only ids. `block._indexItems` holds the chosen articles as `{id, title}`, listed in order with
+↑ / ↓ and × (`renderIndexList()`, one delegated click listener), a count (`3 / 20`) and a title
+search that disappears at the limit. `searchIndex()` shares `runEntrySearch()` and
+`renderEntryResults()` with the related-posts picker; the list stays open after a pick, to add
+several in a row. The lookup asks for more than it shows, so hiding what's already chosen doesn't
+empty the list. `.../content` normalizes `extra_data` the same way, with `ENTRY_INDEX_MAX`.
 
 ### Heading levels (title blocks)
 `initBlockHeadingBtns(block)` - reads `extra_data`, marks the matching H1-H6 button active and
@@ -486,7 +498,7 @@ All of them answer `application/json; charset=UTF-8`.
 | `.../api/entries/<id>/content` | `POST` | `content_count` (capped at 200) plus `content_<i>_id`/`_type`/`_order`/`_extra_data`/`_text_<lang>` per block → `CmsContentBlockEdit[]` → `cms_update_entry_content()` (full `content[]` replace) + gallery upsert (§6) → `{"ok":true,"ids":[...]}` (see below) |
 | `.../api/entries/<id>/blocks` | `POST` | `type`, `order` → `cms_add_entry_content_block()` (`$push` of an empty block), rendered via `entry_editor_render_block()` → `{"ok":true,"block_id":"...","html":"..."}` (HTML escaped with `json_escape_alloc()`) \| `400 ... "create failed"` |
 | `.../api/entries/<id>/blocks/<block_id>/delete` | `POST` | `cms_remove_entry_content_block()` (`$pull` by `_id`) → same shape (`"error":"remove failed"`) |
-| `/dashboard/api/entries/lookup` | `GET` | `require_dashboard_session()` only. `q` (title, literal) or `ids` (comma-separated, in order), `exclude`, `lang` → `{"ok":true,"items":[{"id","title","date"}]}`: published blog entries, eight at most |
+| `/dashboard/api/entries/lookup` | `GET` | `require_dashboard_session()` only. `q` (title, literal) or `ids` (comma-separated, in order, 20 at most), `exclude`, `lang` → `{"ok":true,"items":[{"id","title","date"}]}`: published blog entries (`q`: the 28 newest matches, of which the picker shows eight it doesn't already hold) |
 | `/dashboard/api/session` | `GET` | `require_dashboard_session()` only. `{"ok":true,"csrf":"<token>"}`, or `401 {"ok":false,"session":"expired"}` - see [Session](#session) |
 | `/dashboard/api/translate` | `POST` | `require_dashboard_session()` only (a viewer is refused, as for any write). Azure provider only. `source`, `target`, `format` (`text`\|`html`), `text` × up to 50 → `{"ok":true,"texts":[...]}` \| `400`/`502 {"ok":false,"error":"..."}` |
 | `/dashboard/api/block-preview` | `POST` | `require_dashboard_session()` only (no entry id, no ownership). `type`, `text`, `extra` → `text/html` from `entry_page_render_block()`; `403` plain text on non-epoch-3 |

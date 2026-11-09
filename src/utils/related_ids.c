@@ -17,10 +17,10 @@ int related_id_is_valid(const char *s) {
 }
 
 size_t related_ids_parse(const char *extra_data, const char *exclude,
-                         char ids[RELATED_POSTS_MAX][RELATED_ID_BUF_SIZE]) {
+                         char ids[][RELATED_ID_BUF_SIZE], size_t max) {
     size_t count = 0;
     const char *p = extra_data ? extra_data : "";
-    while (count < RELATED_POSTS_MAX) {
+    while (count < max) {
         size_t len = strcspn(p, "|");
         if (span_is_id(p, len)) {
             char id[RELATED_ID_BUF_SIZE];
@@ -38,9 +38,9 @@ size_t related_ids_parse(const char *extra_data, const char *exclude,
     return count;
 }
 
-void related_ids_normalize(const char *extra_data, const char *exclude, char *out) {
-    char ids[RELATED_POSTS_MAX][RELATED_ID_BUF_SIZE];
-    size_t count = related_ids_parse(extra_data, exclude, ids);
+void related_ids_normalize(const char *extra_data, const char *exclude, size_t max, char *out) {
+    char ids[ENTRY_INDEX_MAX][RELATED_ID_BUF_SIZE];
+    size_t count = related_ids_parse(extra_data, exclude, ids, max < ENTRY_INDEX_MAX ? max : ENTRY_INDEX_MAX);
     out[0] = '\0';
     for (size_t i = 0; i < count; i++) {
         if (i) strcat(out, "|");

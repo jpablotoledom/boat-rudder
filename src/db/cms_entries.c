@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 
 // Resolves header.image_url/title/summary/author/date from doc's "header" subdocument,
@@ -596,29 +597,49 @@ void cms_get_blog_entries_by_ids(const char *lang, const char *const *ids, size_
     *out_count = 0;
     if (id_count == 0) return;
 
-    CmsBlogListItem *items = calloc(id_count, sizeof(CmsBlogListItem));
-    if (!items) return;
-
-    // One query per id: there are two at most, and $in wouldn't keep the
-    // left/right order the author chose.
-    size_t count = 0;
+    bson_t *query = BCON_NEW("type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
+    bson_t id_filter, in;
+    uint32_t added = 0;
+    bson_append_document_begin(query, "_id", -1, &id_filter);
+    bson_append_array_begin(&id_filter, "$in", -1, &in);
     for (size_t i = 0; i < id_count; i++) {
         if (!ids[i] || !bson_oid_is_valid(ids[i], strlen(ids[i]))) continue;
         bson_oid_t oid;
+        char key[16];
         bson_oid_init_from_string(&oid, ids[i]);
-        bson_t *query = BCON_NEW("_id", BCON_OID(&oid), "type", BCON_UTF8("blog"), "enabled", BCON_BOOL(true));
-
-        CmsBlogListItem *found = NULL;
-        size_t found_count = 0;
-        fetch_entry_items(query, lang, 1, "cms_get_blog_entries_by_ids", &found, &found_count);
-        if (found_count == 1) items[count++] = found[0];
-        free(found);    // its one item now belongs to items[]
+        snprintf(key, sizeof(key), "%u", added++);
+        bson_append_oid(&in, key, -1, &oid);
     }
-
-    if (count == 0) {
-        free(items);
+    bson_append_array_end(&id_filter, &in);
+    bson_append_document_end(query, &id_filter);
+    if (added == 0) {
+        bson_destroy(query);
         return;
     }
+
+    CmsBlogListItem *found = NULL;
+    size_t found_count = 0;
+    fetch_entry_items(query, lang, id_count, "cms_get_blog_entries_by_ids", &found, &found_count);
+    if (found_count == 0) return;
+
+    // $in answers in its own order: put them back in the one chosen. Each
+    // item moves once; a repeated id finds its slot already emptied.
+    CmsBlogListItem *items = calloc(id_count, sizeof(CmsBlogListItem));
+    if (!items) {
+        cms_blog_list_free(found, found_count);
+        return;
+    }
+    size_t count = 0;
+    for (size_t i = 0; i < id_count; i++) {
+        for (size_t j = 0; ids[i] && j < found_count; j++) {
+            if (!found[j].id || strcasecmp(found[j].id, ids[i]) != 0) continue;
+            items[count++] = found[j];
+            memset(&found[j], 0, sizeof(found[j]));
+            break;
+        }
+    }
+    cms_blog_list_free(found, found_count);
+
     *out = items;
     *out_count = count;
 }

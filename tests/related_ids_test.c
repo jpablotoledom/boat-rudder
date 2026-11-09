@@ -14,7 +14,7 @@ static int checks = 0;
 
 static void expect_normal(const char *input, const char *exclude, const char *want) {
     char out[RELATED_EXTRA_BUF_SIZE];
-    related_ids_normalize(input, exclude, out);
+    related_ids_normalize(input, exclude, RELATED_POSTS_MAX, out);
     checks++;
     if (strcmp(out, want) != 0) {
         printf("FAIL \"%s\": got \"%s\", wanted \"%s\"\n", input ? input : "(null)", out, want);
@@ -37,6 +37,26 @@ int main(void) {
     expect_normal("6aebaffe77c8e02a6805ecdZ", NULL, "");   // not hex
     expect_normal("6aebaffe", NULL, "");                   // too short
     expect_normal("6aebaffe77c8e02a6805ecd2ff", NULL, ""); // too long
+
+    // The index's limit: twenty kept of twenty-one, in order.
+    char many[32 * 22] = "", want[32 * 21] = "";
+    for (int i = 0; i < 21; i++) {
+        char id[RELATED_ID_BUF_SIZE];
+        snprintf(id, sizeof(id), "6aebaffe77c8e02a6805ec%02x", i);
+        if (i) strcat(many, "|");
+        strcat(many, id);
+        if (i < ENTRY_INDEX_MAX) {
+            if (i) strcat(want, "|");
+            strcat(want, id);
+        }
+    }
+    char out[RELATED_EXTRA_BUF_SIZE];
+    related_ids_normalize(many, NULL, ENTRY_INDEX_MAX, out);
+    checks++;
+    if (strcmp(out, want) != 0) {
+        printf("FAIL index limit: got \"%s\"\n", out);
+        failures++;
+    }
 
     char csv[] = A ",x," B "," C;
     const char *ids[2];

@@ -101,6 +101,7 @@ set(SOURCES
     src/modules/category_menu/category_menu.c
     src/modules/entry_page/entry_page.c
     src/modules/related_posts/related_posts.c
+    src/modules/entry_index/entry_index.c
     src/utils/related_ids.c
     src/modules/language_page/language_page.c
     src/modules/site_page/site_page.c

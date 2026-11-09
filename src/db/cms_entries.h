@@ -139,8 +139,8 @@ void cms_get_latest_related_entry(const char *lang, const char *exclude_id_hex,
                                   const char *const *category_ids, size_t category_count,
                                   CmsBlogListItem **out, size_t *out_count);
 
-// The published blog entries among `ids`, in the order of `ids`: one that is
-// gone, a draft or not a blog entry is left out.
+// The published blog entries among `ids`, in the order of `ids`, with one
+// query: one that is gone, a draft or not a blog entry is left out.
 void cms_get_blog_entries_by_ids(const char *lang, const char *const *ids, size_t id_count,
                                  CmsBlogListItem **out, size_t *out_count);
 

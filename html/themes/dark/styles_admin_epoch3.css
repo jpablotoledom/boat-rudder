@@ -56,6 +56,7 @@
   --br-admin-block-table:            #a3e635;
   --br-admin-block-social-networks:  #fb923c;
   --br-admin-block-related-posts:    #2dd4bf;
+  --br-admin-block-entry-index:      #a78bfa;
   --br-admin-sheet-text:             #ffffff;
   --br-admin-sheet-rule:             #4a4a4a;
 
@@ -2145,6 +2146,7 @@ body.boat-rudder-entry-editor-mode--dragging { cursor: grabbing !important; user
 .boat-rudder-entry-editor-block__type-label--table           { color: var(--br-admin-block-table); }
 .boat-rudder-entry-editor-block__type-label--social-networks { color: var(--br-admin-block-social-networks); }
 .boat-rudder-entry-editor-block__type-label--related-posts   { color: var(--br-admin-block-related-posts); }
+.boat-rudder-entry-editor-block__type-label--entry-index     { color: var(--br-admin-block-entry-index); }
 
 .boat-rudder-entry-editor-block__header-actions { display: flex; align-items: center; gap: 6px; }
 
@@ -2455,6 +2457,20 @@ h6.boat-rudder-entry-editor-preview__title { font-size: 13px; font-weight: 600; 
   border: 1px solid var(--br-admin-border); border-radius: var(--br-admin-radius);
 }
 .boat-rudder-entry-editor-context__switch[hidden] { display: none; }
+
+/* Entry-index block: the chosen articles in order, and the search that adds more */
+.boat-rudder-entry-editor-index__count { font-weight: normal; }
+.boat-rudder-entry-editor-index__list { margin: 6px 0 8px; padding: 0; list-style: none; }
+.boat-rudder-entry-editor-index__row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 8px; font-size: var(--br-admin-font-md); color: var(--br-admin-text);
+  background: var(--br-admin-surface-raised);
+  border: 1px solid var(--br-admin-border); border-bottom-width: 0;
+}
+.boat-rudder-entry-editor-index__row:last-child { border-bottom-width: 1px; }
+.boat-rudder-entry-editor-index__title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.boat-rudder-entry-editor-index__search { position: relative; }
+.boat-rudder-entry-editor-index__search[hidden] { display: none; }
 
 /* Related-posts block: its two article slots, with a search under each */
 .boat-rudder-entry-editor-related {

@@ -455,6 +455,7 @@
     if (type === 'table') initTableBlock(block);
     if (type === 'social-networks') initSocialBlock(block);
     if (type === 'related-posts') initRelatedBlock(block);
+    if (type === 'entry-index') initIndexBlock(block);
     applyLangVisibility(block);
   }
 
@@ -637,6 +638,14 @@
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty table</span>';
       }
+    } else if (type === 'entry-index') {
+      if (extra) {
+        fetchServerPreview(blockEl, preview, type, '', extra, '<span class="boat-rudder-empty">Article index</span>', function () {
+          if (!preview.firstElementChild) preview.innerHTML = '<span class="boat-rudder-empty">The chosen articles are no longer published, so readers won\'t see this block.</span>';
+        }, { lang: currentLang, entry_id: entryId, categories: '' });
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty index: click to add articles</span>';
+      }
     } else if (type === 'related-posts') {
       var relatedCats = Array.from(document.getElementById('entryCategories').selectedOptions)
         .map(function (o) { return o.value; }).join(',');
@@ -675,7 +684,8 @@
     var hit = e.target.closest(
       '.boat-rudder-entry-editor-block__preview .boat-rudder-entry-image img,' +
       '.boat-rudder-entry-editor-block__preview .boat-rudder-gallery-item,' +
-      '.boat-rudder-entry-editor-block__preview .boat-rudder-related-posts a');
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-related-posts a,' +
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-entry-index a');
     if (!hit) return;
     e.stopPropagation();
     e.preventDefault();
@@ -1396,6 +1406,7 @@
     ['&#128279;', 'Link', 'link', '', 'url button'],
     ['&#9654;', 'YouTube', 'youtube-embed', '', 'video embed'],
     ['&#9835;', 'Social', 'social-networks', '', 'network profile'],
+    ['&#9783;', 'Article index', 'entry-index', '', 'index table contents list articles posts series'],
     ['&#128240;', 'Related articles', 'related-posts', '', 'related articles next previous recommended series posts'],
     ['&#9998;', 'Byline', 'byline', '', 'author date'],
     ['&#9965;', 'HTML', 'generic', '', 'generic raw embed html']
@@ -1594,11 +1605,11 @@
     syncRelatedExtra(block);
   }
 
-  function renderRelatedResults(input, items) {
+  // The picker's list under `input`: up to eight of `items`, without the ids
+  // of `taken` (the server sends more, so hiding those doesn't empty it).
+  function renderEntryResults(input, items, taken, onPick) {
     var box = input.nextElementSibling;
-    var block = input.closest('.boat-rudder-entry-editor-block');
-    var other = block._relatedSlots[1 - relatedSlotOf(input)];
-    var shown = items.filter(function (it) { return !other || it.id !== other.id; });
+    var shown = items.filter(function (it) { return taken.indexOf(it.id) < 0; }).slice(0, 8);
     box.innerHTML = '';
     shown.forEach(function (it) {
       var b = document.createElement('button');
@@ -1607,7 +1618,7 @@
       b.textContent = it.title + (it.date ? ' - ' + it.date : '');
       // Keeps the focus in the search box, whose blur closes this list.
       b.addEventListener('mousedown', function (e) { e.preventDefault(); });
-      b.addEventListener('click', function (e) { e.stopPropagation(); pickRelated(input, it); });
+      b.addEventListener('click', function (e) { e.stopPropagation(); onPick(it); });
       box.appendChild(b);
     });
     if (!shown.length) {
@@ -1621,21 +1632,108 @@
 
   // A pause after the last key, and a token so a slow answer can't replace a
   // newer one.
-  window.searchRelated = function (input) {
+  function runEntrySearch(input, onItems) {
     clearTimeout(input._relatedTimer);
     input._relatedTimer = setTimeout(function () {
       var token = (input._relatedToken || 0) + 1;
       input._relatedToken = token;
       relatedLookup('q=' + encodeURIComponent(input.value.trim()) + '&exclude=' + entryId)
         .then(function (items) {
-          if (input._relatedToken === token && document.activeElement === input) renderRelatedResults(input, items);
+          if (input._relatedToken === token && document.activeElement === input) onItems(items);
         }).catch(function () {});
     }, 200);
+  }
+
+  window.searchRelated = function (input) {
+    runEntrySearch(input, function (items) {
+      var block = input.closest('.boat-rudder-entry-editor-block');
+      var other = block._relatedSlots[1 - relatedSlotOf(input)];
+      renderEntryResults(input, items, other ? [other.id] : [], function (it) { pickRelated(input, it); });
+    });
   };
 
   window.closeRelatedResults = function (input) {
     clearTimeout(input._relatedTimer);
     input.nextElementSibling.hidden = true;
+  };
+
+  /* ---- Entry-index block ----
+     extra_data is the chosen ids in order, joined by '|'. block._indexItems
+     holds them as {id, title}; every change writes them back. */
+  var ENTRY_INDEX_MAX = 20;
+
+  function syncIndexExtra(block) {
+    block.querySelector('[name="extra_data"]').value =
+      block._indexItems.map(function (it) { return it.id; }).join('|');
+    setContentChanged();
+  }
+
+  function renderIndexList(block) {
+    var items = block._indexItems;
+    var list = block.querySelector('.boat-rudder-entry-editor-index__list');
+    var iconBtn = 'boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon';
+    list.innerHTML = '';
+    items.forEach(function (it, i) {
+      var row = document.createElement('li');
+      row.className = 'boat-rudder-entry-editor-index__row';
+      row.dataset.index = i;
+      row.innerHTML =
+        '<span class="boat-rudder-entry-editor-index__title"></span>' +
+        '<button type="button" class="' + iconBtn + '" data-index-action="up" title="Move up"' + (i === 0 ? ' disabled' : '') + '>&#8679;</button>' +
+        '<button type="button" class="' + iconBtn + '" data-index-action="down" title="Move down"' + (i === items.length - 1 ? ' disabled' : '') + '>&#8681;</button>' +
+        '<button type="button" class="' + iconBtn + '" data-index-action="remove" title="Remove">&times;</button>';
+      row.firstChild.textContent = it.title;
+      list.appendChild(row);
+    });
+    block.querySelector('.boat-rudder-entry-editor-index__count').textContent = items.length + ' / ' + ENTRY_INDEX_MAX;
+    block.querySelector('.boat-rudder-entry-editor-index__search').hidden = items.length >= ENTRY_INDEX_MAX;
+  }
+
+  function initIndexBlock(block) {
+    if (block._indexItems) return;
+    var ids = block.querySelector('[name="extra_data"]').value.split('|').filter(Boolean).slice(0, ENTRY_INDEX_MAX);
+    block._indexItems = ids.map(function (id) { return { id: id, title: '...' }; });
+
+    // On the list, which outlives every re-render: attached once.
+    block.querySelector('.boat-rudder-entry-editor-index__list').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-index-action]');
+      if (!btn || btn.disabled) return;
+      e.stopPropagation();
+      var items = block._indexItems;
+      var i = parseInt(btn.closest('[data-index]').dataset.index, 10);
+      var to = btn.dataset.indexAction === 'up' ? i - 1 : i + 1;
+      if (btn.dataset.indexAction === 'remove') items.splice(i, 1);
+      else items.splice(to, 0, items.splice(i, 1)[0]);
+      renderIndexList(block);
+      syncIndexExtra(block);
+    });
+
+    renderIndexList(block);
+    if (!ids.length) return;
+    relatedLookup('ids=' + ids.join(',')).then(function (found) {
+      block._indexItems.forEach(function (it) {
+        var match = found.filter(function (f) { return f.id === it.id; })[0];
+        it.title = match ? match.title : 'No longer published';
+      });
+      renderIndexList(block);
+    }).catch(function () {});
+  }
+
+  window.searchIndex = function (input) {
+    runEntrySearch(input, function (items) {
+      var block = input.closest('.boat-rudder-entry-editor-block');
+      var taken = block._indexItems.map(function (it) { return it.id; });
+      renderEntryResults(input, items, taken, function (it) {
+        block._indexItems.push({ id: it.id, title: it.title });
+        input.value = '';
+        renderIndexList(block);
+        syncIndexExtra(block);
+        // Stays open on the next ones, for adding several in a row; the
+        // limit hides the box, so its list goes too.
+        if (block._indexItems.length < ENTRY_INDEX_MAX) window.searchIndex(input);
+        else closeRelatedResults(input);
+      });
+    });
   };
 
   /* ---- Heading level ---- */

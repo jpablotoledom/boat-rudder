@@ -349,7 +349,7 @@ http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │     │     ├─ entry/entry-meta_epoch3.html          (epoch 3 only: author + categories strip;
   │     │     │     older epochs fall back to the bare categories block)
   │     │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
-  │     │           See "Content block types" below (15 types)
+  │     │           See "Content block types" below (16 types)
   │     │
   │     └─ buildEntryWebSiteAtUrl(epoch, title, content, current_url, cat_menu)
   │           title = "[Draft] <title>" for an unpublished entry
@@ -395,6 +395,7 @@ interprets those two fields differently:
 | `social-networks` | display name (falls back to the icon name) | `"<icon>\|<url>"` | -1..3 |
 | `generic` | raw HTML passthrough | unused | -1..3 |
 | `related-posts` | unused | `""` (automatic), `"<id>"` or `"<left id>\|<right id>"` - see [Related-posts block](#related-posts-block) | -1..3 |
+| `entry-index` | unused | up to 20 entry ids, in order, joined by `\|` - see [Entry-index block](#entry-index-block) | -1..3 |
 
 Every type has a template for each epoch (the older-epoch files were ported from the legacy CMS
 in `../the-retro-center-old`) - except `table` on WML, which is built in C (see above). Where a
@@ -440,6 +441,23 @@ Templates `elements/related-posts/related-posts{,-item,-label,-image}_epoch<N>.h
 |---|---|
 | 3 | CSS grid of two columns, `--single` for one, stacked under 600px; the card is one link. Colors from the `blog-list-item-*` palette |
 | 2, 1 | One `<table>` row, cells 50% or 100%, with the `blog_list_thumb_url()` GIF |
+| 0 | Title link and summary, no picture |
+| -1 | The title link only |
+
+### Entry-index block
+
+`entry_index_render()` (`src/modules/entry_index/`): a table-like list of up to 20
+(`ENTRY_INDEX_MAX`) blog entries chosen by the author, in their order - picture, title, summary,
+each row linking to its entry, read from the entries in the reader's language. One query for all
+of them (`cms_get_blog_entries_by_ids()`). A chosen entry that is gone or back to draft is
+skipped; with none left the block renders `""`.
+
+Templates `elements/entry-index/entry-index{,-item,-image}_epoch<N>.html`:
+
+| Epoch | Layout |
+|---|---|
+| 3 | One link per row on a CSS grid - picture, title, summary - in the theme's `table-*` colors; under 600px the picture beside the title over the summary. `_small` picture |
+| 2, 1 | A `<table>`, one row each, with the `blog_list_thumb_url()` GIF |
 | 0 | Title link and summary, no picture |
 | -1 | The title link only |
 

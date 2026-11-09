@@ -113,6 +113,8 @@ char *entry_editor_render_block(const CmsContentBlockEdit *block,
         return render_notext_block(block, "dashboard/entries/editor/blocks/separator_epoch%d.html", epoch);
     if (strcmp(block->type, "youtube-embed") == 0)
         return render_notext_block(block, "dashboard/entries/editor/blocks/youtube-embed_epoch%d.html", epoch);
+    if (strcmp(block->type, "entry-index") == 0)
+        return render_notext_block(block, "dashboard/entries/editor/blocks/entry-index_epoch%d.html", epoch);
     if (strcmp(block->type, "related-posts") == 0)
         return render_notext_block(block, "dashboard/entries/editor/blocks/related-posts_epoch%d.html", epoch);
     if (strcmp(block->type, "link") == 0)

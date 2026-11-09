@@ -11,7 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define RELATED_LOOKUP_LIMIT 8
+// What the picker shows, plus room for the ones it already holds and hides.
+#define RELATED_LOOKUP_LIMIT (8 + ENTRY_INDEX_MAX)
 
 static char *load_template(const char *subpath_fmt, int epoch) {
     char *path = generate_url_theme(subpath_fmt, epoch);
@@ -55,7 +56,7 @@ static char *render_item(const CmsBlogListItem *item, const char *item_tpl, cons
 
 char *related_posts_render(const char *extra_data, const RelatedPostsContext *ctx, int epoch) {
     char ids[RELATED_POSTS_MAX][RELATED_ID_BUF_SIZE];
-    size_t chosen = related_ids_parse(extra_data, ctx ? ctx->entry_id : NULL, ids);
+    size_t chosen = related_ids_parse(extra_data, ctx ? ctx->entry_id : NULL, ids, RELATED_POSTS_MAX);
 
     CmsBlogListItem *items = NULL;
     size_t count = 0;
@@ -106,8 +107,8 @@ char *related_posts_lookup_json(const char *query, char *ids_csv, const char *ex
     size_t count = 0;
 
     if (ids_csv && ids_csv[0]) {
-        const char *ids[RELATED_POSTS_MAX];
-        size_t id_count = related_ids_split_csv(ids_csv, ids, RELATED_POSTS_MAX);
+        const char *ids[ENTRY_INDEX_MAX];
+        size_t id_count = related_ids_split_csv(ids_csv, ids, ENTRY_INDEX_MAX);
         cms_get_blog_entries_by_ids(request_lang(), ids, id_count, &items, &count);
     } else {
         cms_find_blog_entries_by_title(query, request_lang(), exclude_id, RELATED_LOOKUP_LIMIT,

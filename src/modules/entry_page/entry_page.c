@@ -1,4 +1,5 @@
 #include "entry_page.h"
+#include "../entry_index/entry_index.h"
 #include "../related_posts/related_posts.h"
 #include "../../db/cms_themes.h"
 #include "../../db/mongodb_manager.h"
@@ -1422,6 +1423,7 @@ static char *render_block(const CmsContentBlock *block, const RelatedPostsContex
     if (strcmp(block->type, "table") == 0)           return render_table(block, epoch);
     if (strcmp(block->type, "social-networks") == 0) return render_social_networks(block, epoch);
     if (strcmp(block->type, "related-posts") == 0)   return related_posts_render(block->extra_data, related, epoch);
+    if (strcmp(block->type, "entry-index") == 0)     return entry_index_render(block->extra_data, related ? related->entry_id : NULL, epoch);
     return strdup("");
 }
 

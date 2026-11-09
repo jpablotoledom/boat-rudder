@@ -2944,7 +2944,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                         const char *raw_q = get_query_param(params, param_count, "q");
                         const char *raw_ids = get_query_param(params, param_count, "ids");
                         char query[SEARCH_QUERY_MAX + 1] = "";
-                        char ids[64] = "";
+                        char ids[RELATED_EXTRA_BUF_SIZE + 64] = "";
                         if (raw_q && strlen(raw_q) <= SEARCH_QUERY_MAX) url_decode(query, raw_q);
                         if (raw_ids && strlen(raw_ids) < sizeof(ids)) url_decode(ids, raw_ids);
                         char *json = related_posts_lookup_json(query, ids,
@@ -4273,7 +4273,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                     size_t cap = req.body_length > 0 ? (size_t)req.body_length + 1 : 1;
                     char *text = malloc(cap);
                     char type[32];
-                    char extra[256];
+                    char extra[RELATED_EXTRA_BUF_SIZE + 32];
                     char *html = NULL;
                     if (text) {
                         parse_urlencoded_field(req.body, req.body_length, "type", type, sizeof(type));
@@ -4284,7 +4284,7 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
                             strcmp(type, "table") == 0 || strcmp(type, "youtube-embed") == 0 ||
                             strcmp(type, "image") == 0 || strcmp(type, "paragraph") == 0) {
                             html = entry_page_render_block(type, text, extra, NULL, EPOCH_MODERN);
-                        } else if (strcmp(type, "related-posts") == 0) {
+                        } else if (strcmp(type, "related-posts") == 0 || strcmp(type, "entry-index") == 0) {
                             // The categories ticked in the editor right now,
                             // saved or not, so the preview follows them.
                             char entry_id[RELATED_ID_BUF_SIZE];
@@ -4555,10 +4555,11 @@ void http_route(read_func_t read_func, void *ctx, const char *root_directory) {
 
                             snprintf(field, sizeof(field), "content_%d_extra_data", i);
                             parse_urlencoded_field(req.body, req.body_length, field, value, sizeof(value));
-                            if (strcmp(blocks[i].type, "related-posts") == 0) {
-                                // Whatever the page sends: two valid ids at most, never this entry.
+                            int is_index = strcmp(blocks[i].type, "entry-index") == 0;
+                            if (is_index || strcmp(blocks[i].type, "related-posts") == 0) {
+                                // Whatever the page sends: valid ids only, up to the block's limit, never this entry.
                                 char normalized[RELATED_EXTRA_BUF_SIZE];
-                                related_ids_normalize(value, id, normalized);
+                                related_ids_normalize(value, id, is_index ? ENTRY_INDEX_MAX : RELATED_POSTS_MAX, normalized);
                                 blocks[i].extra_data = strdup(normalized);
                             } else {
                                 blocks[i].extra_data = strdup(value);

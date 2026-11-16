@@ -1,14 +1,22 @@
       <tr>
         <td class="boat-rudder-dashboard__thumb-cell"><img class="boat-rudder-dashboard__thumb" src="%s" alt=""></td>
-        <td class="boat-rudder-dashboard__title-cell"><a href="/dashboard/entries/%s/edit">%s</a>%s <span class="boat-rudder-dashboard__badge boat-rudder-badge">%s</span></td>
-        <td><div class="boat-rudder-dashboard__clamp">%s</div></td>
+        <td class="boat-rudder-dashboard__entry-cell">
+          <div class="boat-rudder-dashboard__entry-title"><a href="/dashboard/entries/%s/edit">%s</a>%s <span class="boat-rudder-dashboard__badge boat-rudder-badge">%s</span></div>
+          <div class="boat-rudder-dashboard__entry-summary boat-rudder-dashboard__clamp">%s</div>
+        </td>
         <td>%s</td>
         <td class="boat-rudder-dashboard__nowrap">%s</td>
         <td class="boat-rudder-dashboard__categories">%s</td>
         <td>
-          <div class="boat-rudder-dashboard__inline-form">
-            <a class="boat-rudder-btn" href="/dashboard/entries/%s/edit">Edit</a>
-            <a class="boat-rudder-btn" href="%s" target="_blank" rel="noopener">View</a>
+          <div class="boat-rudder-dashboard__row-actions">
+            <a class="boat-rudder-btn boat-rudder-btn--sm" href="/dashboard/entries/%s/edit" title="Edit">
+              <svg class="boat-rudder-btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              <span class="boat-rudder-btn__label">Edit</span>
+            </a>
+            <a class="boat-rudder-btn boat-rudder-btn--sm" href="%s" target="_blank" rel="noopener" title="View">
+              <svg class="boat-rudder-btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="boat-rudder-btn__label">View</span>
+            </a>
 %s
           </div>
         </td>

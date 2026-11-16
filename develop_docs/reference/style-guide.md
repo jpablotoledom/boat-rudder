@@ -379,7 +379,7 @@ boat-rudder-<block>__<element>--<modifier>
 | Modifier | A variant or state of a block or element, after `--` | `boat-rudder-navbar__menu--open` |
 
 - **No nested elements.** `block__a__b` is not allowed. When an element has parts of its own, it
-  becomes a block: `boat-rudder-entry-editor-block` with `boat-rudder-entry-editor-block__header`.
+  becomes a block: `boat-rudder-entry-editor-block` with `boat-rudder-entry-editor-block__tools`.
 - **No underscores inside names.** Use `menu-item`, not `menu_item`.
 - **State is a modifier, never a bare class.** Write `boat-rudder-modal--active`, not
   `active`, `is-open` or `selected`. The element keeps its base class too:
@@ -416,6 +416,10 @@ elements are unsafe for the real browsers of that epoch. Color those epochs with
   new color is a new token first.
 - **Change a theme's admin look in its token block**, not in the rules: the rules are the same in
   every theme that ships today.
+- **Icons are inline SVG in the template**, `<svg class="boat-rudder-btn__icon" viewBox="0 0 24 24"
+  aria-hidden="true">`, stroked in `currentColor` so a button's color (danger, hover) reaches
+  them; the button's text goes in `boat-rudder-btn__label` and its name in a `title`, so it
+  still has one when only the icon shows.
 
 ### Checking
 

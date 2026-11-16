@@ -4,13 +4,20 @@
 #include "../../db/cms_categories.h"
 #include <stddef.h>
 
+// Categories the bar on /blog and /blog/category/<slug> shows before its
+// "See more..." link - the most visited ones (cms_category_ranking.h).
+#define CATEGORY_MENU_MAX 15
+
 // Renders the category sub-menu bar shown below the main navbar on blog pages.
 // `categories` is the full list of all entry_categories documents. `current_slug`
 // is the URL slug of the currently active category (NULL if none is selected).
 // Uses slugify() to convert each category name to a URL slug for matching and
-// for building the href. Returns a malloc'd HTML string (possibly "") or NULL
-// on allocation failure. The caller must free() the result.
+// for building the href. With `max_items` > 0 and more categories than that,
+// only the first `max_items` show - plus the current one, if it is further
+// down - followed by a "See more..." link to /blog/categories, the full list;
+// 0 shows them all. Returns a malloc'd HTML string (possibly "") or NULL on
+// allocation failure. The caller must free() the result.
 char *category_menu_render(const CmsCategoryItem *categories, size_t count,
-                            const char *current_slug, int epoch);
+                            const char *current_slug, int epoch, size_t max_items);
 
 #endif // CATEGORY_MENU_H

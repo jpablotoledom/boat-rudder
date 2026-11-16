@@ -249,6 +249,10 @@ static char *splice_theme_colors(char *html) {
         "--br-color-code-comment:%s;--br-color-code-number:%s;"
         "--br-color-code-variable:%s;--br-color-code-tag:%s;"
         "--br-color-code-line-number:%s;"
+        "--br-color-terminal-background:%s;--br-color-terminal-text:%s;"
+        "--br-color-terminal-prompt:%s;--br-color-terminal-output:%s;"
+        "--br-color-terminal-option:%s;--br-color-terminal-value:%s;"
+        "--br-color-terminal-variable:%s;"
         "}%s</style>",
         colors.navbar_background, colors.navbar_menu_normal,
         colors.navbar_menu_hover, colors.navbar_menu_active,
@@ -270,6 +274,9 @@ static char *splice_theme_colors(char *html) {
         colors.code_comment, colors.code_number,
         colors.code_variable, colors.code_tag,
         colors.code_line_number,
+        colors.terminal_background, colors.terminal_text,
+        colors.terminal_prompt, colors.terminal_output,
+        colors.terminal_option, colors.terminal_value, colors.terminal_variable,
         font_css ? font_css : "");
     free(font_css);
 

@@ -638,6 +638,19 @@ def os_unknown():
     ])
 
 
+# ---- Marks -------------------------------------------------------------------------
+
+def verified():
+    # The team's mark next to a name: a white check on a blue badge.
+    px = blank()
+    disc(px, C0, C0, 9.6, "b")
+    disc(px, C0, C0, 8.6, "B")
+    for dx, dy in ((0, 0), (0, 1), (1, 0)):
+        line(px, 5 + dx, 10 + dy, 8 + dx, 13 + dy, "W")
+        line(px, 8 + dx, 13 + dy, 14 + dx, 6 + dy, "W")
+    return px
+
+
 ICONS = {
     # browsers
     "chrome": chrome, "firefox": firefox, "edge": edge, "safari": safari, "opera": opera,
@@ -647,6 +660,8 @@ ICONS = {
     "windows": windows, "windows-xp": windows_xp, "windows-classic": windows_classic,
     "mac": mac, "mac-classic": mac_classic, "linux": linux, "android": android, "ios": ios,
     "bsd": bsd, "unix": unix, "dos": dos, "os2": os2, "palm": palm, "os": os_unknown,
+    # marks
+    "verified": verified,
 }
 
 

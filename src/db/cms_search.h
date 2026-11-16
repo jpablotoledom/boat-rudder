@@ -34,4 +34,8 @@ int cms_search_entries(const char *query, const char *lang, CmsSearchResult **ou
 
 void cms_search_free(CmsSearchResult *results, size_t count);
 
+// `query` as a literal regex: every ASCII character that isn't a letter,
+// digit or space is escaped. Malloc'd; NULL on allocation failure.
+char *cms_search_regex_literal(const char *query);
+
 #endif // CMS_SEARCH_H

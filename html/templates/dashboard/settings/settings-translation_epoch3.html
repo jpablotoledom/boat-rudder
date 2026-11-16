@@ -1,0 +1,45 @@
+  <section class="boat-rudder-dashboard__panel" id="translation">
+    <h2>Translation</h2>
+    <form method="POST" action="/dashboard/settings/translation" class="boat-rudder-dashboard__site-name boat-rudder-card">
+      <label for="translate_provider">Translate entries with</label>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <select class="boat-rudder-input" id="translate_provider" name="translate_provider">
+          <option value=""%1$s>Off</option>
+          <option value="azure"%2$s>Azure AI Translator</option>
+          <option value="local"%3$s>A translator on this computer</option>
+        </select>
+        <button class="boat-rudder-btn boat-rudder-btn--primary" type="submit">Save</button>
+      </div>
+      <label for="translate_azure_key">Azure key</label>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <input class="boat-rudder-input" type="password" id="translate_azure_key" name="translate_azure_key"
+               value="" maxlength="120" autocomplete="off" placeholder="%4$s">
+        <label class="boat-rudder-dashboard__asset-check">
+          <input type="checkbox" name="translate_azure_key_clear" value="1"%5$s> Remove the key
+        </label>
+      </div>
+      <label for="translate_azure_region">Azure region (required, unless the resource is Global)</label>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <input class="boat-rudder-input" type="text" id="translate_azure_region" name="translate_azure_region"
+               value="%8$s" maxlength="60" autocomplete="off" placeholder="westeurope">
+      </div>
+      <label for="translate_local_url">Local translator address</label>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <input class="boat-rudder-input" type="url" id="translate_local_url" name="translate_local_url"
+               value="%6$s" maxlength="250" placeholder="http://localhost:5000">
+      </div>
+      <label for="translate_local_key">Local translator API key (if it asks for one)</label>
+      <div class="boat-rudder-dashboard__site-name-row">
+        <input class="boat-rudder-input" type="text" id="translate_local_key" name="translate_local_key"
+               value="%7$s" maxlength="120" autocomplete="off">
+      </div>
+      <p class="boat-rudder-dashboard__hint">Adds a <em>Translate</em> button to the entry editor that
+         fills the empty fields of the other languages from the one being edited.
+         <strong>Azure AI Translator</strong> is called by the server: create a Translator resource in
+         the Azure portal (the <em>F0</em> tier is free, 2 million characters a month) and copy its
+         key and its <em>Location/Region</em> (empty for a global resource). The key is never shown
+         again - leave the field empty to keep it. <strong>A translator on this computer</strong> is a
+         LibreTranslate-compatible server (<code>POST /translate</code>) running where the editor is:
+         the browser calls it directly, so the site never needs to reach it.</p>
+    </form>
+  </section>

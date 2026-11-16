@@ -123,13 +123,13 @@ epoch 3 browser below that floor sees "needs a more recent browser" on `/login` 
 |---|---|---|
 | `/login` | `GET` | If `mongodb_manager_is_ready()` and the request carries a valid session cookie, `302 /dashboard`. Otherwise renders `login_epoch<N>.html` via `buildPageWebSite()`. For `EPOCH_MODERN`, a real form; other epochs show "not available". |
 | `/login` | `POST` | **`EPOCH_MODERN` only.** Other epochs re-render the "not available" page without any DB access. If `mongodb_manager_is_ready()` is false, `503`. Otherwise `auth_login_user()`; on success, `generate_session_token()` + `create_session()` + `Set-Cookie` + `302 /dashboard`; on failure, re-renders `/login` (`200`) with "Invalid email or password." |
-| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN` the page opens with "Welcome back" and, on its right, a **Menu** dropdown and a **Log out** button, then has two parts (three for an Administrador). (1) **Option groups**, inside the Menu dropdown (a `<details>`, so it works without JS; a small inline script in `dashboard_epoch3.html` closes it on an outside click or Escape) - an Administrador gets `dashboard/nav-admin_epoch3.html`: *Content* (Entries, Categories, Media library, Menu), *Site* (General, Themes, Fonts, Languages, Epoch preview), *Administration* (Users, Analytics report, Extensions); an Autor gets `nav-author_epoch3.html`: *Content* (Entries, Media library). Both end with an *Extensions* group listing every enabled extension's `nav=` link (`extensions_admin_nav()`, see [extensions.md](extensions.md)), absent when there is none. (2) For an Administrador only, the **analytics summary** (`analytics_summary()`, see [analytics.md](analytics.md#dashboard-summary)). (3) **Entries pending publication** - unpublished entries only (`enabled != true`), with **+ New entry** and **View all** (`/dashboard/entries`) next to the heading: every type for an Administrador (`entries_admin_rows(epoch, lang, NULL, NULL, true, true)`), only their own `type:"blog"` entries for an Autor (`entries_admin_rows(epoch, lang, "blog", user_id, true, false)` - no Delete button). Rows: see [Entries listing](#entries-listing-srcmodulesentries_admin-embedded-in-dashboard) below. Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
-| `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_admin_session()` - Administrador only, an Autor session gets `302 /dashboard`. Renders `categories_admin_list(epoch, content_lang)`: every `entry_categories` document, `name` resolved to the current default content language. |
+| `/dashboard` | `GET` | If `!mongodb_manager_is_ready()` → `503`. Else `validate_session_cookie()`: valid → looks up the user's role (`cms_get_user_role()`, defaulting to `"admin"` on error) and calls `dashboard(epoch, content_lang, user_id, role)` via `buildPageWebSite()`; otherwise → `302 /login`. For `EPOCH_MODERN` the page opens with "Welcome back" and, on its right, a **Menu** dropdown and a **Log out** button, then has two parts (three for an Administrador). (1) **Option groups**, inside the Menu dropdown (a `<details>`, so it works without JS; a small inline script in `dashboard_epoch3.html` closes it on an outside click or Escape) - an Administrador gets `dashboard/nav-admin_epoch3.html`: *Content* (Entries, Categories, Media library, Menu), *Site* (General, Themes, Fonts, Languages, Epoch preview), *Administration* (Users, Analytics report, Extensions); an Autor gets `nav-author_epoch3.html`: *Content* (Entries, Categories, Media library, Comments). Both end with an *Extensions* group listing every enabled extension's `nav=` link (`extensions_admin_nav()`, see [extensions.md](extensions.md)), absent when there is none. (2) For an Administrador only, the **analytics summary** (`analytics_summary()`, see [analytics.md](analytics.md#dashboard-summary)). (3) **Entries pending publication** - unpublished entries only (`enabled != true`), with **+ New entry** and **View all** (`/dashboard/entries`) next to the heading: every type for an Administrador (`entries_admin_rows(epoch, lang, NULL, NULL, true, true)`), only their own `type:"blog"` entries for an Autor (`entries_admin_rows(epoch, lang, "blog", user_id, true, false)` - no Delete button). Rows: see [Entries listing](#entries-listing-srcmodulesentries_admin-embedded-in-dashboard) below. Other epochs render the static "Welcome to dashboard" fragment unchanged (role is ignored). |
+| `/dashboard/categories` | `GET` | **`EPOCH_MODERN` only** (other epochs `302 /dashboard`). `require_category_creator_session()` - an Administrador, an Observador or an Autor (anyone else `302 /dashboard`). Renders `categories_admin_list(epoch, content_lang, can_manage)`: every `entry_categories` document, `name` resolved to the current default content language; each row's Edit / Delete buttons (`list-row-actions_epoch<N>.html`) only for a role that sees everything (`role_sees_everything()`) - an Autor sees the names and *+ New category*. |
 | `/dashboard/categories/new` | `GET` | Same guards. Renders `categories_admin_form()` with one empty field per active content language. |
-| `/dashboard/categories/new` | `POST` | Same guards. Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
-| `/dashboard/categories/<id>/edit` | `GET` | Same guards. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `categories_admin_form()` pre-filled via `cms_get_category_name_values()`. |
-| `/dashboard/categories/<id>/edit` | `POST` | Same guards. `cms_update_category()`, `302 /dashboard/categories`. |
-| `/dashboard/categories/<id>/delete` | `POST` | Same guards. `cms_delete_category()`, `302 /dashboard/categories`. Any `entries.categories[]` referencing `<id>` simply stop resolving to a name - no cascading cleanup. |
+| `/dashboard/categories/new` | `POST` | Same guards - an Autor may add a category (an Observador's write is refused, as every one). Reads `name_<code>` for each active language from the form body, `cms_create_category()`, `302 /dashboard/categories`. |
+| `/dashboard/categories/<id>/edit` | `GET` | `require_admin_session()` - Administrador (and Observador) only: categories are shared, so an Autor's change would reach other authors' entries. `404` if `<id>` is not a valid ObjectId or no matching document exists; otherwise `categories_admin_form()` pre-filled via `cms_get_category_name_values()`. |
+| `/dashboard/categories/<id>/edit` | `POST` | Same guards as the edit form. `cms_update_category()`, `302 /dashboard/categories`. |
+| `/dashboard/categories/<id>/delete` | `POST` | Same guards as the edit form. `cms_delete_category()`, `302 /dashboard/categories`. Any `entries.categories[]` referencing `<id>` simply stop resolving to a name - no cascading cleanup. |
 | `/dashboard/languages` | `GET` | Same guards. Renders `languages_admin()`: active `languages` documents (default marked, "make default"/"remove" actions on the rest) plus an "add language" `<select>` of `LANGUAGE_CATALOG` entries not yet active. |
 | `/dashboard/languages/add` | `POST` | Same guards. `cms_add_language(code)`; on failure (unknown or already-active code), re-renders `/dashboard/languages` (`200`) with an error message; on success, `302 /dashboard/languages`. |
 | `/dashboard/languages/<code>/default` | `POST` | Same guards. `cms_set_default_language(code)`, `302 /dashboard/languages`. Takes effect immediately (no restart) - `cms_resolve_default_lang()` re-queries `languages` on every request. |
@@ -197,15 +197,18 @@ newest `header.date` first - see `cms_get_admin_entries()` in `cms_entries.c`); 
 and `created_by_hex`, if non-NULL, restrict the query to `{type: type_filter, created_by:
 ObjectId(created_by_hex)}` - `dashboard()` passes `(NULL, NULL)` for an Administrador (every
 entry, any `type`) and `("blog", user_id)` for an Autor (only their own `type:"blog"` entries).
-Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the same fields as the home/blog
-list - image, title (linked to the editor, `/dashboard/entries/<id>/edit`), summary (clamped to
-two lines), author, date and category tags (`elements/category/category_epoch<N>.html`). The
-title carries the "Draft" badge for an unpublished entry and a "Page"/"Blog" badge for its
-`type`. The actions cell has "Edit", "View" (the public `/page/<link>` or `/blog/<link>`, in a
-new tab - a draft is visible there to a signed-in user) and, only when `entries_admin_rows()` gets
-`can_delete` (Administrador), "Delete" (`entries/list-row-delete_epoch<N>.html`, a
-`POST /dashboard/entries/<id>/delete` form behind a `confirm()`). With no entries,
-`list-empty_epoch<N>.html` shows the message and its own "+ New entry" button. `cms_get_admin_entries()` shares its row population
+Each row (`dashboard/entries/list-row_epoch<N>.html`) shows the image, an **Entry** cell with
+two lines - the title (linked to the editor, `/dashboard/entries/<id>/edit`) over the summary
+(muted, clamped to two lines) - then author, date and category tags
+(`elements/category/category_epoch<N>.html`). The title carries the "Draft" badge for an
+unpublished entry and a "Page"/"Blog" badge for its `type`. The actions cell holds icon buttons
+(see [Maintainer page conventions](#maintainer-page-conventions-epoch-3)): "Edit", "View" (the
+public `/page/<link>` or `/blog/<link>`, in a new tab - a draft is visible there to a signed-in
+user) and, only when `entries_admin_rows()` gets `can_delete` (Administrador), "Delete"
+(`entries/list-row-delete_epoch<N>.html`, a `POST /dashboard/entries/<id>/delete` form behind a
+`confirm()`). The dashboard home's "Entries pending publication" table has the same columns
+(Image, Entry, Author, Date, Categories, Actions). With no entries, `list-empty_epoch<N>.html`
+shows the message and its own "+ New entry" button. `cms_get_admin_entries()` shares its row population
 with `cms_get_blog_entries()` via the `CmsBlogListItem` struct, which now also carries `type`
 and `id` (hex ObjectId). `dashboard_epoch<N>.html` also has a static "+ New entry"
 `POST /dashboard/entries/new` button above the table.
@@ -221,6 +224,19 @@ and `id` (hex ObjectId). `dashboard_epoch<N>.html` also has a static "+ New entr
 - **Buttons**: `boat-rudder-btn` plus `--primary` for create/save actions and `--danger` for
   destructive ones (the admin components: [themes.md](themes.md#61-admin-tokens-and-components)). Every Delete/Remove form asks first with
   `onsubmit="return confirm(...)"`.
+- **Row actions**: a list's per-row buttons (entries, users, menu, categories, languages,
+  themes) sit in one row, `<div class="boat-rudder-dashboard__row-actions">`, as
+  `boat-rudder-btn--sm` buttons with an inline SVG icon (`<svg class="boat-rudder-btn__icon">`,
+  stroked in `currentColor`) and a `<span class="boat-rudder-btn__label">` - Edit a pencil, View
+  an eye, Delete / Remove a trash can, Make default a star, Customize sliders. Under 600px the
+  label is hidden visually (still read by screen readers) and each button carries a `title`
+  tooltip, so only the icons show.
+- **Two-line cells**: the entries list stacks title over summary
+  (`__entry-cell` / `__entry-title` / `__entry-summary`), the users list username over email
+  (`__user-cell` / `__user-name` / `__user-email`, which wrap anywhere so a long address never
+  widens the table).
+- **Tables**: every list table sits in a `boat-rudder-dashboard__table-scroll` wrapper, so on a
+  phone a wide table scrolls inside itself instead of pushing the page sideways.
 
 ### Entry editor (`src/db/cms_entries_admin.c`, `src/modules/entry_editor/`)
 
@@ -251,14 +267,14 @@ document instead of a 5-table relational model).
   (full-array `$set` replace, used for editing/reordering existing blocks - every block must
   already have a valid `_id` from `cms_add_entry_content_block()`).
 - `src/modules/entry_editor/entry_editor.c`: `entry_editor_page()` renders
-  `dashboard/entries/editor/container_epoch<N>.html` - a meta sidebar
-  (`meta_epoch<N>.html` + `category-option_epoch<N>.html` per category, multi-select), a header
-  sidebar (`header_epoch<N>.html` - image, date, a read-only author name and one
+  `dashboard/entries/editor/container_epoch<N>.html` - a settings panel holding the meta section
+  (`meta_epoch<N>.html` + `category-option_epoch<N>.html` per category, multi-select) and the
+  post header (`header_epoch<N>.html` - image, date, a read-only author name and one
   `header-lang-tab_epoch<N>.html` per `cms_get_languages()` entry, each holding that language's
   title and summary), and the blocks section (below), plus a JSON array of language
   codes (`["en","es",...]`) injected into `data-langs` for the inline editor script.
   `lang-tab-button_epoch<N>.html` renders one language-switcher button per language, shared by
-  the header sidebar and every content block.
+  the settings panel and every content block.
 - `src/modules/entry_editor/entry_editor_blocks.c`: `entry_editor_render_block()` renders one
   `content[]` block's edit form - move-up/down/remove buttons, one
   `blocks/lang-field_epoch<N>.html` per language (the block's `text.<lang>`), a type-specific
@@ -267,23 +283,33 @@ document instead of a 5-table relational model).
   `entry_page.c`'s `render_block()` renders publicly, minus `gallery`-specific handling
   (unknown types render `""`, mirroring that function). Only epoch 3 editor templates exist,
   which is consistent with the editor being `EPOCH_MODERN`-only. `entry_editor_render_blocks()`
-  renders every block and wraps them in `blocks_epoch<N>.html`, which also holds the
-  "+ Add block" dropdown (one button per supported type) and the "Save all"/autosave controls.
+  renders every block and wraps them in `blocks_epoch<N>.html`, which also holds the block
+  menu (one button per supported type) shared by the sheet's "+ Add block" and the context
+  bar's "+ Insert".
 - **Editor JS** (inline `<script>` in `container_epoch3.html`, no external `.js` file, following
   the convention in `layout/layout_epoch3.html` / `menu/menu_epoch3.html`): language tabs
-  toggle every `.boat-rudder-entry-editor__lang-panel[data-lang="<code>"]` element (header
-  sidebar + each block) via `setLang()`. `saveMeta()`/`saveHeader()`/`saveContent()` each `POST`
+  toggle every `.boat-rudder-entry-editor-block__lang-content[data-lang="<code>"]` element
+  (settings panel + each block) via `setLang()`. `saveMeta()`/`saveHeader()`/`saveContent()` each `POST`
   one of the `/dashboard/api/entries/<id>/...` endpoints below as
   `application/x-www-form-urlencoded`; `editorSaveAll()` runs all three. Editing any field marks
   the page dirty; an "Autosave" checkbox schedules `editorSaveAll()` 3s after the last edit.
   `insertNewComponent(type)` / `removeComponent()` call the `/blocks` and
   `/blocks/<block_id>/delete` endpoints and patch the DOM without a full reload.
   `moveBlockUp()`/`moveBlockDown()` just reorder DOM nodes - the new order is only persisted on
-  the next `saveContent()` (block `order` = DOM index at save time). Previews of simple blocks
-  are built client-side; `code-text`, `gallery`, `table`, `youtube-embed`, `image` and
-  `paragraph` are fetched from `POST /dashboard/api/block-preview`, which returns the real epoch 3
-  rendering (`entry_page_render_block()`), so the preview can't drift from the public page.
-- **Editor UX** (epoch 3): the editor uses a document-style layout with a fixed top bar (save-all, autosave toggle, publish toggle, language tabs), a block type toolbar, and a two-column layout (left: meta + header sidebars; right: content blocks). Blocks default to a document-like preview mode; clicking a block enters edit mode showing the full form. Paragraph blocks have a WYSIWYG rich-text toolbar. Title blocks have H1-H6 level selectors. Gallery blocks show a thumbnail preview area with drag-and-drop reordering and a "Select photos" button that opens the media picker modal. Blocks support drag-and-drop reordering.
+  the next `saveContent()` (block `order` = DOM index at save time). Paragraphs and titles have no
+  preview - they are written in place. Previews of simple blocks are built client-side;
+  `code-text`, `terminal`, `list`, `gallery`, `table`, `youtube-embed` and `image` are fetched from
+  `POST /dashboard/api/block-preview`, which returns the real epoch 3 rendering
+  (`entry_page_render_block()`), so the preview can't drift from the public page.
+- **Editor UX** (epoch 3): WYSIWYG-style. A fixed top bar (save-all, autosave, translate,
+  publish, language tabs, ⚙ Settings), a context bar with "+ Insert" and the open block's type,
+  tools and actions, and a sheet drawn like the published entry (page content background, 18px
+  text, the public headings) where paragraphs and titles are written in place and other blocks
+  show their real rendering until opened. Settings (slug, type, categories, cover, date, title,
+  summary) are a panel beside the sheet, a drawer under 900px. Enter, Backspace and the arrows
+  work across blocks, `/` and Markdown shortcuts insert blocks, and paragraphs, headings and
+  lists switch type keeping their text. Blocks support drag-and-drop reordering. Full writeup:
+  [entry-editor.md](entry-editor.md#4-client-side-editor-container_epoch3html-inline-script).
 - **Gallery block**: supported in editor (thumbnail preview, drag-drop reorder) and public view (see "Gallery block" below). Selecting photos opens the `/dashboard/api/media/modal` endpoint, which returns the media admin UI inside a modal overlay.
 - **Drafts**: the publish toggle is the entry's `enabled` flag. A draft is listed in the
   dashboard and viewable at its public URL by any signed-in user (marked `[Draft]`), and is
@@ -338,8 +364,9 @@ Basic CRUD over `entry_categories` (`ENTRY_CATEGORIES_COLLECTION`), already read
   leaves dangling `entries.categories[]` references, which `resolve_category_names()`'s `$in`
   lookup already ignores gracefully.
 - `src/modules/categories_admin/categories_admin.c`:
-  - `categories_admin_list(epoch, lang)` -> `dashboard/categories/list_epoch<N>.html` (+
-    `list-row_epoch<N>.html` per category, or `list-empty_epoch<N>.html`).
+  - `categories_admin_list(epoch, lang, can_manage)` -> `dashboard/categories/list_epoch<N>.html` (+
+    `list-row_epoch<N>.html` per category - with `list-row-actions_epoch<N>.html`'s Edit / Delete
+    when `can_manage` - or `list-empty_epoch<N>.html`).
   - `categories_admin_form(epoch, id, langs, lang_count, values, error_message)` ->
     `dashboard/categories/form_epoch<N>.html` (+ one `form-field_epoch<N>.html` per active
     language, + `form-error_epoch<N>.html` if `error_message`). `id == ""` for "new category".
@@ -378,8 +405,9 @@ Basic CRUD over `menu` (`MENU_COLLECTION`), already read (read-only, `enabled: t
 
 Three roles: **Administrador** (`users.role == "admin"`, full access - everything described in
 this document), **Autor** (`users.role == "author"`, can only create/edit their own
-`type:"blog"` entries - no Categories/Languages/Menu/Users, no `type:"page"` entries, and can
-never delete entries) and **Observador** (`users.role == "viewer"`, read-only: sees exactly what
+`type:"blog"` entries - no Languages/Menu/Users, no `type:"page"` entries, and can never
+delete entries; of Categories it sees the list and may add one, but not edit or delete any,
+since they are shared by every author's entries) and **Observador** (`users.role == "viewer"`, read-only: sees exactly what
 an Administrador sees - every menu, the analytics summary, every entry, the entry editor, every
 settings page - and can change nothing; for a public demo account). A viewer's writes are
 refused in one place, `require_dashboard_session()` (see [security.md](security.md#roles)), and
@@ -431,7 +459,7 @@ Basic CRUD over `users` (the same collection `auth_login_user()` reads):
 - `cms_users_ensure_usernames()`: startup migration (from `main.c`, after `session_manager_ensure_indexes()`) - see [data-model.md](data-model.md#users) - plus the unique `username_unique` index.
 - `src/modules/users_admin/users_admin.c`:
   - `users_admin_list(epoch, error_message)` -> `dashboard/users/list_epoch<N>.html` (+
-    `list-row_epoch<N>.html` per user with "Username", "Email" and "Role" columns - "Administrator"/"Author"/"Viewer" - or
+    `list-row_epoch<N>.html` per user with "User" (username over email) and "Role" columns - "Administrator"/"Author"/"Viewer" - and Edit / Delete icon buttons, or
     `list-empty_epoch<N>.html`, + `list-error_epoch<N>.html` if `error_message`).
   - `users_admin_form(epoch, id, name, username, email, role, error_message)` -> `dashboard/users/form_epoch<N>.html`
     (name input, username input - `readonly` when editing -, email input, always-empty password input, a 3-option `role` `<select>`
@@ -525,7 +553,7 @@ Admin-only, epoch 3. Summary - the reference is [themes.md](themes.md):
 
 | Page | What it edits | Stored in |
 |---|---|---|
-| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere), the *Hide latest blog posts* home page checkbox, the *Maintenance mode* (a page entry picker + checkbox), and the epoch 2 / epoch 3 favicons; shows the running version (`BOAT_RUDDER_VERSION`) with a link to *Updates* | `site_settings.site_name`, `site_settings.hide_home_blog`, `site_settings.under_construction`/`under_construction_page`; `html/favicon2.ico`, `html/favicon3.ico` |
+| `/dashboard/settings` | Site name (replaces `{{SITE_NAME}}` everywhere), the *Hide latest blog posts* home page checkbox, the *Maintenance mode* (a page entry picker + checkbox, and *Authors can sign in and edit*), the *Translation* panel (the entry editor's translator: Azure AI Translator or a local one), and the epoch 2 / epoch 3 favicons; shows the running version (`BOAT_RUDDER_VERSION`) with a link to *Updates* | `site_settings.site_name`, `site_settings.hide_home_blog`, `site_settings.under_construction`/`under_construction_page`/`under_construction_authors`, `site_settings.translate_*`; `html/favicon2.ico`, `html/favicon3.ico` |
 | `/dashboard/settings/themes` | The list of directories under `html/themes/`: each one's name, *Active* or *Set active*, and *Customize* | `site_settings.active_theme` |
 | `…/themes/<key>/customize` | The theme customizer: pick an epoch, then its logo, navbar, banner, content, home blog, footer and data colors, with a live preview (WML translated for epoch −1) and the public CSS layer in a bottom drawer. `…/themes/<key>` redirects here | everything below, plus `themes.home_blog_background`, `themes.home_blog_item_background`, `themes.home_blog_item_color` |
 | `…/themes/<key>/banner`, `…/footer` | Raw markup per epoch (−1…3) in the code editor + the epoch's uploaded images | `themes.banner_html`, `themes.footer_html`, files in `html/content/themes/<key>/` |

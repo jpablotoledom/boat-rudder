@@ -308,12 +308,28 @@ static char *wml_safe(char *html, int epoch) {
     return out;
 }
 
+char *comment_who_html(int epoch, const char *name, const char *username, int verified) {
+    char *enc = wml_safe(html_encode_alloc(name ? name : ""), epoch);
+    if (!enc) return NULL;
+    char *tpl = NULL;
+    if (verified) {
+        tpl = load_template("comments/comment-verified_epoch%d.html", epoch);
+    } else if (username && username[0]) {
+        tpl = load_template("comments/comment-user_epoch%d.html", epoch);
+    }
+    if (!tpl) return enc;
+    char *user = html_encode_alloc(username ? username : "");
+    char *out = user ? render_template(tpl, enc, user) : NULL;
+    free(tpl); free(user); free(enc);
+    return out;
+}
+
 // The team's reply under a comment ("" when it has none), marked as the
 // entry's author's or an Administrador's.
 static char *reply_html(int epoch, const CmsComment *c, const char *color) {
     if (!c->reply_text || !c->reply_text[0]) return strdup("");
     char *tpl = load_template("comments/comment-reply_epoch%d.html", epoch);
-    char *name = wml_safe(html_encode_alloc(c->reply_name), epoch);
+    char *name = comment_who_html(epoch, c->reply_name, NULL, 1);   // the team's: verified
     char *text = wml_safe(text_html(c->reply_text), epoch);
     char *out = (tpl && name && text)
         ? render_template(tpl, name, c->reply_date, text, c->reply_by_author ? "Author" : "Administrator", color) : NULL;
@@ -351,7 +367,7 @@ static char *retro_section(int epoch, const char *link, const char *lang, const 
 
     char *items = (section_tpl && item_tpl) ? strdup("") : NULL;
     for (int i = 0; items && i < count; i++) {
-        char *name = wml_safe(html_encode_alloc(list[i].name), epoch);
+        char *name = comment_who_html(epoch, list[i].name, list[i].username, list[i].verified);
         char *text = wml_safe(text_html(list[i].text), epoch);
         char *client = comment_client_html(epoch, list[i].browser, list[i].os, list[i].user_agent);
         char *reply = reply_html(epoch, &list[i], colors.home_content_text);
@@ -486,7 +502,7 @@ char *comments_section(int epoch, const char *link, const char *lang, const Comm
     int count = cms_comments_approved(entry_id, &list);
     char *items = strdup("");
     for (int i = 0; items && i < count; i++) {
-        char *name = html_encode_alloc(list[i].name);
+        char *name = comment_who_html(epoch, list[i].name, list[i].username, list[i].verified);
         char *text = text_html(list[i].text);
         char *client = comment_client_html(epoch, list[i].browser, list[i].os, list[i].user_agent);
         char *reply = reply_html(epoch, &list[i], color);
@@ -571,6 +587,10 @@ static void notify_author(const char *comment_id, const char *lang, const char *
     }
     char subject[200];
     snprintf(subject, sizeof(subject), "New comment on \"%.*s%s\"", (int)cut, title, title[cut] ? "..." : "");
+    // "Ana (user-12)": names are anyone's, the username says which Ana.
+    char who[160];
+    if (n.commenter_username[0]) snprintf(who, sizeof(who), "%s (%s)", n.commenter_name, n.commenter_username);
+    else snprintf(who, sizeof(who), "%s", n.commenter_name);
     char *text = render_template(
         "Hello %s,\n\n"
         "%s left a comment on \"%s\" at %s:\n\n"
@@ -578,7 +598,7 @@ static void notify_author(const char *comment_id, const char *lang, const char *
         "It is waiting for moderation - approve or reject it here:\n"
         "%s/dashboard/comments\n\n"
         "The entry: %s/blog/%s\n",
-        n.author_name, n.commenter_name, title, site ? site : "the site", n.text,
+        n.author_name, who, title, site ? site : "the site", n.text,
         base_url, base_url, n.entry_link);
     if (!text || mailer_enqueue(n.author_email, subject, text) != 0)
         LOG_ERROR("Comment %s: the author's notice was not queued", comment_id);
@@ -741,7 +761,6 @@ CommentPostResult comments_post(const char *link, const char *lang, const char *
             result = COMMENT_POST_PENDING;
             notify_author(comment_id, lang, base_url);
             break;
-        case COMMENT_SUBMIT_NAME_TAKEN: error = "That name is already used by someone else - please choose another."; break;
         case COMMENT_SUBMIT_BLOCKED:    error = "Comments from this email address are not accepted."; break;
         default:                        error = "Your comment could not be saved - please try again later."; break;
         }

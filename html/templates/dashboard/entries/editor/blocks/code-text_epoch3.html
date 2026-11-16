@@ -15,19 +15,40 @@
       <div class="boat-rudder-entry-editor-block__preview"></div>
 
       <div class="boat-rudder-entry-editor-block__body">
-        <div class="boat-rudder-entry-editor__meta-group">
+        <div class="boat-rudder-entry-editor__meta-group boat-rudder-entry-editor-block__tools">
           <label class="boat-rudder-entry-editor-advanced__label">Language</label>
-          <select class="boat-rudder-entry-editor__code-lang-select" onclick="event.stopPropagation()" onchange="syncCodeLang(this)"
-                  style="width:100%%;">
+          <select class="boat-rudder-entry-editor__code-lang-select" onclick="event.stopPropagation()" onchange="syncCodeLang(this)">
             <option value="">Plain text</option>
-            <option value="javascript">JavaScript</option>
-            <option value="html">HTML</option>
-            <option value="c">C / C++</option>
-            <option value="python">Python</option>
-            <option value="css">CSS</option>
-            <option value="php">PHP</option>
-            <option value="bash">Bash</option>
-            <option value="sql">SQL</option>
+            <optgroup label="Web">
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="php">PHP</option>
+            </optgroup>
+            <optgroup label="Languages">
+              <option value="c">C / C++</option>
+              <option value="csharp">C#</option>
+              <option value="go">Go</option>
+              <option value="java">Java</option>
+              <option value="kotlin">Kotlin</option>
+              <option value="python">Python</option>
+              <option value="swift">Swift</option>
+            </optgroup>
+            <optgroup label="Retro">
+              <option value="asm">Assembly</option>
+              <option value="basic">BASIC</option>
+              <option value="batch">DOS Batch</option>
+              <option value="pascal">Pascal</option>
+            </optgroup>
+            <optgroup label="Data and shell">
+              <option value="bash">Bash</option>
+              <option value="diff">Diff</option>
+              <option value="ini">INI / config</option>
+              <option value="json">JSON</option>
+              <option value="sql">SQL</option>
+              <option value="xml">XML</option>
+            </optgroup>
           </select>
         </div>
 %s

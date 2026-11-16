@@ -84,6 +84,14 @@ char *comments_verify_page(int epoch, const char *token);
 // comment stored them; "" when nothing was recorded. Returns malloc'd HTML.
 char *comment_client_html(int epoch, const char *browser, const char *os, const char *user_agent);
 
+// Who wrote a comment or reply, as `epoch` shows it: anyone may use any
+// name, so a commenter's comes with their username - "Ana (user-12)"
+// (comment-user_epoch*.html) - and the team's with a verified mark instead
+// (comment-verified_epoch*.html: an icon on epochs 1-3, "[v]" on epoch 0 and
+// WAP - plain ASCII: Lynx on DOS shows a "√" as "SQRT"); `username` NULL or
+// "" and not verified: the name alone. Escaped. Returns malloc'd HTML.
+char *comment_who_html(int epoch, const char *name, const char *username, int verified);
+
 typedef enum {
     COMMENT_REPLY_SAVED = 0,
     COMMENT_REPLY_APPROVED,      // saved, and the pending comment approved by it

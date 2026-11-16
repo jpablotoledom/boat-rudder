@@ -1,10 +1,10 @@
-<article class="boat-rudder-entry-editor" id="entryEditor" data-entry-id="%s" data-langs='%s'>
+<article class="boat-rudder-entry-editor" id="entryEditor" data-entry-id="%s" data-langs='%s'%s>
 
   <!-- Fixed top bar -->
   <div class="boat-rudder-entry-editor__topbar">
     <div class="boat-rudder-entry-editor__topbar-left">
-      <a href="/dashboard" class="boat-rudder-entry-editor__back boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm">&#8592; Dashboard</a>
-      <button class="boat-rudder-entry-editor__preview-btn boat-rudder-btn boat-rudder-btn--sm" onclick="openBlogPreview()">&#128065; View post</button>
+      <a href="/dashboard" class="boat-rudder-entry-editor__back boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" title="Dashboard">&#8592;<span class="boat-rudder-entry-editor-context__label"> Dashboard</span></a>
+      <button class="boat-rudder-entry-editor__preview-btn boat-rudder-btn boat-rudder-btn--sm" onclick="openBlogPreview()" title="View post">&#128065;<span class="boat-rudder-entry-editor-context__label"> View post</span></button>
     </div>
     <div class="boat-rudder-entry-editor__topbar-center">
       <button class="boat-rudder-entry-editor__save-btn boat-rudder-btn boat-rudder-btn--primary" id="editor-save-btn" onclick="editorSaveAll()">Save all</button>
@@ -17,46 +17,91 @@
       </div>
     </div>
     <div class="boat-rudder-entry-editor__topbar-right">
+      <div class="boat-rudder-entry-editor-translate" id="translateBox" hidden>
+        <button class="boat-rudder-btn boat-rudder-btn--sm" type="button" onclick="toggleTranslatePanel()" title="Translate">&#127760;<span class="boat-rudder-entry-editor-context__label"> Translate</span></button>
+        <div class="boat-rudder-entry-editor-translate__panel" id="translatePanel">
+          <p class="boat-rudder-entry-editor-translate__from">From <strong id="translateFrom"></strong> to:</p>
+          <div id="translateTargets"></div>
+          <label class="boat-rudder-entry-editor-translate__target boat-rudder-entry-editor-translate__overwrite"><input type="checkbox" id="translateOverwrite" onchange="updateTranslateHint()"> Replace what is already written</label>
+          <p class="boat-rudder-entry-editor-translate__hint" id="translateHint"></p>
+          <p class="boat-rudder-entry-editor-translate__message" id="translateMessage" role="status"></p>
+          <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="runTranslation()">Translate</button>
+        </div>
+      </div>
       <div class="boat-rudder-entry-editor-publish-toggle" onclick="togglePublish()">
         <span class="boat-rudder-entry-editor-publish-toggle__status" id="publish-status-label">Draft</span>
         <div class="boat-rudder-switch" id="publish-switch">
           <div class="boat-rudder-switch__knob"></div>
         </div>
       </div>
+      <select class="boat-rudder-entry-editor__theme-select" id="editorTheme" title="Theme: how the dashboard and the site look to you"
+              onchange="switchEditorTheme(this)" hidden></select>
       <div class="boat-rudder-entry-editor__lang-toggle">
 %s
       </div>
+      <button class="boat-rudder-btn boat-rudder-btn--sm boat-rudder-entry-editor__settings-btn" id="editorSettingsBtn" type="button" onclick="toggleEditorSettings()" aria-expanded="false" title="Entry settings: slug, type, categories, cover, title, summary">&#9881;<span class="boat-rudder-entry-editor-context__label"> Settings</span></button>
     </div>
   </div>
 
-  <!-- Block type toolbar -->
-  <div class="boat-rudder-entry-editor-block-toolbar">
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('title')">&sect; Title</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('image')">&square; Image</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('gallery')">&#9632; Gallery</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('byline')">&#9998; Byline</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('separator')">&#9135; Separator</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('link')">&#128279; Link</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('list')">&#9776; List</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('generic')">&#9965; HTML</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('table')">&#9974; Table</button>
-    <button class="boat-rudder-entry-editor-block-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
+  <!-- Context bar: one place for the tools of whichever block is being
+       edited. A block's own tool row (.boat-rudder-entry-editor-block__tools)
+       stays in the block - so its handlers still find it with closest() -
+       and is pinned over #editorContextTools while the block is open
+       (placeContextTools()). -->
+  <div class="boat-rudder-entry-editor-context" id="editorContext">
+    <div class="boat-rudder-entry-editor-add-block boat-rudder-entry-editor-context__insert">
+      <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="toggleAddBlockDropdown(this)" title="Insert a block after the one being edited">+ Insert</button>
+    </div>
+    <span class="boat-rudder-entry-editor-context__type" id="editorContextType"></span>
+    <!-- Paragraphs, headings and lists turn into one another, text kept. -->
+    <select class="boat-rudder-entry-editor-context__switch" id="editorContextSwitch" onchange="switchActiveBlockType(this)" title="Change this block's type" hidden>
+      <option value="paragraph">&para; Paragraph</option>
+      <option value="title:1">Heading 1</option>
+      <option value="title:2">Heading 2</option>
+      <option value="title:3">Heading 3</option>
+      <option value="title:4">Heading 4</option>
+      <option value="title:5">Heading 5</option>
+      <option value="title:6">Heading 6</option>
+      <option value="list:ul">&bull; Bulleted list</option>
+      <option value="list:ol">1. Numbered list</option>
+    </select>
+    <div class="boat-rudder-entry-editor-context__tools" id="editorContextTools"></div>
+    <div class="boat-rudder-entry-editor-context__actions" id="editorContextActions" hidden>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" data-para-only onmousedown="event.preventDefault()" onclick="contextAction('split')"
+              title="Split: move everything after the cursor into a new paragraph below">&#9986;<span class="boat-rudder-entry-editor-context__label"> Split</span></button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" data-para-only id="editorContextMerge" onclick="contextAction('merge')"
+              title="Merge: join this paragraph onto the end of the one above">&#8613;<span class="boat-rudder-entry-editor-context__label"> Merge</span></button>
+      <span class="boat-rudder-entry-editor-toolbar__sep" data-para-only></span>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" onclick="contextAction('up')" title="Move up">&#8679;</button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" onclick="contextAction('down')" title="Move down">&#8681;</button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm" type="button" onclick="contextAction('advanced')" title="Advanced (extra_data)">&#9881;</button>
+      <button class="boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--sm boat-rudder-entry-editor-context__delete" type="button" onclick="contextAction('delete')" title="Delete block">&#128465;</button>
+    </div>
   </div>
 
-  <!-- Two-column body -->
+  <!-- Shown once the session has ended (sessionLost()): nothing can be saved
+       until the writer signs in again, and the unsaved work stays here. -->
+  <div class="boat-rudder-entry-editor-session" id="editorSession" role="alert" hidden>
+    <div class="boat-rudder-entry-editor-session__text">
+      <strong>Your session has ended, so your changes can't be saved.</strong>
+      They are still on this page - don't reload or close it. Sign in again in a new tab, then save.
+    </div>
+    <a class="boat-rudder-btn boat-rudder-btn--sm" href="/login" target="_blank" rel="noopener">Sign in in a new tab</a>
+    <button class="boat-rudder-btn boat-rudder-btn--primary boat-rudder-btn--sm" type="button" onclick="retryAfterSignIn()">Save again</button>
+    <span class="boat-rudder-entry-editor-session__note" id="editorSessionNote" role="status"></span>
+  </div>
+
+  <!-- Body: the sheet, and the settings panel the top bar's Settings opens -->
   <div class="boat-rudder-entry-editor__body">
-    <!-- Left sidebar -->
-    <div class="boat-rudder-entry-editor__sidebar">
+    <div class="boat-rudder-entry-editor__settings-backdrop" onclick="toggleEditorSettings(false)"></div>
+    <div class="boat-rudder-entry-editor__sidebar" id="editorSettings">
       <div class="boat-rudder-entry-editor__sidebar-inner">
 %s
         <hr class="boat-rudder-entry-editor__sidebar-divider">
 %s
       </div>
     </div>
-    <!-- Right: content blocks -->
+    <!-- The sheet: the content blocks -->
     <div class="boat-rudder-entry-editor__main">
 %s
     </div>
@@ -81,14 +126,90 @@
     return '/dashboard/api/entries/' + entryId + suffix;
   }
 
+  // Every editor write. Resolves with the server's JSON ({ok, ...}); rejects
+  // when there is none to read - no session (401, err.session "expired"), a
+  // token from an older session (err.session "csrf"), an answer that isn't
+  // JSON, no answer at all - so a save can never hang on "Saving...".
   function postForm(url, params) {
     return fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
-    }).then(function (res) { return res.json(); });
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        if (res.status === 401 || (data && data.session === 'expired')) throw sessionError('expired');
+        if (data && data.session === 'csrf') throw sessionError('csrf');
+        if (!data) throw new Error('the server answered ' + res.status);
+        return data;
+      });
+    }).catch(function (err) {
+      if (err.session === 'expired') sessionLost();
+      throw err;
+    });
   }
+
+  /* ---- Session ----
+     A session ends on its own (session_ttl_seconds), or in another tab. The
+     editor checks it every few minutes and whenever its tab comes back, so
+     the writer hears of it before saving, not after; then it keeps the work
+     on the page, and once they sign in again (in a new tab) it fetches the
+     new session's CSRF token and saves. */
+  var SESSION_CHECK_MS = 5 * 60 * 1000;
+
+  function sessionError(kind) {
+    var err = new Error(kind === 'csrf' ? 'signed in again since the page loaded' : 'session expired');
+    err.session = kind;
+    return err;
+  }
+
+  function sessionLost() {
+    document.getElementById('editorSession').hidden = false;
+    setStatus('Signed out - not saved', 'error');
+  }
+
+  // true: signed in (and the page now holds this session's token); false:
+  // signed out; null: no answer (offline, server down) - nothing known.
+  function checkSession() {
+    return fetch('/dashboard/api/session', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (data) {
+          if (res.ok && data && data.ok) {
+            if (window.boatRudderSetCsrfToken) window.boatRudderSetCsrfToken(data.csrf);
+            return true;
+          }
+          if (res.status === 401 || (data && data.ok === false)) { sessionLost(); return false; }
+          return null;
+        });
+      }, function () { return null; });
+  }
+
+  window.retryAfterSignIn = function () {
+    var note = document.getElementById('editorSessionNote');
+    note.textContent = 'Checking...';
+    checkSession().then(function (ok) {
+      if (ok) {
+        note.textContent = '';
+        document.getElementById('editorSession').hidden = true;
+        editorSaveAll();
+      } else {
+        note.textContent = ok === false ? 'Still signed out: sign in in the other tab first.'
+                                        : 'The server did not answer. Try again in a moment.';
+      }
+    });
+  };
+
+  setInterval(checkSession, SESSION_CHECK_MS);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkSession();
+  });
+
+  // Leaving with unsaved changes (reload, close, "Dashboard") asks first.
+  window.addEventListener('beforeunload', function (e) {
+    if (!dirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
 
   function setStatus(text, cls) {
     var el = document.getElementById('editor-save-status');
@@ -164,6 +285,9 @@
     }
     applyLangVisibility(document);
     refreshAllPreviews();
+    // An open image block shows its own picture, which may change with the language.
+    if (activeEditBlock && activeEditBlock.dataset.type === 'image') renderImagePreview(activeEditBlock);
+    document.querySelectorAll('#entryBlocks [data-type="title"]').forEach(autosizeTitle);
   };
 
   /* ---- Block preview/edit ---- */
@@ -177,6 +301,7 @@
     block.classList.add('boat-rudder-entry-editor-block--editing');
     activeEditBlock = block;
     initBlockEditors(block);
+    updateContextBar();
   };
 
   window.deactivateBlock = function (el) {
@@ -186,6 +311,70 @@
     block.classList.remove('boat-rudder-entry-editor-block--editing');
     if (activeEditBlock === block) activeEditBlock = null;
     refreshBlockPreview(block);
+    updateContextBar();
+  };
+
+  /* ---- Context bar ---- */
+  // Paragraphs and titles are written straight on the sheet: always in edit
+  // form, with no preview of their own (see initInlineBlock()).
+  function isInlineType(type) {
+    return type === 'paragraph' || type === 'title';
+  }
+
+  // The open block's name, tools and actions in the context bar - or only
+  // "+ Insert" while none is open.
+  function updateContextBar() {
+    var block = activeEditBlock;
+    var typeEl = document.getElementById('editorContextType');
+    var actions = document.getElementById('editorContextActions');
+    var label = block && block.querySelector('.boat-rudder-entry-editor-block__type-label');
+    var sw = document.getElementById('editorContextSwitch');
+    var switchable = !!block && /^(paragraph|title|list)$/.test(block.dataset.type);
+    sw.hidden = !switchable;
+    if (switchable) sw.value = blockVariantValue(block);
+    typeEl.innerHTML = label && !switchable ? label.innerHTML : '';
+    actions.hidden = !block;
+    var isPara = !!block && block.dataset.type === 'paragraph';
+    actions.querySelectorAll('[data-para-only]').forEach(function (b) { b.hidden = !isPara; });
+    if (isPara) {
+      var prev = block.previousElementSibling;
+      document.getElementById('editorContextMerge').disabled = !(prev && prev.dataset.type === 'paragraph');
+    }
+    placeContextTools();
+  }
+
+  // A block's tool row is position: fixed over #editorContextTools; it gets
+  // that slot's box here, measured again whenever the bar's layout changes.
+  function placeContextTools() {
+    var slot = document.getElementById('editorContextTools').getBoundingClientRect();
+    root.style.setProperty('--br-editor-tools-left', slot.left + 'px');
+    root.style.setProperty('--br-editor-tools-width', Math.max(slot.width, 0) + 'px');
+  }
+  window.addEventListener('resize', placeContextTools);
+
+  window.contextAction = function (action) {
+    var block = activeEditBlock;
+    if (!block) return;
+    if (action === 'split') splitParagraph(block);
+    else if (action === 'merge') mergeParagraphUp(block);
+    else if (action === 'up') { moveBlockUp(block); block.scrollIntoView({ block: 'nearest' }); updateContextBar(); }
+    else if (action === 'down') { moveBlockDown(block); block.scrollIntoView({ block: 'nearest' }); updateContextBar(); }
+    else if (action === 'delete') removeComponent(block);
+    else if (action === 'advanced') {
+      var toggle = block.querySelector('.boat-rudder-entry-editor-advanced__toggle');
+      if (toggle) { toggleAdvanced(toggle); toggle.parentNode.scrollIntoView({ block: 'nearest' }); }
+    }
+  };
+
+  /* ---- Settings panel ---- */
+  // Slug, type, categories and the post header, folded away from the sheet.
+  // Remembered per browser; storage may be unavailable (private mode).
+  window.toggleEditorSettings = function (open) {
+    if (typeof open !== 'boolean') open = !root.classList.contains('boat-rudder-entry-editor--settings-open');
+    root.classList.toggle('boat-rudder-entry-editor--settings-open', open);
+    document.getElementById('editorSettingsBtn').setAttribute('aria-expanded', String(open));
+    try { localStorage.setItem('br-editor-settings-open', open ? '1' : '0'); } catch (e) {}
+    placeContextTools();
   };
 
   // Escape, or a click anywhere outside the block being edited, closes it -
@@ -209,8 +398,14 @@
   // only on a second press the block being edited.
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || overlayOpen()) return;
-    if (closeAddBlockMenu()) return;
-    if (activeEditBlock) deactivateBlock(activeEditBlock);
+    if (closeAddBlockMenu() || closeTranslatePanel()) return;
+    if (root.classList.contains('boat-rudder-entry-editor--settings-open') &&
+        window.matchMedia('(max-width: 899px)').matches) { toggleEditorSettings(false); return; }
+    if (activeEditBlock) {
+      var focused = document.activeElement;
+      if (focused && activeEditBlock.contains(focused)) focused.blur();
+      deactivateBlock(activeEditBlock);
+    }
   });
 
   // Judged by where the press started, not where the click lands: a text
@@ -224,6 +419,7 @@
     var t = pressTarget || e.target;
     pressTarget = null;
     if (document.contains(t) && !t.closest('.boat-rudder-entry-editor-add-block')) closeAddBlockMenu();
+    if (document.contains(t) && !t.closest('.boat-rudder-entry-editor-translate')) closeTranslatePanel();
     if (!activeEditBlock || overlayOpen()) return;
     if (!document.contains(t)) return; // removed by its own handler (a deleted table row...)
     if (activeEditBlock.contains(t) || t.closest('#modalContainer, #imageModal')) return;
@@ -234,7 +430,16 @@
     // The top bar's controls act on the whole entry (language, save,
     // publish...): switching language or saving mid-edit keeps the block open.
     if (t.closest('.boat-rudder-entry-editor__topbar')) return;
+    // The context bar's tools and actions work on the open block.
+    if (t.closest('.boat-rudder-entry-editor-context')) return;
     deactivateBlock(activeEditBlock);
+  });
+
+  // Tabbing (or clicking) into a paragraph or title opens it like a click on
+  // its block does.
+  document.getElementById('entryBlocks').addEventListener('focusin', function (e) {
+    var block = e.target.closest('.boat-rudder-entry-editor-block');
+    if (block && block !== activeEditBlock) activateBlock(block);
   });
 
   function initBlockEditors(block) {
@@ -246,16 +451,18 @@
     if (type === 'link') initLinkBlock(block);
     if (type === 'list') initListBlock(block);
     if (type === 'youtube-embed') initYouTubeBlock(block);
-    if (type === 'code-text') initCodeBlock(block);
+    if (type === 'code-text' || type === 'terminal') initCodeBlock(block);
     if (type === 'table') initTableBlock(block);
     if (type === 'social-networks') initSocialBlock(block);
+    if (type === 'related-posts') initRelatedBlock(block);
+    if (type === 'entry-index') initIndexBlock(block);
     applyLangVisibility(block);
   }
 
   /* ---- Block preview rendering ---- */
 
   // Block types whose public rendering is made server-side (code-text's
-  // highlighting, gallery's thumbnails/tiles, table's rows, image's size/align
+  // highlighting, terminal's prompts, gallery's thumbnails/tiles, table's rows, image's size/align
   // classes, paragraph's style variant) get previewed with that exact
   // epoch 3 output from /dashboard/api/block-preview, so the editor can't
   // drift from what readers see. `fallbackHtml` only fills the gap before the
@@ -265,8 +472,10 @@
   // An unchanged block keeps its current preview: the editor refreshes every
   // preview often (language switch, closing a block), and replacing the
   // markup would reload a YouTube iframe or every gallery image each time.
-  function fetchServerPreview(blockEl, preview, type, text, extra, fallbackHtml, done) {
-    var key = type + '\u0000' + text + '\u0000' + extra;
+  // `context` (related-posts): {lang, entry_id, categories}, what else the
+  // rendering depends on.
+  function fetchServerPreview(blockEl, preview, type, text, extra, fallbackHtml, done, context) {
+    var key = type + '\u0000' + text + '\u0000' + extra + '\u0000' + JSON.stringify(context || '');
     // The node check catches another branch having replaced the preview
     // since (e.g. "Empty table"), which makes the cached key stale.
     if (blockEl._previewKey === key && blockEl._previewNode &&
@@ -278,7 +487,11 @@
     params.set('type', type);
     params.set('text', text);
     params.set('extra', extra);
-    fetch('/dashboard/api/block-preview', {
+    if (context) {
+      params.set('entry_id', context.entry_id);
+      params.set('categories', context.categories);
+    }
+    fetch('/dashboard/api/block-preview' + (context ? '?lang=' + encodeURIComponent(context.lang) : ''), {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -298,6 +511,11 @@
   window.refreshBlockPreview = function (blockEl) {
     if (!blockEl) return;
     var type = blockEl.dataset.type;
+    if (isInlineType(type)) { autosizeTitle(blockEl); return; }
+    // An open block hides its preview: nothing to draw - nor to ask the
+    // server for on every keystroke. Closing it (deactivateBlock()) draws it
+    // once, with whatever was typed.
+    if (blockEl.classList.contains('boat-rudder-entry-editor-block--editing')) return;
     var preview = blockEl.querySelector('.boat-rudder-entry-editor-block__preview');
     if (!preview) return;
 
@@ -325,6 +543,7 @@
         preview.innerHTML = '<div class="boat-rudder-entry-editor-preview__paragraph"><span class="boat-rudder-empty">Empty paragraph</span></div>';
       }
     } else if (type === 'image') {
+      text = imageUrlFor(blockEl, currentLang);
       if (text) {
         // The stored path has no size suffix; only the generated variants exist
         // on disk, so the fallback asks for the thumbnail like galleries do.
@@ -365,9 +584,16 @@
       if (text) {
         var items = text.split('\n').filter(function (l) { return l.trim(); });
         var tag = extra === 'ol' ? 'ol' : 'ul';
-        preview.innerHTML = '<' + tag + ' class="boat-rudder-entry-editor-preview__list">' +
-          items.map(function (l) { return '<li>' + escapeHtml(l.trim()) + '</li>'; }).join('') +
-          '</' + tag + '>';
+        // The server's own rendering (an item's "label:" in bold); this one
+        // only until it arrives, with the same bold label.
+        fetchServerPreview(blockEl, preview, 'list', text, extra,
+          '<' + tag + ' class="boat-rudder-entry-editor-preview__list">' +
+          items.map(function (l) {
+            var m = /^([^:<]*[^:<\s][^:<]*):(\s|$)/.exec(l.trim());
+            return '<li>' + (m ? '<b>' + escapeHtml(m[1]) + '</b>' + escapeHtml(l.trim().slice(m[1].length))
+                               : escapeHtml(l.trim())) + '</li>';
+          }).join('') +
+          '</' + tag + '>');
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty list</span>';
       }
@@ -384,6 +610,13 @@
           '<pre class="boat-rudder-entry-editor-preview__code"><code>' + escapeHtml(text) + '</code></pre>');
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty code block</span>';
+      }
+    } else if (type === 'terminal') {
+      if (text) {
+        fetchServerPreview(blockEl, preview, 'terminal', text, extra,
+          '<pre class="boat-rudder-entry-editor-preview__code"><code>' + escapeHtml(text) + '</code></pre>');
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty terminal block</span>';
       }
     } else if (type === 'generic') {
       if (text) {
@@ -405,6 +638,23 @@
       } else {
         preview.innerHTML = '<span class="boat-rudder-empty">Empty table</span>';
       }
+    } else if (type === 'entry-index') {
+      if (extra) {
+        fetchServerPreview(blockEl, preview, type, '', extra, '<span class="boat-rudder-empty">Article index</span>', function () {
+          if (!preview.firstElementChild) preview.innerHTML = '<span class="boat-rudder-empty">The chosen articles are no longer published, so readers won\'t see this block.</span>';
+        }, { lang: currentLang, entry_id: entryId, categories: '' });
+      } else {
+        preview.innerHTML = '<span class="boat-rudder-empty">Empty index: click to add articles</span>';
+      }
+    } else if (type === 'related-posts') {
+      var relatedCats = Array.from(document.getElementById('entryCategories').selectedOptions)
+        .map(function (o) { return o.value; }).join(',');
+      // Readers get nothing when nothing matches; the writer gets told why.
+      var relatedEmpty = extra ? 'The chosen articles are no longer published, so readers won\'t see this block.'
+                               : 'No published article shares a category with this entry, so readers won\'t see this block.';
+      fetchServerPreview(blockEl, preview, type, '', extra, '<span class="boat-rudder-empty">Related articles</span>', function () {
+        if (!preview.firstElementChild) preview.innerHTML = '<span class="boat-rudder-empty">' + relatedEmpty + '</span>';
+      }, { lang: currentLang, entry_id: entryId, categories: relatedCats });
     } else if (type === 'social-networks') {
       if (extra) {
         var parts = extra.split('|');
@@ -433,7 +683,9 @@
   document.getElementById('entryBlocks').addEventListener('click', function (e) {
     var hit = e.target.closest(
       '.boat-rudder-entry-editor-block__preview .boat-rudder-entry-image img,' +
-      '.boat-rudder-entry-editor-block__preview .boat-rudder-gallery-item');
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-gallery-item,' +
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-related-posts a,' +
+      '.boat-rudder-entry-editor-block__preview .boat-rudder-entry-index a');
     if (!hit) return;
     e.stopPropagation();
     e.preventDefault();
@@ -517,6 +769,7 @@
       var lang = lc.dataset.lang;
 
       var toolbarHtml =
+        '<div class="boat-rudder-entry-editor-block__tools">' +
         '<div class="boat-rudder-entry-editor-toolbar">' +
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Bold" onmousedown="event.preventDefault();document.execCommand(\'bold\')"><b>B</b></button>' +
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Italic" onmousedown="event.preventDefault();document.execCommand(\'italic\')"><i>I</i></button>' +
@@ -541,6 +794,7 @@
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="Redo" onmousedown="event.preventDefault();document.execCommand(\'redo\')">&#8618;</button>' +
         '<span class="boat-rudder-entry-editor-toolbar__sep"></span>' +
         '<button class="boat-rudder-entry-editor-toolbar__btn boat-rudder-btn boat-rudder-btn--sm" title="HTML source" onclick="toggleSource(this)">HTML</button>' +
+        '</div>' +
         '</div>';
 
       lc.insertAdjacentHTML('afterbegin', toolbarHtml);
@@ -550,6 +804,7 @@
       div.contentEditable = 'true';
       div.spellcheck = true;
       div.dataset.for = lang;
+      div.dataset.placeholder = 'Write something, or type / to insert a block';
       div.innerHTML = ta.value;
 
       ta.style.display = 'none';
@@ -560,7 +815,11 @@
       sourceTA.style.display = 'none';
       lc.insertBefore(sourceTA, ta);
 
-      div.addEventListener('input', function () { syncRichtext(div); });
+      div.addEventListener('input', function () {
+        // Emptied, the browser leaves a lone <br>, which hides the placeholder.
+        if (!div.textContent && /^(<br>)?$/i.test(div.innerHTML)) div.innerHTML = '';
+        syncRichtext(div);
+      });
       div.addEventListener('mouseup', saveRichSelection);
       div.addEventListener('keyup', saveRichSelection);
       div.addEventListener('paste', function (e) {
@@ -659,13 +918,10 @@
 
   // Merge is only possible from the second paragraph of a run onward.
   function updateMergeButton(block) {
-    var btn = block && block.querySelector('.boat-rudder-entry-editor__merge-btn');
-    if (!btn) return;
-    var prev = block.previousElementSibling;
-    btn.disabled = !(prev && prev.dataset.type === 'paragraph');
+    if (block && block === activeEditBlock) updateContextBar();
   }
   new MutationObserver(function () {
-    if (activeEditBlock) updateMergeButton(activeEditBlock);
+    if (activeEditBlock) updateContextBar();
   }).observe(document.getElementById('entryBlocks'), { childList: true });
 
   // Moves everything after the cursor into a new paragraph block right
@@ -740,11 +996,12 @@
   };
 
   // Appends this paragraph block's text, in every language, to the end of
-  // the paragraph block right above it, and removes this one.
+  // the paragraph block right above it, and removes this one. Resolves with
+  // the block above once merged, or null.
   window.mergeParagraphUp = function (btn) {
     var block = btn.closest('.boat-rudder-entry-editor-block');
     var prev = block.previousElementSibling;
-    if (!prev || prev.dataset.type !== 'paragraph') return;
+    if (!prev || prev.dataset.type !== 'paragraph') return Promise.resolve(null);
 
     var joined = {};
     block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content').forEach(function (lc) {
@@ -754,10 +1011,10 @@
       joined[lang] = joinParagraphHtml(prevTa ? prevTa.value : '', ta ? ta.value : '');
     });
 
-    postForm(apiUrl('/blocks/' + block.dataset.blockId + '/delete'), new URLSearchParams()).then(function (data) {
+    return postForm(apiUrl('/blocks/' + block.dataset.blockId + '/delete'), new URLSearchParams()).then(function (data) {
       if (!data.ok) {
         setStatus('Error: ' + data.error, 'error');
-        return;
+        return null;
       }
       Object.keys(joined).forEach(function (lang) { setParagraphText(prev, lang, joined[lang]); });
       if (activeEditBlock === block) activeEditBlock = null;
@@ -768,6 +1025,714 @@
       // only in this page (in the block above) until saved - save right away
       // so leaving without saving can't lose it.
       saveContent();
+      return prev;
+    });
+  };
+
+  /* ---- Keyboard: writing across blocks ----
+     The sheet behaves like one page: Enter in a paragraph is a line break
+     (Split in the context bar cuts it in two), Enter at the end of any other
+     block starts a paragraph below it (or moves into the empty one already
+     there), Backspace at a paragraph's start joins it to the one above, and the arrows cross from block to block. A selected
+     block with no field focused (an image, a gallery...) takes Enter and the
+     arrows too. */
+
+  // The field the writer types into, in the language being edited: a
+  // paragraph's rich-text editor, a title's textarea.
+  function inlineField(block) {
+    if (!block) return null;
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
+    if (!panel) return null;
+    return block.dataset.type === 'paragraph'
+      ? panel.querySelector('.boat-rudder-entry-editor__richtext')
+      : panel.querySelector('textarea[name="text"]');
+  }
+
+  function isEmptyParagraph(block) {
+    if (!block || block.dataset.type !== 'paragraph') return false;
+    var field = inlineField(block);
+    return !!field && !Array.from(field.childNodes).some(function (n) { return !isEmptyNode(n); });
+  }
+
+  // Puts the caret at the start (atEnd false) or the end of a block's field;
+  // a block without one is selected instead.
+  function focusBlock(block, atEnd) {
+    var field = inlineField(block);
+    if (!field || !isInlineType(block.dataset.type)) {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      activateBlock(block);
+      block.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    field.focus({ preventScroll: true });
+    if (field.tagName === 'TEXTAREA') {
+      var pos = atEnd ? field.value.length : 0;
+      field.setSelectionRange(pos, pos);
+    } else {
+      var r = document.createRange();
+      r.selectNodeContents(field);
+      r.collapse(!atEnd);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    activateBlock(block);
+    block.scrollIntoView({ block: 'nearest' });
+  }
+
+  // The caret `offset` characters into a rich-text field's text.
+  function placeCaretAtText(field, offset) {
+    var walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT);
+    var node, r = document.createRange();
+    while ((node = walker.nextNode())) {
+      if (offset <= node.length) { r.setStart(node, offset); break; }
+      offset -= node.length;
+    }
+    if (!node) { r.selectNodeContents(field); r.collapse(false); }
+    r.collapse(true);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
+  // A paragraph right below `block` to write in: the empty one already there,
+  // or a new one. One at a time - a second Enter while the server is still
+  // making it would make two.
+  var creatingParagraph = false;
+  function paragraphAfter(block) {
+    var next = block.nextElementSibling;
+    if (isEmptyParagraph(next)) { focusBlock(next, false); return; }
+    if (creatingParagraph) return;
+    creatingParagraph = true;
+    createBlockAfter(block, 'paragraph').then(function (nb) {
+      creatingParagraph = false;
+      if (nb) focusBlock(nb, false);
+    }, function () { creatingParagraph = false; });
+  }
+
+  // Whether the caret has only empty content before it / after it in `field`.
+  function caretEdges(field, range) {
+    var before = document.createRange();
+    before.setStart(field, 0);
+    before.setEnd(range.startContainer, range.startOffset);
+    var after = document.createRange();
+    after.setStart(range.endContainer, range.endOffset);
+    after.setEnd(field, field.childNodes.length);
+    var head = document.createElement('div');
+    head.appendChild(before.cloneContents());
+    trimEdges(head);
+    var tail = document.createElement('div');
+    tail.appendChild(after.cloneContents());
+    trimEdges(tail);
+    return { atStart: !head.innerHTML, atEnd: !tail.innerHTML };
+  }
+
+  // Whether the caret sits on the field's first (up) or last (down) line,
+  // so an arrow key leaves the block instead of moving inside it.
+  function caretOnEdgeLine(field, range, up) {
+    if (field.tagName === 'TEXTAREA') {
+      var oneLine = field.scrollHeight <= parseFloat(getComputedStyle(field).lineHeight) * 1.5;
+      if (oneLine) return true;
+      return up ? field.selectionStart === 0 : field.selectionEnd === field.value.length;
+    }
+    var edges = caretEdges(field, range);
+    if (up ? edges.atStart : edges.atEnd) return true;
+    var rect = range.getBoundingClientRect();
+    if (!rect.height) return false;
+    var box = field.getBoundingClientRect();
+    var line = parseFloat(getComputedStyle(field).lineHeight) || 24;
+    return up ? rect.top - box.top < line * 0.8 : box.bottom - rect.bottom < line * 0.8;
+  }
+
+  // Enter inside a list item, a quote or a <pre> of the rich text keeps the
+  // browser's own behavior (a new item, a new line...).
+  function inNestedBlock(field, range) {
+    for (var n = range.startContainer; n && n !== field; n = n.parentNode) {
+      if (n.nodeType === 1 && /^(LI|PRE|BLOCKQUOTE)$/.test(n.tagName)) return true;
+    }
+    return false;
+  }
+
+  function onParagraphKey(e, block, field) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    var range = sel.getRangeAt(0);
+
+    // Enter is a line break inside the paragraph, as <br> like the stored
+    // text has them (the browser would wrap the line in a <div>). In a list
+    // item, a quote or a <pre> the browser's own Enter stays.
+    if (e.key === 'Enter') {
+      if (inNestedBlock(field, range)) return;
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+      return;
+    }
+
+    if (e.key === 'Backspace' && sel.isCollapsed && caretEdges(field, range).atStart) {
+      var prev = block.previousElementSibling;
+      if (!prev) return;
+      e.preventDefault();
+      if (prev.dataset.type === 'paragraph') {
+        var prevField = inlineField(prev);
+        var joinAt = prevField ? prevField.textContent.length : 0;
+        mergeParagraphUp(block).then(function (merged) {
+          if (!merged) return;
+          var f = inlineField(merged);
+          if (!f) return;
+          f.focus({ preventScroll: true });
+          placeCaretAtText(f, joinAt);
+        });
+      } else if (isEmptyParagraph(block)) {
+        removeComponent(block);
+        focusBlock(prev, true);
+      } else {
+        focusBlock(prev, true);
+      }
+      return;
+    }
+
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      var up = e.key === 'ArrowUp';
+      var target = up ? block.previousElementSibling : block.nextElementSibling;
+      if (target && caretOnEdgeLine(field, range, up)) {
+        e.preventDefault();
+        focusBlock(target, up);
+      }
+    }
+  }
+
+  function onTitleKey(e, block, field) {
+    if (e.key === 'Enter') {
+      // A heading is one line: Enter goes on to the text under it.
+      e.preventDefault();
+      paragraphAfter(block);
+      return;
+    }
+    if (e.key === 'Backspace' && !field.value && block.previousElementSibling) {
+      e.preventDefault();
+      var prev = block.previousElementSibling;
+      removeComponent(block);
+      focusBlock(prev, true);
+      return;
+    }
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      var up = e.key === 'ArrowUp';
+      var target = up ? block.previousElementSibling : block.nextElementSibling;
+      if (target && caretOnEdgeLine(field, null, up)) {
+        e.preventDefault();
+        focusBlock(target, up);
+      }
+    }
+  }
+
+  // Code, terminal, list and HTML keep Enter for their own new lines: Ctrl
+  // (or Cmd) + Enter leaves them for a paragraph below - and so does Enter
+  // on an empty last line of code, a session or a list, which is dropped.
+  function onMultilineKey(e, block, field) {
+    if (e.key !== 'Enter' || e.shiftKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      paragraphAfter(block);
+      return;
+    }
+    if (block.dataset.type === 'generic') return;
+    var v = field.value;
+    if (field.selectionStart === v.length && field.selectionEnd === v.length && /\n[ \t]*$/.test(v)) {
+      e.preventDefault();
+      field.value = v.replace(/\n[ \t]*$/, '');
+      onBlockInput(field);
+      paragraphAfter(block);
+    }
+  }
+
+  document.getElementById('entryBlocks').addEventListener('keydown', function (e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    var block = e.target.closest('.boat-rudder-entry-editor-block');
+    if (!block) return;
+    var type = block.dataset.type;
+    if (type === 'paragraph' && e.target.classList.contains('boat-rudder-entry-editor__richtext')) {
+      onParagraphKey(e, block, e.target);
+    } else if (type === 'title' && e.target.name === 'text') {
+      onTitleKey(e, block, e.target);
+    } else if (/^(code-text|terminal|list|generic)$/.test(type) && e.target.tagName === 'TEXTAREA' && e.target.name === 'text') {
+      onMultilineKey(e, block, e.target);
+    }
+  });
+
+  // A selected block with no field focused: Enter writes below it, the
+  // arrows move to its neighbours.
+  document.addEventListener('keydown', function (e) {
+    var block = activeEditBlock;
+    if (!block || isInlineType(block.dataset.type) || overlayOpen()) return;
+    var focused = document.activeElement;
+    if (focused && focused !== document.body && focused.closest('input, textarea, select, button, [contenteditable="true"], .boat-rudder-entry-editor-context, .boat-rudder-entry-editor__topbar, #editorSettings')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Enter') { e.preventDefault(); paragraphAfter(block); }
+    else if (e.key === 'ArrowUp' && block.previousElementSibling) { e.preventDefault(); focusBlock(block.previousElementSibling, true); }
+    else if (e.key === 'ArrowDown' && block.nextElementSibling) { e.preventDefault(); focusBlock(block.nextElementSibling, false); }
+  });
+
+  // A click on the sheet below the last block writes there: at the end of
+  // that block if it is a paragraph, in a new paragraph otherwise. Deferred,
+  // so the document's click handler closes the old block first.
+  document.querySelector('.boat-rudder-entry-editor__main').addEventListener('click', function (e) {
+    if (e.target.closest('.boat-rudder-entry-editor-block, .boat-rudder-entry-editor-add-block__btn, #addBlockMenu')) return;
+    var blocksEl = document.getElementById('entryBlocks');
+    var last = blocksEl.lastElementChild;
+    if (last && e.clientY < last.getBoundingClientRect().bottom) return;
+    setTimeout(function () {
+      if (last && last.dataset.type === 'paragraph') focusBlock(last, true);
+      else if (last) paragraphAfter(last);
+      else createBlockAfter(null, 'paragraph').then(function (nb) { if (nb) focusBlock(nb, false); });
+    }, 0);
+  });
+
+  /* ---- Block types: switching, "/" menu, Markdown shortcuts ---- */
+
+  // "paragraph", "title:2", "list:ol" - the context bar's type <select> value.
+  function blockVariantValue(block) {
+    var extra = (block.querySelector('[name="extra_data"]') || {}).value || '';
+    if (block.dataset.type === 'title') return 'title:' + (parseInt(extra) || 2);
+    if (block.dataset.type === 'list') return 'list:' + (extra === 'ol' ? 'ol' : 'ul');
+    return block.dataset.type;
+  }
+
+  // A heading's level, a list's kind.
+  function applyVariant(block, variant) {
+    var hidden = block.querySelector('[name="extra_data"]');
+    if (!hidden || !variant) return;
+    hidden.value = variant;
+    if (block.dataset.type === 'title') { initBlockHeadingBtns(block); autosizeTitle(block); }
+    if (block.dataset.type === 'list') { initListBlock(block); refreshBlockPreview(block); }
+  }
+
+  // A paragraph's HTML as plain lines: one per <br> or block element.
+  function htmlLines(html) {
+    var box = htmlBox(html);
+    box.querySelectorAll('br').forEach(function (br) { br.replaceWith('\n'); });
+    box.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre').forEach(function (el) { el.append('\n'); });
+    return box.textContent.split('\n').map(function (l) { return l.replace(/[\s ]+/g, ' ').trim(); }).filter(Boolean);
+  }
+
+  // One language's stored text, carried from a `from` block to a `to` one.
+  function convertText(from, to, text) {
+    if (!text) return '';
+    var lines = from === 'paragraph' ? htmlLines(text)
+              : text.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    if (to === 'paragraph') return lines.map(escapeHtml).join('<br>');
+    if (to === 'title') return lines.join(' ');
+    if (to === 'list') return lines.join('\n');
+    return '';
+  }
+
+  // Turns `block` into a `type` block (`variant`: a heading level, a list
+  // kind), its text kept in every language when both are text blocks.
+  // Same type: only the variant changes. Resolves with the block now there.
+  function convertBlock(block, type, variant) {
+    if (block.dataset.type === type) {
+      applyVariant(block, variant);
+      setContentChanged();
+      return Promise.resolve(block);
+    }
+    var from = block.dataset.type;
+    var texts = {};
+    langs.forEach(function (l) {
+      var f = langField(block, l, 'text');
+      texts[l] = f ? f.value : '';
+    });
+    return createBlockAfter(block, type).then(function (nb) {
+      if (!nb) return null;
+      langs.forEach(function (l) {
+        var text = convertText(from, type, texts[l]);
+        if (type === 'paragraph') setParagraphText(nb, l, text);
+        else {
+          var f = langField(nb, l, 'text');
+          if (f && /^(title|list)$/.test(type)) f.value = text;
+        }
+      });
+      applyVariant(nb, variant);
+      if (activeEditBlock === block) activeEditBlock = null;
+      block.hidden = true;           // gone at once; the server delete follows
+      removeComponent(block);
+      refreshBlockPreview(nb);
+      return nb;
+    });
+  }
+
+  // Where the writer goes on in a block just made by a switch, "/" or a
+  // shortcut: its text, its first field - or the media library, for the
+  // blocks that are nothing but pictures.
+  function enterBlock(block) {
+    var type = block.dataset.type;
+    if (isInlineType(type)) { focusBlock(block, true); return; }
+    activateBlock(block);
+    block.scrollIntoView({ block: 'nearest' });
+    if (type === 'image') { openImageGallery(block); return; }
+    if (type === 'gallery') { openGalleryForBlock(block); return; }
+    if (type === 'separator') { paragraphAfter(block); return; }
+    var field = block.querySelector('.boat-rudder-entry-editor-block__lang-content--active textarea, ' +
+      '.boat-rudder-entry-editor-block__body input[type="text"]:not([name="extra_data"]), ' +
+      '.boat-rudder-entry-editor__table-cell');
+    if (field && field.offsetParent) field.focus();
+  }
+
+  window.switchActiveBlockType = function (sel) {
+    var block = activeEditBlock;
+    if (!block) return;
+    var parts = sel.value.split(':');
+    convertBlock(block, parts[0], parts[1]).then(function (nb) {
+      if (nb && nb !== block) enterBlock(nb);
+      else updateContextBar();
+    });
+  };
+
+  // The "/" menu: typed alone at the start of an empty paragraph, it lists
+  // the blocks; the letters after it filter them (keywords too), the arrows
+  // and Enter pick one, Escape or deleting the "/" closes it. The paragraph
+  // becomes the picked block.
+  var SLASH_ITEMS = [
+    ['&para;', 'Paragraph', 'paragraph', '', 'text p'],
+    ['H1', 'Heading 1', 'title', '1', 'title h1 heading'],
+    ['H2', 'Heading 2', 'title', '2', 'title h2 heading subtitle'],
+    ['H3', 'Heading 3', 'title', '3', 'title h3 heading'],
+    ['&bull;', 'Bulleted list', 'list', 'ul', 'ul bullet list'],
+    ['1.', 'Numbered list', 'list', 'ol', 'ol number list ordered'],
+    ['&#9633;', 'Image', 'image', '', 'picture photo img'],
+    ['&#9632;', 'Gallery', 'gallery', '', 'photos pictures images'],
+    ['&lt;/&gt;', 'Code', 'code-text', '', 'code pre source snippet'],
+    ['&gt;_', 'Terminal', 'terminal', '', 'shell console command dos powershell'],
+    ['&#9974;', 'Table', 'table', '', 'grid rows columns'],
+    ['&#9135;', 'Separator', 'separator', '', 'hr divider line rule'],
+    ['&#128279;', 'Link', 'link', '', 'url button'],
+    ['&#9654;', 'YouTube', 'youtube-embed', '', 'video embed'],
+    ['&#9835;', 'Social', 'social-networks', '', 'network profile'],
+    ['&#9783;', 'Article index', 'entry-index', '', 'index table contents list articles posts series'],
+    ['&#128240;', 'Related articles', 'related-posts', '', 'related articles next previous recommended series posts'],
+    ['&#9998;', 'Byline', 'byline', '', 'author date'],
+    ['&#9965;', 'HTML', 'generic', '', 'generic raw embed html']
+  ];
+  var slash = null;   // { block, field, menu, items, index }
+
+  function closeSlashMenu() {
+    if (!slash) return false;
+    slash.menu.remove();
+    slash = null;
+    return true;
+  }
+
+  function renderSlashMenu(query) {
+    var q = query.toLowerCase();
+    slash.items = SLASH_ITEMS.filter(function (it) {
+      return !q || (it[1] + ' ' + it[4]).toLowerCase().split(/\s+/).some(function (w) { return w.indexOf(q) === 0; });
+    });
+    slash.index = Math.min(slash.index, Math.max(slash.items.length - 1, 0));
+    slash.menu.innerHTML = slash.items.length
+      ? slash.items.map(function (it, i) {
+          return '<button type="button" class="boat-rudder-entry-editor-slash__item' +
+            (i === slash.index ? ' boat-rudder-entry-editor-slash__item--active' : '') + '" data-index="' + i + '">' +
+            '<span class="boat-rudder-entry-editor-slash__icon">' + it[0] + '</span>' + it[1] + '</button>';
+        }).join('')
+      : '<div class="boat-rudder-entry-editor-slash__none">No block matches</div>';
+    var active = slash.menu.querySelector('.boat-rudder-entry-editor-slash__item--active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openSlashMenu(block, field) {
+    if (!slash || slash.block !== block) {
+      closeSlashMenu();
+      var menu = document.createElement('div');
+      menu.className = 'boat-rudder-entry-editor-slash';
+      menu.setAttribute('role', 'listbox');
+      // Keeps the caret in the paragraph while an item is clicked.
+      menu.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      menu.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-index]');
+        if (btn) pickSlashItem(parseInt(btn.dataset.index));
+      });
+      document.body.appendChild(menu);
+      slash = { block: block, field: field, menu: menu, items: [], index: 0 };
+    }
+    var r = field.getBoundingClientRect();
+    var below = window.innerHeight - r.bottom > 260;
+    slash.menu.style.left = Math.min(r.left + 14, window.innerWidth - 250) + 'px';
+    slash.menu.style.top = below ? (r.bottom + 4) + 'px' : '';
+    slash.menu.style.bottom = below ? '' : (window.innerHeight - r.top + 4) + 'px';
+    renderSlashMenu(field.textContent.replace(/ /g, ' ').slice(1));
+  }
+
+  function pickSlashItem(i) {
+    if (!slash || !slash.items[i]) return;
+    var it = slash.items[i], block = slash.block;
+    closeSlashMenu();
+    setParagraphText(block, currentLang, '');
+    if (it[2] === 'paragraph') { focusBlock(block, false); setContentChanged(); return; }
+    convertBlock(block, it[2], it[3]).then(function (nb) { if (nb) enterBlock(nb); });
+  }
+
+  // Typed alone in an empty paragraph, these turn it into another block.
+  var MARKDOWN_SHORTCUTS = [
+    [/^# $/, 'title', '1'], [/^## $/, 'title', '2'], [/^### $/, 'title', '3'],
+    [/^[-*] $/, 'list', 'ul'], [/^1[.)] $/, 'list', 'ol'],
+    [/^```$/, 'code-text', ''], [/^---$/, 'separator', '']
+  ];
+
+  document.getElementById('entryBlocks').addEventListener('input', function (e) {
+    var field = e.target;
+    if (!field.classList || !field.classList.contains('boat-rudder-entry-editor__richtext')) return;
+    var block = field.closest('.boat-rudder-entry-editor-block');
+    var text = field.textContent.replace(/ /g, ' ');
+    var onlyText = !field.querySelector('img, iframe, video, hr, table');
+
+    if (onlyText && /^\/[\w-]*$/.test(text)) openSlashMenu(block, field);
+    else closeSlashMenu();
+
+    if (!onlyText || text.length > 4) return;
+    for (var i = 0; i < MARKDOWN_SHORTCUTS.length; i++) {
+      var sc = MARKDOWN_SHORTCUTS[i];
+      if (!sc[0].test(text)) continue;
+      setParagraphText(block, currentLang, '');
+      convertBlock(block, sc[1], sc[2]).then(function (nb) { if (nb) enterBlock(nb); });
+      return;
+    }
+  });
+
+  // Capture phase: the "/" menu's keys come before the paragraph's own
+  // (Enter would otherwise split it).
+  document.getElementById('entryBlocks').addEventListener('keydown', function (e) {
+    if (!slash || e.target !== slash.field) return;
+    var n = slash.items.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!n) return;
+      slash.index = (slash.index + (e.key === 'ArrowDown' ? 1 : n - 1)) %% n;
+      renderSlashMenu(slash.field.textContent.replace(/ /g, ' ').slice(1));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (!n) { closeSlashMenu(); return; }
+      pickSlashItem(slash.index);
+    } else if (e.key === 'Escape') {
+      closeSlashMenu();
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
+  document.getElementById('entryBlocks').addEventListener('focusout', function (e) {
+    if (slash && e.target === slash.field) closeSlashMenu();
+  });
+  document.querySelector('.boat-rudder-entry-editor__main').addEventListener('scroll', closeSlashMenu);
+
+  /* ---- Related-posts block ----
+     extra_data is "" (automatic) or the chosen ids, "<left>|<right>". The
+     two slots hold {id, title} or null; every change writes them back. */
+  var RELATED_LOOKUP = '/dashboard/api/entries/lookup';
+
+  function relatedLookup(query) {
+    return fetch(RELATED_LOOKUP + '?' + query + '&lang=' + encodeURIComponent(currentLang), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return data.items || []; });
+  }
+
+  function relatedSlotOf(el) {
+    var slot = el.closest('.boat-rudder-entry-editor-related__slot');
+    return parseInt(slot.dataset.slot, 10);
+  }
+
+  function renderRelatedSlots(block) {
+    block.querySelectorAll('.boat-rudder-entry-editor-related__slot').forEach(function (el, i) {
+      var item = block._relatedSlots[i];
+      el.querySelector('.boat-rudder-entry-editor-related__chosen').hidden = !item;
+      el.querySelector('.boat-rudder-entry-editor-related__chosen-title').textContent = item ? item.title : '';
+      el.querySelector('.boat-rudder-entry-editor-related__search').hidden = !!item;
+    });
+  }
+
+  function syncRelatedExtra(block) {
+    var mode = block.querySelector('.boat-rudder-entry-editor-related__mode').value;
+    block.querySelector('[name="extra_data"]').value = mode === 'auto' ? '' :
+      block._relatedSlots.filter(Boolean).map(function (s) { return s.id; }).join('|');
+    setContentChanged();
+  }
+
+  function showRelatedMode(block, mode) {
+    block.querySelector('.boat-rudder-entry-editor-related__mode').value = mode;
+    block.querySelector('.boat-rudder-entry-editor-related__hint').hidden = mode !== 'auto';
+    block.querySelector('.boat-rudder-entry-editor-related').hidden = mode === 'auto';
+  }
+
+  function initRelatedBlock(block) {
+    if (block._relatedSlots) return;
+    var ids = block.querySelector('[name="extra_data"]').value.split('|').filter(Boolean);
+    block._relatedSlots = [null, null];
+    ids.slice(0, 2).forEach(function (id, i) { block._relatedSlots[i] = { id: id, title: '...' }; });
+    showRelatedMode(block, ids.length ? 'pick' : 'auto');
+    renderRelatedSlots(block);
+    if (!ids.length) return;
+    relatedLookup('ids=' + ids.join(',')).then(function (items) {
+      block._relatedSlots.forEach(function (slot) {
+        if (!slot) return;
+        var found = items.filter(function (it) { return it.id === slot.id; })[0];
+        slot.title = found ? found.title : 'No longer published';
+      });
+      renderRelatedSlots(block);
+    }).catch(function () {});
+  }
+
+  window.setRelatedMode = function (sel) {
+    var block = sel.closest('.boat-rudder-entry-editor-block');
+    showRelatedMode(block, sel.value);
+    syncRelatedExtra(block);
+  };
+
+  window.clearRelatedSlot = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    block._relatedSlots[relatedSlotOf(btn)] = null;
+    renderRelatedSlots(block);
+    syncRelatedExtra(block);
+  };
+
+  window.swapRelatedSlots = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    block._relatedSlots.reverse();
+    renderRelatedSlots(block);
+    syncRelatedExtra(block);
+  };
+
+  function pickRelated(input, item) {
+    var block = input.closest('.boat-rudder-entry-editor-block');
+    block._relatedSlots[relatedSlotOf(input)] = { id: item.id, title: item.title };
+    input.value = '';
+    closeRelatedResults(input);
+    renderRelatedSlots(block);
+    syncRelatedExtra(block);
+  }
+
+  // The picker's list under `input`: up to eight of `items`, without the ids
+  // of `taken` (the server sends more, so hiding those doesn't empty it).
+  function renderEntryResults(input, items, taken, onPick) {
+    var box = input.nextElementSibling;
+    var shown = items.filter(function (it) { return taken.indexOf(it.id) < 0; }).slice(0, 8);
+    box.innerHTML = '';
+    shown.forEach(function (it) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'boat-rudder-entry-editor-related__result';
+      b.textContent = it.title + (it.date ? ' - ' + it.date : '');
+      // Keeps the focus in the search box, whose blur closes this list.
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function (e) { e.stopPropagation(); onPick(it); });
+      box.appendChild(b);
+    });
+    if (!shown.length) {
+      var none = document.createElement('div');
+      none.className = 'boat-rudder-empty';
+      none.textContent = 'No articles found';
+      box.appendChild(none);
+    }
+    box.hidden = false;
+  }
+
+  // A pause after the last key, and a token so a slow answer can't replace a
+  // newer one.
+  function runEntrySearch(input, onItems) {
+    clearTimeout(input._relatedTimer);
+    input._relatedTimer = setTimeout(function () {
+      var token = (input._relatedToken || 0) + 1;
+      input._relatedToken = token;
+      relatedLookup('q=' + encodeURIComponent(input.value.trim()) + '&exclude=' + entryId)
+        .then(function (items) {
+          if (input._relatedToken === token && document.activeElement === input) onItems(items);
+        }).catch(function () {});
+    }, 200);
+  }
+
+  window.searchRelated = function (input) {
+    runEntrySearch(input, function (items) {
+      var block = input.closest('.boat-rudder-entry-editor-block');
+      var other = block._relatedSlots[1 - relatedSlotOf(input)];
+      renderEntryResults(input, items, other ? [other.id] : [], function (it) { pickRelated(input, it); });
+    });
+  };
+
+  window.closeRelatedResults = function (input) {
+    clearTimeout(input._relatedTimer);
+    input.nextElementSibling.hidden = true;
+  };
+
+  /* ---- Entry-index block ----
+     extra_data is the chosen ids in order, joined by '|'. block._indexItems
+     holds them as {id, title}; every change writes them back. */
+  var ENTRY_INDEX_MAX = 20;
+
+  function syncIndexExtra(block) {
+    block.querySelector('[name="extra_data"]').value =
+      block._indexItems.map(function (it) { return it.id; }).join('|');
+    setContentChanged();
+  }
+
+  function renderIndexList(block) {
+    var items = block._indexItems;
+    var list = block.querySelector('.boat-rudder-entry-editor-index__list');
+    var iconBtn = 'boat-rudder-btn boat-rudder-btn--ghost boat-rudder-btn--icon';
+    list.innerHTML = '';
+    items.forEach(function (it, i) {
+      var row = document.createElement('li');
+      row.className = 'boat-rudder-entry-editor-index__row';
+      row.dataset.index = i;
+      row.innerHTML =
+        '<span class="boat-rudder-entry-editor-index__title"></span>' +
+        '<button type="button" class="' + iconBtn + '" data-index-action="up" title="Move up"' + (i === 0 ? ' disabled' : '') + '>&#8679;</button>' +
+        '<button type="button" class="' + iconBtn + '" data-index-action="down" title="Move down"' + (i === items.length - 1 ? ' disabled' : '') + '>&#8681;</button>' +
+        '<button type="button" class="' + iconBtn + '" data-index-action="remove" title="Remove">&times;</button>';
+      row.firstChild.textContent = it.title;
+      list.appendChild(row);
+    });
+    block.querySelector('.boat-rudder-entry-editor-index__count').textContent = items.length + ' / ' + ENTRY_INDEX_MAX;
+    block.querySelector('.boat-rudder-entry-editor-index__search').hidden = items.length >= ENTRY_INDEX_MAX;
+  }
+
+  function initIndexBlock(block) {
+    if (block._indexItems) return;
+    var ids = block.querySelector('[name="extra_data"]').value.split('|').filter(Boolean).slice(0, ENTRY_INDEX_MAX);
+    block._indexItems = ids.map(function (id) { return { id: id, title: '...' }; });
+
+    // On the list, which outlives every re-render: attached once.
+    block.querySelector('.boat-rudder-entry-editor-index__list').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-index-action]');
+      if (!btn || btn.disabled) return;
+      e.stopPropagation();
+      var items = block._indexItems;
+      var i = parseInt(btn.closest('[data-index]').dataset.index, 10);
+      var to = btn.dataset.indexAction === 'up' ? i - 1 : i + 1;
+      if (btn.dataset.indexAction === 'remove') items.splice(i, 1);
+      else items.splice(to, 0, items.splice(i, 1)[0]);
+      renderIndexList(block);
+      syncIndexExtra(block);
+    });
+
+    renderIndexList(block);
+    if (!ids.length) return;
+    relatedLookup('ids=' + ids.join(',')).then(function (found) {
+      block._indexItems.forEach(function (it) {
+        var match = found.filter(function (f) { return f.id === it.id; })[0];
+        it.title = match ? match.title : 'No longer published';
+      });
+      renderIndexList(block);
+    }).catch(function () {});
+  }
+
+  window.searchIndex = function (input) {
+    runEntrySearch(input, function (items) {
+      var block = input.closest('.boat-rudder-entry-editor-block');
+      var taken = block._indexItems.map(function (it) { return it.id; });
+      renderEntryResults(input, items, taken, function (it) {
+        block._indexItems.push({ id: it.id, title: it.title });
+        input.value = '';
+        renderIndexList(block);
+        syncIndexExtra(block);
+        // Stays open on the next ones, for adding several in a row; the
+        // limit hides the box, so its list goes too.
+        if (block._indexItems.length < ENTRY_INDEX_MAX) window.searchIndex(input);
+        else closeRelatedResults(input);
+      });
     });
   };
 
@@ -780,6 +1745,8 @@
     block.querySelectorAll('.boat-rudder-entry-editor__heading-btn').forEach(function (b) {
       b.classList.toggle('boat-rudder-btn--active', parseInt(b.dataset.level) === level);
     });
+    block.dataset.level = level;
+    autosizeTitle(block);
     setContentChanged();
   };
 
@@ -790,6 +1757,33 @@
     block.querySelectorAll('.boat-rudder-entry-editor__heading-btn').forEach(function (b) {
       b.classList.toggle('boat-rudder-btn--active', parseInt(b.dataset.level) === level);
     });
+    block.dataset.level = level;
+  }
+
+  // A title is a one-line textarea drawn as its heading: it grows with its
+  // text instead of scrolling. Only the visible language's box can be
+  // measured, so setLang() runs it again.
+  function autosizeTitle(block) {
+    if (!block || block.dataset.type !== 'title') return;
+    block.querySelectorAll('.boat-rudder-entry-editor-block__lang-content--active [name="text"]').forEach(function (ta) {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+  }
+
+  // Paragraphs and titles are editable on the sheet from the start, not
+  // only once opened.
+  function initInlineBlock(block) {
+    var type = block.dataset.type;
+    if (type === 'paragraph') initParagraphEditors(block);
+    if (type === 'title') {
+      initBlockHeadingBtns(block);
+      block.querySelectorAll('[name="text"]').forEach(function (ta) {
+        ta.rows = 1;
+        ta.placeholder = 'Heading';
+      });
+      autosizeTitle(block);
+    }
   }
 
   /* ---- Advanced panel ---- */
@@ -905,20 +1899,286 @@
     });
   };
 
-  window.editorSaveAll = function () {
+  // `retried`: already a second try, after fetching a newer session's token.
+  window.editorSaveAll = function (retried) {
     setStatus('Saving...');
     return Promise.all([saveMeta(), saveHeader(), saveContent()]).then(function (results) {
-      dirty = results.some(function (data) { return !data.ok; });
-      setStatus(dirty ? 'Save failed' : 'Saved', dirty ? 'error' : 'saved');
+      var failed = results.filter(function (data) { return !data.ok; });
+      dirty = failed.length > 0;
+      setStatus(dirty ? 'Save failed: ' + (failed[0].error || 'unknown error') : 'Saved', dirty ? 'error' : 'saved');
+    }, function (err) {
+      dirty = true;
+      // Signed in again in another tab: this page still sends the old
+      // session's token. Take the new one and save once more.
+      if (err.session === 'csrf' && retried !== true) {
+        return checkSession().then(function (ok) {
+          if (ok) return editorSaveAll(true);
+          if (ok === null) setStatus('Not saved: no answer from the server', 'error');
+        });
+      }
+      if (err.session) sessionLost();
+      else setStatus('Not saved: ' + (err.message || 'no answer from the server'), 'error');
+    });
+  };
+
+  /* ---- Translation ---- */
+  // Fills the other languages' empty fields from the one being edited
+  // (entry-translation-plan.md). Azure goes through the server, which holds
+  // the key; a local translator is called straight from here, since the
+  // server can't reach the editor's computer. Either way translateBatch()
+  // turns a list of texts into a list of translations.
+  var translateProvider = root.dataset.translateProvider || '';
+  var translateBusy = false;
+  var TRANSLATE_MAX_TEXTS = 50;
+  var TRANSLATE_MAX_CHARS = 40000;
+
+  function langName(code) {
+    var btn = root.querySelector('.boat-rudder-entry-editor__lang-btn[data-lang="' + code + '"]');
+    return btn ? btn.textContent.trim() : code;
+  }
+
+  if (translateProvider && langs.length > 1) document.getElementById('translateBox').hidden = false;
+
+  window.toggleTranslatePanel = function () {
+    var panel = document.getElementById('translatePanel');
+    if (panel.classList.contains('boat-rudder-entry-editor-translate__panel--open')) { closeTranslatePanel(); return; }
+    translateMessage('');
+    document.getElementById('translateFrom').textContent = langName(currentLang);
+    document.getElementById('translateTargets').innerHTML = langs.filter(function (code) {
+      return code !== currentLang;
+    }).map(function (code) {
+      return '<label class="boat-rudder-entry-editor-translate__target"><input type="checkbox" value="' +
+        escapeHtml(code) + '" checked> ' + escapeHtml(langName(code)) + '</label>';
+    }).join('');
+    // Off every time the panel opens: replacing is the exception, and a
+    // checkbox left on from an earlier run would overwrite by surprise.
+    document.getElementById('translateOverwrite').checked = false;
+    updateTranslateHint();
+    panel.classList.add('boat-rudder-entry-editor-translate__panel--open');
+  };
+
+  window.updateTranslateHint = function () {
+    document.getElementById('translateHint').textContent = document.getElementById('translateOverwrite').checked
+      ? 'Every field is translated again from ' + langName(currentLang) + ', replacing what the other languages have.'
+      : 'Only empty fields are filled; what is already written stays.';
+  };
+
+  function closeTranslatePanel() {
+    var panel = document.getElementById('translatePanel');
+    if (!panel || !panel.classList.contains('boat-rudder-entry-editor-translate__panel--open')) return false;
+    panel.classList.remove('boat-rudder-entry-editor-translate__panel--open');
+    return true;
+  }
+  window.closeTranslatePanel = closeTranslatePanel;
+
+  // The panel's own line: progress, and why a run stopped or did nothing -
+  // the top bar's status alone is easy to miss.
+  function translateMessage(text, cls) {
+    var el = document.getElementById('translateMessage');
+    el.textContent = text;
+    el.className = 'boat-rudder-entry-editor-translate__message' +
+      (cls ? ' boat-rudder-entry-editor-translate__message--' + cls : '');
+  }
+
+  function translateBatch(texts, source, target, format) {
+    if (translateProvider === 'azure') {
+      var params = new URLSearchParams();
+      params.set('source', source);
+      params.set('target', target);
+      params.set('format', format);
+      texts.forEach(function (t) { params.append('text', t); });
+      return postForm('/dashboard/api/translate', params).then(function (data) {
+        if (!data.ok) throw new Error(data.error || 'translation failed');
+        return data.texts;
+      });
+    }
+    var url = (root.dataset.translateUrl || '').replace(/\/+$/, '') + '/translate';
+    var body = { q: texts, source: source, target: target, format: format };
+    if (root.dataset.translateKey) body.api_key = root.dataset.translateKey;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(function () {
+      throw new Error('the local translator at ' + url + ' did not answer');
+    }).then(function (res) {
+      return res.json().catch(function () { throw new Error('the local translator answered ' + res.status); });
+    }).then(function (data) {
+      if (data.error) throw new Error(data.error);
+      var out = Array.isArray(data.translatedText) ? data.translatedText : [data.translatedText];
+      if (out.length !== texts.length) throw new Error('the local translator answered a different number of texts');
+      return out;
+    });
+  }
+
+  function langField(scope, lang, name) {
+    var panel = scope.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"]');
+    return panel ? panel.querySelector('[name="' + name + '"]') : null;
+  }
+
+  // An opened table block shows a starter grid ("Column 1"...) even in a
+  // language nobody has written yet; that still counts as empty.
+  function isBlankTable(text) {
+    return text.split('\n').every(function (row) {
+      return row.split('|').every(function (c) { return !c.trim() || /^Column \d+$/.test(c.trim()); });
+    });
+  }
+
+  // The jobs of one target language: each has a format, the texts to send
+  // and apply(translations). Only fields empty in `target` - or every one,
+  // with `overwrite` - whose `source` has text; a list goes line by line and
+  // a table cell by cell, so their separators survive.
+  function translationJobs(source, target, overwrite) {
+    var jobs = [];
+    var header = document.getElementById('headerSidebar');
+    var written = function (value) { return !overwrite && value.trim(); };
+    ['title', 'summary'].forEach(function (name) {
+      var from = langField(header, source, name), to = langField(header, target, name);
+      if (!from || !to || !from.value.trim() || written(to.value)) return;
+      jobs.push({ format: 'text', texts: [from.value], apply: function (t) { to.value = t[0]; } });
+    });
+
+    document.querySelectorAll('#entryBlocks .boat-rudder-entry-editor-block').forEach(function (block) {
+      var type = block.dataset.type;
+      var from = langField(block, source, 'text'), to = langField(block, target, 'text');
+      if (!from || !to || !from.value.trim()) return;
+      var done = function (value) {
+        to.value = value;
+        refreshBlockPreview(block);
+      };
+      if (type === 'paragraph') {
+        if (written(to.value)) return;
+        jobs.push({ format: 'html', texts: [from.value], apply: function (t) {
+          setParagraphText(block, target, t[0]);
+          refreshBlockPreview(block);
+        } });
+      } else if (type === 'title' || type === 'link') {
+        if (written(to.value)) return;
+        jobs.push({ format: 'text', texts: [from.value], apply: function (t) { done(t[0]); } });
+      } else if (type === 'list' || type === 'table') {
+        if (!overwrite && (type === 'list' ? to.value.trim() : !isBlankTable(to.value))) return;
+        var sep = type === 'list' ? null : '|';
+        var rows = from.value.replace(/\r\n?/g, '\n').split('\n');
+        var cells = rows.map(function (row) { return sep ? row.split(sep) : [row]; });
+        var texts = [];
+        cells.forEach(function (row) { row.forEach(function (c) { if (c.trim()) texts.push(c); }); });
+        jobs.push({ format: 'text', texts: texts, apply: function (t) {
+          var i = 0;
+          done(cells.map(function (row) {
+            return row.map(function (c) { return c.trim() ? t[i++] : c; }).join(sep || '');
+          }).join('\n'));
+          var grid = to.parentNode.querySelector('.boat-rudder-entry-editor__table-editor');
+          if (grid) buildTableGrid(grid, parseTableRows(to.value), tableHasHeader(block), to);
+        } });
+      } else if (type === 'code-text' || type === 'terminal') {
+        // Code and commands are the same in every language - a translator
+        // would rename keywords, paths and options - so they are copied as
+        // they are, or the block would show nothing in the other language.
+        if (written(to.value)) return;
+        jobs.push({ format: 'copy', texts: [from.value], apply: function (t) { done(t[0]); } });
+      }
+    });
+    return jobs;
+  }
+
+  // Sends `jobs` in batches of up to TRANSLATE_MAX_TEXTS texts per format,
+  // one after another, then hands each job its translations and calls
+  // applied() for it.
+  function runJobs(jobs, source, target, progress, applied) {
+    // Copied fields (code, terminal) need no translator: filled right away.
+    jobs.filter(function (j) { return j.format === 'copy'; }).forEach(function (job) {
+      job.apply(job.texts);
+      applied();
+    });
+    var batches = [];
+    ['text', 'html'].forEach(function (format) {
+      var batch = null;
+      jobs.filter(function (j) { return j.format === format; }).forEach(function (job) {
+        var size = job.texts.join('').length;
+        if (!batch || batch.texts.length + job.texts.length > TRANSLATE_MAX_TEXTS ||
+            batch.size + size > TRANSLATE_MAX_CHARS) {
+          batch = { format: format, texts: [], jobs: [], size: 0 };
+          batches.push(batch);
+        }
+        batch.jobs.push(job);
+        batch.texts = batch.texts.concat(job.texts);
+        batch.size += size;
+      });
+    });
+    return batches.reduce(function (chain, batch, i) {
+      return chain.then(function () {
+        progress(i + 1, batches.length);
+        return translateBatch(batch.texts, source, target, batch.format).then(function (out) {
+          var at = 0;
+          batch.jobs.forEach(function (job) {
+            job.apply(out.slice(at, at + job.texts.length));
+            at += job.texts.length;
+            applied();
+          });
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  window.runTranslation = function () {
+    if (translateBusy) return;
+    var source = currentLang;
+    var targets = Array.from(document.querySelectorAll('#translateTargets input:checked'))
+      .map(function (cb) { return cb.value; });
+    var overwrite = document.getElementById('translateOverwrite').checked;
+    var work = targets.map(function (target) {
+      return { target: target, jobs: translationJobs(source, target, overwrite) };
+    }).filter(function (w) { return w.jobs.length; });
+    if (overwrite && work.length && !confirm('Replace everything already written in ' +
+        work.map(function (w) { return langName(w.target); }).join(', ') + ' with a new translation from ' +
+        langName(source) + '?')) return;
+    if (!work.length) {
+      translateMessage('Nothing to translate: no field written in ' + langName(source) +
+        ' is empty in the other languages. Write in the tab you translate from.', 'error');
+      return;
+    }
+
+    translateBusy = true;
+    var filled = 0;
+    work.reduce(function (chain, w) {
+      return chain.then(function () {
+        return runJobs(w.jobs, source, w.target, function (i, n) {
+          var text = 'Translating to ' + langName(w.target) + (n > 1 ? ' ' + i + '/' + n : '') + '...';
+          setStatus(text);
+          translateMessage(text);
+        }, function () { filled++; });
+      });
+    }, Promise.resolve()).then(function () {
+      translateBusy = false;
+      closeTranslatePanel();
+      setContentChanged();
+      if (autoSaveEnabled) {
+        clearTimeout(autoSaveTimer);
+        editorSaveAll();
+      } else {
+        setStatus('Translated ' + filled + ' field' + (filled === 1 ? '' : 's') + ' - not saved yet', 'saved');
+      }
+    }, function (err) {
+      translateBusy = false;
+      if (filled) setContentChanged();
+      setStatus('Translation stopped: ' + err.message, 'error');
+      translateMessage('Translation stopped: ' + err.message, 'error');
     });
   };
 
   /* ---- Add / remove blocks ---- */
-  window.toggleAddBlockDropdown = function () {
+  window.toggleAddBlockDropdown = function (opener) {
     var menu = document.getElementById('addBlockMenu');
+    // One menu serves the context bar's "+ Insert" and the sheet's
+    // "+ Add block": it moves next to the button that opened it.
+    if (opener && opener.nextElementSibling !== menu) {
+      opener.after(menu);
+      menu.classList.remove('boat-rudder-entry-editor-add-block__dropdown--open');
+    }
     var opening = !menu.classList.contains('boat-rudder-entry-editor-add-block__dropdown--open');
     menu.classList.toggle('boat-rudder-entry-editor-add-block__dropdown--open', opening);
     if (!opening) return;
+    if (menu.closest('.boat-rudder-entry-editor-context')) return;  // always opens downward there
 
     // The menu opens upward, since the button sits under the last block. The
     // editor area scrolls (overflow-y: auto), so with little or nothing above
@@ -937,12 +2197,13 @@
   };
 
   // Creates a block of `type` server-side right after `anchor` (or at the
-  // end when there's none), puts it on the page and resolves with its
-  // element, or null on failure - shared by the add-block buttons and
-  // splitParagraph().
-  function createBlockAfter(anchor, type) {
+  // end when there's none) - or right before `before`, when given - puts it
+  // on the page and resolves with its element, or null on failure. Shared by
+  // the add-block buttons, splitParagraph() and the keyboard.
+  function createBlockAfter(anchor, type, before) {
     var blocksEl = document.getElementById('entryBlocks');
-    var order = anchor ? Array.from(blocksEl.children).indexOf(anchor) + 1 : blocksEl.children.length;
+    var order = before ? Array.from(blocksEl.children).indexOf(before)
+              : anchor ? Array.from(blocksEl.children).indexOf(anchor) + 1 : blocksEl.children.length;
     var params = new URLSearchParams();
     params.set('type', type);
     params.set('order', order);
@@ -955,12 +2216,15 @@
       var wrapper = document.createElement('div');
       wrapper.innerHTML = data.html;
       var blockEl = wrapper.firstElementChild;
-      if (anchor && anchor.parentNode === blocksEl) {
+      if (before && before.parentNode === blocksEl) {
+        before.before(blockEl);
+      } else if (anchor && anchor.parentNode === blocksEl) {
         anchor.after(blockEl);
       } else {
         blocksEl.appendChild(blockEl);
       }
       applyLangVisibility(blockEl);
+      initInlineBlock(blockEl);
       setupDragHandles();
       setContentChanged();
       return blockEl;
@@ -972,6 +2236,12 @@
     // always at the end - captured now, since activateBlock() below will
     // clear activeEditBlock once the new block takes its place.
     var anchor = activeEditBlock;
+    // An empty paragraph (where Enter just landed) becomes the new block.
+    if (isEmptyParagraph(anchor) && type !== 'paragraph') {
+      closeAddBlockMenu();
+      convertBlock(anchor, type).then(function (nb) { if (nb) enterBlock(nb); });
+      return;
+    }
     createBlockAfter(anchor, type).then(function (blockEl) {
       if (!blockEl) return;
       refreshBlockPreview(blockEl);
@@ -979,6 +2249,9 @@
       if (menu) menu.classList.remove('boat-rudder-entry-editor-add-block__dropdown--open');
       activateBlock(blockEl);
       blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      var field = blockEl.querySelector('.boat-rudder-entry-editor-block__lang-content--active .boat-rudder-entry-editor__richtext, ' +
+                                        '.boat-rudder-entry-editor-block__lang-content--active textarea');
+      if (field && isInlineType(blockEl.dataset.type)) field.focus({ preventScroll: true });
     });
   };
 
@@ -989,6 +2262,7 @@
       if (data.ok) {
         if (activeEditBlock === blockEl) activeEditBlock = null;
         blockEl.remove();
+        updateContextBar();
         setContentChanged();
       } else {
         setStatus('Error: ' + data.error, 'error');
@@ -1022,8 +2296,7 @@
     getBlockRows().forEach(function (row) {
       // The open block's whole header bar drags too, from any spot that
       // isn't one of its own controls (trash, Split/Merge, move, close...).
-      var grips = [row.querySelector('.boat-rudder-entry-editor-block__grip'),
-                   row.querySelector('.boat-rudder-entry-editor-block__header')].filter(Boolean);
+      var grips = [row.querySelector('.boat-rudder-entry-editor-block__grip')].filter(Boolean);
       grips.forEach(function (grip) {
         if (grip.dataset.dragInit) return;
         grip.dataset.dragInit = '1';
@@ -1040,6 +2313,9 @@
           placeholder.style.cssText = 'height:4px;background:rgba(37,99,235,0.6);border-radius:2px;margin:2px 0;pointer-events:none;';
 
           clone = row.cloneNode(true);
+          // An open block's tool row is pinned to the context bar; the
+          // dragged copy must not put a second one there.
+          clone.classList.remove('boat-rudder-entry-editor-block--editing');
           clone.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;opacity:0.88;pointer-events:none;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);background:#222;border:1px solid #2563eb;border-radius:5px;box-sizing:border-box';
 
           document.body.appendChild(clone);
@@ -1085,6 +2361,7 @@
     if (placeholder) placeholder.remove();
     document.body.classList.remove('boat-rudder-entry-editor-mode--dragging');
     dragging = null; clone = null; placeholder = null;
+    updateContextBar();
     setContentChanged();
   });
 
@@ -1170,7 +2447,8 @@
     preview.innerHTML = '<iframe width="100%%" height="180" src="' + escapeHtml(embed) + '" frameborder="0" allowfullscreen></iframe>';
   }
 
-  /* ---- Code-text block ---- */
+  /* ---- Code-text and terminal blocks: the <select> holds extra_data (the
+     language, or the shell) ---- */
   function initCodeBlock(block) {
     var hidden = block.querySelector('[name="extra_data"]');
     var sel = block.querySelector('.boat-rudder-entry-editor__code-lang-select');
@@ -1385,15 +2663,80 @@
     setContentChanged();
   };
 
-  /* ---- Image block ---- */
+  /* ---- Image block ----
+     Each language may have its own picture. English's is the default: a
+     language whose path is empty shows English's, on the site too
+     (cms_entries.c), so a picture is only stored where it differs. */
+  var IMAGE_DEFAULT_LANG = langs.indexOf('en') >= 0 ? 'en' : langs[0];
+
+  function imageField(block, lang) {
+    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + lang + '"]');
+    return panel ? panel.querySelector('[name="text"]') : null;
+  }
+
+  function imageUrlFor(block, lang) {
+    var own = imageField(block, lang), def = imageField(block, IMAGE_DEFAULT_LANG);
+    return (own && own.value.trim()) || (def && def.value.trim()) || '';
+  }
+
+  // The media picker's choice, for the language being edited. Picked for
+  // English, it is every language's that had none of its own - or had
+  // English's previous one copied in, which is how blocks were stored before.
+  window.setBlockImage = function (block, url) {
+    var def = imageField(block, IMAGE_DEFAULT_LANG);
+    if (!def) return;
+    if (currentLang === IMAGE_DEFAULT_LANG) {
+      var old = def.value.trim();
+      def.value = url;
+      langs.forEach(function (lang) {
+        var f = imageField(block, lang);
+        if (lang !== IMAGE_DEFAULT_LANG && f && (f.value.trim() === old || f.value.trim() === url)) f.value = '';
+      });
+    } else if (!def.value.trim()) {
+      // The first picture, whatever tab it was picked on, is the default.
+      def.value = url;
+    } else {
+      var own = imageField(block, currentLang);
+      if (own) own.value = url === def.value.trim() ? '' : url;
+    }
+    renderImagePreview(block);
+    refreshBlockPreview(block);
+  };
+
+  window.useDefaultImage = function (btn) {
+    var block = btn.closest('.boat-rudder-entry-editor-block');
+    var own = block ? imageField(block, currentLang) : null;
+    if (!own) return;
+    own.value = '';
+    renderImagePreview(block);
+    refreshBlockPreview(block);
+    setContentChanged();
+  };
+
+  // Under the picture, on a language other than English: whose picture it is.
+  function renderImageLangNote(block) {
+    var note = block.querySelector('.boat-rudder-entry-editor__image-lang');
+    if (!note) return;
+    var own = imageField(block, currentLang);
+    var def = imageField(block, IMAGE_DEFAULT_LANG);
+    var hasOwn = currentLang !== IMAGE_DEFAULT_LANG && own && own.value.trim();
+    note.hidden = currentLang === IMAGE_DEFAULT_LANG || !(def && def.value.trim()) && !hasOwn;
+    note.querySelector('.boat-rudder-entry-editor__image-lang-text').textContent = hasOwn
+      ? langName(currentLang) + ' has its own image.'
+      : 'Using the ' + langName(IMAGE_DEFAULT_LANG) + ' image. Select photo to give ' +
+        langName(currentLang) + ' its own.';
+    var reset = note.querySelector('button');
+    reset.hidden = !hasOwn;
+    reset.textContent = 'Use the ' + langName(IMAGE_DEFAULT_LANG) + ' image';
+  }
+
   // Opening a block hides its preview and shows the body, so the body needs its
   // own picture: otherwise editing an image would show only the path textareas.
   window.renderImagePreview = function (block) {
     var container = block.querySelector('.boat-rudder-entry-editor__image-preview');
     if (!container) return;
-    var panel = block.querySelector('.boat-rudder-entry-editor-block__lang-content[data-lang="' + currentLang + '"]');
-    var field = panel ? panel.querySelector('[name="text"]') : null;
-    var url = field && field.value ? field.value.trim() : '';
+    renderImageLangNote(block);
+    var url = imageUrlFor(block, currentLang);
 
     container.innerHTML = '';
     if (!url) {
@@ -1640,13 +2983,82 @@
   }
 
 
+  /* ---- Theme ----
+     The same switch as the site's navbar: /theme/set sets the theme cookie
+     and comes back here. It reloads the editor, so unsaved work is saved
+     first (a failed save switches nothing), and the language tab and scroll
+     come back after the reload. */
+  var THEME_RESTORE = 'br-editor-theme-restore';
+
+  (function initThemeSelect() {
+    var themes = (root.dataset.themes || '').split(',').filter(Boolean);
+    var sel = document.getElementById('editorTheme');
+    if (themes.length < 2 || !sel) return;
+    sel.innerHTML = themes.map(function (key) {
+      return '<option value="' + escapeHtml(key) + '"' + (key === root.dataset.theme ? ' selected' : '') + '>' +
+             escapeHtml(key.charAt(0).toUpperCase() + key.slice(1)) + '</option>';
+    }).join('');
+    sel.hidden = false;
+  })();
+
+  function editorScroller() {
+    return document.querySelector('.boat-rudder-entry-editor__main');
+  }
+
+  window.switchEditorTheme = function (sel) {
+    var key = sel.value;
+    var go = function () {
+      var scroller = editorScroller();
+      try {
+        sessionStorage.setItem(THEME_RESTORE, JSON.stringify({
+          path: location.pathname, lang: currentLang,
+          scroll: scroller ? scroller.scrollTop : 0, pageScroll: window.scrollY
+        }));
+      } catch (e) {}
+      location.href = '/theme/set?key=' + encodeURIComponent(key) +
+                      '&return=' + encodeURIComponent(location.pathname + location.search);
+    };
+    if (!dirty) { go(); return; }
+    Promise.resolve(editorSaveAll()).then(function () {
+      if (dirty) sel.value = root.dataset.theme; // the save status says why
+      else go();
+    });
+  };
+
+  // After a theme switch: the tab and the place the editor was left at.
+  function restoreAfterThemeSwitch() {
+    var saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(THEME_RESTORE) || 'null');
+      sessionStorage.removeItem(THEME_RESTORE);
+    } catch (e) {}
+    if (!saved || saved.path !== location.pathname) return;
+    if (langs.indexOf(saved.lang) >= 0) setLang(saved.lang);
+    var scroller = editorScroller();
+    if (scroller) scroller.scrollTop = saved.scroll || 0;
+    window.scrollTo(0, saved.pageScroll || 0);
+  }
+
   /* ---- Initialize ---- */
   function init() {
     initPublishToggle();
+    document.querySelectorAll('#entryBlocks > .boat-rudder-entry-editor-block').forEach(initInlineBlock);
+    var settingsOpen = null;
+    try { settingsOpen = localStorage.getItem('br-editor-settings-open'); } catch (e) {}
+    // First visit: open beside the sheet on a wide screen, folded on a small one.
+    toggleEditorSettings(settingsOpen === null ? window.matchMedia('(min-width: 1200px)').matches : settingsOpen === '1');
     setLang(currentLang);
+    restoreAfterThemeSwitch();
     refreshAllPreviews();
     setupDragHandles();
     updateHeaderImagePreview();
+    updateContextBar();
+
+    // The related-posts previews follow the categories ticked in Settings.
+    document.getElementById('entryCategories').addEventListener('change', function () {
+      document.querySelectorAll('#entryBlocks [data-type="related-posts"]:not(.boat-rudder-entry-editor-block--editing)')
+        .forEach(refreshBlockPreview);
+    });
 
     var imgInput = document.querySelector('#headerSidebar [name="image_url"]');
     if (imgInput) imgInput.addEventListener('input', updateHeaderImagePreview);

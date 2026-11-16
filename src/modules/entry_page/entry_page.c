@@ -1,9 +1,12 @@
 #include "entry_page.h"
+#include "../entry_index/entry_index.h"
+#include "../related_posts/related_posts.h"
 #include "../../db/cms_themes.h"
 #include "../../db/mongodb_manager.h"
 #include "../../db/short_links.h"
 #include "../../utils/category_tags.h"
 #include "../../utils/code_highlight.h"
+#include "../../utils/terminal_session.h"
 #include "../../utils/image_size.h"
 #include "../../utils/detect_epoch.h"
 #include "../../utils/generate_url_theme.h"
@@ -16,6 +19,7 @@
 #include "../../utils/request_theme.h"
 #include "../../utils/template_utils.h"
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -716,6 +720,25 @@ static char *render_link(const CmsContentBlock *block, int epoch) {
     return result;
 }
 
+// Where a list item's label ends: "Intel 486: a processor..." -> 9, the
+// text before the first ':' that is followed by a space or ends the item -
+// not "http://", "10:30", nor a ':' inside a tag ('style="color: red"').
+// 0 when the item has no label (or nothing but spaces before the ':').
+static size_t list_label_len(const char *item) {
+    int in_tag = 0;
+    for (size_t i = 0; item[i]; i++) {
+        char c = item[i];
+        if (c == '<') in_tag = 1;
+        else if (c == '>') in_tag = 0;
+        else if (c == ':' && !in_tag && (item[i + 1] == '\0' || isspace((unsigned char)item[i + 1]))) {
+            for (size_t k = 0; k < i; k++)
+                if (!isspace((unsigned char)item[k])) return i;
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static char *render_list(const CmsContentBlock *block, int epoch) {
     if (!block->text || !block->text[0]) return strdup("");
 
@@ -741,7 +764,11 @@ static char *render_list(const CmsContentBlock *block, int epoch) {
         char *end = tok + strlen(tok) - 1;
         while (end >= tok && (*end == '\r' || *end == '\n')) *end-- = '\0';
         if (!*tok) continue;
-        char *item = render_template(item_tpl, tok);
+        // A label before ':' is bold, on every epoch (WML has <b> too).
+        size_t label = list_label_len(tok);
+        char *text = label ? render_template("<b>%.*s</b>%s", (int)label, tok, tok + label) : NULL;
+        char *item = render_template(item_tpl, text ? text : tok);
+        free(text);
         items = item ? str_append(items, item) : NULL;
         free(item);
     }
@@ -911,6 +938,44 @@ static char *render_code_text(const CmsContentBlock *block, int epoch) {
                                           code_highlight_display_name(lang),
                                           toggle_url, toggle_label, block_id,
                                           colors.code_background, colors.code_text) : NULL;
+    free(text);
+    free(tpl);
+    return result ? result : strdup("");
+}
+
+// A pasted shell session: commands (after their prompt) and what they
+// printed, in a console window titled by the shell. Epoch 3 colors it with
+// the theme's --br-color-terminal-* properties and copies only the commands;
+// epochs 1-2 get <font color> from the same "Terminal colors" (epoch 1's
+// lines end in <br>, like the code block's); epoch 0 and WML plain text with
+// the commands bold.
+static char *render_terminal(const CmsContentBlock *block, int epoch) {
+    if (!block->text || !block->text[0]) return strdup("");
+    char *tpl = load_template("elements/terminal/terminal_epoch%d.html", epoch);
+    if (!tpl) return NULL;
+
+    const char *shell = block->extra_data ? block->extra_data : "";
+    CmsThemeColors colors = {0};
+    char *text;
+    if (epoch >= EPOCH_MODERN) {
+        text = terminal_html(block->text, shell);
+    } else {
+        // Epoch 0 and WML: no color; WML also has no <pre> to keep the lines.
+        int plain = (epoch <= EPOCH_PRESTANDARD);
+        if (!plain) cms_get_theme_colors(request_theme(), &colors);
+        TerminalPalette pal = {
+            .text = colors.terminal_text, .prompt = colors.terminal_prompt,
+            .output = colors.terminal_output, .option = colors.terminal_option,
+            .value = colors.terminal_value, .variable = colors.terminal_variable,
+            .no_color = plain,
+            .newline = epoch == EPOCH_EARLY ? "<br>" : epoch == EPOCH_WML ? "<br/>" : NULL,
+        };
+        text = terminal_html_fonts(block->text, shell, &pal);
+    }
+    // Arguments: the shell's title, the lines, then the screen's background
+    // and text colors that only epochs 1-2 use.
+    char *result = text ? render_template(tpl, terminal_shell_title(shell), text,
+                                          colors.terminal_background, colors.terminal_text) : NULL;
     free(text);
     free(tpl);
     return result ? result : strdup("");
@@ -1342,7 +1407,7 @@ static char *render_social_networks(const CmsContentBlock *block, int epoch) {
     return result ? result : strdup("");
 }
 
-static char *render_block(const CmsContentBlock *block, int epoch) {
+static char *render_block(const CmsContentBlock *block, const RelatedPostsContext *related, int epoch) {
     if (strcmp(block->type, "title") == 0)          return render_title(block, epoch);
     if (strcmp(block->type, "paragraph") == 0)       return render_paragraph(block, epoch);
     if (strcmp(block->type, "byline") == 0)          return render_byline(block, epoch);
@@ -1353,20 +1418,23 @@ static char *render_block(const CmsContentBlock *block, int epoch) {
     if (strcmp(block->type, "list") == 0)            return render_list(block, epoch);
     if (strcmp(block->type, "youtube-embed") == 0)   return render_youtube_embed(block, epoch);
     if (strcmp(block->type, "code-text") == 0)       return render_code_text(block, epoch);
+    if (strcmp(block->type, "terminal") == 0)        return render_terminal(block, epoch);
     if (strcmp(block->type, "generic") == 0)         return render_generic(block, epoch);
     if (strcmp(block->type, "table") == 0)           return render_table(block, epoch);
     if (strcmp(block->type, "social-networks") == 0) return render_social_networks(block, epoch);
+    if (strcmp(block->type, "related-posts") == 0)   return related_posts_render(block->extra_data, related, epoch);
+    if (strcmp(block->type, "entry-index") == 0)     return entry_index_render(block->extra_data, related ? related->entry_id : NULL, epoch);
     return strdup("");
 }
 
 char *entry_page_render_block(const char *type, const char *text,
-                              const char *extra_data, int epoch) {
+                              const char *extra_data, const RelatedPostsContext *related, int epoch) {
     CmsContentBlock block = {
         .type = (char *)type,
         .text = (char *)text,
         .extra_data = (char *)extra_data,
     };
-    return render_block(&block, epoch);
+    return render_block(&block, related, epoch);
 }
 
 // Renders every block individually. *count_out is only meaningful when this
@@ -1376,9 +1444,15 @@ static char **render_blocks(const CmsEntry *entry, int epoch, size_t *count_out)
     char **blocks = calloc(entry->content_count ? entry->content_count : 1, sizeof(char *));
     if (!blocks) return NULL;
 
+    RelatedPostsContext related = {
+        .entry_id = entry->id,
+        .category_ids = (const char *const *)entry->category_ids,
+        .category_count = entry->category_id_count,
+    };
+
     code_block_seq = 0;
     for (size_t i = 0; i < entry->content_count; i++) {
-        blocks[i] = render_block(&entry->content[i], epoch);
+        blocks[i] = render_block(&entry->content[i], &related, epoch);
         if (!blocks[i]) {
             for (size_t j = 0; j < i; j++) free(blocks[j]);
             free(blocks);

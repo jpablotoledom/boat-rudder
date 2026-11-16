@@ -1,0 +1,7 @@
+<div class="boat-rudder-terminal">
+  <div class="boat-rudder-terminal__bar">
+    <span class="boat-rudder-terminal__title">%1$s</span>
+    <button type="button" class="boat-rudder-terminal__copy" title="Copies the commands, without their prompts or output" onclick="var b=this,s=b.closest('.boat-rudder-terminal'),c=s.querySelectorAll('.boat-rudder-terminal__cmd'),t=c.length?Array.prototype.map.call(c,function(e){return e.textContent}).join('\n'):s.querySelector('code').textContent,d=function(){b.textContent='Copied!';setTimeout(function(){b.textContent='Copy'},1500)};if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(d)}else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();d()}">Copy</button>
+  </div>
+  <pre class="boat-rudder-terminal__screen"><code>%2$s</code></pre>
+</div>

@@ -349,7 +349,7 @@ http_router.c  (route == "/page/<link>" or "/blog/<link>")
   │     │     ├─ entry/entry-meta_epoch3.html          (epoch 3 only: author + categories strip;
   │     │     │     older epochs fall back to the bare categories block)
   │     │     └─ elements/<type>/<type>_epoch<N>.html  (one per content[] block, in order)
-  │     │           See "Content block types" below (13 types)
+  │     │           See "Content block types" below (16 types)
   │     │
   │     └─ buildEntryWebSiteAtUrl(epoch, title, content, current_url, cat_menu)
   │           title = "[Draft] <title>" for an unpublished entry
@@ -383,16 +383,19 @@ interprets those two fields differently:
 | `title` | heading text | heading level `1`-`6` (anything else = `2`) | -1..3 |
 | `paragraph` | rich text (stored as HTML) | style variant: `lead` / `note` (validated modifier) | -1..3 |
 | `byline` | author | date | -1..3 |
-| `image` | image base URL | `"<caption>\|<width>\|<align>"`, align incl. `float-left`/`float-right` (see below) | -1..3 |
+| `image` | image base URL, per language: an empty one is English's (`cms_entries.c` falls back to `text.en` for an image block) | `"<caption>\|<width>\|<align>"`, align incl. `float-left`/`float-right` (see below) | -1..3 |
 | `gallery` | `;`-separated image URLs | `media_galleries._id` | -1..3 |
 | `separator` | unused | style variant (validated modifier) | -1..3 |
 | `link` | link label | target URL (`#` if empty) | -1..3 |
-| `list` | one item per line | `"ol"` for ordered, anything else = unordered | -1..3 |
+| `list` | one item per line; an item's label - the text before its first `:` followed by a space or ending the item, not one inside a tag - is bold (`list_label_len()`): `Intel 486: a processor` → **Intel 486**: a processor | `"ol"` for ordered, anything else = unordered | -1..3 |
 | `table` | rows by line, cells by `\|` | `"header"` makes row 0 a header row | -1..3 |
 | `code-text` | code body | language key (`javascript`, `c`, `python`, …, `""` = plain) - see [code-highlighting.md](code-highlighting.md) | -1..3 |
+| `terminal` | a shell session: commands after their prompt, and their output | shell: `""` Linux / Unix, `dos`, `powershell` - see [Terminal block](#terminal-block) | -1..3 |
 | `youtube-embed` | caption / link label | watch/short/embed URL, normalized to `/embed/<id>` | -1..3 |
 | `social-networks` | display name (falls back to the icon name) | `"<icon>\|<url>"` | -1..3 |
 | `generic` | raw HTML passthrough | unused | -1..3 |
+| `related-posts` | unused | `""` (automatic), `"<id>"` or `"<left id>\|<right id>"` - see [Related-posts block](#related-posts-block) | -1..3 |
+| `entry-index` | unused | up to 20 entry ids, in order, joined by `\|` - see [Entry-index block](#entry-index-block) | -1..3 |
 
 Every type has a template for each epoch (the older-epoch files were ported from the legacy CMS
 in `../the-retro-center-old`) - except `table` on WML, which is built in C (see above). Where a
@@ -412,6 +415,87 @@ rules, and NCSA Mosaic 1.x/Cello-era engines don't consistently - live-tested, a
 entire code block onto one line - so epoch 1 ends each highlighted line with `<br>`, and WML (no
 `<pre>` at all) goes through `expand_newlines()`. Full behavior:
 [code-highlighting.md](code-highlighting.md).
+
+### Related-posts block
+
+`related_posts_render()` (`src/modules/related_posts/`), called by `render_block()` with the
+entry's id and category ids (`RelatedPostsContext`). One or two blog entries as cards - picture,
+title, summary, all linking to the entry. `extra_data` (`utils/related_ids.h`):
+
+| `extra_data` | Shows |
+|---|---|
+| `""` | Automatic: the newest published blog entry, other than this one, sharing at least one category (`cms_get_latest_related_entry()`), at full width |
+| `"<id>"` | That entry, at full width |
+| `"<left id>\|<right id>"` | Side by side, labelled "Previous article" and "Next article" (`pair_label()`) |
+
+Only published `type:"blog"` entries are shown (`cms_get_blog_entries_by_ids()` keeps the order
+chosen). A chosen entry that is gone or back to draft is skipped - one left takes the full width,
+with no label. With nothing to show the block renders `""`: readers see no gap.
+
+The labels are the one fixed text: the site has no translation table, so `pair_label()` spells out
+Spanish and any other language reads English, like the pager's *Next* / *Previous*.
+
+Templates `elements/related-posts/related-posts{,-item,-label,-image}_epoch<N>.html`:
+
+| Epoch | Layout |
+|---|---|
+| 3 | CSS grid of two columns, `--single` for one, stacked under 600px; the card is one link. Colors from the `blog-list-item-*` palette |
+| 2, 1 | One `<table>` row, cells 50% or 100%, with the `blog_list_thumb_url()` GIF |
+| 0 | Title link and summary, no picture |
+| -1 | The title link only |
+
+### Entry-index block
+
+`entry_index_render()` (`src/modules/entry_index/`): a table-like list of up to 20
+(`ENTRY_INDEX_MAX`) blog entries chosen by the author, in their order - picture, title, summary,
+each row linking to its entry, read from the entries in the reader's language. One query for all
+of them (`cms_get_blog_entries_by_ids()`). A chosen entry that is gone or back to draft is
+skipped; with none left the block renders `""`.
+
+Templates `elements/entry-index/entry-index{,-item,-image}_epoch<N>.html`:
+
+| Epoch | Layout |
+|---|---|
+| 3 | One link per row on a CSS grid - picture, title, summary - in the theme's `table-*` colors; under 600px the picture beside the title over the summary. `_small` picture |
+| 2, 1 | A `<table>`, one row each, with the `blog_list_thumb_url()` GIF |
+| 0 | Title link and summary, no picture |
+| -1 | The title link only |
+
+### Terminal block
+
+`terminal` shows a pasted shell session in a console window titled by its shell
+(`src/utils/terminal_session.c`). A line starting with the shell's prompt is a **command**,
+every other line is **output**. A block where **no line has a prompt** is a list of commands
+(what a how-to shows): every non-empty line is a command, drawn after the shell's own prompt -
+`$ `, `C:\>` or `PS> `:
+
+| Shell (`extra_data`) | Title | A command line starts with |
+|---|---|---|
+| `""` | Terminal | a first word ending in `$`, `#` or `%` and a space: `$ `, `# `, `user@host:~$ ` - not `$HOME`, `#include` or `50%` (a digit before the sign) |
+| `dos` | MS-DOS | a drive, `:\`, a path and `>`: `C:\>`, `C:\GAMES>`, `C:\Program Files>` |
+| `powershell` | PowerShell | `PS>` or `PS <path>> ` |
+
+Inside a command, its parts get their own colors (`command()`):
+
+| Part | Examples | Class / color |
+|---|---|---|
+| Option | `-la`, `--protocol`, PowerShell's `-Path`, DOS's `/w` | `__opt` / `terminal-option` |
+| Value | the word after an option without `=` (`--servercert <HASH>`), what follows `=` (`--protocol=gp`), a quoted string | `__val` / `terminal-value` |
+| Variable | `$HOME`, `${USER}`, `$1`, `$?`; DOS `%PATH%`, `%1`, `%%i` - also inside a value | `__var` / `terminal-variable` |
+| Operator | `\|`, `\|\|`, `&`, `&&`, `;`, `>`, `>>`, `2>`, `<` | `__op` / `terminal-prompt` |
+
+The program and its plain arguments keep the command's color. `<NAME>` with no space in it is a
+placeholder to fill in, not a redirection.
+
+| Epoch | Output |
+|---|---|
+| 3 | `boat-rudder-terminal__prompt` / `__cmd` / `__out` spans in a `<pre>`, colored by `--br-color-terminal-*`. The prompt has `user-select: none`, and *Copy* copies the commands alone (the whole text when there are none) |
+| 1-2 | `<font color>` from the theme's *Terminal colors*, commands bold, on a `bgcolor` screen; epoch 1 ends lines with `<br>` like `code-text` |
+| 0 | Plain text in a `<pre>`, commands bold |
+| −1 (WML) | Plain text, commands bold, lines joined by `<br/>` |
+
+Everything is HTML-escaped on every epoch (a DOS prompt is full of `>`). The text is per language
+like `code-text`'s, and translation leaves it alone.
 
 A run of 2+ consecutive `<br>` marks a paragraph break rather than a mid-paragraph line break -
 whether it got there as literal HTML typed into the rich-text editor, or was just produced by
@@ -754,14 +838,16 @@ name, "under construction" (`site_settings.under_construction`, `serve_under_con
 While `site_settings.under_construction` is `true`, the router's first GET/HEAD branch answers
 every **site content route** - `/`, `/page/*`, `/blog`, `/blog/*`, `/menu`
 (`is_site_content_route()`) - with `serve_under_construction()`, unless the request carries the
-session of an Administrador (`request_user_is_admin()`, `users.role == "admin"`; an Autor or an
-Observador gets the page too):
+session of an Administrador (`users.role == "admin"`), or of an Autor while
+`site_settings.under_construction_authors` is on (`sees_site_under_construction()`); anyone else -
+a Moderador, an Observador, an Autor otherwise - gets the page too:
 
 - The **home page layout** (`buildUnderConstructionWebSite()`, which shares
   `build_home_layout()` with `buildHomeWebSite()`): navigation bar, main banner and footer
   as usual, but the bar **without menu items** (`menu_without_items()`: logo, language
-  and theme selectors and user link stay, `#navbarMenu` is empty; WML shows this bar instead of
-  its compact `[Menu]` link) and **no blog list**, and in the home content region the content blocks of the
+  and theme selectors and user link stay, `#navbarMenu` is empty, and on epoch 3
+  `.boat-rudder-navbar__content` carries `--no-items`, which centres the logo with no menu to
+  make room for; WML shows this bar instead of its compact `[Menu]` link) and **no blog list**, and in the home content region the content blocks of the
   `page` entry whose `link` is `site_settings.under_construction_page` (drafts included) - in
   the same `home-content` wrapper the `/` entry gets (`home_content_entry()`). Its title is the
   entry's, or the site name when it has none.
@@ -774,7 +860,8 @@ gallery pages, theme CSS and static files (the page's own images and styles). Th
 fetches over HTTP like any visitor, so phones get the page too. If MongoDB is unreachable the mode
 reads as off. Set from `/dashboard/settings` (*Maintenance mode* panel).
 
-It also closes the dashboard to everyone but an Administrador (`maintenance_locks_out()`):
+It also closes the dashboard to everyone but an Administrador - and an Autor, with *Authors can
+sign in and edit* (`under_construction_authors`) - (`maintenance_locks_out()`):
 `POST /login` with a right password for any other role creates no session and answers `503` with
 "The site is under maintenance: only administrators can sign in right now." (a wrong password
 still gets the usual "Invalid email or password."); a session already open when the mode was
@@ -826,15 +913,16 @@ http_router.c  (route == "/blog" or "/blog/category/<slug>")
   ├─ [/blog/category/<slug> only] resolve <slug> against slugify(cats[i].name)
   │     no match -> 404
   │
-  ├─ category_menu_render(cats, cat_count, current_slug, epoch)
-  │                                                 ── src/modules/category_menu/category_menu.c
+  ├─ page = ?page=N (absent = 1; not a whole number from 1 up -> 404)
   │
-  ├─ blog_list(epoch, lang)                         ── src/modules/blog_list/blog_list.c
-  │  or blog_list_category(epoch, lang, cat_id)     (same, restricted to one category id)
+  ├─ blog_list(epoch, lang, "/blog", page, &found)  ── src/modules/blog_list/blog_list.c
+  │  or blog_list_category(epoch, lang, cat_id, "/blog/category/<slug>", page, &found)
   │     │
-  │     ├─ cms_get_blog_entries(lang, BLOG_LIST_LIMIT, &items, &count) ── src/db/cms_entries.c
+  │     ├─ cms_count_blog_entries(cat_id | NULL) -> pages; page > pages -> found = 0 -> 404
+  │     │
+  │     ├─ cms_get_blog_entries(lang, skip, BLOG_LIST_LIMIT, &items, &count) ── src/db/cms_entries.c
   │     │     db.entries.find({ type: "blog", enabled: true })
-  │     │       .sort({ "header.date": -1 }).limit(BLOG_LIST_LIMIT)
+  │     │       .sort({ "header.date": -1 }).skip((page - 1) * 10).limit(BLOG_LIST_LIMIT)
   │     │     (the category variant adds { categories: {$in: [ObjectId(cat_id)]} })
   │     │
   │     ├─ if count == 0: home-blog/empty_epoch<N>.html ("No blog entries found")
@@ -842,26 +930,51 @@ http_router.c  (route == "/blog" or "/blog/category/<slug>")
   │     ├─ for each item: home-blog/home-blog-item_epoch<N>.html (reused, same as
   │     │     home blog list - link -> "/blog/<item.link>", categories, etc.)
   │     │
+  │     ├─ the pager after the items, when there is more than one page (see below)
+  │     │
   │     └─ home-blog/home-blog_epoch<N>.html (2 `%s`: heading "Blog", items)
+  │
+  ├─ category_ranking_sort(cats) - most visited first, see "Category menu"
+  ├─ category_menu_render(cats, cat_count, current_slug, epoch, CATEGORY_MENU_MAX)
+  │                                                 ── src/modules/category_menu/category_menu.c
   │
   └─ buildBlogListWebSiteAtUrl(epoch, title, content, "/blog", category_menu_html)
 ```
 
-`cms_get_blog_entries()` is shared with `home_blog()`, parameterized by a `limit`:
-`HOME_BLOG_LIMIT` (10) for the home page, `BLOG_LIST_LIMIT` (`src/db/cms_entries.h`, currently
-50) for `/blog`. Same decorative/never-fail behavior: on a DB error or if MongoDB is not
-ready, `*out_count == 0` and the empty-state template is shown instead of failing the page.
+`cms_get_blog_entries()` is shared with `home_blog()`: `HOME_BLOG_LIMIT` (10) newest entries
+on the home page, no pager; pages of `BLOG_LIST_LIMIT` (`src/db/cms_entries.h`, 10) on `/blog`.
+Same decorative/never-fail behavior: on a DB error or if MongoDB is not ready,
+`*out_count == 0` and the empty-state template is shown instead of failing the page.
+
+**Pager.** `render_pager()` builds it from `html/templates/blog-pager/` (shared by every theme):
+`pager-prev`, the page numbers - the first, the last, and two either side of the current one,
+with a `pager-gap` (`...`) for each run left out - as `pager-link` / `pager-current`, `pager-next`,
+joined by spaces into `pager` (epoch 2: a `<tr>` of the list's table; epoch 1 takes
+`home-content-text` as its color). Page 1's links are the bare `/blog`, the rest
+`/blog?page=N`. WML has no numbers: `< Prev 2/5 Next >`.
 
 Both routes pass `"/blog"` as the active menu URL, so the Blog nav item stays highlighted while
-browsing a category. The page title becomes `"Blog - <category name>"` on the filtered route.
+browsing a category. The page title becomes `"Blog - <category name>"` on the filtered route,
+with `" - Page N"` after it from page 2 on.
 
 Each blog article is then served at `/blog/<item.link>` - see "CMS entries" above.
 
 ### Category menu (`/blog`, `/blog/category/<slug>`)
 
-`category_menu_render(categories, count, current_slug, epoch)`
+`category_menu_render(categories, count, current_slug, epoch, max_items)`
 (`modules/category_menu/category_menu.c`) renders the category bar shown directly under the
-navbar on the blog listing pages:
+navbar on the blog listing pages.
+
+**Which categories.** The listings show `CATEGORY_MENU_MAX` (15) categories, the most visited
+first, then a **See more...** link (`category-menu-more_epoch<N>.html`) to
+`/blog/categories?return=<current path>`; a category being browsed that isn't among them is
+added after them, highlighted. The order comes from `src/db/cms_category_ranking.c`: a thread
+started in `main.c` sums, at startup and every 3 hours (`CATEGORY_RANKING_INTERVAL_SECS`), the
+visits of each category's **published** blog posts over the last 30 days
+(`CATEGORY_RANKING_DAYS`) from `entry_visits_daily` - a post in two categories counts for both -
+and keeps the result in memory; `category_ranking_sort()` applies it per request, categories
+with the same visits (none, before the first run) keeping their creation order.
+`/blog/categories` lists every category by name, with a back link to `return`, on every epoch.
 
 ```
 category_menu_render(cats, count, current_slug, epoch)
@@ -873,7 +986,10 @@ category_menu_render(cats, count, current_slug, epoch)
   │     slug = slugify(category.name)
   │     slug == current_slug ? category-menu-item-selected_epoch<N>.html
   │                          : category-menu-item_epoch<N>.html
-  │     (both: 2 %s - slug, name)
+  │     (both: 2 %s - slug, name; epochs 1-2 also a color)
+  │     past max_items: only the current one
+  │
+  ├─ more than max_items: category-menu-more_epoch<N>.html (return path; epochs 1-2 a color)
   │
   └─ category-menu_epoch<N>.html (1 %s: items)
 ```

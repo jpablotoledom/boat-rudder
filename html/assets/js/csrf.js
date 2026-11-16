@@ -6,6 +6,8 @@
 //
 //   fetch() / XMLHttpRequest -> "X-CSRF-Token" request header
 //   <form method="post">     -> hidden "csrf_token" field, added on submit
+//
+// window.boatRudderSetCsrfToken(token) swaps in a new session's token.
 (function () {
   'use strict';
 
@@ -68,4 +70,13 @@
     }
     input.value = token;
   }, true);
+
+  // The token of a session opened since the page loaded (the writer signed in
+  // again in another tab): the entry editor reads it from
+  // /dashboard/api/session and hands it here, so its next save goes through.
+  window.boatRudderSetCsrfToken = function (value) {
+    if (!value) return;
+    token = value;
+    meta.setAttribute('content', value);
+  };
 })();

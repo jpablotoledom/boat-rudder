@@ -61,16 +61,16 @@ else epoch == EPOCH_MODERN
       ROUTER -> EDITOR : entry_editor_page(epoch, &entry,\ncategories, langs)
       activate EDITOR
 
-      EDITOR -> EDITOR : render_meta_sidebar()\n(link/type/enabled +\ncategories <select multiple>)
+      EDITOR -> EDITOR : render_meta_sidebar()\n(settings panel: link/type/enabled +\ncategories <select multiple>)
       EDITOR -> EDITOR : render_lang_tab_buttons()
-      EDITOR -> EDITOR : render_header_sidebar()\n(image_url/date +\none lang-panel per language)
+      EDITOR -> EDITOR : render_header_sidebar()\n(settings panel: image_url/date +\none lang-panel per language)
 
       EDITOR -> BLOCKS : entry_editor_render_blocks(&entry, langs, epoch)
       activate BLOCKS
       loop for each entry.content[i]
         BLOCKS -> BLOCKS : entry_editor_render_block(&content[i], langs, epoch)
       end
-      BLOCKS --> EDITOR : blocks_html\n(+ "Add block" dropdown)
+      BLOCKS --> EDITOR : blocks_html\n(+ the block menu of "+ Add block" / "+ Insert")
       deactivate BLOCKS
 
       EDITOR -> EDITOR : render_template(container_epoch3.html,\nentry_id, langs_json, lang_tabs,\nmeta_html, header_html, blocks_html)

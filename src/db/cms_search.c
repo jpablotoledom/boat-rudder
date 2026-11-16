@@ -22,7 +22,7 @@ static const char *const SEARCHED_BLOCKS[] = { "title", "tittle", "paragraph", "
 // The query as a literal regex: every ASCII character that isn't a letter,
 // digit or space is escaped, so "C++" or "a.b" mean exactly that. UTF-8
 // bytes pass through.
-static char *regex_literal(const char *query) {
+char *cms_search_regex_literal(const char *query) {
     char *out = malloc(strlen(query) * 2 + 1);
     if (!out) return NULL;
     char *w = out;
@@ -230,7 +230,7 @@ int cms_search_entries(const char *query, const char *lang, CmsSearchResult **ou
     mongoc_collection_t *col = mongodb_manager_get_collection(ENTRIES_COLLECTION);
     if (!col) return -1;
 
-    char *re = regex_literal(query);
+    char *re = cms_search_regex_literal(query);
     char *needle = strdup(query);
     if (!re || !needle) {
         free(re);

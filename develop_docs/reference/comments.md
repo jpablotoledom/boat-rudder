@@ -105,7 +105,6 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
 | Name, email, text shapes and lengths | form + message |
 | Challenge: signed, answered right, ≥ 3 s and ≤ 15 min after it was drawn, never used before | form + message, new image |
 | ≤ 5 comments per address per hour, ≤ 10 per email per day | form + message |
-| Name not one of the site's users' names/usernames, nor another email's | form + message |
 | Email not blocked | form + message |
 
 ## 4. The challenge (`src/utils/captcha.c`)
@@ -143,10 +142,23 @@ once, for 24 hours; an unconfirmed comment is deleted when it expires.
   open challenges and every remember cookie.
 - **Confirmation token**: 32 random bytes, only in the email; the database keeps its SHA-256
   (`comment_tokens`, TTL 24 h).
-- **Commenters** are `users` documents created by the form: `role: "commenter"`, a username, the
-  name and its folded `name_key`, `email_verified_at`, `blocked`; no password. Emails match
-  without case, and a team member's own address is their own account. An older `commenters`
-  collection is moved into `users` at startup (same `_id`s).
+- **Commenters** are `users` documents created by the form: `role: "commenter"`, the username
+  `user-<n>` (the next number of `counters.commenter_username`, given once and kept), the name,
+  `email_verified_at`, `blocked`; no password. Emails match without case: the same email is
+  always the same commenter, with the same username, and its name becomes the one last typed
+  (each comment keeps the name it was written with). A team member's own address is their own
+  account. An older `commenters` collection is moved into `users` at startup (same `_id`s).
+- **Names are anyone's**: two commenters may share one, and anyone may use a team member's.
+  What tells them apart is shown with every comment (`comment_who_html()`): a commenter's
+  username next to the name - `Ana user-12` on epoch 3 (`boat-rudder-comment__user`),
+  `Ana (user-12)` elsewhere and in the author's email - and the team's **verified mark**
+  instead of a username (their username is their sign-in name, never published): the
+  `verified.gif` badge on epochs 1-3 (`boat-rudder-comment__verified`), `[v]` on epoch 0 and
+  WAP - plain ASCII, as no check character shows everywhere (Lynx on DOS turns a `√` into
+  "SQRT"). Replies are the team's, so they always carry it. Templates `comment-user_epoch*` and
+  `comment-verified_epoch*`. Until 2026-10-30 names were unique and usernames came from the
+  email; at startup the `name_key` index and field go and every commenter without a
+  `user-<n>` gets one, in the order they came (`number_commenters()`).
 - **Remember cookie** `br_commenter=<commenter id>.<issued>.<HMAC>` - `HttpOnly`, `SameSite=Lax`,
   1 year. Valid only while the commenter's email stays confirmed and not blocked.
 - **Addresses**: only `HMAC(secret, "ip|<address>")` (16 bytes, hex) is stored, for the limits.

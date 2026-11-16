@@ -40,4 +40,9 @@ int request_user_read_only(void);
 // cms_get_under_construction()).
 int request_user_is_admin(void);
 
+// 1 if that session belongs to an Autor ("author"), who sees the real site
+// under construction too when the Administrador lets authors keep editing
+// (cms_get_under_construction_authors()).
+int request_user_is_author(void);
+
 #endif // REQUEST_USER_H

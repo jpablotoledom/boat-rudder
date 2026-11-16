@@ -2,6 +2,7 @@
 #define ENTRY_PAGE_H
 
 #include "../../db/cms_entries.h"
+#include "../related_posts/related_posts.h"
 
 // Renders entry->header followed by entry->content[] (in order) into one
 // HTML/WML fragment suitable for buildPageWebSite()'s html_content argument.
@@ -28,8 +29,9 @@ char *entry_page_render_content(const CmsEntry *entry, int epoch);
 // as a public page would for `epoch` - the entry editor previews unselected
 // code-text/gallery blocks with epoch 3's output, so they can't drift from
 // the real thing. Returns a malloc'd string ("" for an unknown type or empty
-// block), or NULL on failure.
+// block), or NULL on failure. `related` is the entry a related-posts block
+// sits in; NULL for every other type.
 char *entry_page_render_block(const char *type, const char *text,
-                              const char *extra_data, int epoch);
+                              const char *extra_data, const RelatedPostsContext *related, int epoch);
 
 #endif // ENTRY_PAGE_H

@@ -438,7 +438,7 @@ fragment for a given epoch:
 | `modules/menu` | `char *menu(const char *current_url, int epoch)` | Renders the navigation bar from the `menu` collection (`cms_get_menu_items()`), joining items with the epoch's separator and marking the item matching `current_url`; falls back to a single built-in `{"/", "Home"}` item if the query returns nothing |
 | `modules/mainbanner` | `char *mainbanner(int epoch)` | Home banner (a banner, not a slider/carousel), personalizable per theme and epoch from `/dashboard/settings/themes/<key>/banner`, falling back to the theme's `mainbanner_epoch<N>.html` - see [reference/themes.md](reference/themes.md) |
 | `modules/home_content` | `char *home_content(int epoch, const char *lang)` | The content blocks of the CMS entry whose `link` is `/`, if one exists; otherwise a built-in "updates" list (`UPDATES[]`) |
-| `modules/blog_list` | `home_blog()`, `blog_list()`, `blog_list_category()` | One component in three appearances. All render `home-blog/home-blog_epoch<N>.html` (2 `%s`: heading, items) with one `home-blog-item_epoch<N>.html` per entry, from the `entries` collection (`type: "blog"`, newest first). They differ only in the heading, the limit (`HOME_BLOG_LIMIT` / `BLOG_LIST_LIMIT`) and whether the query filters by category |
+| `modules/blog_list` | `home_blog()`, `blog_list()`, `blog_list_category()` | One component in three appearances. All render `home-blog/home-blog_epoch<N>.html` (2 `%s`: heading, items) with one `home-blog-item_epoch<N>.html` per entry, from the `entries` collection (`type: "blog"`, newest first). They differ only in the heading, the limit (`HOME_BLOG_LIMIT` / `BLOG_LIST_LIMIT`), whether the query filters by category, and the pager `/blog` and a category listing get (`?page=N`) |
 
 `src/html_builder/orchestrator.c` ties them together:
 
@@ -1003,8 +1003,8 @@ Features added after the initial home-page MVP (dated history in [../CHANGELOG.m
 - **Server-side syntax highlighting** for `code-text` in 8 languages, colored from the theme on epochs 1-3, with line numbers and a reload-based toggle (`?code_lines=off`) for old browsers.
 - **QR codes and short links**: `/qr/<code>` short links keep QR codes small; `/youtube-qr/<id>` and `/image-qr/<code>` epoch-0 pages; WBMP/GIF/Unicode/Latin-1 block renderers.
 - **Gallery**: epoch 3 CSS grid with lightbox (click to open, prev/next, ESC); epochs 1-2 paginated viewer; epochs −1/0 a QR code to the gallery; `/gallery/<id>` public route with a "Back to <entry>" link.
-- **Media admin** (`/dashboard/media`): directory management, drag-and-drop upload, per-author `default` directory, move and bulk delete, `scripts/image-optimizer.sh` (5 variants per image via ImageMagick), paginated grid, media picker modal for the entry editor.
-- **Entry editor** (`/dashboard/entries/<id>/edit`): document-style editor UX with a fixed top bar, preview/edit toggle per block, server-rendered previews (`/dashboard/api/block-preview`) for blocks the server renders, rich-text with split/merge for paragraphs, table grid editor, heading-level buttons for titles, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.
+- **Media admin** (`/dashboard/media`): directory management, drag-and-drop upload, per-author `default` directory, move and bulk delete, `scripts/image-optimizer.sh` (5 variants per image via ImageMagick), paginated grid, media picker modal for the entry editor; under 600px the directory column is a drawer opened from a *Directories* button.
+- **Entry editor** (`/dashboard/entries/<id>/edit`): WYSIWYG-style - a sheet drawn like the published entry where paragraphs and titles are written in place, one context bar for the open block's tools and actions, a settings panel (a drawer on small screens), Enter/Backspace/arrows across blocks, a `/` block menu, Markdown shortcuts, paragraph/heading/list type switching, server-rendered previews (`/dashboard/api/block-preview`) for the other blocks, table grid editor, gallery thumbnail drag-and-drop, drag-and-drop block reorder, publish/autosave toggles.
 - **Authentication**: login (Argon2id via libsodium), session cookies, roles (Administrador / Autor).
 - **Dashboard maintainers**: Categories, Languages, Menu, Users (with a display `name` used as the entry author).
 - **Active menu item**: `--selected` CSS modifier on the nav item matching the current URL, and on the active category in the category bar.
@@ -1027,7 +1027,6 @@ Features added after the initial home-page MVP (dated history in [../CHANGELOG.m
 - A dashboard editor for the home page's content: today it is the `/` entry's blocks if such an
   entry exists, else the built-in `UPDATES[]` list.
 - The `image-single` block type (legacy entries using it were migrated to `image`).
-- Pagination for `/blog` and `/blog/category/<slug>` (both are capped at `BLOG_LIST_LIMIT`, currently 50).
 - Human-readable gallery URLs (`/gallery/<slug>`; today the route takes the `_id` hex only).
 - WAP gateway: connection-oriented WSP (9201), testing connectionless WSP on real phones, a
   per-device page size.

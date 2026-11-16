@@ -86,11 +86,12 @@ URLTHEME --> FS
 READFILE --> FS
 
 note right of EDITOR
-  Renders the meta sidebar, header sidebar
-  and blocks section + one inline <script>
+  Renders the settings panel (meta + post
+  header), the context bar and the sheet of
+  blocks + one inline <script>
   (container_epoch3.html). One global set of
   language-tab buttons drives every
-  ".lang-panel[data-lang]" via setLang(code).
+  ".block__lang-content[data-lang]" via setLang(code).
 end note
 
 note right of BLOCKS

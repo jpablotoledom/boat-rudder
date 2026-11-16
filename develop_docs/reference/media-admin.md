@@ -173,6 +173,14 @@ All functions are declared on `window` so they remain available after `activateS
 - Every POST carries the CSRF token through `/assets/js/csrf.js` (loaded by the page layout), not
   through code in this template.
 - `validarCaracter(e)` - keypress validator for directory name input (`[a-zA-Z0-9_-]` only).
+- **Under 600px** the directory column is a drawer over the grid: a bar at the top of the
+  content area holds a **Directories** button and the current directory's name
+  (`#media-dirs-current`, "Latest uploads" until one is picked). `toggleMediaDirectories(open)`
+  sets `.boat-rudder-media--dirs-open` on `.boat-rudder-media` (and the button's
+  `aria-expanded`); picking a directory closes it - except a click into the rename field - as do
+  its backdrop and Escape (which then leaves the selection alone). The grid toolbar's buttons
+  wrap onto a second line instead of being cut off. From 600px up the bar and the backdrop are
+  hidden and the column shows as before. The same applies inside the editor's picker modal.
 
 **Content loading**:
 - `getMediaContents(directoryId, start, end)` - GET `/dashboard/api/media/contents?...`, appends returned HTML to `#media-content-dynamically`.
@@ -205,10 +213,14 @@ a grid reload and on load; it also closes an open *Move to…* list once the sel
   (`media_admin_modal()`; `/dashboard/media` renders it `hidden`, having nothing to hand the
   selection to). Collects selected URLs in selection order; writes to:
   - `header` type: `#headerImageUrl` input + header image preview
-  - `image-block` type: all lang text fields of `window._galleryTargetBlock`
+  - `image-block` type: `setBlockImage()` on `window._galleryTargetBlock` - the picture of the
+    language being edited ([entry-editor.md](entry-editor.md#type-specific-controls))
   - `gallery-block` type: all lang text fields + calls `renderGalleryThumbs()`
   - Closes the modal.
-- ESC key clears selection.
+- Escape, in this order: closes the directory drawer if it is open; else clears the selection;
+  else - nothing selected - closes the picker modal, like its ×, and stops there, so the entry
+  editor doesn't also close the block it was opened for. Not while typing in one of its fields
+  (a new directory's name). On `/dashboard/media`, no modal, it only clears the selection.
 
 ---
 

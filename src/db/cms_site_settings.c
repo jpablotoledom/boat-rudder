@@ -156,10 +156,11 @@ void cms_get_under_construction(bool *enabled, char **page_link) {
     if (page_link) *page_link = link ? link : strdup("");
 }
 
-int cms_update_under_construction(bool enabled, const char *page_link) {
+int cms_update_under_construction(bool enabled, const char *page_link, bool authors) {
     bson_t *set_doc = bson_new();
     bson_append_bool(set_doc, "under_construction", -1, enabled);
     bson_append_utf8(set_doc, "under_construction_page", -1, page_link, -1);
+    bson_append_bool(set_doc, "under_construction_authors", -1, authors);
     return upsert_set(set_doc);
 }
 
@@ -183,6 +184,10 @@ static bool get_bool(const char *field, bool fallback) {
     return result;
 }
 
+bool cms_get_under_construction_authors(void) {
+    return get_bool("under_construction_authors", false);
+}
+
 bool cms_get_comments_enabled(void) {
     return get_bool("comments_enabled", false);
 }
@@ -190,6 +195,45 @@ bool cms_get_comments_enabled(void) {
 int cms_update_comments_enabled(bool enabled) {
     bson_t *set_doc = bson_new();
     bson_append_bool(set_doc, "comments_enabled", -1, enabled);
+    return upsert_set(set_doc);
+}
+
+// Copies the UTF-8 field `field` of `doc` into `out`, if present.
+static void copy_utf8(const bson_t *doc, const char *field, char *out, size_t out_size) {
+    bson_iter_t iter;
+    if (bson_iter_init_find(&iter, doc, field) && BSON_ITER_HOLDS_UTF8(&iter))
+        snprintf(out, out_size, "%s", bson_iter_utf8(&iter, NULL));
+}
+
+void cms_get_translate_settings(CmsTranslateSettings *out) {
+    memset(out, 0, sizeof(*out));
+    snprintf(out->local_url, sizeof(out->local_url), "%s", TRANSLATE_LOCAL_URL_DEFAULT);
+
+    mongoc_collection_t *collection = mongodb_manager_get_collection(SITE_SETTINGS_COLLECTION);
+    if (!collection) return;
+    bson_t *query = bson_new();
+    mongoc_cursor_t *cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+    const bson_t *doc;
+    if (mongoc_cursor_next(cursor, &doc)) {
+        copy_utf8(doc, "translate_provider", out->provider, sizeof(out->provider));
+        copy_utf8(doc, "translate_azure_key", out->azure_key, sizeof(out->azure_key));
+        copy_utf8(doc, "translate_azure_region", out->azure_region, sizeof(out->azure_region));
+        copy_utf8(doc, "translate_local_url", out->local_url, sizeof(out->local_url));
+        copy_utf8(doc, "translate_local_key", out->local_key, sizeof(out->local_key));
+    }
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+}
+
+int cms_update_translate_settings(const char *provider, const char *azure_key, const char *azure_region,
+                                  const char *local_url, const char *local_key) {
+    bson_t *set_doc = bson_new();
+    bson_append_utf8(set_doc, "translate_provider", -1, provider, -1);
+    if (azure_key) bson_append_utf8(set_doc, "translate_azure_key", -1, azure_key, -1);
+    bson_append_utf8(set_doc, "translate_azure_region", -1, azure_region, -1);
+    bson_append_utf8(set_doc, "translate_local_url", -1, local_url, -1);
+    bson_append_utf8(set_doc, "translate_local_key", -1, local_key, -1);
     return upsert_set(set_doc);
 }
 

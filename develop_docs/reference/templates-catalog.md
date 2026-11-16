@@ -62,8 +62,9 @@ shipped themes (`dark`, `light`) contain the same set.
 | `home-content/` | `home-content`, `home-content-item` | −1…3 | 1-2 / 3-4 | | home page "welcome" entry (`home_content.c`) |
 | `home-blog/` | `home-blog`, `home-blog-item`, `empty` | −1…3 | 2-3 / 6-11 / 0-1 | | blog list - home section, `/blog`, category listing (`blog_list.c`) |
 | `category-menu/` | `category-menu`, `-item`, `-item-selected`, `-separator` | −1…3 | 1-3 | | category bar on blog pages (`category_menu.c`) |
+| | `category-menu-more` | 0…3 | 1-2 | | *See more...* after the 15 most visited (return path; epochs 1-2 a color) |
 | | `category-menu-compact` | −1 | 1 | | WML: single `[Categories]` link |
-| | `category-menu-page` | −1 | 2 | | `/blog/categories` page body |
+| | `category-menu-page` | −1…3 | 2 | | `/blog/categories` page body (menu, back link) |
 | `page/` | `page-home` | −1…3 | 4 | `FOOTER` | home page wrapper (`buildHomeWebSite()`) |
 | `.` | `styles_epoch3.css` | 3 | - | | public epoch 3 stylesheet, served via `/themes/<key>/styles_epoch3.css` (DB-overridable) |
 | `.` | `styles_admin_epoch3.css` | 3 | - | | admin epoch 3 stylesheet (login, dashboard), served via `/themes/<key>/styles_admin_epoch3.css` (DB-overridable; optional, falls back to the configured `theme`'s) |
@@ -87,10 +88,12 @@ shipped themes (`dark`, `light`) contain the same set.
 | `login/` | `login` | −1…3 | 0-1 | | `/login` (epoch 3 form; other epochs "not available") |
 | | `login-error` | 3 | 1 | | error line |
 | `language/` | `language`, `language-item` | −1…3 | 2 / 3-4 | | `/language` page |
+| `blog-pager/` | `pager`, `pager-link`, `pager-current`, `pager-gap`, `pager-prev`, `pager-next` | −1…3 | 1 (epoch 1: 2) / 2 / 1 / 0 / 1 / 1 | | the pager under a page of `/blog` (`blog_list.c`'s `render_pager()`); epoch 2's `pager` is a `<tr>` of the list's table |
 | `comments/` | `comments`, `comment-item`, `comment-form`, `comment-error`, `comments-notice`, `comments-empty`, `comments-closed` | 0…3 | 5 (positional: count, notice, comments, form or closed, color) / 6 (name, date, text, client icons, reply, color) / 10 (positional: action, error, name, email, text, challenge - image src, or text art on epoch 0 -, token, name max, text max, color) / 2 (message, color) / 2 (message, color) / 1 (color) / 1 (color) | | Blog comments section and form (`comments_section()`); epochs 0 and 3 ignore the color, epochs 0-2 have no honeypot |
 | | `comments`, `comment-item`, `comments-notice`, `comments-empty` | −1 | 4 (positional: count, notice, comments, note - the "Write a comment" link or "closed") / 6 (name, date, text, client, reply, color) / 2 (message, color) / 0 | | Approved comments on WAP (`retro_section()`) |
 | | `comment-form`, `comment-code`, `comment-error`, `comment-sent` | −1 | 3 (positional: name max, text max, step 2 URL) / 4 (WBMP URL, token, action, answer variable suffix) / 3 (message, step 1 URL, step 2 URL) / 2 (message, entry URL) | | WAP's comment form on pages of its own (`comments_wap_form_page()`, `comments_wap_sent_page()`): step 1, step 2, a refusal, the thanks |
 | | `comment-reply` | −1…3 | 5 (positional: name, date, text, "Author"/"Administrator", color) | | The team's reply under a comment (`reply_html()`): a block on 3, `<blockquote>` on 0-2, a `Re:` line on −1; only epoch 1 uses the color |
+| | `comment-user`, `comment-verified` | −1…3 | 2 (positional: name, username) / 1 (name) | | Who wrote a comment (`comment_who_html()`): a commenter's name and username (`Ana user-12` / `Ana (user-12)`), or a team member's name and the verified mark (icon on 1-3, `[v]` on 0 and −1) |
 | | `comment-client` | −1…3 | 2 (positional: label, icon URL) | | One browser or system icon next to a comment's name (`comment_client_html()`); text on −1 and 0 |
 | | `verify`, `verify-form` | −1…3 | 3 / 1 | | `/comments/verify` pages |
 | `search/` | `search` | −1…3 | 4 (`%1$s` query, `%2$s` summary, `%3$s` results, `%4$s` hidden fields) | | `/search` page: form, summary, results |
@@ -122,6 +125,7 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `youtube-embed/` | `youtube-embed` | −1…3 | 1/3 | iframe (3), QR image (1, 2, −1), QR link (0) |
 | | `youtube-qr-page` | 0 | 4 | `/youtube-qr/<id>` page |
 | `code-text/` | `code-text` | −1…3 | 2/3/6/8 | see [code-highlighting.md](code-highlighting.md) |
+| `terminal/` | `terminal` | −1…3 | 2/4 | title, lines, then screen background and text colors (epochs 1-2) - see [rendering.md](rendering.md#terminal-block) |
 | `table/` | `table` | 0-3 | 1-2 | epochs 0/1 wrap an ASCII-drawn table; WML has no template - rows are transposed to `label: value` lines |
 | | `table-row`, `table-cell`, `table-header-cell` | 2, 3 | 1-3 | |
 | `list/` | `list-container`, `list-item` | −1…3 | 1-2 / 1 | |
@@ -129,6 +133,8 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `separator/` | `separator` | −1…3 | 0-1 | |
 | `generic/` | `generic` | −1…3 | 0-1 | raw content |
 | `social-networks/` | `social-networks` | −1…3 | 1/4 | |
+| `entry-index/` | `entry-index`, `entry-index-item`, `entry-index-image` (epochs 1-3) | −1…3 | 1 / 3-4 / 1-2 | `entry_index.c` |
+| `related-posts/` | `related-posts`, `related-posts-item`, `related-posts-label`, `related-posts-image` (epochs 1-3) | −1…3 | 1-2 / 4-6 / 1 / 1-2 | `related_posts.c` |
 | `category/` | `category`, `category-separator` | −1…3 | 2-3 / 0 | category tags (`category_tags.c`) |
 | | `category-list` | −1 | 1 | WML tag list |
 
@@ -141,8 +147,8 @@ Rendered by `entry_page.c`; formats of each block's `text`/`extra_data` are in
 | `entries/` | `list`, `list-row`, `list-row-delete` (the admin-only Delete form, one `%s`: the id), `list-empty` (one `%s`: the empty message, plus a "+ New entry" button), `list-draft` (the "Draft" badge) | `entries_admin.c` |
 | `entries/` | `list` (the `/dashboard/entries` page) | `dashboard.c` |
 | `entries/editor/` | `container`, `meta`, `header`, `header-lang-tab`, `lang-tab-button`, `category-option`, `blocks` | `entry_editor.c` ([entry-editor.md](entry-editor.md)) |
-| `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text generic table social-networks lang-field` | `entry_editor_blocks.c` |
-| `categories/`, `menu/`, `users/`, `languages/` | `list`, `list-row`, `list-empty`/`list-error`, `form`, `form-field`, `form-error`, `option`, `list-row-actions` | the matching `*_admin.c` |
+| `entries/editor/blocks/` | one per block type: `title paragraph byline image gallery separator link list youtube-embed code-text terminal generic table social-networks related-posts entry-index lang-field` | `entry_editor_blocks.c` |
+| `categories/`, `menu/`, `users/`, `languages/` | `list`, `list-row`, `list-empty`/`list-error`, `form`, `form-field`, `form-error`, `option`, `list-row-actions` (categories: Edit / Delete, rendered only for an Administrador; languages: Make default / Remove) | the matching `*_admin.c` |
 | `media/` | `media`, `media-directory-container`, `media-directory`, `item-photo`, `media-modal` | `media_admin.c` ([media-admin.md](media-admin.md)) |
 | `settings/` | `settings`, `settings-error`, `settings-themes` (the list), `settings-themes-row`, `settings-themes-active`, `settings-customize` (the theme customizer; 9 positional args: key, status, logo / banner / home blog / footer panels, color panel, CSS layer, original CSS), `settings-themes-panel` (the color form; 48 args, fields tagged `data-epochs`, groups `data-section`), `settings-themes-activate` (key, `return`), `settings-asset`, `settings-asset-panel`, `settings-home-blog-panel` (epoch, key, list and item background, the item color switch or `""`), `settings-home-blog-item-color` (epoch 2's "show the background color" checkbox; 1 arg: `checked`), `browsers` (Browser detection; 3 positional args: the rules as HTML-encoded JSON, the status badge, the visitor's `User-Agent`; its rows - rules, tiers, test cases, stylesheet warnings - are `<template>`s cloned by `browser-detection.js`), `settings-logo`, `settings-logo-panel_{radio,image-only,text-only}`, `settings-css` (10 positional args: key, two tab modifiers, status, `css`/`admin-css`, the layer, *Discard* `hidden`, the original CSS, its file name, the compatibility block or `""`), `settings-css-compat` (1 arg: the items) and `settings-css-compat-item` (feature, the versions it needs, the lower versions still served - [css_compat.h](../../src/utils/css_compat.h)), `preview` | `site_settings_admin.c` ([themes.md](themes.md)) |
 | `fonts/` | `list`, `list-row`, `list-error` | `fonts_admin.c` ([fonts.md](fonts.md)) |

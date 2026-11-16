@@ -2,7 +2,7 @@
 %s
       </div>
       <div class="boat-rudder-entry-editor-add-block">
-        <button class="boat-rudder-entry-editor-add-block__btn boat-rudder-btn boat-rudder-btn--ghost" type="button" onclick="toggleAddBlockDropdown()">+ Add block</button>
+        <button class="boat-rudder-entry-editor-add-block__btn boat-rudder-btn boat-rudder-btn--ghost" type="button" onclick="toggleAddBlockDropdown(this)">+ Add block</button>
         <div id="addBlockMenu" class="boat-rudder-entry-editor-add-block__dropdown">
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('title')">&sect; Title</button>
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('paragraph')">&para; Paragraph</button>
@@ -14,8 +14,11 @@
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('list')">&#9776; List</button>
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('youtube-embed')">&#9654; YouTube</button>
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('code-text')">&lt;/&gt; Code</button>
+          <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('terminal')">&gt;_ Terminal</button>
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('generic')">&#9965; Generic HTML</button>
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('table')">&#9974; Table</button>
           <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('social-networks')">&#9835; Social</button>
+          <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('related-posts')">&#128240; Related articles</button>
+          <button class="boat-rudder-entry-editor-add-block__option" type="button" onclick="insertNewComponent('entry-index')">&#9783; Article index</button>
         </div>
       </div>

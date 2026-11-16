@@ -173,23 +173,24 @@ static int socket_answers(const char *path) {
 // and execve() a multi-threaded parent's child may only call
 // async-signal-safe functions.
 static pid_t spawn(Extension *ext) {
-    char env_name[64], env_dir[PATH_MAX + 32], env_sock[160], env_uri[300], env_db[96], env_log[32];
+    char env_name[64], env_dir[PATH_MAX + 32], env_sock[160], env_uri[300], env_db[96], env_log[32], env_url[300];
     snprintf(env_name, sizeof(env_name), "BR_EXTENSION=%s", ext->info.name);
     snprintf(env_dir, sizeof(env_dir), "BR_EXTENSION_DIR=%s", ext->dir);
     snprintf(env_sock, sizeof(env_sock), "BR_SOCKET=%s", ext->socket_path);
     snprintf(env_uri, sizeof(env_uri), "BR_MONGODB_URI=%s", mongodb_uri);
     snprintf(env_db, sizeof(env_db), "BR_MONGODB_DB=%s", mongodb_db);
     snprintf(env_log, sizeof(env_log), "BR_LOG_LEVEL=%d", verbose_level);
+    snprintf(env_url, sizeof(env_url), "BR_PUBLIC_URL=%s", public_url);
 
     size_t n = 0;
     while (environ && environ[n]) n++;
-    char **envp = calloc(n + 8, sizeof(char *));
+    char **envp = calloc(n + 9, sizeof(char *));
     if (!envp) return -1;
     size_t k = 0;
     for (size_t i = 0; i < n; i++)
         if (strncmp(environ[i], "BR_", 3) != 0) envp[k++] = environ[i];
     envp[k++] = env_name; envp[k++] = env_dir; envp[k++] = env_sock;
-    envp[k++] = env_uri;  envp[k++] = env_db;  envp[k++] = env_log;
+    envp[k++] = env_uri;  envp[k++] = env_db;  envp[k++] = env_log;  envp[k++] = env_url;
     envp[k] = NULL;
     char *argv[] = { ext->exec_path, NULL };
 

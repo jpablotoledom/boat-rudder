@@ -59,7 +59,7 @@ Constraints:
 |---|---|---|
 | 1 | Discovery, admin page, supervision, forwarding, dashboard menu entries, SDK, reference doc and guide | done |
 | 2 | Public pages and retro epochs: an extension answers **content blocks as JSON** (`application/vnd.boat-rudder.blocks+json`) and the core renders them for every epoch with its existing block renderers (title, paragraph, list, table, image, gallery, link), WML included; a `public=` list in the manifest | proposed |
-| 3 | Static assets under `<mount>/assets/` served from the extension's directory | proposed |
+| 3 | Static assets under `<mount>/assets/` served from the extension's directory. Done so far: an extension may answer an image (`image/jpeg`, `png`, `gif`, `webp`) under its mount, passed through privately to the signed-in user (`brext_bytes()`) | partly done |
 | 4 | `member` role: signs in, sees extensions and their account, never the CMS | proposed |
 | 5 | Packaging: `boat-rudder-ext install/update/remove [--purge]`, signed with minisign; multi-br per-site extensions | proposed |
 | 6 | Optional sessions on epochs 1-2 (`Expires` cookies, HTML 3.2 forms), so a signed-in extension can be used from a vintage computer | proposed |
@@ -72,4 +72,5 @@ Constraints:
    the protocol assumes core and extension on the same machine; anything further is the
    extension's own concern (a VPN, an API client).
 2. **Media for extensions**: an upload API onto the core media library, or each extension's own
-   storage.
+   storage. Today: its own storage, served through its own image answers - private, unlike the
+   media library's public files.

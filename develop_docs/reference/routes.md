@@ -31,9 +31,10 @@ traffic is not routed here directly - it re-enters this table over loopback HTTP
 |---|---|---|
 | - | Public | - |
 | **E3** | `dashboard_allowed()`: `resolve_epoch() == 3` **and** the browser detection rules grant the real `User-Agent` the dashboard (factory: Chrome 111, Firefox 121, Safari 16.2) | Page routes: `302 /dashboard`. API routes (`/dashboard/api/*`): `403 Forbidden` (plain text). |
-| **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token |
+| **S** | `require_dashboard_session()`: valid `session` cookie; on `POST` also the session's CSRF token (`X-CSRF-Token` header or `csrf_token` field - see [security.md](security.md#csrf-protection)) | `503` if MongoDB is down, `302 /login` without a session, `403` (plain text) for a missing/wrong CSRF token. Under `/dashboard/api/` both are JSON instead: `401 {"ok":false,"session":"expired",...}` and `403 {"ok":false,"session":"csrf",...}` - a redirect would hand a `fetch()` the login page |
 | **S+R** | `require_dashboard_session_role()`: session, role loaded (missing role = `admin`) | as **S** |
 | **A** | `require_admin_session()`: session with role `admin` - or `viewer` (Observador), whose writes **S** already refused | as **S**, plus `302 /dashboard` for an `author` |
+| **A+Au** | `require_category_creator_session()`: as **A**, or role `author` | as **S**, plus `302 /dashboard` for any other role |
 | **Own** | `can_edit_entry()`: `admin` or `viewer`, or `author` on a `blog` entry they created | `302 /dashboard` (page) or JSON `403` (API) |
 | **RO** | Part of **S**: on any `POST` but `/dashboard/api/block-preview` and `/dashboard/api/browsers/preview`, a `viewer` session is refused - every dashboard write is a `POST` | `403`: JSON `{"ok":false,"error":"read-only account"}` under `/dashboard/api/`, else the error page |
 | **OwnMedia** | `media_can_manage()`: `admin`, or `author` on a media directory/item whose `author_id` is theirs | `403` (plain text) |
@@ -54,9 +55,9 @@ All public pages render in the visitor's epoch (−1…3) unless noted.
 |---|---|---|---|
 | `/` | - | `buildHomeWebSite()` (orchestrator: banner, home content, blog list) | Home page |
 | `/` *(no `Host`, no `?site=`, `site_directory` set)* | `site` | `site_page()` | Site chooser for `Host`-less browsers behind a multi-site front (see `site_key` in [configuration.md](configuration.md)) |
-| `/blog` | - | `blog_list()` + `category_menu_render()` + `buildBlogListWebSiteAtUrl()` | Blog listing (≤ `BLOG_LIST_LIMIT` = 50) |
+| `/blog` | `page` | `blog_list()` + `category_menu_render()` + `buildBlogListWebSiteAtUrl()` | Blog listing, 10 entries a page (`BLOG_LIST_LIMIT`), newest first, with a pager; `404` for a `page` past the last or not a whole number from 1 up. The category bar shows the 15 most visited categories and *See more...* ([rendering.md](rendering.md#category-menu-blog-blogcategoryslug)) |
 | `/blog/category/<slug>` | - | `blog_list_category()`; `<slug>` matched against `slugify(category name)` | Filtered listing, `404` if no category matches |
-| `/blog/categories` | `return` | `category-menu/category-menu-page_epoch<N>.html` | Full category menu + back link. Only epochs with that template (today: −1); others `404` |
+| `/blog/categories` | `return` | `category-menu/category-menu-page_epoch<N>.html` | Every category, by name, + back link to `return` - the bar's *See more...* and WML's `[Categories]` target. Every epoch |
 | `/blog/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "blog")` → `entry_page()` | Entry, `404` if missing / not `blog` / draft without session |
 | `/page/<link>` | `__page`, `code_lines` | `serve_cms_entry(…, "page")` | Same, for `type: "page"` |
 | `/gallery/<id>` | `img` | inline in router (`cms_get_media_gallery()`) | Epoch 3: grid + lightbox. Epochs 1-2: paginated viewer (`?img=N`). Epochs −1/0: QR code to the gallery (via `/qr/<code>`). `404` if `<id>` isn't 24 chars or unknown |
@@ -130,9 +131,10 @@ title `{{SITE_NAME}} - Dashboard`.
 | `POST` | `/dashboard/comments/<id>/reply` · `/reply/delete` | E3, S+R, Own entry | `comments_reply()` / `cms_comments_delete_reply()` | Fields `text`, `back`. Saves the one reply (approves a pending comment, emails the commenter at the first one): `302 …&done=replied\|replied-approved\|reply-deleted`; a refused text shows the page again with the reason |
 | `POST` | `/dashboard/comments/commenter/<id>/block` · `/unblock` · `/block-delete` | E3, A | `cms_comments_block()` | Block (and delete everything from) a commenter's email |
 | `POST` | `/dashboard/settings/comments` | E3, A | `cms_update_comments_enabled()` | Field `comments_enabled`; can't turn on without mail |
+| `POST` | `/dashboard/settings/translation` | E3, A | `cms_update_translate_settings()` | Fields `translate_provider` (`""`/`azure`/`local`), `translate_azure_key` (empty keeps the stored one), `translate_azure_key_clear`, `translate_azure_region` (letters, digits, dashes), `translate_local_url`, `translate_local_key`; `302 /dashboard/settings#translation`, or the page with the reason |
 | `POST` | `/dashboard/settings/mail/test` | E3, A | `mailer_enqueue()` | Test email to the admin's own address; `302 /dashboard/settings?mail=queued\|no-email\|failed#comments` |
-| `GET` | `/dashboard/categories` | E3, A | `categories_admin_list()` | |
-| `GET`/`POST` | `/dashboard/categories/new` | E3, A | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
+| `GET` | `/dashboard/categories` | E3, A+Au | `categories_admin_list()` | Edit / Delete buttons only for **A** |
+| `GET`/`POST` | `/dashboard/categories/new` | E3, A+Au | `categories_admin_form()` / `cms_create_category()` | Fields `name_<lang>` |
 | `GET`/`POST` | `/dashboard/categories/<id>/edit` | E3, A | same / `cms_update_category()` | |
 | `POST` | `/dashboard/categories/<id>/delete` | E3, A | `cms_delete_category()` | |
 | `GET` | `/dashboard/menu` | E3, A | `menu_admin_list()` | |
@@ -165,7 +167,7 @@ All **E3, A**. Detailed behavior in [themes.md](themes.md) and [fonts.md](fonts.
 | `GET` | `/dashboard/settings/themes/<key>/customize` | `site_settings_customize_page()` | The theme customizer: per-epoch panels, live preview, CSS drawer ([themes.md](themes.md#81-theme-customizer)). Guard: Theme |
 | `GET` | `/dashboard/settings/themes/<key>` | - | `302` to `…/<key>/customize` (to the list for an unknown key) |
 | `POST` | `/dashboard/settings/themes/<key>/activate` | `cms_set_active_theme()` | Sets `site_settings.active_theme`; `302` to the field `return` when it is this theme's customizer, else to the list |
-| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 40 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's customizer. Guard: Theme |
+| `POST` | `/dashboard/settings/themes/<key>/colors` | `cms_update_theme_colors()`, `cms_update_theme_logo_font()` | 47 color fields (hyphenated names, `*-alpha` companions for backgrounds) + `logo-font`; `302` to the theme's customizer. Guard: Theme |
 | `GET` | `/dashboard/settings/themes/<key>/banner` | `site_settings_banner_page()` | Guard: Theme |
 | `POST` | `/dashboard/settings/themes/<key>/banner/<epoch>` | `cms_update_theme_banner()` | Field `html` (≤ 128 KiB); `""` restores the file |
 | `GET` | `/dashboard/settings/themes/<key>/footer` | `site_settings_footer_page()` | Guard: Theme |
@@ -201,7 +203,7 @@ All **E3** (`403` plain text otherwise). Responses are JSON (`build_json_respons
 
 ### Entry editor
 
-Guards **S+R** and **Own** on every route except `block-preview` (**S**). Detailed in
+Guards **S+R** and **Own** on every route except `block-preview` and `translate` (**S**). Detailed in
 [entry-editor.md](entry-editor.md).
 
 | Method | Path | Handler | Response |
@@ -211,7 +213,10 @@ Guards **S+R** and **Own** on every route except `block-preview` (**S**). Detail
 | `POST` | `/dashboard/api/entries/<id>/content` | `cms_update_entry_content()` + `cms_upsert_media_gallery()` | `{ok, ids:[…]}` - the block ids, including any minted for blocks sent without one |
 | `POST` | `/dashboard/api/entries/<id>/blocks` | `cms_add_entry_content_block()` | `{ok, block_id, html}` - the new block's editor markup |
 | `POST` | `/dashboard/api/entries/<id>/blocks/<block-id>/delete` | `cms_remove_entry_content_block()` | `{ok}` |
-| `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `gallery`, `table`, `youtube-embed`, `image` or `paragraph` block (fields `type`, `text`, `extra`) |
+| `GET` | `/dashboard/api/entries/lookup` | `related_posts_lookup_json()` | `{"ok":true,"items":[{"id","title","date"}]}` - the picker of the related-posts and entry-index blocks: published blog entries by title (`q`) or by id (`ids`), never `exclude`. Guard **S** only |
+| `GET` | `/dashboard/api/session` | `request_csrf_token()` | `{"ok":true,"csrf":"<token>"}` - the session is open, and its CSRF token (guard **S** only: `401` JSON without one). The entry editor polls it and fetches the token again after the writer signs in in another tab |
+| `POST` | `/dashboard/api/block-preview` | `entry_page_render_block(type, text, extra, 3)` | **HTML** fragment: the real epoch 3 rendering of a `code-text`, `terminal`, `list`, `gallery`, `table`, `youtube-embed`, `image`, `paragraph`, `related-posts` or `entry-index` block (fields `type`, `text`, `extra`; the last two also `entry_id` and `categories`) |
+| `POST` | `/dashboard/api/translate` | `translator_azure()` | `{ok, texts:[…]}` - fields `source`, `target` (site languages), `format` (`text`/`html`), `text` (repeated, up to 50, 50,000 characters). Azure only: `400` with another provider; `502 {ok:false, error}` when Azure fails. A viewer is refused (**RO**) |
 
 ### Media library
 

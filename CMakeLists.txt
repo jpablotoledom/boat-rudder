@@ -25,7 +25,7 @@ find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
-# libcurl: outgoing mail over SMTP (utils/mailer.c).
+# libcurl: outgoing mail over SMTP (utils/mailer.c) and Azure AI Translator (utils/translator.c).
 pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 
 # Optional: MaxMind GeoLite2 for country detection in analytics (src/modules/
@@ -64,6 +64,7 @@ set(SOURCES
     src/utils/image_size.c
     src/utils/category_tags.c
     src/utils/code_highlight.c
+    src/utils/terminal_session.c
     src/html_builder/page_layout.c
     src/utils/log.c
     src/utils/http_utils.c
@@ -99,6 +100,9 @@ set(SOURCES
     src/modules/blog_list/blog_list.c
     src/modules/category_menu/category_menu.c
     src/modules/entry_page/entry_page.c
+    src/modules/related_posts/related_posts.c
+    src/modules/entry_index/entry_index.c
+    src/utils/related_ids.c
     src/modules/language_page/language_page.c
     src/modules/site_page/site_page.c
     src/modules/theme_page/theme_page.c
@@ -138,6 +142,7 @@ set(SOURCES
     src/db/cms_entries_admin.c
     src/db/cms_menu.c
     src/db/cms_categories.c
+    src/db/cms_category_ranking.c
     src/db/cms_languages.c
     src/db/cms_users_admin.c
     src/db/cms_media.c
@@ -151,6 +156,7 @@ set(SOURCES
     src/db/cms_search.c
     src/db/cms_comments.c
     src/utils/mailer.c
+    src/utils/translator.c
     src/utils/captcha.c
     src/extensions/extensions.c
     src/db/cms_fonts.c
@@ -231,3 +237,12 @@ add_test(NAME proxy_protocol COMMAND proxy_protocol_test)
 add_executable(css_compat_test tests/css_compat_test.c src/utils/css_compat.c src/utils/detect_epoch.c)
 target_link_libraries(css_compat_test Threads::Threads)
 add_test(NAME css_compat COMMAND css_compat_test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(code_highlight_test tests/code_highlight_test.c src/utils/code_highlight.c)
+add_test(NAME code_highlight COMMAND code_highlight_test)
+
+add_executable(terminal_session_test tests/terminal_session_test.c src/utils/terminal_session.c)
+add_test(NAME terminal_session COMMAND terminal_session_test)
+
+add_executable(related_ids_test tests/related_ids_test.c src/utils/related_ids.c)
+add_test(NAME related_ids COMMAND related_ids_test)

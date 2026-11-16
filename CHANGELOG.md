@@ -4,6 +4,210 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
+## v0.0.8
+
+### List block
+
+**Changed**
+- A list item's label is bold: in "Intel 486: a processor from the 90s", **Intel 486** - the
+  text before the first colon followed by a space. A colon in a link or a time ("http://",
+  "10:30") makes no label. On every epoch and in the editor's preview.
+
+### Media picker
+
+**Changed**
+- Escape closes the photo picker: the first press clears the photos selected, the next one
+  closes it.
+
+### Image block
+
+**Added**
+- An image block can show a different picture in each language. *Select photo* sets the picture
+  of the language being edited; English's is the default, shown in every language that hasn't one
+  of its own, and a note under the picture says which one a language shows, with *Use the English
+  image* to go back to it. Changing English's picture changes it in those languages too.
+
+### Blog list
+
+**Changed**
+- `/blog` and each category's listing show 10 entries a page, newest first, with a pager under
+  them (`/blog?page=2`...) on every epoch - WAP phones get *< Prev 2/5 Next >*. A page past the
+  last one is a 404.
+- The category bar shows at most 15 categories - the ones whose posts were read most in the last
+  30 days, most read first, worked out again every 3 hours - and a *See more...* link to the full
+  list. A category being browsed always shows, even when it isn't among them.
+- `/blog/categories`, the full list by name, now opens on every epoch (it was WAP's only).
+
+### Entry editor
+
+**Changed**
+- The entry editor is written like the page it makes. Paragraphs and headings are typed straight
+  on a sheet that looks like the published entry - its background, text color, 18px text and the
+  site's heading sizes and spacing - with no frame or header around each block. Other blocks
+  (images, code, tables...) show as readers see them until clicked.
+- One bar under the top bar holds the tools of the block being edited - formatting for a
+  paragraph, H1-H6 for a heading, language, shell, list type, photo, size and alignment - and its
+  actions: Split, Merge, move up and down, Advanced and delete.
+- Slug, type, categories, cover image, date, title and summary moved to a *Settings* panel opened
+  from the top bar: beside the sheet on a wide screen, over it on a small one. The editor
+  remembers whether it was open.
+- **+ Insert** adds a block after the one being edited; on an empty paragraph it turns that
+  paragraph into the new block. The row of block buttons is gone.
+
+**Added**
+- Writing across blocks: Enter after a heading, a selected image or the like starts a paragraph
+  below (Ctrl+Enter, or Enter on an empty last line, in code, terminal and list blocks); Enter in
+  a paragraph is a line break; Backspace at the start of a paragraph joins it to the one above;
+  the arrow keys move from block to block; a click below the last block writes there.
+- Type `/` in an empty paragraph for a menu of every block, filtered as you type (`/ima`,
+  `/shell`).
+- Markdown shortcuts in an empty paragraph: `# `, `## `, `### ` for headings, `- ` and `1. ` for
+  lists, ```` ``` ```` for code, `---` for a separator.
+- A paragraph, heading or list can be turned into another of the three from the bar, keeping its
+  text in every language.
+- Image and gallery blocks have *Select photo* / *+ Add photos* in the bar; a click on an open
+  image block's picture also changes it.
+- In a narrow window the top bar's secondary buttons keep only their icon, and under 1000px wide
+  the open block's tools sit in a row at the bottom of the screen.
+- A theme switch in the top bar, next to the language tabs. It changes the theme the same way
+  the site's menu does, saving unsaved work first, and the editor comes back on the same
+  language tab and at the same place.
+
+### Article index block
+
+**Added**
+- An *Article index* block lists up to 20 existing articles, in the order the author sets: a
+  table with each article's picture, title and summary, in the reader's language, every row
+  linking to it. An article that is unpublished later simply drops out of the list.
+- On every browser era: a table where there is one, down to a text list on text browsers and links
+  on WAP phones.
+
+### Related articles block
+
+**Added**
+- A *Related articles* block for entries. By default it shows the newest published article that
+  shares a category with the entry, at full width; with no match readers see nothing, and the
+  editor says why.
+- The author can choose one article (full width) or two, side by side: left the previous one and
+  right the next, labelled "Previous article" and "Next article" - for articles published in
+  parts. Each card has the article's picture, title and summary, in the reader's language, and
+  links to it. An article that is unpublished later simply stops showing.
+- On every browser era: two columns or a table, down to a text list on text browsers and a link
+  on WAP phones.
+
+### Entry editor: signed out while writing
+
+**Fixed**
+- When the session ended while an entry was open, saving stayed on "Saving..." for ever and the
+  unsaved work was lost on reload. Now the editor checks the session every few minutes and when
+  its tab comes back, and as soon as it has ended says so - the changes stay on the page: sign in
+  again in a new tab, then *Save again*. A failed save always says why.
+- Leaving the editor with unsaved changes (reload, close, *Dashboard*) asks first.
+
+### Categories
+
+**Added**
+- Authors can add categories: *Categories* is in their dashboard menu, with the list and
+  *+ New category*. Editing and deleting a category stay with Administrators, since every
+  author's entries share them.
+
+### Dashboard lists
+
+**Changed**
+- Entries are listed with the title over the summary in one column, and their Edit, View and
+  Delete buttons in one row, with icons. Users, Menu, Categories, Languages and Themes use the
+  same icon buttons. Under 600px wide only the icons show.
+- The users list shows the username over the email.
+
+**Fixed**
+- The users list ran off the page on a phone; it and the other lists (categories, fonts,
+  languages, menu) now scroll inside themselves when too wide.
+- The "Entries pending publication" table on the dashboard home showed its columns under the
+  wrong headings.
+- The default language's row in Languages said "Sí" instead of "Yes".
+
+### Media library
+
+**Changed**
+- Under 600px wide the directories column is hidden behind a *Directories* button, next to the
+  name of the directory shown; picking one closes it. The selection buttons wrap instead of being
+  cut off. Also in the editor's image picker.
+
+### Published pages
+
+**Changed**
+- List blocks use the same 18px text as paragraphs (they were 16px).
+
+### Terminal block
+
+**Added**
+- A *Terminal* block for shell sessions: paste it as it is, and each line that starts with the
+  prompt shows as a command, the rest as its output, in a console window titled by the shell -
+  Linux / Unix (`$`, `#`), MS-DOS / Windows (`C:\>`) or PowerShell (`PS C:\>`). Commands
+  written without any prompt are all shown as commands, after the shell's prompt. In each
+  command, options (`-la`, `--user`, `/w`), their values, quoted strings, variables (`$HOME`,
+  `%PATH%`) and operators (`|`, `&&`, `>`) get their own colors. *Copy* copies only the commands,
+  without prompts or output.
+- *Terminal colors* in the theme customizer: background, commands, prompt, output, options,
+  values and variables. They also
+  color the block on Netscape-era browsers; text-only browsers and WAP phones get the commands in
+  bold.
+
+### Code block languages
+
+**Added**
+- The code block highlights 14 more languages: TypeScript, Java, C#, Kotlin, Go, Swift, JSON,
+  XML, INI, Diff and, for retro code, Assembly (x86, 6502, Z80, 68000), BASIC, Pascal and DOS
+  Batch. The editor's language list is grouped: Web, Languages, Retro, Data and shell.
+- HTML code blocks color `<?...?>` and `<![CDATA[...]]>`; Python colors `@decorators`.
+
+### Entry translation
+
+**Added**
+- A *Translate* button in the entry editor fills the other languages' empty fields - title,
+  summary and the text blocks - from the language being edited. Text already written is never
+  replaced; with autosave on, the result is saved right away.
+- *Settings → Translation* picks the translator: **Azure AI Translator** (its F0 tier is free,
+  2 million characters a month), called by the server with a key that is never shown again, or
+  **a translator on this computer** - a LibreTranslate-compatible server the browser calls
+  directly.
+- Code and terminal blocks are copied as they are into the empty languages, never translated: a
+  translator would rename keywords, paths and options.
+- *Replace what is already written*, in the Translate panel, translates the whole entry again,
+  replacing the other languages' text. It asks first, and is off each time the panel opens.
+
+### Commenters' names
+
+**Changed**
+- A commenter's name is no longer reserved: two people may comment under the same name. Each
+  commenter gets a username of its own, `user-1`, `user-2`..., shown next to the name ("Juan
+  user-12") and in the author's email. The same email is always the same commenter.
+- Comments and replies from the site's team carry a verified mark (a badge on epochs 1-3, `[v]` on
+  epoch 0 and WAP) instead of having their names reserved, and never show a team member's
+  sign-in name.
+- At startup, existing commenters get a `user-<n>` username in the order they first commented,
+  replacing the one taken from their email address.
+
+### Maintenance mode
+
+**Added**
+- *Authors can sign in and edit*, next to *Site in maintenance*: Authors keep the dashboard
+  and see the real site while it is in maintenance, so content can be prepared before it
+  opens. Off by default; Moderators and Viewers stay out either way.
+
+### Extensions
+
+**Added**
+- An extension can answer images (JPEG, PNG, GIF, WebP) under its own address, shown only to the
+  signed-in user who asks: photos in an extension stay private. New SDK call `brext_bytes()`.
+- Extensions get the site's public address (`BR_PUBLIC_URL`, SDK `brext_public_url()`), for
+  absolute links such as QR codes on printed labels.
+
+**Fixed**
+- An extension stopped or restarted after the server had run any other program (an update check,
+  an image) stayed "Starting" for ever: the server only collected its first finished child
+  process, and later ones were left as zombies it took for still running.
+
 ## v0.0.7
 ### 2026-10-29
 

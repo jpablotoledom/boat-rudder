@@ -159,7 +159,7 @@ char *comments_admin_page(int epoch, const char *status, const char *owner_id, i
         snprintf(url, sizeof(url), "/blog/%s", c->entry_link);
         char *url_enc = html_encode_alloc(url);
         char *title = html_encode_alloc(c->entry_title[0] ? c->entry_title : c->entry_link);
-        char *name = html_encode_alloc(c->name);
+        char *name = comment_who_html(EPOCH_MODERN, c->name, c->username, c->verified);
         char *email = html_encode_alloc(c->email);
         char *text = text_with_reply(c);
         char *acts = row_actions(action_tpl, c, status, can_delete, can_block, can_reply);
@@ -234,7 +234,7 @@ char *comments_admin_reply_page(int epoch, const char *comment_id, const char *l
     snprintf(url, sizeof(url), "/blog/%s", c->entry_link);
     char *url_enc = html_encode_alloc(url);
     char *title = html_encode_alloc(c->entry_title[0] ? c->entry_title : c->entry_link);
-    char *name = html_encode_alloc(c->name);
+    char *name = comment_who_html(EPOCH_MODERN, c->name, c->username, c->verified);
     char *when = client_line(c);
     char *comment = text_html(c->text);
     char *typed = html_encode_alloc(text ? text : c->reply_text);

@@ -1,4 +1,7 @@
             <form method="POST" action="/dashboard/entries/%s/delete"
                   onsubmit="return confirm('Delete this entry? This cannot be undone.');">
-              <button class="boat-rudder-btn boat-rudder-btn--danger" type="submit">Delete</button>
+              <button class="boat-rudder-btn boat-rudder-btn--sm boat-rudder-btn--danger" type="submit" title="Delete">
+                <svg class="boat-rudder-btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                <span class="boat-rudder-btn__label">Delete</span>
+              </button>
             </form>

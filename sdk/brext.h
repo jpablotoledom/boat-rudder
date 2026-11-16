@@ -71,6 +71,11 @@ const char *brext_mongodb_uri(void);   // BR_MONGODB_URI    - the site's databas
 const char *brext_mongodb_db(void);    // BR_MONGODB_DB     - the site's database; name your
                                        //                     collections ext_<name>_...
 int         brext_log_level(void);     // BR_LOG_LEVEL      - 0 none .. 4 debug
+const char *brext_public_url(void);    // BR_PUBLIC_URL     - the site's public address
+                                       //                     ("https://example.org", no
+                                       //                     trailing slash), "" if not set:
+                                       //                     for links that leave the browser
+                                       //                     (QR codes, emails)
 
 // Writes "[<name>] message" to stderr, which ends up in the server's log, when
 // `level` <= brext_log_level() (1 error, 2 warning, 3 info, 4 debug).
@@ -115,6 +120,13 @@ void brext_html(BrextResponse *res, const char *title);
 
 // JSON, passed through as it is - for the page's own scripts.
 void brext_json(BrextResponse *res);
+
+// Binary content, `len` bytes of `data`, as the whole body: an image
+// ("image/jpeg", "image/png", "image/gif", "image/webp") Boat Rudder passes
+// through as it is, private to the signed-in user's browser and cached there
+// for a day - so never answer other bytes at the same URL. Any other type
+// is refused (502). At most 4 MiB.
+void brext_bytes(BrextResponse *res, const char *content_type, const void *data, size_t len);
 
 // 302 to a path inside the extension ("/" is its first page).
 void brext_redirect(BrextResponse *res, const char *path);

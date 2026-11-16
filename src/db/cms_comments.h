@@ -7,9 +7,11 @@
 // Blog comments - see develop_docs/reference/comments.md.
 //
 //   users           a commenter is a user with role "commenter" (no
-//                   password, can't sign in): name, name_key, email,
-//                   email_verified_at, blocked. A team member commenting
-//                   with their own address is themselves.
+//                   password, can't sign in): username "user-<n>" (given
+//                   once, from the `counters` collection), name (any - two
+//                   commenters may share one), email, email_verified_at,
+//                   blocked. A team member commenting with their own
+//                   address is themselves - shown as verified.
 //   comments        status "unverified" -> "pending" -> "approved"/"rejected";
 //                   at most one `reply` from the team (text, user_id, name,
 //                   by_author, created_at, updated_at)
@@ -24,6 +26,8 @@
 #define COMMENT_TEXT_MAX      2000
 #define COMMENT_REPLY_MAX     2000
 #define COMMENT_UA_MAX        256
+#define COMMENTER_USERNAME_PREFIX "user-"   // a commenter's username: user-1, user-2...
+#define COMMENT_USERNAME_MAX  32
 #define COMMENT_EPOCH_NONE    (-99)  // CmsCommentAdmin.epoch of a comment older than that record
 #define COMMENT_VERIFY_HOURS  24
 #define COMMENT_LIMIT_PER_IP_HOUR     5
@@ -50,7 +54,6 @@ int cms_comments_within_limits(const char *ip_hash, const char *email);
 typedef enum {
     COMMENT_SUBMIT_VERIFY = 0,   // stored unverified; *token_out must be emailed
     COMMENT_SUBMIT_PENDING,      // stored pending (browser remembered, email already confirmed)
-    COMMENT_SUBMIT_NAME_TAKEN,   // the name belongs to another email, or to a site user
     COMMENT_SUBMIT_BLOCKED,      // this email is blocked
     COMMENT_SUBMIT_ERROR,
 } CommentSubmitResult;
@@ -94,6 +97,7 @@ typedef struct {
     char *author_email;
     char *author_name;           // name, else username
     char *commenter_name;
+    char *commenter_username;    // "user-<n>", "" for a team member
     char *text;
     char *entry_title;           // in `lang`
     char *entry_link;
@@ -117,6 +121,10 @@ typedef struct {
     char *browser;               // where it was written from ("" before that was recorded)
     char *os;
     char *user_agent;
+    // Who wrote it: a commenter's username ("user-<n>"), or `verified` for a
+    // team member (username left "": it is their sign-in name).
+    char  username[COMMENT_USERNAME_MAX];
+    bool  verified;
     // The team's reply: reply_text is "" when there is none.
     char *reply_name;
     char *reply_text;
@@ -145,6 +153,8 @@ typedef struct {
     // and its last error ("" if none).
     char  mail_status[12];
     char *mail_error;
+    char  username[COMMENT_USERNAME_MAX];   // as in CmsComment
+    bool  verified;
     // Where it was written from ("" / COMMENT_EPOCH_NONE for comments older than this).
     char *browser;
     char *os;

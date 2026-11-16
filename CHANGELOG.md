@@ -4,7 +4,7 @@ All notable changes to Boat Rudder, newest first. Each `## vX.Y.Z` section is on
 `scripts/release.sh` publishes it as that release's notes on GitHub, and the dashboard's
 Updates page shows them. Changes not released yet go under `## Unreleased
 
-## Unreleased
+## v0.0.8
 
 ### List block
 
@@ -12,13 +12,6 @@ Updates page shows them. Changes not released yet go under `## Unreleased
 - A list item's label is bold: in "Intel 486: a processor from the 90s", **Intel 486** - the
   text before the first colon followed by a space. A colon in a link or a time ("http://",
   "10:30") makes no label. On every epoch and in the editor's preview.
-
-### Entry editor
-
-**Added**
-- A theme switch in the entry editor's top bar, next to the language tabs. It changes the theme
-  the same way the site's menu does, saving unsaved work first, and the editor comes back on the
-  same language tab and at the same place.
 
 ### Media picker
 
@@ -76,6 +69,9 @@ Updates page shows them. Changes not released yet go under `## Unreleased
   image block's picture also changes it.
 - In a narrow window the top bar's secondary buttons keep only their icon, and under 1000px wide
   the open block's tools sit in a row at the bottom of the screen.
+- A theme switch in the top bar, next to the language tabs. It changes the theme the same way
+  the site's menu does, saving unsaved work first, and the editor comes back on the same
+  language tab and at the same place.
 
 ### Article index block
 
